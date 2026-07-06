@@ -1,4 +1,4 @@
-export const API_URL = import.meta.env.VITE_API_URL || "https://SEU_BACKEND_NO_RENDER.onrender.com";
+export const API_URL = import.meta.env.VITE_API_URL || "https://danihmorais-github-io.onrender.com";
 
 export const apiFetch = async (endpoint: string, options?: RequestInit) => {
   const response = await fetch(`${API_URL}${endpoint}`, options);

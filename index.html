@@ -8,110 +8,351 @@
     <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <style>
-        html, #root {
+        :root {
+            --bg: #f4f5f7;
+            --surface: #ffffff;
+            --surface-2: #f9fafb;
+            --border: #e5e7eb;
+            --text: #1f2430;
+            --text-muted: #6b7280;
+            --primary: #2f6f4f;
+            --primary-hover: #275e42;
+            --primary-soft: #eaf5ee;
+            --shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px rgba(16, 24, 40, 0.06);
+            --radius: 14px;
+        }
+
+        * { box-sizing: border-box; }
+
+        html, body, #root {
             margin: 0;
             padding: 0;
             width: 100%;
-            height: 100%;
+            min-height: 100%;
         }
+
         body {
-            font-family: 'Calibri', Arial, sans-serif;
-            background-color: #f4f4f9;
-            margin: 0;
-            padding: 20px;
+            font-family: 'Segoe UI', 'Calibri', Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
             display: flex;
             flex-direction: column;
             align-items: center;
-            box-sizing: border-box;
-            width: 100%;
-            height: 100%;
+            padding: 32px 16px;
         }
-        .container {
-            background: #ffffff;
-            padding: 30px;
+
+        .page {
+            width: 100%;
+            max-width: 720px;
+        }
+
+        /* ---------- Tela de seleção ---------- */
+        .hero {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .hero h1 {
+            font-size: 26px;
+            margin: 0 0 8px;
+        }
+
+        .hero p {
+            color: var(--text-muted);
+            font-size: 15px;
+            margin: 0;
+        }
+
+        .option-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+
+        @media (max-width: 560px) {
+            .option-grid { grid-template-columns: 1fr; }
+        }
+
+        .option-card {
+            position: relative;
+            background: var(--surface);
+            border: 2px solid var(--border);
+            border-radius: var(--radius);
+            padding: 22px 20px;
+            cursor: pointer;
+            text-align: left;
+            transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+            box-shadow: var(--shadow);
+        }
+
+        .option-card:hover {
+            transform: translateY(-2px);
+            border-color: #cfd4dc;
+        }
+
+        .option-card.selected {
+            border-color: var(--primary);
+            background: var(--primary-soft);
+        }
+
+        .option-card .icon {
+            font-size: 26px;
+            margin-bottom: 12px;
+            display: block;
+        }
+
+        .option-card h3 {
+            margin: 0 0 6px;
+            font-size: 16px;
+        }
+
+        .option-card p {
+            margin: 0;
+            font-size: 13px;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        .option-card .check {
+            position: absolute;
+            top: 14px;
+            right: 14px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid var(--border);
+            background: var(--surface);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: transparent;
+            transition: all .15s ease;
+        }
+
+        .option-card.selected .check {
+            border-color: var(--primary);
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .actions-row {
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        /* ---------- Cards de conteúdo ---------- */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 28px;
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 22px;
+        }
+
+        .card-header h2 {
+            font-size: 19px;
+            margin: 0;
+        }
+
+        .back-link {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
             border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            width: 100%;
-            max-width: 800px;
+            transition: background .15s ease;
+            width: auto;
         }
-        .ad-banner {
-            background-color: transparent;
-            text-align: center;
-            margin-bottom: 20px;
-            width: 100%;
-            max-width: 800px;
-            min-height: 90px;
+
+        .back-link:hover {
+            background: var(--surface-2);
+            color: var(--text);
         }
-        h1 {
-            color: #333;
-            font-size: 24px;
-            margin-bottom: 20px;
-            text-align: center;
-        }
+
         .form-group {
             margin-bottom: 20px;
         }
+
         label {
             display: block;
-            font-weight: bold;
+            font-weight: 600;
+            font-size: 14px;
             margin-bottom: 8px;
-            color: #555;
+            color: var(--text);
         }
+
         select, input[type="file"] {
             width: 100%;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            box-sizing: border-box;
-            background-color: #fff;
+            padding: 11px 12px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: var(--surface-2);
+            font-size: 14px;
+            color: var(--text);
         }
-        button {
-            background-color: #4CAF50;
+
+        select:focus, input[type="file"]:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        button.primary {
+            background: var(--primary);
             color: white;
-            padding: 12px 20px;
+            padding: 13px 22px;
             border: none;
-            border-radius: 4px;
+            border-radius: 10px;
             cursor: pointer;
-            font-size: 16px;
+            font-size: 15px;
+            font-weight: 600;
             width: 100%;
-            transition: background-color 0.3s;
+            transition: background-color .15s ease;
         }
-        button:hover {
-            background-color: #45a049;
+
+        button.primary:hover {
+            background: var(--primary-hover);
         }
-        .footer-ad {
+
+        button.primary:disabled {
+            background: #b7c2bb;
+            cursor: not-allowed;
+        }
+
+        /* ---------- Utilitários de visibilidade ---------- */
+        .view {
+            display: none;
+        }
+
+        .view.active {
+            display: block;
+        }
+
+        .ad-banner, .footer-ad {
             background-color: transparent;
             text-align: center;
-            margin-top: 20px;
+            margin: 20px 0;
             width: 100%;
-            max-width: 800px;
+            max-width: 720px;
             min-height: 90px;
         }
     </style>
 </head>
 <body>
-    <div id="root"></div>
 
-    <div class="container">
-        <h1>Conversor de Relatório</h1>
-        
-        <div class="form-group">
-            <label for="tipoScript">Selecione o Modelo de Conversão:</label>
-            <select id="tipoScript">
-                <option value="1">Modelo 1 - Separação por Grupos (Sem Preço)</option>
-                <option value="2">Modelo 2 - Tabela Única (Com Preço)</option>
-            </select>
+    <div class="page">
+
+        <!-- TELA 1: seleção de ferramenta -->
+        <div id="view-selecao" class="view active">
+            <div class="hero">
+                <h1>MontaEdital</h1>
+                <p>Escolha o que você quer fazer e clique em avançar.</p>
+            </div>
+
+            <div class="option-grid">
+                <div class="option-card" data-target="view-app" tabindex="0">
+                    <span class="check">✓</span>
+                    <span class="icon">🗂️</span>
+                    <h3>Licita.AI</h3>
+                    <p>Gerador de DFD, ETP, TR e editais com apoio de IA.</p>
+                </div>
+
+                <div class="option-card" data-target="view-conversor" tabindex="0">
+                    <span class="check">✓</span>
+                    <span class="icon">📄</span>
+                    <h3>Conversor de Relatório</h3>
+                    <p>Transforma um arquivo .txt/.csv em uma tabela DOCX formatada.</p>
+                </div>
+            </div>
+
+            <div class="actions-row">
+                <button class="primary" id="btnAvancar" style="width: auto; padding: 13px 32px;" disabled>Avançar</button>
+            </div>
         </div>
 
-        <div class="form-group">
-            <label for="fileInput">Selecione o Arquivo (.txt / .csv):</label>
-            <input type="file" id="fileInput" accept=".txt,.csv">
+        <!-- TELA 2: app Licita.AI (React monta aqui) -->
+        <div id="view-app" class="view">
+            <div class="card-header">
+                <h2>Licita.AI</h2>
+                <button class="back-link" data-back="view-selecao">← Voltar</button>
+            </div>
+            <div id="root"></div>
         </div>
 
-        <button onclick="processarArquivo()">Converter e Baixar DOCX</button>
+        <!-- TELA 3: conversor de relatório -->
+        <div id="view-conversor" class="view">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Conversor de Relatório</h2>
+                    <button class="back-link" data-back="view-selecao">← Voltar</button>
+                </div>
+
+                <div class="form-group">
+                    <label for="tipoScript">Modelo de conversão</label>
+                    <select id="tipoScript">
+                        <option value="1">Modelo 1 - Separação por Grupos (Sem Preço)</option>
+                        <option value="2">Modelo 2 - Tabela Única (Com Preço)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="fileInput">Arquivo (.txt / .csv)</label>
+                    <input type="file" id="fileInput" accept=".txt,.csv">
+                </div>
+
+                <button class="primary" onclick="processarArquivo()">Converter e Baixar DOCX</button>
+            </div>
+        </div>
+
     </div>
 
     <script type="module" src="/src/main.tsx"></script>
+
+    <script>
+        // ---------- Navegação entre telas ----------
+        (function () {
+            const cards = document.querySelectorAll('.option-card');
+            const btnAvancar = document.getElementById('btnAvancar');
+            let targetView = null;
+
+            cards.forEach(card => {
+                card.addEventListener('click', () => {
+                    cards.forEach(c => c.classList.remove('selected'));
+                    card.classList.add('selected');
+                    targetView = card.dataset.target;
+                    btnAvancar.disabled = false;
+                });
+            });
+
+            btnAvancar.addEventListener('click', () => {
+                if (!targetView) return;
+                showView(targetView);
+            });
+
+            document.querySelectorAll('[data-back]').forEach(btn => {
+                btn.addEventListener('click', () => showView(btn.dataset.back));
+            });
+
+            function showView(id) {
+                document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+                document.getElementById(id).classList.add('active');
+            }
+        })();
+    </script>
+
     <script>
         function limparTexto(texto) {
             return String(texto).replace(/\s+/g, ' ').trim();
