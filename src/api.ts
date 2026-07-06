@@ -1,28 +1,9 @@
-export const API_URL = import.meta.env.PROD 
-  ? 'https://danihmorais-github-io.onrender.com' 
-  : 'http://localhost:8000';
+export const API_URL = import.meta.env.VITE_API_URL || "https://SEU_BACKEND_NO_RENDER.onrender.com";
 
-export async function enviarParaProcessamento(file: File, modelo: string): Promise<void> {
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('modelo', modelo);
-
-  const response = await fetch(`${API_URL}/api/processar`, {
-    method: 'POST',
-    body: formData,
-  });
-
+export const apiFetch = async (endpoint: string, options?: RequestInit) => {
+  const response = await fetch(`${API_URL}${endpoint}`, options);
   if (!response.ok) {
-    throw new Error(await response.text());
+    throw new Error('Erro na requisição');
   }
-
-  const blob = await response.blob();
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `documento_gerado.docx`;
-  document.body.appendChild(a);
-  a.click();
-  window.URL.revokeObjectURL(url);
-  document.body.removeChild(a);
-}
+  return response.json();
+};
