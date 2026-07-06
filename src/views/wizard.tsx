@@ -7,7 +7,7 @@ import { mapearDadosWizard } from "../utils/mapearDados";
 import { ThemeContext } from "../context/ThemeContext";
 import "./wizard.css";
 import logo from "../assets/logo.png";
-import { gerarEditalApi } from "../api"; // Importação atualizada
+import { gerarEditalApi } from "../api";
 
 export default function Wizard() {
   const [etapaAtual, setEtapaAtual] = useState(0);
@@ -94,10 +94,11 @@ export default function Wizard() {
   const voltar = () => {
     if (etapaAtual > 0) {
       setEtapaAtual(etapaAtual - 1);
+    } else {
+      window.location.href = "/";
     }
   };
 
-  // Função auxiliar para conversão de arquivos para envio em nuvem
   const fileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -249,7 +250,7 @@ export default function Wizard() {
           <div className="wiz-step-hint">Preencha os campos obrigatórios (*) para avançar</div>
         </div>
         <div className="wiz-footer-right">
-          <button className="wiz-btn wiz-btn-ghost" onClick={voltar} disabled={etapaAtual === 0}>
+          <button className="wiz-btn wiz-btn-ghost" onClick={voltar}>
             Voltar
           </button>
           <button
