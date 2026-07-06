@@ -116,10 +116,13 @@ export default function Wizard() {
     try {
       const { dadosMapeados } = await mapearDadosWizard(dados);
 
+      // Cast para Record<string, any> para contornar o erro TS7053
+      const payload: Record<string, any> = { ...dadosMapeados };
+
       // Converte anexos para Base64 para suportar a arquitetura REST
-      if (dados.arquivoDfd) dadosMapeados["DFD_B64"] = await fileToBase64(dados.arquivoDfd as unknown as File);
-      if (dados.arquivoEtp) dadosMapeados["ETP_B64"] = await fileToBase64(dados.arquivoEtp as unknown as File);
-      if (dados.arquivoTr)  dadosMapeados["TR_B64"]  = await fileToBase64(dados.arquivoTr as unknown as File);
+      if (dados.arquivoDfd) payload["DFD_B64"] = await fileToBase64(dados.arquivoDfd as unknown as File);
+      if (dados.arquivoEtp) payload["ETP_B64"] = await fileToBase64(dados.arquivoEtp as unknown as File);
+      if (dados.arquivoTr)  payload["TR_B64"]  = await fileToBase64(dados.arquivoTr as unknown as File);
 
       // Mapeia a seleção do front para a chave exata exigida pelo backend
       let tipoEditalStr = "pregao_eletronico";
@@ -129,7 +132,7 @@ export default function Wizard() {
 
       await gerarEditalApi({
         tipo_edital: tipoEditalStr,
-        dados_preenchimento: dadosMapeados
+        dados_preenchimento: payload
       });
 
       setGeracaoSucesso(true);
