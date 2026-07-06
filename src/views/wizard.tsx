@@ -5,7 +5,6 @@ import Step2 from "./steps/step2";
 import Step3 from "./steps/step3";
 import { mapearDadosWizard } from "../utils/mapearDados";
 import { ThemeContext } from "../context/ThemeContext";
-import { verificarAtualizacao } from "../updater";
 import "./wizard.css";
 import logo from "../assets/logo.png";
 
@@ -211,20 +210,6 @@ export default function Wizard() {
                 {idx < 2 && <div className={`wiz-step-connector ${etapaAtual > step.id ? 'done' : ''}`} />}
               </React.Fragment>
             ))}
-          </div>
-
-          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-            <button 
-              onClick={() => verificarAtualizacao(setAguardandoUpdate)} 
-              className="wiz-btn-ghost" 
-              style={{ padding: "8px 12px", borderRadius: "8px", fontSize: "14px", display: "flex", alignItems: "center", gap: "6px" }}
-              disabled={aguardandoUpdate}
-            >
-              {aguardandoUpdate ? "⏳" : "🔄"} {aguardandoUpdate ? "Atualizando..." : "Atualizar"}
-            </button>
-            <button onClick={toggleTheme} className="wiz-btn-ghost" style={{ padding: "8px", borderRadius: "8px" }}>
-              {theme === "dark" ? "☀️" : "🌙"}
-            </button>
           </div>
         </div>
       </div>

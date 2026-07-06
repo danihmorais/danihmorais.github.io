@@ -1,17 +1,22 @@
 import os
-import json
-import sys
-import io
+import uuid
+import zipfile
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
 from processador_docx import preencher_documento
 from montador_variaveis import montar_variaveis_fixas
 
-if sys.platform == "win32":
-    if sys.stdout is not None:
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    if sys.stderr is not None:
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
-    if sys.stdin is not None:
-        sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8')
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 MODELOS_DISPONIVEIS = {
     "dispensa": "modelos/Dispensa xx Proc xx -  MINUTA DP 15.04.2026.docx",
@@ -34,17 +39,23 @@ MODALIDADE_TEXTO = {
     "PREGAO_PRESENCIAL": "Pregão Presencial"
 }
 
-def gerar_edital(tipo_edital: str, dados_preenchimento: dict):
+class EditalRequest(BaseModel):
+    tipo_edital: str
+    dados_preenchimento: dict
+
+@app.post("/api/gerar-edital")
+async def gerar_edital_endpoint(req: EditalRequest):
     base_dir = os.getcwd()
-    caminho_modelo = os.path.join(base_dir, MODELOS_DISPONIVEIS.get(tipo_edital, ""))
+    caminho_modelo = os.path.join(base_dir, MODELOS_DISPONIVEIS.get(req.tipo_edital, ""))
 
-    if not tipo_edital in MODELOS_DISPONIVEIS or not os.path.exists(caminho_modelo):
-        return {"sucesso": False, "erro": f"Modelo não encontrado para o tipo: {tipo_edital}\nCaminho buscado: {caminho_modelo}"}
+    if req.tipo_edital not in MODELOS_DISPONIVEIS or not os.path.exists(caminho_modelo):
+        raise HTTPException(status_code=400, detail=f"Modelo não encontrado para o tipo: {req.tipo_edital}")
 
-    diretorio_saida = os.path.join(base_dir, "editais_gerados")
+    session_id = uuid.uuid4().hex
+    diretorio_saida = os.path.join(base_dir, "editais_gerados", session_id)
     os.makedirs(diretorio_saida, exist_ok=True)
     
-    dados_processados = montar_variaveis_fixas(dados_preenchimento)
+    dados_processados = montar_variaveis_fixas(req.dados_preenchimento)
     
     modalidade_raw = dados_processados.get("{{MODALIDADE}}", "PREGAO_ELETRONICO")
     mod_abr = MOD_ABR_MAP.get(modalidade_raw, "PE")
@@ -78,34 +89,15 @@ def gerar_edital(tipo_edital: str, dados_preenchimento: dict):
     caminho_minuta = os.path.join(diretorio_saida, nome_arq_minuta)
     preencher_documento(caminho_modelo, caminho_minuta, dados_minuta)
 
-    return {
-        "sucesso": True, 
-        "caminhos": [caminho_edital, caminho_minuta],
-        "caminho_arquivo": caminho_edital,
-        "diretorio_saida": diretorio_saida
-    }
-
-def processar():
-    try:
-        if len(sys.argv) > 1:
-            conteudo = sys.argv[1]
-        else:
-            conteudo = sys.stdin.read()
-            
-        if not conteudo.strip():
-            print(json.dumps({"sucesso": False, "erro": "Nenhum dado recebido via Stdin."}), flush=True)
-            return
-            
-        requisicao = json.loads(conteudo)
+    zip_filename = f"Editais_{num_mod_arq}_{session_id[:6]}.zip"
+    caminho_zip = os.path.join(base_dir, "editais_gerados", zip_filename)
+    
+    with zipfile.ZipFile(caminho_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        zipf.write(caminho_edital, nome_arq_edital)
+        zipf.write(caminho_minuta, nome_arq_minuta)
         
-        tipo_edital = requisicao.get("tipo_edital")
-        dados_preenchimento = requisicao.get("dados_preenchimento", {})
-        
-        resultado = gerar_edital(tipo_edital, dados_preenchimento)
-        print(json.dumps(resultado), flush=True)
-        
-    except Exception as e:
-        print(json.dumps({"sucesso": False, "erro": str(e)}), flush=True)
-
-if __name__ == "__main__":
-    processar()
+    return FileResponse(
+        path=caminho_zip,
+        filename=zip_filename,
+        media_type="application/zip"
+    )
