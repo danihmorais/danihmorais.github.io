@@ -9,6 +9,7 @@ import "./wizard.css";
 import logo from "../assets/logo.png";
 import { gerarEdital } from "../api";
 
+
 export default function Wizard() {
   const [etapaAtual, setEtapaAtual] = useState(0);
   const [dados, setDados] = useState({
