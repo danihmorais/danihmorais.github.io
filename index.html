@@ -24,11 +24,15 @@
 
         * { box-sizing: border-box; }
 
-        html, body, #root {
+        html, body {
             margin: 0;
             padding: 0;
             width: 100%;
-            min-height: 100%;
+            min-height: 100vh;
+        }
+
+        #root {
+            width: 100%;
         }
 
         body {
@@ -38,6 +42,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            justify-content: center;
             padding: 32px 16px;
         }
 
@@ -46,7 +51,6 @@
             max-width: 720px;
         }
 
-        /* ---------- Tela de seleção ---------- */
         .hero {
             text-align: center;
             margin-bottom: 32px;
@@ -142,7 +146,6 @@
             justify-content: flex-end;
         }
 
-        /* ---------- Cards de conteúdo ---------- */
         .card {
             background: var(--surface);
             border: 1px solid var(--border);
@@ -232,9 +235,9 @@
             cursor: not-allowed;
         }
 
-        /* ---------- Utilitários de visibilidade ---------- */
         .view {
             display: none;
+            width: 100%;
         }
 
         .view.active {
@@ -254,8 +257,6 @@
 <body>
 
     <div class="page">
-
-        <!-- TELA 1: seleção de ferramenta -->
         <div id="view-selecao" class="view active">
             <div class="hero">
                 <h1>MontaEdital</h1>
@@ -283,7 +284,6 @@
             </div>
         </div>
 
-        <!-- TELA 2: app Licita.AI (React monta aqui) -->
         <div id="view-app" class="view">
             <div class="card-header">
                 <h2>Licita.AI</h2>
@@ -292,7 +292,6 @@
             <div id="root"></div>
         </div>
 
-        <!-- TELA 3: conversor de relatório -->
         <div id="view-conversor" class="view">
             <div class="card">
                 <div class="card-header">
@@ -322,7 +321,6 @@
     <script type="module" src="/src/main.tsx"></script>
 
     <script>
-        // ---------- Navegação entre telas ----------
         (function () {
             const cards = document.querySelectorAll('.option-card');
             const btnAvancar = document.getElementById('btnAvancar');
