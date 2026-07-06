@@ -9,10 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "fastapi": "^0.0.8",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "uvicorn": "^0.0.1-security",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

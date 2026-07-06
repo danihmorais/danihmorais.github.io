@@ -7,7 +7,7 @@ import { mapearDadosWizard } from "../utils/mapearDados";
 import { ThemeContext } from "../context/ThemeContext";
 import "./wizard.css";
 import logo from "../assets/logo.png";
-import { API_URL } from "../api";
+import { gerarEditalApi } from "../api"; // Importação atualizada
 
 export default function Wizard() {
   const [etapaAtual, setEtapaAtual] = useState(0);
@@ -55,9 +55,8 @@ export default function Wizard() {
   const [statusTexto, setStatusTexto] = useState("Iniciando...");
   const [erroMsg, setErroMsg] = useState<string | null>(null);
   const [geracaoSucesso, setGeracaoSucesso] = useState(false);
-  const [aguardandoUpdate, setAguardandoUpdate] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { theme, toggleTheme } = useContext(ThemeContext);
+  const { theme } = useContext(ThemeContext);
 
   const atualizarDados = (novosDados: Partial<typeof dados>) => {
     setDados((prev) => ({ ...prev, ...novosDados }));
@@ -98,6 +97,16 @@ export default function Wizard() {
     }
   };
 
+  // Função auxiliar para conversão de arquivos para envio em nuvem
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve((reader.result as string).split(",")[1]);
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
   const confeccionarDocumentos = async () => {
     setCarregando(true);
     setErroMsg(null);
@@ -105,24 +114,23 @@ export default function Wizard() {
     setStatusTexto("A compilar o Edital...");
 
     try {
-      const { dadosMapeados, arquivoBase } = await mapearDadosWizard(dados);
+      const { dadosMapeados } = await mapearDadosWizard(dados);
 
-      const response = await fetch(`${API_URL}/gerar_documentos`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          dadosUsuario: dadosMapeados,
-          arquivosBase: [arquivoBase],
-        }),
+      // Converte anexos para Base64 para suportar a arquitetura REST
+      if (dados.arquivoDfd) dadosMapeados["DFD_B64"] = await fileToBase64(dados.arquivoDfd as unknown as File);
+      if (dados.arquivoEtp) dadosMapeados["ETP_B64"] = await fileToBase64(dados.arquivoEtp as unknown as File);
+      if (dados.arquivoTr)  dadosMapeados["TR_B64"]  = await fileToBase64(dados.arquivoTr as unknown as File);
+
+      // Mapeia a seleção do front para a chave exata exigida pelo backend
+      let tipoEditalStr = "pregao_eletronico";
+      if (dados.modalidade === "DISPENSA") tipoEditalStr = "dispensa";
+      else if (dados.modalidade === "DISPENSA_BLL") tipoEditalStr = "dispensa_bll";
+      else if (dados.modalidade === "PREGAO_PRESENCIAL") tipoEditalStr = "pregao_presencial";
+
+      await gerarEditalApi({
+        tipo_edital: tipoEditalStr,
+        dados_preenchimento: dadosMapeados
       });
-
-      if (!response.ok) {
-        throw new Error("Erro ao gerar documentos");
-      }
-
-      const resultado = await response.json();
 
       setGeracaoSucesso(true);
     } catch (erro: any) {
@@ -138,6 +146,8 @@ export default function Wizard() {
         msg = "Erro desconhecido ao gerar o Edital.";
       }
       setErroMsg(msg);
+    } finally {
+      setCarregando(false);
     }
   };
 
@@ -150,7 +160,7 @@ export default function Wizard() {
     }
   };
 
-  if (carregando) {
+  if (carregando || erroMsg || geracaoSucesso) {
     return (
       <div className="wiz-root" style={{ alignItems: "center", justifyContent: "center" }}>
         <div className="wiz-card" style={{ width: "100%", maxWidth: "620px", textAlign: "center", padding: "40px" }}>
@@ -176,7 +186,7 @@ export default function Wizard() {
             </>
           )}
 
-          {!erroMsg && !geracaoSucesso && (
+          {carregando && !erroMsg && !geracaoSucesso && (
             <>
               <h2 style={{ margin: "0 0 16px 0", color: "var(--wiz-text)", fontSize: "24px" }}>Gerando Edital</h2>
               <p style={{ color: "var(--wiz-text-3)", margin: "0 0 24px 0" }}>{statusTexto}</p>

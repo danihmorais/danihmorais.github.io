@@ -1,7 +1,10 @@
 import os
 import uuid
 import zipfile
-from fastapi import FastAPI, HTTPException
+import tempfile
+import shutil
+import base64
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -12,7 +15,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://danihmorais.github.io"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -43,8 +46,11 @@ class EditalRequest(BaseModel):
     tipo_edital: str
     dados_preenchimento: dict
 
+def cleanup_temp_dir(path: str):
+    shutil.rmtree(path, ignore_errors=True)
+
 @app.post("/api/gerar-edital")
-async def gerar_edital_endpoint(req: EditalRequest):
+async def gerar_edital_endpoint(req: EditalRequest, background_tasks: BackgroundTasks):
     base_dir = os.getcwd()
     caminho_modelo = os.path.join(base_dir, MODELOS_DISPONIVEIS.get(req.tipo_edital, ""))
 
@@ -52,10 +58,18 @@ async def gerar_edital_endpoint(req: EditalRequest):
         raise HTTPException(status_code=400, detail=f"Modelo não encontrado para o tipo: {req.tipo_edital}")
 
     session_id = uuid.uuid4().hex
-    diretorio_saida = os.path.join(base_dir, "editais_gerados", session_id)
-    os.makedirs(diretorio_saida, exist_ok=True)
+    temp_dir = tempfile.mkdtemp(prefix=f"edital_{session_id}_")
+    
+    background_tasks.add_task(cleanup_temp_dir, temp_dir)
     
     dados_processados = montar_variaveis_fixas(req.dados_preenchimento)
+
+    for key, ph in [("DFD_B64", "{{DFD}}"), ("ETP_B64", "{{ETP}}"), ("TR_B64", "{{TR}}")]:
+        if key in req.dados_preenchimento and req.dados_preenchimento[key]:
+            file_path = os.path.join(temp_dir, f"{key}.docx")
+            with open(file_path, "wb") as f:
+                f.write(base64.b64decode(req.dados_preenchimento[key]))
+            dados_processados[ph] = file_path
     
     modalidade_raw = dados_processados.get("{{MODALIDADE}}", "PREGAO_ELETRONICO")
     mod_abr = MOD_ABR_MAP.get(modalidade_raw, "PE")
@@ -70,7 +84,7 @@ async def gerar_edital_endpoint(req: EditalRequest):
     dados_edital = dados_processados.copy()
     dados_edital["{{MINUTA DE}}"] = ""
     nome_arq_edital = f"{modalidade_nome} {num_mod_arq} Proc {num_proc_arq} - {mod_abr} 15.04.2026.docx"
-    caminho_edital = os.path.join(diretorio_saida, nome_arq_edital)
+    caminho_edital = os.path.join(temp_dir, nome_arq_edital)
     preencher_documento(caminho_modelo, caminho_edital, dados_edital)
     
     dados_minuta = dados_processados.copy()
@@ -86,11 +100,11 @@ async def gerar_edital_endpoint(req: EditalRequest):
     dados_minuta["{{HORA FIM DO REC}}"] = "XXhXXmin"
     dados_minuta["{{HORA INICIO CRED}}"] = "XXhXXmin"
     nome_arq_minuta = f"{modalidade_nome} XX Proc {num_proc_arq} - MINUTA DE {mod_abr} 15.04.2026.docx"
-    caminho_minuta = os.path.join(diretorio_saida, nome_arq_minuta)
+    caminho_minuta = os.path.join(temp_dir, nome_arq_minuta)
     preencher_documento(caminho_modelo, caminho_minuta, dados_minuta)
 
     zip_filename = f"Editais_{num_mod_arq}_{session_id[:6]}.zip"
-    caminho_zip = os.path.join(base_dir, "editais_gerados", zip_filename)
+    caminho_zip = os.path.join(temp_dir, zip_filename)
     
     with zipfile.ZipFile(caminho_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
         zipf.write(caminho_edital, nome_arq_edital)

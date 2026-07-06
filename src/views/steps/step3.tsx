@@ -136,14 +136,20 @@ export default function Step3({ dados, atualizarDados }: any) {
               Documento de Formalização da Demanda (DFD) <span className="req-star">*</span>
             </label>
             {!dados.arquivoDfd ? (
-              <div className="wiz-upload-area" onClick={() => selecionarArquivo("arquivoDfd")}>
+              <label className="wiz-upload-area" style={{ cursor: "pointer", display: "flex", width: "100%" }}>
+                <input
+                  type="file"
+                  accept=".doc,.docx"
+                  style={{ display: "none" }}
+                  onChange={(e) => selecionarArquivo(e, "arquivoDfd")}
+                />
                 <div className="wiz-upload-icon">📄</div>
                 <div className="wiz-upload-text">
                   <div className="wiz-upload-label">Selecionar Arquivo DFD</div>
                   <div className="wiz-upload-file">Nenhum selecionado (.doc, .docx)</div>
                 </div>
                 <div className="wiz-upload-cta">Procurar</div>
-              </div>
+              </label>
             ) : (
               <div className="wiz-upload-area has-file" onClick={() => atualizarDados({ arquivoDfd: null })}>
                 <div className="wiz-upload-icon">✓</div>
@@ -161,14 +167,20 @@ export default function Step3({ dados, atualizarDados }: any) {
               Estudo Técnico Preliminar (ETP) <span className="req-star">*</span>
             </label>
             {!dados.arquivoEtp ? (
-              <div className="wiz-upload-area" onClick={() => selecionarArquivo("arquivoEtp")}>
+              <label className="wiz-upload-area" style={{ cursor: "pointer", display: "flex", width: "100%" }}>
+                <input
+                  type="file"
+                  accept=".doc,.docx"
+                  style={{ display: "none" }}
+                  onChange={(e) => selecionarArquivo(e, "arquivoEtp")}
+                />
                 <div className="wiz-upload-icon">📄</div>
                 <div className="wiz-upload-text">
                   <div className="wiz-upload-label">Selecionar Arquivo ETP</div>
                   <div className="wiz-upload-file">Nenhum selecionado (.doc, .docx)</div>
                 </div>
                 <div className="wiz-upload-cta">Procurar</div>
-              </div>
+              </label>
             ) : (
               <div className="wiz-upload-area has-file" onClick={() => atualizarDados({ arquivoEtp: null })}>
                 <div className="wiz-upload-icon">✓</div>
@@ -186,14 +198,20 @@ export default function Step3({ dados, atualizarDados }: any) {
               Termo de Referência (TR) <span className="req-star">*</span>
             </label>
             {!dados.arquivoTr ? (
-              <div className="wiz-upload-area" onClick={() => selecionarArquivo("arquivoTr")}>
+              <label className="wiz-upload-area" style={{ cursor: "pointer", display: "flex", width: "100%" }}>
+                <input
+                  type="file"
+                  accept=".doc,.docx"
+                  style={{ display: "none" }}
+                  onChange={(e) => selecionarArquivo(e, "arquivoTr")}
+                />
                 <div className="wiz-upload-icon">📄</div>
                 <div className="wiz-upload-text">
                   <div className="wiz-upload-label">Selecionar Arquivo TR</div>
                   <div className="wiz-upload-file">Nenhum selecionado (.doc, .docx)</div>
                 </div>
                 <div className="wiz-upload-cta">Procurar</div>
-              </div>
+              </label>
             ) : (
               <div className="wiz-upload-area has-file" onClick={() => atualizarDados({ arquivoTr: null })}>
                 <div className="wiz-upload-icon">✓</div>
