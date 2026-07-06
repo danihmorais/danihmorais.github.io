@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MontaEdital - Gerador e Conversor de Editais</title>
+    <title>MontaEdital e Gerador de Tabelas</title>
     <meta name="google-adsense-account" content="ca-pub-7602585014371569">
     <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
@@ -35,8 +35,18 @@
             width: 100%;
         }
 
+        body:not(.landing) #root {
+            width: 100%;
+            min-height: 100vh;
+        }
+
         body {
             font-family: 'Segoe UI', 'Calibri', Arial, sans-serif;
+            margin: 0;
+            min-height: 100vh;
+        }
+
+        body.landing {
             background: var(--bg);
             color: var(--text);
             display: flex;
@@ -46,9 +56,20 @@
             padding: 32px 16px;
         }
 
+        body:not(.landing) {
+            display: block;
+            padding: 0;
+            background: #fff;
+        }
+
         .page {
             width: 100%;
             max-width: 720px;
+        }
+
+        body:not(.landing) .page {
+            width: 100%;
+            max-width: none;
         }
 
         .hero {
@@ -254,7 +275,7 @@
         }
     </style>
 </head>
-<body>
+<body class="landing">
 
     <div class="page">
         <div id="view-selecao" class="view active">
@@ -345,8 +366,14 @@
             });
 
             function showView(id) {
-                document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-                document.getElementById(id).classList.add('active');
+                document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+                document.getElementById(id).classList.add("active");
+
+                if (id === "view-app") {
+                    document.body.classList.remove("landing");
+                } else {
+                    document.body.classList.add("landing");
+                }
             }
         })();
     </script>
