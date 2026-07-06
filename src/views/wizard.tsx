@@ -132,10 +132,20 @@ export default function Wizard() {
       else if (dados.modalidade === "DISPENSA_BLL") tipoEditalStr = "dispensa_bll";
       else if (dados.modalidade === "PREGAO_PRESENCIAL") tipoEditalStr = "pregao_presencial";
 
-      await gerarEdital({
+      const { blob, filename } = await gerarEdital({
         tipo_edital: tipoEditalStr,
         dados_preenchimento: payload
       });
+
+      // Dispara o download do .zip retornado pelo backend
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
 
       setGeracaoSucesso(true);
     } catch (erro: any) {
