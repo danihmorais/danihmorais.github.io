@@ -1,467 +1,67 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Conversor de Relatório para DOCX</title>
-    <meta name="google-adsense-account" content="ca-pub-7602585014371569">
-    <script src="https://unpkg.com/docx@8.5.0/build/index.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-    <style>
-        body {
-            font-family: 'Calibri', Arial, sans-serif;
-            background-color: #f4f4f9;
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        .container {
-            background: #ffffff;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            width: 100%;
-            max-width: 800px;
-        }
-        .ad-banner {
-            background-color: transparent;
-            text-align: center;
-            margin-bottom: 20px;
-            width: 100%;
-            max-width: 800px;
-            min-height: 90px;
-        }
-        h1 {
-            color: #333;
-            font-size: 24px;
-            margin-bottom: 20px;
-            text-align: center;
-        }
-        .form-group {
-            margin-bottom: 20px;
-        }
-        label {
-            display: block;
-            font-weight: bold;
-            margin-bottom: 8px;
-            color: #555;
-        }
-        select, input[type="file"] {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            box-sizing: border-box;
-            background-color: #fff;
-        }
-        button {
-            background-color: #4CAF50;
-            color: white;
-            padding: 12px 20px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-            width: 100%;
-            transition: background-color 0.3s;
-        }
-        button:hover {
-            background-color: #45a049;
-        }
-        .footer-ad {
-            background-color: transparent;
-            text-align: center;
-            margin-top: 20px;
-            width: 100%;
-            max-width: 800px;
-            min-height: 90px;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Conversor de Arquivo para Docx</title>
+<script src="https://unpkg.com/docx@8.5.0/build/index.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 </head>
 <body>
 
-    <div class="container">
-        <h1>Conversor de Relatório</h1>
-        
-        <div class="form-group">
-            <label for="tipoScript">Selecione o Modelo de Conversão:</label>
-            <select id="tipoScript">
-                <option value="1">Modelo 1 - Separação por Grupos (Sem Preço)</option>
-                <option value="2">Modelo 2 - Tabela Única (Com Preço)</option>
-            </select>
-        </div>
-
-        <div class="form-group">
-            <label for="fileInput">Selecione o Arquivo (.txt / .csv):</label>
-            <input type="file" id="fileInput" accept=".txt,.csv">
-        </div>
-
-        <button onclick="processarArquivo()">Converter e Baixar DOCX</button>
-    </div>
+    <input type="file" id="arquivoEntrada" />
+    <button onclick="processarArquivo()">Converter e Baixar Docx</button>
 
     <script>
-        function limparTexto(texto) {
-            return String(texto).replace(/\s+/g, ' ').trim();
-        }
-
-        function formatarMoeda(valorStr) {
-            let v = String(valorStr).trim().replace(/"/g, '');
-            if (!v) return "";
-            let num = parseFloat(v.replace(/\./g, '').replace(/,/g, '.'));
-            if (isNaN(num)) return "R$ " + v;
-            let formatado = num.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-            return "R$ " + formatado;
-        }
-
-        function parseCSV(str) {
-            const arr = [];
-            let quote = false;
-            let col = "", row = [];
-            for (let i = 0; i < str.length; i++) {
-                let c = str[i];
-                if (c === '"' && !quote) {
-                    quote = true;
-                } else if (c === '"' && quote) {
-                    if (str[i + 1] === '"') {
-                        col += '"';
-                        i++;
-                    } else {
-                        quote = false;
-                    }
-                } else if (c === ',' && !quote) {
-                    row.push(col.trim());
-                    col = "";
-                } else if (c === '\n' && !quote) {
-                    row.push(col.trim());
-                    arr.push(row);
-                    col = "";
-                    row = [];
-                } else if (c !== '\r') {
-                    col += c;
-                }
-            }
-            if (col !== "") row.push(col.trim());
-            if (row.length > 0) arr.push(row);
-            return arr;
-        }
-
-        function createDocxModel1(gruposDict) {
-            const children = [];
-
-            for (const [grupoNome, itens] of Object.entries(gruposDict)) {
-                if (itens.length === 0) continue;
-
-                children.push(new docx.Paragraph({
-                    children: [
-                        new docx.TextRun({ text: grupoNome, bold: true, size: 28, font: "Calibri" })
-                    ],
-                    alignment: docx.AlignmentType.CENTER,
-                    spacing: { before: 200, after: 200 }
-                }));
-
-                const tableRows = [];
-
-                for (const el of itens) {
-                    const cellProps = { shading: { fill: "D9EAD3", type: docx.ShadingType.CLEAR } };
-
-                    tableRows.push(new docx.TableRow({
+    function createDocxModel2(texto) {
+        const doc = new docx.Document({
+            sections: [{
+                properties: {},
+                children: [
+                    new docx.Paragraph({
                         children: [
-                            new docx.TableCell({
-                                ...cellProps,
-                                children: [new docx.Paragraph({ children: [new docx.TextRun({ text: el.item, bold: true, font: "Calibri", size: 20 })], alignment: docx.AlignmentType.CENTER })]
-                            }),
-                            new docx.TableCell({
-                                ...cellProps,
-                                children: [new docx.Paragraph({ children: [new docx.TextRun({ text: el.codigo, font: "Calibri", size: 20 })], alignment: docx.AlignmentType.CENTER })]
-                            }),
-                            new docx.TableCell({
-                                ...cellProps,
-                                children: [new docx.Paragraph({ children: [new docx.TextRun({ text: el.nome, bold: true, font: "Calibri", size: 20 })], alignment: docx.AlignmentType.JUSTIFY })]
-                            }),
-                            new docx.TableCell({
-                                ...cellProps,
-                                children: [new docx.Paragraph({ children: [new docx.TextRun({ text: el.medida, font: "Calibri", size: 20 })], alignment: docx.AlignmentType.CENTER })]
-                            }),
-                            new docx.TableCell({
-                                ...cellProps,
-                                children: [new docx.Paragraph({ children: [new docx.TextRun({ text: el.qtd, font: "Calibri", size: 20 })], alignment: docx.AlignmentType.CENTER })]
-                            })
+                            new docx.TextRun(texto)
                         ]
-                    }));
+                    })
+                ]
+            }]
+        });
+        return doc;
+    }
 
-                    if (el.desc) {
-                        tableRows.push(new docx.TableRow({
-                            children: [
-                                new docx.TableCell({
-                                    columnSpan: 5,
-                                    shading: { fill: "F2F2F2", type: docx.ShadingType.CLEAR },
-                                    children: [new docx.Paragraph({ children: [new docx.TextRun({ text: el.desc, font: "Calibri", size: 20 })], alignment: docx.AlignmentType.JUSTIFY })]
-                                })
-                            ]
-                        }));
-                    }
-                }
+    async function processarModelo2(conteudo) {
+        try {
+            const modeloDocx = createDocxModel2(conteudo);
+            const blob = await docx.Packer.toBlob(modeloDocx);
+            saveAs(blob, "documento_convertido.docx");
+        } catch (erro) {
+            console.error(erro);
+            alert("Ocorreu um erro durante a conversão do documento.");
+        }
+    }
 
-                children.push(new docx.Table({
-                    rows: tableRows,
-                    columnWidths: [850, 1701, 5103, 1134, 850],
-                    alignment: docx.AlignmentType.CENTER,
-                    width: { size: 100, type: docx.WidthType.PERCENTAGE }
-                }));
-
-                children.push(new docx.Paragraph({ text: "" }));
-            }
-
-            return new docx.Document({
-                sections: [{
-                    properties: {
-                        page: {
-                            margin: { top: 720, right: 720, bottom: 720, left: 720 },
-                            size: { width: 11907, height: 16840 }
-                        }
-                    },
-                    children: children
-                }]
-            });
+    function processarArquivo() {
+        const inputArquivo = document.getElementById('arquivoEntrada');
+        
+        if (!inputArquivo.files || inputArquivo.files.length === 0) {
+            alert("Por favor, selecione um arquivo primeiro.");
+            return;
         }
 
-        function createDocxModel2(tabelaRowsData) {
-            const tableRows = [];
+        const arquivo = inputArquivo.files[0];
+        const reader = new FileReader();
 
-            for (const el of tabelaRowsData) {
-                if (el.isDesc) {
-                    tableRows.push(new docx.TableRow({
-                        children: [
-                            new docx.TableCell({
-                                columnSpan: 7,
-                                shading: { fill: "F2F2F2", type: docx.ShadingType.CLEAR },
-                                children: [new docx.Paragraph({ children: [new docx.TextRun({ text: el.desc, font: "Calibri", size: 20 })], alignment: docx.AlignmentType.JUSTIFY })]
-                            })
-                        ]
-                    }));
-                } else {
-                    const cellProps = { shading: { fill: "D9EAD3", type: docx.ShadingType.CLEAR } };
-                    tableRows.push(new docx.TableRow({
-                        children: [
-                            new docx.TableCell({
-                                ...cellProps,
-                                children: [new docx.Paragraph({ children: [new docx.TextRun({ text: el.item, bold: true, font: "Calibri", size: 20 })], alignment: docx.AlignmentType.CENTER })]
-                            }),
-                            new docx.TableCell({
-                                ...cellProps,
-                                children: [new docx.Paragraph({ children: [new docx.TextRun({ text: el.codigo, font: "Calibri", size: 20 })], alignment: docx.AlignmentType.CENTER })]
-                            }),
-                            new docx.TableCell({
-                                ...cellProps,
-                                children: [new docx.Paragraph({ children: [new docx.TextRun({ text: el.nome, bold: true, font: "Calibri", size: 20 })], alignment: docx.AlignmentType.JUSTIFY })]
-                            }),
-                            new docx.TableCell({
-                                ...cellProps,
-                                children: [new docx.Paragraph({ children: [new docx.TextRun({ text: el.medida, font: "Calibri", size: 20 })], alignment: docx.AlignmentType.CENTER })]
-                            }),
-                            new docx.TableCell({
-                                ...cellProps,
-                                children: [new docx.Paragraph({ children: [new docx.TextRun({ text: el.qtd, font: "Calibri", size: 20 })], alignment: docx.AlignmentType.CENTER })]
-                            }),
-                            new docx.TableCell({
-                                ...cellProps,
-                                children: [new docx.Paragraph({ children: [new docx.TextRun({ text: el.preco, font: "Calibri", size: 20 })], alignment: docx.AlignmentType.CENTER })]
-                            }),
-                            new docx.TableCell({
-                                ...cellProps,
-                                children: [new docx.Paragraph({ children: [new docx.TextRun({ text: el.total, font: "Calibri", size: 20 })], alignment: docx.AlignmentType.CENTER })]
-                            })
-                        ]
-                    }));
-                }
-            }
+        reader.onload = function(evento) {
+            const conteudo = evento.target.result;
+            processarModelo2(conteudo);
+        };
 
-            return new docx.Document({
-                sections: [{
-                    properties: {
-                        page: {
-                            margin: { top: 720, right: 720, bottom: 720, left: 720 },
-                            size: { width: 11907, height: 16840 }
-                        }
-                    },
-                    children: tableRows.length > 0 ? [
-                        new docx.Table({
-                            rows: tableRows,
-                            columnWidths: [567, 1247, 4536, 850, 850, 1190, 1190],
-                            alignment: docx.AlignmentType.CENTER,
-                            width: { size: 100, type: docx.WidthType.PERCENTAGE }
-                        })
-                    ] : [new docx.Paragraph({ text: "Nenhum dado processado." })]
-                }]
-            });
-        }
+        reader.onerror = function() {
+            console.error("Erro ao ler o arquivo.");
+        };
 
-        function processarModelo1(csvData) {
-            const gruposDict = {};
-            let lastItem = null;
-
-            for (let linha of csvData) {
-                linha = linha.map(c => limparTexto(c)).filter(c => c !== "");
-                if (linha.length === 0) continue;
-
-                let idxCodigo = -1;
-                for (let i = 0; i < linha.length; i++) {
-                    if (/^\d{3}\.\d{3}\.\d{3}$/.test(linha[i])) {
-                        idxCodigo = i;
-                        break;
-                    }
-                }
-
-                if (idxCodigo !== -1) {
-                    let codigo = linha[idxCodigo];
-                    let item = "", grupo = "", descParts = [];
-
-                    if (idxCodigo >= 1 && /^\d+$/.test(linha[idxCodigo - 1])) {
-                        item = linha[idxCodigo - 1];
-                        if (idxCodigo >= 2) {
-                            grupo = linha[idxCodigo - 2];
-                            descParts = linha.slice(0, idxCodigo - 2);
-                        }
-                    } else {
-                        if (idxCodigo >= 1) {
-                            grupo = linha[idxCodigo - 1];
-                            descParts = linha.slice(0, idxCodigo - 1);
-                        }
-                    }
-
-                    if (!grupo) grupo = "GERAL";
-
-                    let postCode = linha.slice(idxCodigo + 1);
-                    let nome = postCode.length > 0 ? postCode[0] : "";
-                    let medida = "";
-                    let qtd = "";
-
-                    if (postCode.length >= 3) {
-                        medida = postCode[1];
-                        qtd = postCode[2];
-                    } else if (postCode.length === 2) {
-                        qtd = postCode[1];
-                    }
-
-                    let desc = descParts.join(" ").trim();
-
-                    if (!gruposDict[grupo]) {
-                        gruposDict[grupo] = [];
-                    }
-
-                    let itemDict = { item, codigo, nome, medida, qtd, desc };
-                    gruposDict[grupo].push(itemDict);
-                    lastItem = itemDict;
-
-                } else {
-                    if (lastItem !== null) {
-                        let textoAdicional = "";
-                        if (lastItem.qtd === "" && /^\d+([.,]\d+)?$/.test(linha[linha.length - 1])) {
-                            lastItem.qtd = linha[linha.length - 1];
-                            textoAdicional = linha.slice(0, -1).join(" ").trim();
-                        } else {
-                            textoAdicional = linha.join(" ").trim();
-                        }
-
-                        if (textoAdicional) {
-                            if (lastItem.desc) {
-                                lastItem.desc += " " + textoAdicional;
-                            } else {
-                                lastItem.desc = textoAdicional;
-                            }
-                        }
-                    }
-                }
-            }
-
-            const doc = createDocxModel1(gruposDict);
-            docx.Packer.toBlob(doc).then(blob => {
-                saveAs(blob, "Tabela_Convertida_Modelo1.docx");
-            });
-        }
-
-        function processarModelo2(csvData) {
-            const tabelaRowsData = [];
-
-            for (let linha of csvData) {
-                linha = linha.map(c => limparTexto(c));
-                if (linha.length === 0 || linha.every(c => !c)) continue;
-
-                let temDesc = false;
-                let descricao = "";
-                let item = "", codigo = "", nome = "", medida = "", qtd = "", preco = "", total = "";
-
-                if (linha.length >= 7 && /^\d+$/.test(linha[0]) && /^\d{3}\.\d{3}\.\d{3}$/.test(linha[1])) {
-                    item = linha[0];
-                    codigo = linha[1];
-                    nome = linha[2];
-                    medida = linha[3];
-                    qtd = linha[4];
-                    preco = linha[5];
-                    total = linha[6];
-                } else if (linha.length >= 8 && /^\d+$/.test(linha[1]) && /^\d{3}\.\d{3}\.\d{3}$/.test(linha[2])) {
-                    temDesc = true;
-                    descricao = linha[0];
-                    item = linha[1];
-                    codigo = linha[2];
-                    nome = linha[3];
-                    medida = linha[4];
-                    qtd = linha[5];
-                    preco = linha[6];
-                    total = linha[7];
-                } else {
-                    descricao = linha.filter(c => c).join(" ").trim();
-                    if (descricao && tabelaRowsData.length > 0) {
-                        tabelaRowsData.push({ isDesc: true, desc: descricao });
-                    }
-                    continue;
-                }
-
-                tabelaRowsData.push({
-                    isDesc: false,
-                    item, codigo, nome, medida, qtd,
-                    preco: formatarMoeda(preco),
-                    total: formatarMoeda(total)
-                });
-
-                if (temDesc && descricao) {
-                    tabelaRowsData.push({ isDesc: true, desc: descricao });
-                }
-            }
-
-            const doc = createDocxModel2(tabelaRowsData);
-            docx.Packer.toBlob(doc).then(blob => {
-                saveAs(blob, "Tabela_Convertida_Modelo2.docx");
-            });
-        }
-
-        function processarArquivo() {
-            const fileInput = document.getElementById('fileInput');
-            const tipoScript = document.getElementById('tipoScript').value;
-
-            if (fileInput.files.length === 0) {
-                alert("Por favor, selecione um arquivo.");
-                return;
-            }
-
-            const file = fileInput.files[0];
-            const reader = new FileReader();
-
-            reader.onload = function(e) {
-                const text = e.target.result;
-                const csvData = parseCSV(text);
-
-                if (tipoScript === "1") {
-                    processarModelo1(csvData);
-                } else {
-                    processarModelo2(csvData);
-                }
-            };
-
-            reader.readAsText(file, "UTF-8");
-        }
+        reader.readAsText(arquivo);
+    }
     </script>
 </body>
 </html>
