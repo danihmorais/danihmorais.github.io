@@ -204,7 +204,9 @@ def _data_por_extenso(data_str: str) -> str:
     except Exception:
         return data_str
 
-def montar_variaveis_fixas(dados_usuario: dict) -> dict:
+def montar(modelo_json: str) -> dict:
+    import json
+    dados_usuario = json.loads(modelo_json)
     resultado = {}
 
     for chave, valor in dados_usuario.items():
@@ -421,7 +423,4 @@ def montar_variaveis_fixas(dados_usuario: dict) -> dict:
         resultado["{{EXCLUSIVO}}"] = "NÃO"
         resultado["{{EXCLUSIVO TXT}}"] = "Nos termos do art. 47, 48 e 49 da LCP 123/2006, que versa que “o tratamento diferenciado e simplificado para as microempresas e empresas de pequeno porte” pode ser afastado quando “não for vantajoso para a administração pública ou representar prejuízo ao conjunto ou complexo do objeto a ser contratado” e, considerando ainda a justificativa apresentada no bojo do Estudo Técnico Preliminar e no Termo de referência, ***esta licitação NÃO será exclusiva para ME/EPP, sendo concedido, porém, o benefício do empate ficto e demais tratamentos diferenciados para tais empresas.***"
 
-    return resultado
-
-def filtrar_chaves_docx(dados: dict) -> dict:
-    return {k: v for k, v in dados.items() if (k.startswith("{{") and k.endswith("}}")) or k == "E_ARP" or k.startswith("__")}
+    return {k: v for k, v in resultado.items() if (k.startswith("{{") and k.endswith("}}")) or k == "E_ARP" or k.startswith("__")}

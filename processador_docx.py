@@ -476,7 +476,10 @@ def _remover_secao_arp(doc):
     if len(body.findall(qn('w:p'))) == 0:
         body.insert(0, OxmlElement('w:p'))
 
-def preencher_documento(caminho_modelo: str, caminho_saida: str, dados: dict) -> str:
+def processar(caminho_modelo: str, dados: dict, modelo: str) -> str:
+    os.makedirs("saida", exist_ok=True)
+    caminho_saida = os.path.join("saida", f"resultado_{uuid.uuid4().hex}.docx")
+    
     doc = Document(caminho_modelo)
     e_arp = dados.get("E_ARP", False)
     remover_amostra = dados.get("__REMOVER_AMOSTRA__", False)
