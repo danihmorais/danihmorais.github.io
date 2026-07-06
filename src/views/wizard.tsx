@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useContext } from "react";
-import { invoke } from "@tauri-apps/api/core";
+
 import Step1 from "./steps/step1";
 import Step2 from "./steps/step2";
 import Step3 from "./steps/step3";
@@ -7,6 +7,7 @@ import { mapearDadosWizard } from "../utils/mapearDados";
 import { ThemeContext } from "../context/ThemeContext";
 import "./wizard.css";
 import logo from "../assets/logo.png";
+import { API_URL } from "../api";
 
 export default function Wizard() {
   const [etapaAtual, setEtapaAtual] = useState(0);
@@ -106,10 +107,22 @@ export default function Wizard() {
     try {
       const { dadosMapeados, arquivoBase } = await mapearDadosWizard(dados);
 
-      await invoke("gerar_documentos", {
-        dadosUsuario: dadosMapeados,
-        arquivosBase: [arquivoBase]
+      const response = await fetch(`${API_URL}/gerar_documentos`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          dadosUsuario: dadosMapeados,
+          arquivosBase: [arquivoBase],
+        }),
       });
+
+      if (!response.ok) {
+        throw new Error("Erro ao gerar documentos");
+      }
+
+      const resultado = await response.json();
 
       setGeracaoSucesso(true);
     } catch (erro: any) {
@@ -157,8 +170,7 @@ export default function Wizard() {
               <div style={{ fontSize: "44px", marginBottom: "12px" }}>✅</div>
               <h2 style={{ margin: "0 0 16px 0", color: "var(--wiz-success)", fontSize: "22px" }}>Edital Gerado com Sucesso!</h2>
               <p style={{ color: "var(--wiz-text-3)", margin: "0 0 24px 0", fontSize: "14px" }}>
-                Os arquivos foram salvos na pasta{" "}
-                <span onClick={() => invoke("abrir_pasta_documentos")} style={{ color: "var(--wiz-accent)", fontWeight: "bold", cursor: "pointer", textDecoration: "underline" }}>Documentos_Gerados</span>.
+                Os documentos foram baixados. Verifique sua pasta Downloads.
               </p>
               <button onClick={() => { setCarregando(false); setGeracaoSucesso(false); setEtapaAtual(0); }} className="wiz-btn" style={{ background: "var(--wiz-success)", color: "#fff" }}>✓ Concluir</button>
             </>

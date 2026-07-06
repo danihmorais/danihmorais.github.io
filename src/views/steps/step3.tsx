@@ -1,5 +1,4 @@
 import React from "react";
-import { open } from "@tauri-apps/plugin-dialog";
 
 export default function Step3({ dados, atualizarDados }: any) {
   const handleValorChange = (e: any) => {
@@ -24,19 +23,17 @@ export default function Step3({ dados, atualizarDados }: any) {
     ? dados.declAdicionais 
     : (typeof dados.declAdicionais === 'string' && dados.declAdicionais.trim() !== '' ? [dados.declAdicionais] : []);
 
-  const selecionarArquivo = async (chave: string) => {
-    const selected = await open({
-      multiple: false,
-      filters: [{
-        name: "Documentos",
-        extensions: ["doc", "docx"]
-      }]
-    });
+  const selecionarArquivo = (
+    event: React.ChangeEvent<HTMLInputElement>,
+    chave: string
+  ) => {
+    const file = event.target.files?.[0];
 
-    if (selected && typeof selected === "string") {
-      const nameStr = selected.split(/[\\/]/).pop() || selected;
-      atualizarDados({ [chave]: { name: nameStr, path: selected } });
-    }
+    if (!file) return;
+
+    atualizarDados({
+      [chave]: file,
+    });
   };
 
   return (
