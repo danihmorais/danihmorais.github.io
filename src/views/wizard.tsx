@@ -7,7 +7,7 @@ import { mapearDadosWizard } from "../utils/mapearDados";
 import { ThemeContext } from "../context/ThemeContext";
 import "./wizard.css";
 import logo from "../assets/logo.png";
-import { gerarEditalApi } from "../api";
+import { gerarEdital } from "../api";
 
 export default function Wizard() {
   const [etapaAtual, setEtapaAtual] = useState(0);
@@ -131,7 +131,7 @@ export default function Wizard() {
       else if (dados.modalidade === "DISPENSA_BLL") tipoEditalStr = "dispensa_bll";
       else if (dados.modalidade === "PREGAO_PRESENCIAL") tipoEditalStr = "pregao_presencial";
 
-      await gerarEditalApi({
+      await gerarEdital({
         tipo_edital: tipoEditalStr,
         dados_preenchimento: payload
       });
