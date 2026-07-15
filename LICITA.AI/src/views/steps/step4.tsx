@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
 
 export default function Step4({ dados, atualizarDados }: any) {
   const [gestorNome, setGestorNome] = useState("");

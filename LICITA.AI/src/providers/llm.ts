@@ -1,5 +1,3 @@
-import { writeTextFile, exists, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs';
-
 const MAX_TENTATIVAS = 3;
 
 async function salvarLogErro(prefixo: string, erro: any, dadosCrus: any = null) {

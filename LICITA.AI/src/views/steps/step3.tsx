@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
 
 const SECRETARIAS_DEFAULT = [
   "Gabinete do Prefeito",

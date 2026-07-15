@@ -1,5 +1,4 @@
 import { useState, useContext, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import logo from "./assets/logo.png";
 import { ThemeContext } from "./context/ThemeContext";
 import Wizard from "./views/wizard";

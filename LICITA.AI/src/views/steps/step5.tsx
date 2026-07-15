@@ -1,5 +1,4 @@
 import React from "react";
-import { open } from "@tauri-apps/plugin-dialog";
 
 const styles = {
   container: { display: "flex", flexDirection: "column" as const, gap: "28px" },
