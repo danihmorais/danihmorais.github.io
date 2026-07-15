@@ -3,739 +3,137 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MontaEdital e Gerador de Tabelas</title>
-    <link rel="icon" href="/src/assets/logo.png" type="image/png">
-    <meta name="google-adsense-account" content="ca-pub-7602585014371569">
-    <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <title>MontaEdital</title>
+
+    <link rel="icon" href="/assets/logo.png" type="image/png">
+
     <style>
         :root {
             --bg: #f4f5f7;
             --surface: #ffffff;
-            --surface-2: #f9fafb;
             --border: #e5e7eb;
             --text: #1f2430;
             --text-muted: #6b7280;
             --primary: #2f6f4f;
             --primary-hover: #275e42;
             --primary-soft: #eaf5ee;
-            --shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px rgba(16, 24, 40, 0.06);
+            --shadow: 0 1px 2px rgba(16,24,40,.04),0 8px 24px rgba(16,24,40,.06);
             --radius: 14px;
         }
 
-        * { box-sizing: border-box; }
-
-        html, body {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            min-height: 100vh;
-        }
-
-        #root {
-            width: 100%;
-        }
-
-        body:not(.landing) #root {
-            width: 100%;
-            min-height: 100vh;
+        * {
+            box-sizing: border-box;
         }
 
         body {
-            font-family: 'Segoe UI', 'Calibri', Arial, sans-serif;
             margin: 0;
-            min-height: 100vh;
-        }
-
-        body.landing {
+            font-family: "Segoe UI", Arial, sans-serif;
             background: var(--bg);
             color: var(--text);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 32px 16px;
         }
 
-        body:not(.landing) {
-            display: block;
-            padding: 0;
-            background: #fff;
-        }
-
-        .page {
-            width: 100%;
-            max-width: 720px;
-        }
-
-        body:not(.landing) .page {
-            width: 100%;
-            max-width: none;
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 50px 20px;
         }
 
         .hero {
             text-align: center;
-            margin-bottom: 32px;
+            margin-bottom: 40px;
         }
 
         .hero h1 {
-            font-size: 26px;
-            margin: 0 0 8px;
+            margin: 0;
+            font-size: 34px;
         }
 
         .hero p {
+            margin-top: 10px;
             color: var(--text-muted);
-            font-size: 15px;
-            margin: 0;
-        }
-
-        .option-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
-            margin-bottom: 28px;
-        }
-
-        @media (max-width: 560px) {
-            .option-grid { grid-template-columns: 1fr; }
-        }
-
-        .option-card {
-            position: relative;
-            background: var(--surface);
-            border: 2px solid var(--border);
-            border-radius: var(--radius);
-            padding: 22px 20px;
-            cursor: pointer;
-            text-align: left;
-            transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
-            box-shadow: var(--shadow);
-        }
-
-        .option-card:hover {
-            transform: translateY(-2px);
-            border-color: #cfd4dc;
-        }
-
-        .option-card.selected {
-            border-color: var(--primary);
-            background: var(--primary-soft);
-        }
-
-        .option-card .icon {
-            font-size: 26px;
-            margin-bottom: 12px;
-            display: block;
-        }
-
-        .option-card h3 {
-            margin: 0 0 6px;
             font-size: 16px;
         }
 
-        .option-card p {
-            margin: 0;
-            font-size: 13px;
-            color: var(--text-muted);
-            line-height: 1.4;
-        }
-
-        .option-card .check {
-            position: absolute;
-            top: 14px;
-            right: 14px;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            border: 2px solid var(--border);
-            background: var(--surface);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            color: transparent;
-            transition: all .15s ease;
-        }
-
-        .option-card.selected .check {
-            border-color: var(--primary);
-            background: var(--primary);
-            color: #fff;
-        }
-
-        .actions-row {
-            display: flex;
-            justify-content: flex-end;
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px,1fr));
+            gap: 20px;
         }
 
         .card {
             background: var(--surface);
-            border: 1px solid var(--border);
+            border: 2px solid var(--border);
             border-radius: var(--radius);
-            box-shadow: var(--shadow);
-            padding: 28px;
-        }
-
-        .card-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 22px;
-        }
-
-        .card-header h2 {
-            font-size: 19px;
-            margin: 0;
-        }
-
-        .back-link {
-            background: none;
-            border: none;
-            color: var(--text-muted);
-            font-size: 14px;
+            padding: 24px;
             cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 10px;
-            border-radius: 8px;
-            transition: background .15s ease;
-            width: auto;
+            transition: .15s;
+            box-shadow: var(--shadow);
         }
 
-        .back-link:hover {
-            background: var(--surface-2);
-            color: var(--text);
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        label {
-            display: block;
-            font-weight: 600;
-            font-size: 14px;
-            margin-bottom: 8px;
-            color: var(--text);
-        }
-
-        select, input[type="file"] {
-            width: 100%;
-            padding: 11px 12px;
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            background: var(--surface-2);
-            font-size: 14px;
-            color: var(--text);
-        }
-
-        select:focus, input[type="file"]:focus {
-            outline: none;
+        .card:hover {
+            transform: translateY(-3px);
             border-color: var(--primary);
         }
 
-        button.primary {
-            background: var(--primary);
-            color: white;
-            padding: 13px 22px;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            font-size: 15px;
-            font-weight: 600;
-            width: 100%;
-            transition: background-color .15s ease;
+        .icon {
+            font-size: 42px;
+            margin-bottom: 15px;
         }
 
-        button.primary:hover {
-            background: var(--primary-hover);
+        .card h2 {
+            margin: 0 0 8px;
+            font-size: 20px;
         }
 
-        button.primary:disabled {
-            background: #b7c2bb;
-            cursor: not-allowed;
+        .card p {
+            margin: 0;
+            color: var(--text-muted);
+            line-height: 1.5;
         }
 
-        .view {
-            display: none;
-            width: 100%;
-        }
-
-        .view.active {
-            display: block;
-        }
-
-        .ad-banner, .footer-ad {
-            background-color: transparent;
+        .footer {
+            margin-top: 60px;
             text-align: center;
-            margin: 20px 0;
-            width: 100%;
-            max-width: 720px;
-            min-height: 90px;
+            color: var(--text-muted);
+            font-size: 14px;
         }
     </style>
 </head>
-<body class="landing">
 
-    <div class="page">
-        <div id="view-selecao" class="view active">
-            <div class="hero">
-                <h1>MontaEdital</h1>
-                <p>Escolha o que você quer fazer e clique em avançar.</p>
-            </div>
+<body>
 
-            <div class="option-grid">
-                <div class="option-card" data-target="view-app" tabindex="0">
-                    <span class="check">✓</span>
-                    <span class="icon">🗂️</span>
-                    <h3>MontaEdital</h3>
-                    <p>MontaEdital conforme Fase Prepatória</p>
-                </div>
+<div class="container">
 
-                <div class="option-card" data-target="view-conversor" tabindex="0">
-                    <span class="check">✓</span>
-                    <span class="icon">📄</span>
-                    <h3>Conversor de Relatório</h3>
-                    <p>Transforma um arquivo .txt/.csv em uma tabela DOCX formatada.</p>
-                </div>
-            </div>
+    <div class="hero">
+        <h1>MontaEdital</h1>
+        <p>Selecione o sistema que deseja utilizar.</p>
+    </div>
 
-            <div class="actions-row">
-                <button class="primary" id="btnAvancar" style="width: auto; padding: 13px 32px;" disabled>Avançar</button>
-            </div>
+    <div class="grid">
+
+        <div class="card" onclick="location.href='MontaEdital/'">
+            <div class="icon">🗂️</div>
+            <h2>MontaEdital</h2>
+            <p>
+                Sistema para elaboração da fase preparatória e montagem de editais.
+            </p>
         </div>
 
-        <div id="view-app" class="view">
-            <div id="root"></div>
-        </div>
-
-        <div id="view-conversor" class="view">
-            <div class="card">
-                <div class="card-header">
-                    <h2>Conversor de Relatório</h2>
-                    <button class="back-link" data-back="view-selecao">← Voltar</button>
-                </div>
-
-                <div class="form-group">
-                    <label for="tipoScript">Modelo de conversão</label>
-                    <select id="tipoScript">
-                        <option value="1">Modelo 1 - Separação por Grupos (Sem Preço)</option>
-                        <option value="2">Modelo 2 - Tabela Única (Com Preço)</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label for="fileInput">Arquivo (.txt / .csv)</label>
-                    <input type="file" id="fileInput" accept=".txt,.csv">
-                </div>
-
-                <button class="primary" onclick="processarArquivo()">Converter e Baixar DOCX</button>
-            </div>
+        <div class="card" onclick="location.href='FIORILLICSVTOWORD/'">
+            <div class="icon">📄</div>
+            <h2>Conversor de Relatórios Fiorilli</h2>
+            <p>
+                Converte relatórios TXT/CSV da Fiorilli em tabelas formatadas no Word (.docx).
+            </p>
         </div>
 
     </div>
 
-    <script type="module" src="/src/main.tsx"></script>
+    <div class="footer">
+        © 2026 MontaEdital
+    </div>
 
-    <script>
-        (function () {
-            const cards = document.querySelectorAll('.option-card');
-            const btnAvancar = document.getElementById('btnAvancar');
-            let targetView = null;
+</div>
 
-            cards.forEach(card => {
-                card.addEventListener('click', () => {
-                    cards.forEach(c => c.classList.remove('selected'));
-                    card.classList.add('selected');
-                    targetView = card.dataset.target;
-                    btnAvancar.disabled = false;
-                });
-            });
-
-            btnAvancar.addEventListener('click', () => {
-                if (!targetView) return;
-                showView(targetView);
-            });
-
-            document.querySelectorAll('[data-back]').forEach(btn => {
-                btn.addEventListener('click', () => showView(btn.dataset.back));
-            });
-
-            function showView(id) {
-                document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
-                document.getElementById(id).classList.add("active");
-
-                if (id === "view-app") {
-                    document.body.classList.remove("landing");
-                } else {
-                    document.body.classList.add("landing");
-                }
-            }
-        })();
-    </script>
-
-    <script>
-        function limparTexto(texto) {
-            return String(texto).replace(/\s+/g, ' ').trim();
-        }
-
-        function formatarMoeda(valorStr) {
-            let v = String(valorStr).trim().replace(/"/g, '');
-            if (!v) return "";
-            let num = parseFloat(v.replace(/\./g, '').replace(/,/g, '.'));
-            if (isNaN(num)) return "R$ " + v;
-            let formatado = num.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-            return "R$ " + formatado;
-        }
-
-        function parseCSV(str) {
-            const arr = [];
-            let quote = false;
-            let col = "", row = [];
-            for (let i = 0; i < str.length; i++) {
-                let c = str[i];
-                if (c === '"' && !quote) {
-                    quote = true;
-                } else if (c === '"' && quote) {
-                    if (str[i + 1] === '"') {
-                        col += '"';
-                        i++;
-                    } else {
-                        quote = false;
-                    }
-                } else if (c === ',' && !quote) {
-                    row.push(col.trim());
-                    col = "";
-                } else if (c === '\n' && !quote) {
-                    row.push(col.trim());
-                    arr.push(row);
-                    col = "";
-                    row = [];
-                } else if (c !== '\r') {
-                    col += c;
-                }
-            }
-            if (col !== "") row.push(col.trim());
-            if (row.length > 0) arr.push(row);
-            return arr;
-        }
-
-        function createDocxModel1(gruposDict) {
-            const children = [];
-
-            for (const [grupoNome, itens] of Object.entries(gruposDict)) {
-                if (itens.length === 0) continue;
-
-                children.push(new docx.Paragraph({
-                    children: [
-                        new docx.TextRun({ text: grupoNome, bold: true, size: 28, font: "Calibri" })
-                    ],
-                    alignment: docx.AlignmentType.CENTER,
-                    spacing: { before: 200, after: 200 }
-                }));
-
-                const tableRows = [];
-
-                for (const el of itens) {
-                    const cellProps = { shading: { fill: "D9EAD3", type: docx.ShadingType.CLEAR } };
-
-                    tableRows.push(new docx.TableRow({
-                        children: [
-                            new docx.TableCell({
-                                ...cellProps,
-                                children: [new docx.Paragraph({ children: [new docx.TextRun({ text: el.item, bold: true, font: "Calibri", size: 20 })], alignment: docx.AlignmentType.CENTER })]
-                            }),
-                            new docx.TableCell({
-                                ...cellProps,
-                                children: [new docx.Paragraph({ children: [new docx.TextRun({ text: el.codigo, font: "Calibri", size: 20 })], alignment: docx.AlignmentType.CENTER })]
-                            }),
-                            new docx.TableCell({
-                                ...cellProps,
-                                children: [new docx.Paragraph({ children: [new docx.TextRun({ text: el.nome, bold: true, font: "Calibri", size: 20 })], alignment: docx.AlignmentType.JUSTIFY })]
-                            }),
-                            new docx.TableCell({
-                                ...cellProps,
-                                children: [new docx.Paragraph({ children: [new docx.TextRun({ text: el.medida, font: "Calibri", size: 20 })], alignment: docx.AlignmentType.CENTER })]
-                            }),
-                            new docx.TableCell({
-                                ...cellProps,
-                                children: [new docx.Paragraph({ children: [new docx.TextRun({ text: el.qtd, font: "Calibri", size: 20 })], alignment: docx.AlignmentType.CENTER })]
-                            })
-                        ]
-                    }));
-
-                    if (el.desc) {
-                        tableRows.push(new docx.TableRow({
-                            children: [
-                                new docx.TableCell({
-                                    columnSpan: 5,
-                                    shading: { fill: "F2F2F2", type: docx.ShadingType.CLEAR },
-                                    children: [new docx.Paragraph({ children: [new docx.TextRun({ text: el.desc, font: "Calibri", size: 20 })], alignment: docx.AlignmentType.JUSTIFY })]
-                                })
-                            ]
-                        }));
-                    }
-                }
-
-                children.push(new docx.Table({
-                    rows: tableRows,
-                    columnWidths: [850, 1701, 5103, 1134, 850],
-                    alignment: docx.AlignmentType.CENTER,
-                    width: { size: 100, type: docx.WidthType.PERCENTAGE }
-                }));
-
-                children.push(new docx.Paragraph({ text: "" }));
-            }
-
-            return new docx.Document({
-                sections: [{
-                    properties: {
-                        page: {
-                            margin: { top: 720, right: 720, bottom: 720, left: 720 },
-                            size: { width: 11907, height: 16840 }
-                        }
-                    },
-                    children: children
-                }]
-            });
-        }
-
-        function createDocxModel2(tabelaRowsData) {
-            const tableRows = [];
-
-            for (const el of tabelaRowsData) {
-                if (el.isDesc) {
-                    tableRows.push(new docx.TableRow({
-                        children: [
-                            new docx.TableCell({
-                                columnSpan: 7,
-                                shading: { fill: "F2F2F2", type: docx.ShadingType.CLEAR },
-                                children: [new docx.Paragraph({ children: [new docx.TextRun({ text: el.desc, font: "Calibri", size: 20 })], alignment: docx.AlignmentType.JUSTIFY })]
-                            })
-                        ]
-                    }));
-                } else {
-                    const cellProps = { shading: { fill: "D9EAD3", type: docx.ShadingType.CLEAR } };
-                    tableRows.push(new docx.TableRow({
-                        children: [
-                            new docx.TableCell({
-                                ...cellProps,
-                                children: [new docx.Paragraph({ children: [new docx.TextRun({ text: el.item, bold: true, font: "Calibri", size: 20 })], alignment: docx.AlignmentType.CENTER })]
-                            }),
-                            new docx.TableCell({
-                                ...cellProps,
-                                children: [new docx.Paragraph({ children: [new docx.TextRun({ text: el.codigo, font: "Calibri", size: 20 })], alignment: docx.AlignmentType.CENTER })]
-                            }),
-                            new docx.TableCell({
-                                ...cellProps,
-                                children: [new docx.Paragraph({ children: [new docx.TextRun({ text: el.nome, bold: true, font: "Calibri", size: 20 })], alignment: docx.AlignmentType.JUSTIFY })]
-                            }),
-                            new docx.TableCell({
-                                ...cellProps,
-                                children: [new docx.Paragraph({ children: [new docx.TextRun({ text: el.medida, font: "Calibri", size: 20 })], alignment: docx.AlignmentType.CENTER })]
-                            }),
-                            new docx.TableCell({
-                                ...cellProps,
-                                children: [new docx.Paragraph({ children: [new docx.TextRun({ text: el.qtd, font: "Calibri", size: 20 })], alignment: docx.AlignmentType.CENTER })]
-                            }),
-                            new docx.TableCell({
-                                ...cellProps,
-                                children: [new docx.Paragraph({ children: [new docx.TextRun({ text: el.preco, font: "Calibri", size: 20 })], alignment: docx.AlignmentType.CENTER })]
-                            }),
-                            new docx.TableCell({
-                                ...cellProps,
-                                children: [new docx.Paragraph({ children: [new docx.TextRun({ text: el.total, font: "Calibri", size: 20 })], alignment: docx.AlignmentType.CENTER })]
-                            })
-                        ]
-                    }));
-                }
-            }
-
-            return new docx.Document({
-                sections: [{
-                    properties: {
-                        page: {
-                            margin: { top: 720, right: 720, bottom: 720, left: 720 },
-                            size: { width: 11907, height: 16840 }
-                        }
-                    },
-                    children: tableRows.length > 0 ? [
-                        new docx.Table({
-                            rows: tableRows,
-                            columnWidths: [567, 1247, 4536, 850, 850, 1190, 1190],
-                            alignment: docx.AlignmentType.CENTER,
-                            width: { size: 100, type: docx.WidthType.PERCENTAGE }
-                        })
-                    ] : [new docx.Paragraph({ text: "Nenhum dado processado." })]
-                }]
-            });
-        }
-
-        function processarModelo1(csvData) {
-            const gruposDict = {};
-            let lastItem = null;
-
-            for (let linha of csvData) {
-                linha = linha.map(c => limparTexto(c)).filter(c => c !== "");
-                if (linha.length === 0) continue;
-
-                let idxCodigo = -1;
-                for (let i = 0; i < linha.length; i++) {
-                    if (/^\d{3}\.\d{3}\.\d{3}$/.test(linha[i])) {
-                        idxCodigo = i;
-                        break;
-                    }
-                }
-
-                if (idxCodigo !== -1) {
-                    let codigo = linha[idxCodigo];
-                    let item = "", grupo = "", descParts = [];
-
-                    if (idxCodigo >= 1 && /^\d+$/.test(linha[idxCodigo - 1])) {
-                        item = linha[idxCodigo - 1];
-                        if (idxCodigo >= 2) {
-                            grupo = linha[idxCodigo - 2];
-                            descParts = linha.slice(0, idxCodigo - 2);
-                        }
-                    } else {
-                        if (idxCodigo >= 1) {
-                            grupo = linha[idxCodigo - 1];
-                            descParts = linha.slice(0, idxCodigo - 1);
-                        }
-                    }
-
-                    if (!grupo) grupo = "GERAL";
-
-                    let postCode = linha.slice(idxCodigo + 1);
-                    let nome = postCode.length > 0 ? postCode[0] : "";
-                    let medida = "";
-                    let qtd = "";
-
-                    if (postCode.length >= 3) {
-                        medida = postCode[1];
-                        qtd = postCode[2];
-                    } else if (postCode.length === 2) {
-                        qtd = postCode[1];
-                    }
-
-                    let desc = descParts.join(" ").trim();
-
-                    if (!gruposDict[grupo]) {
-                        gruposDict[grupo] = [];
-                    }
-
-                    let itemDict = { item, codigo, nome, medida, qtd, desc };
-                    gruposDict[grupo].push(itemDict);
-                    lastItem = itemDict;
-
-                } else {
-                    if (lastItem !== null) {
-                        let textoAdicional = "";
-                        if (lastItem.qtd === "" && /^\d+([.,]\d+)?$/.test(linha[linha.length - 1])) {
-                            lastItem.qtd = linha[linha.length - 1];
-                            textoAdicional = linha.slice(0, -1).join(" ").trim();
-                        } else {
-                            textoAdicional = linha.join(" ").trim();
-                        }
-
-                        if (textoAdicional) {
-                            if (lastItem.desc) {
-                                lastItem.desc += " " + textoAdicional;
-                            } else {
-                                lastItem.desc = textoAdicional;
-                            }
-                        }
-                    }
-                }
-            }
-
-            const doc = createDocxModel1(gruposDict);
-            docx.Packer.toBlob(doc).then(blob => {
-                saveAs(blob, "Tabela_Convertida_Modelo1.docx");
-            });
-        }
-
-        function processarModelo2(csvData) {
-            const tabelaRowsData = [];
-
-            for (let linha of csvData) {
-                linha = linha.map(c => limparTexto(c));
-                if (linha.length === 0 || linha.every(c => !c)) continue;
-
-                let temDesc = false;
-                let descricao = "";
-                let item = "", codigo = "", nome = "", medida = "", qtd = "", preco = "", total = "";
-
-                if (linha.length >= 7 && /^\d+$/.test(linha[0]) && /^\d{3}\.\d{3}\.\d{3}$/.test(linha[1])) {
-                    item = linha[0];
-                    codigo = linha[1];
-                    nome = linha[2];
-                    medida = linha[3];
-                    qtd = linha[4];
-                    preco = linha[5];
-                    total = linha[6];
-                } else if (linha.length >= 8 && /^\d+$/.test(linha[1]) && /^\d{3}\.\d{3}\.\d{3}$/.test(linha[2])) {
-                    temDesc = true;
-                    descricao = linha[0];
-                    item = linha[1];
-                    codigo = linha[2];
-                    nome = linha[3];
-                    medida = linha[4];
-                    qtd = linha[5];
-                    preco = linha[6];
-                    total = linha[7];
-                } else {
-                    descricao = linha.filter(c => c).join(" ").trim();
-                    if (descricao && tabelaRowsData.length > 0) {
-                        tabelaRowsData.push({ isDesc: true, desc: descricao });
-                    }
-                    continue;
-                }
-
-                tabelaRowsData.push({
-                    isDesc: false,
-                    item, codigo, nome, medida, qtd,
-                    preco: formatarMoeda(preco),
-                    total: formatarMoeda(total)
-                });
-
-                if (temDesc && descricao) {
-                    tabelaRowsData.push({ isDesc: true, desc: descricao });
-                }
-            }
-
-            const doc = createDocxModel2(tabelaRowsData);
-            docx.Packer.toBlob(doc).then(blob => {
-                saveAs(blob, "Tabela_Convertida_Modelo2.docx");
-            });
-        }
-
-        function processarArquivo() {
-            const fileInput = document.getElementById('fileInput');
-            const tipoScript = document.getElementById('tipoScript').value;
-
-            if (fileInput.files.length === 0) {
-                alert("Por favor, selecione um arquivo.");
-                return;
-            }
-
-            const file = fileInput.files[0];
-            const reader = new FileReader();
-
-            reader.onload = function(e) {
-                const text = e.target.result;
-                const csvData = parseCSV(text);
-
-                if (tipoScript === "1") {
-                    processarModelo1(csvData);
-                } else {
-                    processarModelo2(csvData);
-                }
-            };
-
-            reader.readAsText(file, "UTF-8");
-        }
-    </script>
 </body>
 </html>
