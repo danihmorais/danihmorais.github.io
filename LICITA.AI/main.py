@@ -1,11 +1,36 @@
-import sys
-import json
 import os
+import json
+import uuid
+import shutil
+import zipfile
+import tempfile
 from datetime import datetime
-import traceback
+
+from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
+
 import config
-from MONTAEDITAL.montador_variaveis import montar_variaveis_fixas, filtrar_chaves_docx
-from MONTAEDITAL.processador_docx import modificar_documento
+from montador_variaveis import montar_variaveis_fixas, filtrar_chaves_docx
+from processador_docx import modificar_documento
+
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://danihmorais.github.io"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+class FasePreparatoriaRequest(BaseModel):
+    dados_ia: dict = {}
+    dados_usuario: dict = {}
+    preenchimentos_manuais: dict = {}
+
 
 def _valor_vazio(valor):
     if valor is None:
@@ -16,144 +41,127 @@ def _valor_vazio(valor):
         "nao informado", "[não informado]", "[nao informado]", "[n?o informado]"
     ]
 
-def _garantir_caminho_seguro(base, caminho):
-    abs_base = os.path.abspath(base)
-    abs_caminho = os.path.abspath(os.path.join(base, caminho))
-    if not abs_caminho.startswith(abs_base):
-        raise ValueError("Acesso não autorizado a diretório externo.")
-    return abs_caminho
 
-def processar():
-    try:
-        if hasattr(sys.stdin, 'reconfigure'):
-            sys.stdin.reconfigure(encoding='utf-8')
-        input_data = sys.stdin.read().strip()
-        if not input_data:
-            return
+def cleanup_temp_dir(path: str):
+    shutil.rmtree(path, ignore_errors=True)
 
-        payload = json.loads(input_data)
-        
-        app_data_dir = payload.get("app_data_dir")
-        if app_data_dir:
-            config.carregar_settings(app_data_dir)
 
-        acao = payload.get("acao")
+def _formata_moeda(v):
+    s = f"{v:,.2f}"
+    s = s.replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"R$ {s}"
 
-        if acao == "salvar_documentos":
-            dados_ia = payload.get("dados_ia") or {}
-            dados_usuario = payload.get("dados_usuario") or {}
-            preenchimentos_manuais = payload.get("preenchimentos_manuais") or {}
-            pasta_saida_raw = payload.get("pasta_saida", "Documentos_Gerados")
-            pasta_modelos_raw = payload.get("pasta_modelos", "modelos")
-            arquivos_base = payload.get("arquivos_base", [])
 
-            pasta_modelos = _garantir_caminho_seguro(config.BASE_DIR, pasta_modelos_raw)
-            pasta_saida = _garantir_caminho_seguro(config.EXECUTABLE_DIR, pasta_saida_raw)
+@app.post("/api/gerar-fase-preparatoria")
+async def gerar_fase_preparatoria_endpoint(req: FasePreparatoriaRequest, background_tasks: BackgroundTasks):
+    session_id = uuid.uuid4().hex
+    temp_dir = tempfile.mkdtemp(prefix=f"fase_prep_{session_id}_")
+    background_tasks.add_task(cleanup_temp_dir, temp_dir)
 
-            modificacoes = filtrar_chaves_docx(montar_variaveis_fixas(dados_usuario))
-            
-            for chave, valor in dados_ia.items():
-                chave_docx = chave if chave.startswith("{{") and chave.endswith("}}") else f"{{{{{chave}}}}}"
-                modificacoes[chave_docx] = valor
+    modificacoes = filtrar_chaves_docx(montar_variaveis_fixas(req.dados_usuario))
 
-            for chave1, chave2 in config.ALIASES:
-                val1, val2 = modificacoes.get(chave1), modificacoes.get(chave2)
-                vazio1, vazio2 = _valor_vazio(val1), _valor_vazio(val2)
-                if not vazio1 and vazio2:
-                    modificacoes[chave2] = val1
-                elif not vazio2 and vazio1:
-                    modificacoes[chave1] = val2
+    for chave, valor in req.dados_ia.items():
+        chave_docx = chave if chave.startswith("{{") and chave.endswith("}}") else f"{{{{{chave}}}}}"
+        modificacoes[chave_docx] = valor
 
-            if _valor_vazio(modificacoes.get("{{MES_INICIO}}")):
-                modificacoes["{{MES_INICIO}}"] = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"][datetime.now().month - 1]
+    for chave1, chave2 in config.ALIASES:
+        val1, val2 = modificacoes.get(chave1), modificacoes.get(chave2)
+        vazio1, vazio2 = _valor_vazio(val1), _valor_vazio(val2)
+        if not vazio1 and vazio2:
+            modificacoes[chave2] = val1
+        elif not vazio2 and vazio1:
+            modificacoes[chave1] = val2
 
-            modificacoes.update(preenchimentos_manuais)
+    if _valor_vazio(modificacoes.get("{{MES_INICIO}}")):
+        modificacoes["{{MES_INICIO}}"] = [
+            "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+            "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"
+        ][datetime.now().month - 1]
 
-            for _ in range(3):
-                mudou = False
-                for k, v in modificacoes.items():
-                    if isinstance(v, str) and "{{" in v:
-                        novo_v = v
-                        for sub_k, sub_v in modificacoes.items():
-                            if sub_k != k and sub_k in novo_v and isinstance(sub_v, str):
-                                novo_v = novo_v.replace(sub_k, sub_v)
-                        if novo_v != v:
-                            modificacoes[k] = novo_v
-                            mudou = True
-                if not mudou:
-                    break
+    modificacoes.update(req.preenchimentos_manuais)
 
-            itens_json = modificacoes.get("{{ITENS}}")
-            if not _valor_vazio(itens_json):
-                itens_str = str(itens_json)
-                if itens_str.startswith("__TABLE__"):
-                    itens_str = itens_str.replace("__TABLE__", "")
-                    
+    # Resolve placeholders aninhados (uma chave referenciando outra)
+    for _ in range(3):
+        mudou = False
+        for k, v in modificacoes.items():
+            if isinstance(v, str) and "{{" in v:
+                novo_v = v
+                for sub_k, sub_v in modificacoes.items():
+                    if sub_k != k and sub_k in novo_v and isinstance(sub_v, str):
+                        novo_v = novo_v.replace(sub_k, sub_v)
+                if novo_v != v:
+                    modificacoes[k] = novo_v
+                    mudou = True
+        if not mudou:
+            break
+
+    itens_json = modificacoes.get("{{ITENS}}")
+    if not _valor_vazio(itens_json):
+        itens_str = str(itens_json)
+        if itens_str.startswith("__TABLE__"):
+            itens_str = itens_str.replace("__TABLE__", "")
+
+        try:
+            itens = json.loads(itens_str) if isinstance(itens_str, str) else itens_json
+
+            itens_formatados = []
+            itens_sem_valor = []
+
+            for item in itens:
                 try:
-                    itens = json.loads(itens_str) if isinstance(itens_str, str) else itens_json
-                    
-                    itens_formatados = []
-                    itens_sem_valor = []
-                    
-                    for item in itens:
-                        try:
-                            valor_unit = float(item.get("valor", 0))
-                        except (ValueError, TypeError):
-                            valor_unit = 0.0
-                            
-                        try:
-                            qtd = float(item.get("qtd", 0))
-                        except (ValueError, TypeError):
-                            qtd = 0.0
-                            
-                        total = valor_unit * qtd
-                        
-                        def formata_moeda(v):
-                            s = f"{v:,.2f}"
-                            s = s.replace(",", "X").replace(".", ",").replace("X", ".")
-                            return f"R$ {s}"
-                        
-                        item_formatado = {
-                            "Item": item.get("numero", ""),
-                            "Descrição": item.get("descricao", ""),
-                            "UN": item.get("un", ""),
-                            "Qtd": item.get("qtd", ""),
-                            "Vlr Unit.": formata_moeda(valor_unit),
-                            "Total": formata_moeda(total)
-                        }
-                        itens_formatados.append(item_formatado)
-                        
-                        item_sv = {
-                            "Item": item.get("numero", ""),
-                            "Descrição": item.get("descricao", ""),
-                            "UN": item.get("un", ""),
-                            "Qtd": item.get("qtd", "")
-                        }
-                        itens_sem_valor.append(item_sv)
-                    
-                    modificacoes["{{ITENS}}"] = f"__TABLE__{json.dumps(itens_formatados, ensure_ascii=False)}"
-                    modificacoes["{{ITENS_SEMVALOR}}"] = f"__TABLE__{json.dumps(itens_sem_valor, ensure_ascii=False)}"
-                except Exception:
-                    # Em caso de erro ao converter (ex: já estar formatado ou estrutura errada)
-                    if not str(itens_json).startswith("__TABLE__"):
-                        modificacoes["{{ITENS}}"] = f"__TABLE__{str(itens_json)}"
+                    valor_unit = float(item.get("valor", 0))
+                except (ValueError, TypeError):
+                    valor_unit = 0.0
 
-            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            pasta_lote = os.path.join(pasta_saida, timestamp)
-            os.makedirs(pasta_lote, exist_ok=True)
-            arquivos_gerados = []
+                try:
+                    qtd = float(item.get("qtd", 0))
+                except (ValueError, TypeError):
+                    qtd = 0.0
 
-            for arq in arquivos_base:
-                cam_origem = os.path.join(pasta_modelos, arq)
-                cam_destino = os.path.join(pasta_lote, f"Pronto_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_{arq}")
-                if os.path.exists(cam_origem):
-                    modificar_documento(cam_origem, cam_destino, modificacoes)
-                    arquivos_gerados.append(cam_destino)
+                total = valor_unit * qtd
 
-            print(json.dumps({"sucesso": True, "arquivos": arquivos_gerados}))
+                itens_formatados.append({
+                    "Item": item.get("numero", ""),
+                    "Descrição": item.get("descricao", ""),
+                    "UN": item.get("un", ""),
+                    "Qtd": item.get("qtd", ""),
+                    "Vlr Unit.": _formata_moeda(valor_unit),
+                    "Total": _formata_moeda(total)
+                })
 
-    except Exception as e:
-        print(json.dumps({"sucesso": False, "erro": str(e), "traceback": traceback.format_exc()}))
+                itens_sem_valor.append({
+                    "Item": item.get("numero", ""),
+                    "Descrição": item.get("descricao", ""),
+                    "UN": item.get("un", ""),
+                    "Qtd": item.get("qtd", "")
+                })
 
-if __name__ == "__main__":
-    processar()
+            modificacoes["{{ITENS}}"] = f"__TABLE__{json.dumps(itens_formatados, ensure_ascii=False)}"
+            modificacoes["{{ITENS_SEMVALOR}}"] = f"__TABLE__{json.dumps(itens_sem_valor, ensure_ascii=False)}"
+        except Exception:
+            if not str(itens_json).startswith("__TABLE__"):
+                modificacoes["{{ITENS}}"] = f"__TABLE__{str(itens_json)}"
+
+    arquivos_gerados = []
+    for arq in config.BASE_FILES:
+        cam_origem = os.path.join(config.PASTA_MODELOS, arq)
+        cam_destino = os.path.join(temp_dir, f"Pronto_{arq}")
+        if os.path.exists(cam_origem):
+            modificar_documento(cam_origem, cam_destino, modificacoes)
+            arquivos_gerados.append(cam_destino)
+
+    if not arquivos_gerados:
+        raise HTTPException(status_code=400, detail="Nenhum documento base encontrado.")
+
+    zip_filename = f"FasePreparatoria_{session_id[:6]}.zip"
+    caminho_zip = os.path.join(temp_dir, zip_filename)
+
+    with zipfile.ZipFile(caminho_zip, "w", zipfile.ZIP_DEFLATED) as zipf:
+        for arq in arquivos_gerados:
+            zipf.write(arq, os.path.basename(arq))
+
+    return FileResponse(
+        path=caminho_zip,
+        filename=zip_filename,
+        media_type="application/zip"
+    )
