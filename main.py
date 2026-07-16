@@ -10,6 +10,7 @@ def load_app_from_path(module_name, file_path, dir_name):
     abs_dir = os.path.abspath(dir_name)
     os.chdir(abs_dir)
     sys.path.insert(0, abs_dir)
+    sys.path.insert(0, original_cwd)
     
     try:
         abs_file_path = os.path.join(original_cwd, file_path)
