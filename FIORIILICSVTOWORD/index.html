@@ -7,6 +7,17 @@
 
     <link rel="icon" href="./assets/logo.png" type="image/png">
 
+    <script>
+        (function () {
+            try {
+                var salvo = localStorage.getItem("prontuario_theme");
+                if (salvo === "dark" || salvo === "light") {
+                    document.documentElement.setAttribute("data-theme", salvo);
+                }
+            } catch (e) {}
+        })();
+    </script>
+
     <!-- Bibliotecas usadas pelos scripts abaixo (geração e download do .docx) -->
     <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
@@ -25,6 +36,18 @@
             --radius: 14px;
         }
 
+        [data-theme="dark"] {
+            --bg: #0a0f1a;
+            --surface: #111827;
+            --border: #1e293b;
+            --text: #f1f5f9;
+            --text-muted: #94a3b8;
+            --primary: #34a06f;
+            --primary-hover: #2f8f63;
+            --primary-soft: rgba(52,160,111,0.15);
+            --shadow: 0 1px 3px rgba(0,0,0,.3), 0 2px 8px rgba(0,0,0,.25);
+        }
+
         * {
             box-sizing: border-box;
         }
@@ -34,6 +57,28 @@
             font-family: "Segoe UI", Arial, sans-serif;
             background: var(--bg);
             color: var(--text);
+            transition: background-color .2s, color .2s;
+        }
+
+        .theme-toggle {
+            background: var(--primary-soft);
+            border: none;
+            color: var(--text);
+            font-size: 15px;
+            cursor: pointer;
+            padding: 6px 10px;
+            border-radius: 8px;
+            line-height: 1;
+        }
+
+        .theme-toggle:hover {
+            filter: brightness(0.95);
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .container {
@@ -133,7 +178,10 @@
         <div class="card">
             <div class="card-header">
                 <h2>Conversor de Relatório Fiorilli</h2>
-                <a class="back-link" href="../index.html">← Voltar</a>
+                <div class="header-actions">
+                    <button type="button" class="theme-toggle" onclick="alternarTema()" title="Alternar modo claro/escuro">🌙</button>
+                    <a class="back-link" href="../index.html">← Voltar</a>
+                </div>
             </div>
 
             <div class="form-group">
@@ -154,6 +202,23 @@
     </div>
 
     <script>
+        function alternarTema() {
+            const atual = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+            const proximo = atual === "dark" ? "light" : "dark";
+            document.documentElement.setAttribute("data-theme", proximo);
+            try { localStorage.setItem("prontuario_theme", proximo); } catch (e) {}
+            atualizarIconeTema();
+        }
+
+        function atualizarIconeTema() {
+            const btn = document.querySelector(".theme-toggle");
+            if (!btn) return;
+            const escuro = document.documentElement.getAttribute("data-theme") === "dark";
+            btn.textContent = escuro ? "☀️" : "🌙";
+        }
+
+        atualizarIconeTema();
+
         function limparTexto(texto) {
             return String(texto).replace(/\s+/g, ' ').trim();
         }

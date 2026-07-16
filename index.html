@@ -5,7 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MontaEdital</title>
 
-    <link rel="icon" href="./MONTAEDITAL/src/assets/logo.png" type="image/png">
+    <link rel="icon" href="./favicon.png" type="image/png">
+
+    <script>
+        (function () {
+            try {
+                var salvo = localStorage.getItem("prontuario_theme");
+                if (salvo === "dark" || salvo === "light") {
+                    document.documentElement.setAttribute("data-theme", salvo);
+                }
+            } catch (e) {}
+        })();
+    </script>
 
     <style>
         :root {
@@ -21,6 +32,18 @@
             --radius: 14px;
         }
 
+        [data-theme="dark"] {
+            --bg: #0a0f1a;
+            --surface: #111827;
+            --border: #1e293b;
+            --text: #f1f5f9;
+            --text-muted: #94a3b8;
+            --primary: #34a06f;
+            --primary-hover: #2f8f63;
+            --primary-soft: rgba(52,160,111,0.15);
+            --shadow: 0 1px 3px rgba(0,0,0,.3), 0 2px 8px rgba(0,0,0,.25);
+        }
+
         * {
             box-sizing: border-box;
         }
@@ -30,6 +53,25 @@
             font-family: "Segoe UI", Arial, sans-serif;
             background: var(--bg);
             color: var(--text);
+            transition: background-color .2s, color .2s;
+        }
+
+        .theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--surface);
+            border: 2px solid var(--border);
+            color: var(--text);
+            font-size: 16px;
+            cursor: pointer;
+            padding: 8px 12px;
+            border-radius: 999px;
+            box-shadow: var(--shadow);
+        }
+
+        .theme-toggle:hover {
+            border-color: var(--primary);
         }
 
         .container {

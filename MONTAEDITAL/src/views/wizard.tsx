@@ -57,7 +57,7 @@ export default function Wizard() {
   const [erroMsg, setErroMsg] = useState<string | null>(null);
   const [geracaoSucesso, setGeracaoSucesso] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { theme } = useContext(ThemeContext);
+  const { theme, toggleTheme } = useContext(ThemeContext);
 
   const atualizarDados = (novosDados: Partial<typeof dados>) => {
     setDados((prev) => ({ ...prev, ...novosDados }));
@@ -248,6 +248,15 @@ export default function Wizard() {
               </React.Fragment>
             ))}
           </div>
+
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="wiz-theme-toggle"
+            title={theme === 'dark' ? 'Mudar para modo claro' : 'Mudar para modo escuro'}
+          >
+            {theme === 'dark' ? '☀️' : '🌙'}
+          </button>
         </div>
       </div>
 
