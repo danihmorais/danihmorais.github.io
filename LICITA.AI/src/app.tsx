@@ -3,6 +3,8 @@ import logo from "./assets/logo.png";
 import { ThemeContext } from "./context/ThemeContext";
 import Wizard from "./views/wizard";
 import ConfigIA from "./components/configIA";
+import { lerConfigIA } from "./utils/storageLocal";
+import { validarChaveGemini, validarChaveOpenRouter } from "./providers/llm";
 
 export default function App() {
   const [logado, setLogado] = useState(false);
@@ -23,24 +25,36 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
-  const verificarSessao = async () => {
-    try {
-      const config: any = await invoke("ler_config_ia");
-      if (config && config.chave_api) {
-        setLogado(true);
-      }
-    } catch (error) {}
+  const verificarSessao = () => {
+    const config = lerConfigIA();
+    if (config && config.chave_api) {
+      setLogado(true);
+    }
   };
 
+  // Não existe mais um backend que guarde chaves mestras: cada usuário usa a
+  // própria chave (Gemini ou OpenRouter), salva no navegador. Por isso aqui
+  // apenas validamos, no cliente, se a chave configurada pelo usuário ainda
+  // está ativa junto ao provedor escolhido.
   const verificarApis = async () => {
-    try {
-      const resultado = await invoke<{
-        gemini: boolean;
-        openrouter: boolean;
-      }>("verificar_status_apis");
+    const config = lerConfigIA();
 
-      setStatusGemini(resultado.gemini);
-      setStatusOpenRouter(resultado.openrouter);
+    if (!config?.chave_api) {
+      setStatusGemini(null);
+      setStatusOpenRouter(null);
+      return;
+    }
+
+    try {
+      if (config.provedor === "openrouter") {
+        const ok = await validarChaveOpenRouter(config.chave_api);
+        setStatusOpenRouter(ok);
+        setStatusGemini(null);
+      } else {
+        const ok = await validarChaveGemini(config.chave_api);
+        setStatusGemini(ok);
+        setStatusOpenRouter(null);
+      }
     } catch {
       setStatusGemini(false);
       setStatusOpenRouter(false);
@@ -48,36 +62,22 @@ export default function App() {
   };
 
   const obterStatus = () => {
-    if (statusGemini === null || statusOpenRouter === null) {
+    if (statusGemini === null && statusOpenRouter === null) {
       return {
-        texto: "Verificando disponibilidade das APIs...",
+        texto: "Configure sua chave de API para começar",
         cor: "var(--text-muted)",
       };
     }
 
-    if (statusGemini && statusOpenRouter) {
-      return {
-        texto: "Conectado às APIs Gemini e OpenRouter",
-        cor: "var(--btn-success)",
-      };
+    if (statusGemini === true) {
+      return { texto: "Conectado à API Gemini", cor: "var(--btn-success)" };
     }
-
-    if (statusGemini && !statusOpenRouter) {
-      return {
-        texto: "Conectado à API Gemini (OpenRouter indisponível - Contate o suporte)",
-        cor: "var(--btn-warning)",
-      };
-    }
-
-    if (!statusGemini && statusOpenRouter) {
-      return {
-        texto: "Conectado à API OpenRouter (Gemini indisponível - Contate o suporte)",
-        cor: "var(--btn-warning)",
-      };
+    if (statusOpenRouter === true) {
+      return { texto: "Conectado à API OpenRouter", cor: "var(--btn-success)" };
     }
 
     return {
-      texto: "Falha de conexão às APIs. Contate o suporte",
+      texto: "Falha na conexão com a API configurada. Verifique sua chave.",
       cor: "var(--btn-danger)",
     };
   };

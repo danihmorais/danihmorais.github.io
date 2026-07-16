@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { lerDadosUsuario, salvarDadosUsuario } from "../../utils/storageLocal";
 
 const SECRETARIAS_DEFAULT = [
   "Gabinete do Prefeito",
@@ -24,18 +25,17 @@ export default function Step3({ dados = { secretarias: [], contatosSecretarias: 
   const contatosStr = JSON.stringify(contatosSecretarias);
 
   useEffect(() => {
-    invoke("ler_dados_usuario").then((dadosSalvos: any) => {
-      if (dadosSalvos && dadosSalvos.contatos_salvos) {
-        setContatosSalvos(dadosSalvos.contatos_salvos);
-      }
-    }).catch(console.error);
+    const dadosSalvos = lerDadosUsuario();
+    if (dadosSalvos && dadosSalvos.contatos_salvos) {
+      setContatosSalvos(dadosSalvos.contatos_salvos);
+    }
   }, []);
 
-  const salvarContatosNoBackend = async (novosContatos: any[]) => {
+  const salvarContatosNoBackend = (novosContatos: any[]) => {
     try {
-      const dados_usuario: any = await invoke("ler_dados_usuario") || {};
+      const dados_usuario = lerDadosUsuario() || {};
       dados_usuario.contatos_salvos = novosContatos;
-      await invoke("salvar_dados_usuario", { dados: dados_usuario });
+      salvarDadosUsuario(dados_usuario);
     } catch (e) {
       console.error(e);
     }

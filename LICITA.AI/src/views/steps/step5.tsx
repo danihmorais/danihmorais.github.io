@@ -52,22 +52,32 @@ const JustificationBox = ({ label, value, onChange, errorMsg }: any) => {
 };
 
 export default function Step5({ dados, atualizarDados }: any) {
-  const handleAnexarImagem = async (e: React.MouseEvent) => {
+  const inputImagemRef = React.useRef<HTMLInputElement>(null);
+
+  // Antes usava o dialog nativo do Tauri (open(), com caminho de arquivo no
+  // disco local). No navegador não existe acesso a caminho de arquivo: o
+  // usuário escolhe o arquivo via <input type="file"> e lemos o conteúdo
+  // como base64, que é o que de fato viaja para o backend FastAPI.
+  const handleAnexarImagem = (e: React.MouseEvent) => {
     e.preventDefault();
-    try {
-      const selected = await open({
-        multiple: false,
-        directory: false,
-        title: "Selecione a imagem da dotação",
-        filters: [{ name: 'Imagens', extensions: ['png', 'jpg', 'jpeg'] }]
-      });
-      if (selected) {
-        const caminhoFinal = Array.isArray(selected) ? selected[0] : selected;
-        atualizarDados({ caminhoImagemDotacao: caminhoFinal });
-      }
-    } catch (err: any) {
-      alert("Erro ao selecionar imagem: " + String(err));
-    }
+    inputImagemRef.current?.click();
+  };
+
+  const handleArquivoSelecionado = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const arquivo = e.target.files?.[0];
+    if (!arquivo) return;
+
+    const leitor = new FileReader();
+    leitor.onload = () => {
+      atualizarDados({ caminhoImagemDotacao: leitor.result as string });
+    };
+    leitor.onerror = () => {
+      alert("Erro ao ler a imagem selecionada.");
+    };
+    leitor.readAsDataURL(arquivo);
+
+    // Permite selecionar o mesmo arquivo novamente depois, se necessário
+    e.target.value = "";
   };
 
   const decrementarVigencia = (e: React.MouseEvent) => {
@@ -222,6 +232,13 @@ export default function Step5({ dados, atualizarDados }: any) {
             onChange={(e) => atualizarDados({ dotacao: e.target.value })}
             placeholder="Descreva a dotação orçamentária..."
             style={styles.textareaLarge(faltaDotacao)}
+          />
+          <input
+            ref={inputImagemRef}
+            type="file"
+            accept="image/png,image/jpeg"
+            onChange={handleArquivoSelecionado}
+            style={{ display: "none" }}
           />
           <button 
             type="button"

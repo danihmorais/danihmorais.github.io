@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { lerDadosUsuario, salvarDadosUsuario } from "../../utils/storageLocal";
 
 export default function Step4({ dados, atualizarDados }: any) {
   const [gestorNome, setGestorNome] = useState("");
@@ -13,29 +14,28 @@ export default function Step4({ dados, atualizarDados }: any) {
   const [modalFiscalAberto, setModalFiscalAberto] = useState(false);
 
   useEffect(() => {
-    invoke("ler_dados_usuario").then((dadosSalvos: any) => {
-      if (dadosSalvos) {
-        if (dadosSalvos.gestores_salvos) setGestoresSalvos(dadosSalvos.gestores_salvos);
-        if (dadosSalvos.fiscais_salvos) setFiscaisSalvos(dadosSalvos.fiscais_salvos);
-      }
-    }).catch(console.error);
+    const dadosSalvos = lerDadosUsuario();
+    if (dadosSalvos) {
+      if (dadosSalvos.gestores_salvos) setGestoresSalvos(dadosSalvos.gestores_salvos);
+      if (dadosSalvos.fiscais_salvos) setFiscaisSalvos(dadosSalvos.fiscais_salvos);
+    }
   }, []);
 
-  const salvarGestoresNoBackend = async (novosGestores: any[]) => {
+  const salvarGestoresNoBackend = (novosGestores: any[]) => {
     try {
-      const dados_usuario: any = await invoke("ler_dados_usuario") || {};
+      const dados_usuario = lerDadosUsuario() || {};
       dados_usuario.gestores_salvos = novosGestores;
-      await invoke("salvar_dados_usuario", { dados: dados_usuario });
+      salvarDadosUsuario(dados_usuario);
     } catch (e) {
       console.error(e);
     }
   };
 
-  const salvarFiscaisNoBackend = async (novosFiscais: any[]) => {
+  const salvarFiscaisNoBackend = (novosFiscais: any[]) => {
     try {
-      const dados_usuario: any = await invoke("ler_dados_usuario") || {};
+      const dados_usuario = lerDadosUsuario() || {};
       dados_usuario.fiscais_salvos = novosFiscais;
-      await invoke("salvar_dados_usuario", { dados: dados_usuario });
+      salvarDadosUsuario(dados_usuario);
     } catch (e) {
       console.error(e);
     }

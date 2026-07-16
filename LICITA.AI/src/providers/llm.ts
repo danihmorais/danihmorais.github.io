@@ -1,27 +1,31 @@
 const MAX_TENTATIVAS = 3;
 
+// Antes gravava um arquivo .txt em disco via plugin-fs do Tauri
+// (exists/mkdir/writeTextFile + BaseDirectory.AppData). No navegador não há
+// acesso a sistema de arquivos, então registramos no console e mantemos um
+// histórico curto no localStorage para inspeção posterior (ex.: F12 > Application > Local Storage).
+const CHAVE_LOGS_ERRO = "licita_ai:logs_erro";
+const MAX_LOGS_GUARDADOS = 20;
+
 async function salvarLogErro(prefixo: string, erro: any, dadosCrus: any = null) {
   try {
-    const logsDirExists = await exists("logs", { baseDir: BaseDirectory.AppData });
-    if (!logsDirExists) {
-      await mkdir("logs", { baseDir: BaseDirectory.AppData, recursive: true });
-    }
+    const entrada = {
+      prefixo,
+      data: new Date().toISOString(),
+      mensagem: erro instanceof Error ? erro.message : String(erro),
+      stack: erro instanceof Error ? erro.stack : undefined,
+      dadosCrus: dadosCrus
+        ? (typeof dadosCrus === "string" ? dadosCrus : JSON.stringify(dadosCrus, null, 2))
+        : undefined,
+    };
 
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `logs/${prefixo}-${timestamp}.txt`;
+    console.error(`[${prefixo}]`, entrada);
 
-    let conteudo = `=== ERRO REGISTRADO ===\nData: ${new Date().toISOString()}\n\n`;
-    conteudo += `MENSAGEM DE ERRO:\n${erro instanceof Error ? erro.message : String(erro)}\n\n`;
-    
-    if (erro instanceof Error && erro.stack) {
-      conteudo += `STACK TRACE:\n${erro.stack}\n\n`;
-    }
-
-    if (dadosCrus) {
-      conteudo += `DADOS RECEBIDOS DA API (RAW):\n${typeof dadosCrus === 'string' ? dadosCrus : JSON.stringify(dadosCrus, null, 2)}\n`;
-    }
-
-    await writeTextFile(filename, conteudo, { baseDir: BaseDirectory.AppData });
+    const brutos = localStorage.getItem(CHAVE_LOGS_ERRO);
+    const logs = brutos ? JSON.parse(brutos) : [];
+    logs.push(entrada);
+    while (logs.length > MAX_LOGS_GUARDADOS) logs.shift();
+    localStorage.setItem(CHAVE_LOGS_ERRO, JSON.stringify(logs));
   } catch (e) {}
 }
 

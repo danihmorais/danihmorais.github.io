@@ -10,6 +10,8 @@ import { obterMelhorModelo } from "../providers/llm";
 import ConfigIA from "../components/configIA";
 import PromptModal from "../components/promptModal";
 import { ThemeContext } from "../context/ThemeContext";
+import { lerConfigIA } from "../utils/storageLocal";
+import { gerarFasePreparatoria } from "../api";
 
 export default function Wizard() {
   const [etapaAtual, setEtapaAtual] = useState(0);
@@ -42,6 +44,7 @@ export default function Wizard() {
   const [statusTexto, setStatusTexto] = useState("Iniciando...");
   const [erroMsg, setErroMsg] = useState<string | null>(null);
   const [geracaoSucesso, setGeracaoSucesso] = useState(false);
+  const [arquivoGerado, setArquivoGerado] = useState<{ blob: Blob; filename: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [mostrarConfig, setMostrarConfig] = useState(false);
   const { theme, toggleTheme } = useContext(ThemeContext);
@@ -111,7 +114,7 @@ export default function Wizard() {
     setStatusTexto("A ler configurações da IA...");
 
     try {
-      const config: any = await invoke("ler_config_ia");
+      const config = lerConfigIA();
       const provedor = config.provedor || "gemini";
       const chaveApi = config.chave_api || "";
 
@@ -140,11 +143,22 @@ export default function Wizard() {
       const dadosIaFinais = { ...dadosIaDfd, ...dadosIaEtp, ...dadosIaTr };
 
       setStatusTexto("A preencher os ficheiros DOCX finais...");
-      await invoke("gerar_documentos", {
-        dadosUsuario: dadosMapeados,
-        dadosIa: dadosIaFinais
+      const resultado = await gerarFasePreparatoria({
+        dados_usuario: dadosMapeados,
+        dados_ia: dadosIaFinais,
       });
 
+      // Dispara o download do .zip automaticamente no navegador
+      const urlBlob = URL.createObjectURL(resultado.blob);
+      const link = document.createElement("a");
+      link.href = urlBlob;
+      link.download = resultado.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(urlBlob);
+
+      setArquivoGerado(resultado);
       setGeracaoSucesso(true);
 
     } catch (erro: any) {
@@ -249,21 +263,33 @@ export default function Wizard() {
                 Documentos Gerados com Sucesso!
               </h2>
               <p style={{ color: "var(--text-muted)", margin: "0 0 24px 0", fontSize: "14px" }}>
-                Os arquivos foram salvos na pasta{" "}
-                <span
-                  onClick={() => invoke("abrir_pasta_documentos")}
-                  style={{
-                    color: "var(--btn-primary)",
-                    fontWeight: "bold",
-                    cursor: "pointer",
-                    textDecoration: "underline",
-                  }}
-                >
-                  Documentos_Gerados
-                </span>.
+                O download do arquivo .zip com os documentos foi iniciado automaticamente.
+                {" "}
+                {arquivoGerado && (
+                  <span
+                    onClick={() => {
+                      const urlBlob = URL.createObjectURL(arquivoGerado.blob);
+                      const link = document.createElement("a");
+                      link.href = urlBlob;
+                      link.download = arquivoGerado.filename;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                      URL.revokeObjectURL(urlBlob);
+                    }}
+                    style={{
+                      color: "var(--btn-primary)",
+                      fontWeight: "bold",
+                      cursor: "pointer",
+                      textDecoration: "underline",
+                    }}
+                  >
+                    Baixar novamente
+                  </span>
+                )}
               </p>
               <button
-                onClick={() => { setCarregando(false); setGeracaoSucesso(false); }}
+                onClick={() => { setCarregando(false); setGeracaoSucesso(false); setArquivoGerado(null); }}
                 style={{
                   padding: "12px 32px",
                   background: "var(--btn-success)",

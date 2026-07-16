@@ -1,6 +1,8 @@
 import os
 import re
 import json
+import base64
+import io
 from copy import deepcopy
 from docx import Document
 from docx.shared import RGBColor, Pt, Inches
@@ -112,12 +114,25 @@ def _apply_segments_to_paragraph(paragraph, segments, extracted_runs_data):
         for i, part in enumerate(parts):
             if part:
                 if part.startswith("__IMG__"):
-                    img_path = part.replace("__IMG__", "")
-                    if os.path.exists(img_path):
-                        new_run = paragraph.add_run()
-                        new_run.add_picture(img_path, width=Inches(6.0))
-                    else:
-                        new_run = paragraph.add_run(f"[IMAGEM NÃO ENCONTRADA: {img_path}]")
+                    img_ref = part.replace("__IMG__", "")
+                    try:
+                        if img_ref.startswith("data:image"):
+                            # Vem do navegador como data URL (ex.: "data:image/png;base64,...")
+                            # já que o backend agora roda remoto e não tem acesso
+                            # ao sistema de arquivos do usuário.
+                            _, b64_data = img_ref.split(",", 1)
+                            imagem_bytes = base64.b64decode(b64_data)
+                            new_run = paragraph.add_run()
+                            new_run.add_picture(io.BytesIO(imagem_bytes), width=Inches(6.0))
+                        elif os.path.exists(img_ref):
+                            # Compatibilidade com o fluxo antigo (Tauri desktop,
+                            # caminho de arquivo local no mesmo computador).
+                            new_run = paragraph.add_run()
+                            new_run.add_picture(img_ref, width=Inches(6.0))
+                        else:
+                            raise FileNotFoundError(img_ref)
+                    except Exception:
+                        new_run = paragraph.add_run("[IMAGEM DE DOTAÇÃO NÃO PÔDE SER INSERIDA]")
                         new_run.font.color.rgb = RGBColor(255, 0, 0)
                         new_run.bold = True
                 elif part.startswith("__TABLE__"):

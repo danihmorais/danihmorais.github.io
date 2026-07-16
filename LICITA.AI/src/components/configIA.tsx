@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { validarChaveGemini, validarChaveOpenRouter } from "../providers/llm";
+import { lerConfigIA, salvarConfigIA } from "../utils/storageLocal";
 
 interface ConfigIAProps {
   onSuccess?: () => void;
@@ -13,15 +14,12 @@ export default function ConfigIA({ onSuccess, textoBotao = "Acessar Sistema" }: 
 
   useEffect(() => {
     console.log("Lendo configurações de IA salvas...");
-    invoke("ler_config_ia").then((config: any) => {
-      console.log("Configurações carregadas no componente:", config);
-      if (config && config.chave_api) {
-        setProvedor(config.provedor || "gemini");
-        setChaveApi(config.chave_api);
-      }
-    }).catch((err) => {
-      console.error("Erro ao invocar ler_config_ia no frontend:", err);
-    });
+    const config = lerConfigIA();
+    console.log("Configurações carregadas no componente:", config);
+    if (config && config.chave_api) {
+      setProvedor(config.provedor || "gemini");
+      setChaveApi(config.chave_api);
+    }
   }, []);
 
   const salvar = async (e: React.FormEvent) => {
@@ -46,9 +44,9 @@ export default function ConfigIA({ onSuccess, textoBotao = "Acessar Sistema" }: 
         return;
       }
 
-      console.log("Validação aprovada. Salvando chave via Tauri...");
-      await invoke("salvar_config_ia", { provedor, chave: chaveApi });
-      console.log("Chave salva com sucesso no backend.");
+      console.log("Validação aprovada. Salvando chave localmente...");
+      salvarConfigIA({ provedor, chave_api: chaveApi });
+      console.log("Chave salva com sucesso no navegador.");
       
       if (textoBotao !== "Acessar Sistema") {
         alert("Configurações atualizadas com sucesso!");
@@ -71,7 +69,7 @@ export default function ConfigIA({ onSuccess, textoBotao = "Acessar Sistema" }: 
     const url = provedor === "openrouter" 
       ? "https://openrouter.ai/settings/keys" 
       : "https://aistudio.google.com/app/apikey";
-    invoke("abrir_link", { url }).catch(e => console.error("Erro ao tentar abrir o navegador externo:", e)); 
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   return (
