@@ -255,7 +255,8 @@
         const OWNER = "danihmorais";
         const REPO = "danihmorais.github.io";
         const BRANCH = "main";
-        const ROOT_FOLDER = "Documentos Modelo";
+        const ROOT_FOLDER = "DOCUMENTOS MODELO/Documentos Modelo";
+        const ROOT_LABEL = "Documentos Modelo";
 
         // ---- Tema (mesmo padrão do index principal) ----
         (function () {
@@ -310,7 +311,7 @@
                     return;
                 }
 
-                const root = { name: ROOT_FOLDER, path: ROOT_FOLDER, type: "tree", children: {} };
+                const root = { name: ROOT_LABEL, path: ROOT_FOLDER, type: "tree", children: {} };
                 for (const item of relevant) {
                     if (item.path === ROOT_FOLDER) continue;
                     const rel = item.path.slice(prefix.length);
@@ -358,7 +359,7 @@
         }
 
         function renderBreadcrumb() {
-            let html = `<a onclick="goTo(-1)">📁 ${ROOT_FOLDER}</a>`;
+            let html = `<a onclick="goTo(-1)">📁 ${ROOT_LABEL}</a>`;
             currentPath.forEach((part, idx) => {
                 html += ` / <a onclick="goTo(${idx})">${part}</a>`;
             });
