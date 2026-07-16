@@ -3,9 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MontaEdital</title>
+    <title>Conversor Fiorilli - MontaEdital</title>
 
-    <link rel="icon" href="./MONTAEDITAL/src/assets/logo.png" type="image/png">
+    <link rel="icon" href="./assets/logo.png" type="image/png">
+
+    <!-- Bibliotecas usadas pelos scripts abaixo (geração e download do .docx) -->
+    <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
 
     <style>
         :root {
@@ -33,31 +37,9 @@
         }
 
         .container {
-            max-width: 900px;
+            max-width: 640px;
             margin: 0 auto;
             padding: 50px 20px;
-        }
-
-        .hero {
-            text-align: center;
-            margin-bottom: 40px;
-        }
-
-        .hero h1 {
-            margin: 0;
-            font-size: 34px;
-        }
-
-        .hero p {
-            margin-top: 10px;
-            color: var(--text-muted);
-            font-size: 16px;
-        }
-
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px,1fr));
-            gap: 20px;
         }
 
         .card {
@@ -65,106 +47,111 @@
             border: 2px solid var(--border);
             border-radius: var(--radius);
             padding: 24px;
-            cursor: pointer;
-            transition: .15s;
             box-shadow: var(--shadow);
         }
 
-        .card:hover {
-            transform: translateY(-3px);
-            border-color: var(--primary);
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
         }
 
-        .icon {
-            font-size: 42px;
-            margin-bottom: 15px;
-        }
-
-        .card h2 {
-            margin: 0 0 8px;
-            font-size: 20px;
-        }
-
-        .card p {
+        .card-header h2 {
             margin: 0;
-            color: var(--text-muted);
-            line-height: 1.5;
+            font-size: 22px;
         }
 
-        .footer {
-            margin-top: 60px;
-            text-align: center;
+        .back-link {
+            background: none;
+            border: none;
             color: var(--text-muted);
             font-size: 14px;
+            cursor: pointer;
+            padding: 6px 10px;
+            border-radius: 8px;
+            text-decoration: none;
+        }
+
+        .back-link:hover {
+            background: var(--primary-soft);
+            color: var(--primary);
+        }
+
+        .form-group {
+            margin-bottom: 18px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        .form-group select,
+        .form-group input[type="file"] {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            color: var(--text);
+            background: var(--surface);
+        }
+
+        .form-group select:focus,
+        .form-group input[type="file"]:focus {
+            outline: 2px solid var(--primary);
+            outline-offset: 1px;
+        }
+
+        button.primary {
+            width: 100%;
+            padding: 12px 16px;
+            margin-top: 8px;
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: .15s;
+        }
+
+        button.primary:hover {
+            background: var(--primary-hover);
         }
     </style>
 </head>
-<body class="landing">
+<body>
 
-        <div id="view-conversor" class="view">
-            <div class="card">
-                <div class="card-header">
-                    <h2>Conversor de Relatório</h2>
-                    <button class="back-link" data-back="view-selecao">← Voltar</button>
-                </div>
-
-                <div class="form-group">
-                    <label for="tipoScript">Modelo de conversão</label>
-                    <select id="tipoScript">
-                        <option value="1">Modelo 1 - Separação por Grupos (Sem Preço)</option>
-                        <option value="2">Modelo 2 - Tabela Única (Com Preço)</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label for="fileInput">Arquivo (.txt / .csv)</label>
-                    <input type="file" id="fileInput" accept=".txt,.csv">
-                </div>
-
-                <button class="primary" onclick="processarArquivo()">Converter e Baixar DOCX</button>
+    <div class="container">
+        <div class="card">
+            <div class="card-header">
+                <h2>Conversor de Relatório Fiorilli</h2>
+                <a class="back-link" href="../index.html">← Voltar</a>
             </div>
+
+            <div class="form-group">
+                <label for="tipoScript">Modelo de conversão</label>
+                <select id="tipoScript">
+                    <option value="1">Modelo 1 - Separação por Grupos (Sem Preço)</option>
+                    <option value="2">Modelo 2 - Tabela Única (Com Preço)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="fileInput">Arquivo (.txt / .csv)</label>
+                <input type="file" id="fileInput" accept=".txt,.csv">
+            </div>
+
+            <button class="primary" onclick="processarArquivo()">Converter e Baixar DOCX</button>
         </div>
-
     </div>
-
-
-
-    <script>
-        (function () {
-            const cards = document.querySelectorAll('.option-card');
-            const btnAvancar = document.getElementById('btnAvancar');
-            let targetView = null;
-
-            cards.forEach(card => {
-                card.addEventListener('click', () => {
-                    cards.forEach(c => c.classList.remove('selected'));
-                    card.classList.add('selected');
-                    targetView = card.dataset.target;
-                    btnAvancar.disabled = false;
-                });
-            });
-
-            btnAvancar.addEventListener('click', () => {
-                if (!targetView) return;
-                showView(targetView);
-            });
-
-            document.querySelectorAll('[data-back]').forEach(btn => {
-                btn.addEventListener('click', () => showView(btn.dataset.back));
-            });
-
-            function showView(id) {
-                document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
-                document.getElementById(id).classList.add("active");
-
-                if (id === "view-app") {
-                    document.body.classList.remove("landing");
-                } else {
-                    document.body.classList.add("landing");
-                }
-            }
-        })();
-    </script>
 
     <script>
         function limparTexto(texto) {
