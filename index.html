@@ -1,189 +1,33 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MontaEdital</title>
-
-    <link rel="icon" href="./favicon.png" type="image/png">
-
-    <script>
-        (function () {
-            try {
-                var salvo = localStorage.getItem("prontuario_theme");
-                if (salvo === "dark" || salvo === "light") {
-                    document.documentElement.setAttribute("data-theme", salvo);
-                }
-            } catch (e) {}
-        })();
-    </script>
-
-    <style>
-        :root {
-            --bg: #f4f5f7;
-            --surface: #ffffff;
-            --border: #e5e7eb;
-            --text: #1f2430;
-            --text-muted: #6b7280;
-            --primary: #2f6f4f;
-            --primary-hover: #275e42;
-            --primary-soft: #eaf5ee;
-            --shadow: 0 1px 2px rgba(16,24,40,.04),0 8px 24px rgba(16,24,40,.06);
-            --radius: 14px;
-        }
-
-        [data-theme="dark"] {
-            --bg: #0a0f1a;
-            --surface: #111827;
-            --border: #1e293b;
-            --text: #f1f5f9;
-            --text-muted: #94a3b8;
-            --primary: #34a06f;
-            --primary-hover: #2f8f63;
-            --primary-soft: rgba(52,160,111,0.15);
-            --shadow: 0 1px 3px rgba(0,0,0,.3), 0 2px 8px rgba(0,0,0,.25);
-        }
-
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            margin: 0;
-            font-family: "Segoe UI", Arial, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            transition: background-color .2s, color .2s;
-        }
-
-        .theme-toggle {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: var(--surface);
-            border: 2px solid var(--border);
-            color: var(--text);
-            font-size: 16px;
-            cursor: pointer;
-            padding: 8px 12px;
-            border-radius: 999px;
-            box-shadow: var(--shadow);
-        }
-
-        .theme-toggle:hover {
-            border-color: var(--primary);
-        }
-
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 50px 20px;
-        }
-
-        .hero {
-            text-align: center;
-            margin-bottom: 40px;
-        }
-
-        .hero h1 {
-            margin: 0;
-            font-size: 34px;
-        }
-
-        .hero p {
-            margin-top: 10px;
-            color: var(--text-muted);
-            font-size: 16px;
-        }
-
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px,1fr));
-            gap: 20px;
-        }
-
-        .card {
-            background: var(--surface);
-            border: 2px solid var(--border);
-            border-radius: var(--radius);
-            padding: 24px;
-            cursor: pointer;
-            transition: .15s;
-            box-shadow: var(--shadow);
-        }
-
-        .card:hover {
-            transform: translateY(-3px);
-            border-color: var(--primary);
-        }
-
-        .icon {
-            font-size: 42px;
-            margin-bottom: 15px;
-        }
-
-        .card h2 {
-            margin: 0 0 8px;
-            font-size: 20px;
-        }
-
-        .card p {
-            margin: 0;
-            color: var(--text-muted);
-            line-height: 1.5;
-        }
-
-        .footer {
-            margin-top: 60px;
-            text-align: center;
-            color: var(--text-muted);
-            font-size: 14px;
-        }
-    </style>
-</head>
-
-<body>
-
-<div class="container">
-
-    <div class="hero">
-        <h1>MontaEdital</h1>
-        <p>Selecione o sistema que deseja utilizar.</p>
-    </div>
-
-    <div class="grid">
-
-        <div class="card" onclick="location.href='MONTAEDITAL/'">
-            <div class="icon">🗂️</div>
-            <h2>MontaEdital</h2>
-            <p>
-                Sistema para elaboração da fase preparatória e montagem de editais.
-            </p>
-        </div>
-
-        <div class="card" onclick="location.href='LICITA.AI/'">
-            <div class="icon">🤖</div>
-            <h2>Licita.AI</h2>
-            <p>
-                Automatize a criação de DFD, ETP e TR com Inteligência Artificial.
-            </p>
-        </div>
-
-        <div class="card" onclick="location.href='FIORIILICSVTOWORD/'">
-            <div class="icon">📄</div>
-            <h2>Conversor de Relatórios Fiorilli</h2>
-            <p>
-                Converte relatórios TXT/CSV da Fiorilli em tabelas formatadas no Word (.docx).
-            </p>
-        </div>
-
-    </div>
-
-    <div class="footer">
-        © 2026 MontaEdital
-    </div>
-
-</div>
-
-</body>
-</html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MontaEdital</title>
+<link rel="icon" href="./favicon.png">
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--text:#1f2430;--muted:#6b7280;--pri:#2f6f4f;--b:#e5e7eb}
+[data-theme=dark]{--bg:#0b1220;--card:#111827;--text:#f3f4f6;--muted:#94a3b8;--pri:#34a06f;--b:#243041}
+*{box-sizing:border-box}body{margin:0;font-family:Segoe UI;background:linear-gradient(180deg,var(--bg),#dfe8e3);color:var(--text)}
+[data-theme=dark] body{background:var(--bg)}
+.top{display:flex;justify-content:space-between;padding:20px 30px}
+button{cursor:pointer;border:2px solid var(--b);background:var(--card);border-radius:999px;padding:10px 14px}
+.wrap{max-width:1100px;margin:auto;padding:20px}
+.hero{text-align:center;padding:30px 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px}
+.card{background:var(--card);border:2px solid var(--b);border-radius:18px;padding:28px;transition:.2s;box-shadow:0 10px 30px rgba(0,0,0,.08)}
+.card:hover{transform:translateY(-6px);border-color:var(--pri)}
+.icon{width:70px;height:70px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(47,111,79,.12);font-size:34px}
+h2{margin:18px 0 10px}p{color:var(--muted);line-height:1.5}.main{border-color:var(--pri)}
+footer{text-align:center;padding:40px;color:var(--muted)}
+</style></head><body>
+<div class="top"><div></div><button id=t onclick="sw()"></button></div>
+<div class=wrap>
+<div class=hero><h1>MontaEdital</h1><p>Escolha o sistema que deseja utilizar.</p></div>
+<div class=grid>
+<div class="card main" onclick="location='MONTAEDITAL/'"><div class=icon>🗂️</div><h2>MontaEdital</h2><p>Sistema para elaboração da fase preparatória e montagem de editais.</p></div>
+<div class=card onclick="location='LICITA.AI/'"><div class=icon>🤖</div><h2>Licita.AI</h2><p>Automatize a criação de DFD, ETP e TR com Inteligência Artificial.</p></div>
+<div class=card onclick="location='FIORIILICSVTOWORD/'"><div class=icon>📄</div><h2>Conversor de Relatórios Fiorilli</h2><p>Converte relatórios TXT/CSV da Fiorilli em documentos Word (.docx).</p></div>
+</div><footer>© 2026 MontaEdital</footer></div>
+<script>
+(function(){let t=localStorage.getItem("prontuario_theme")||"light";document.documentElement.dataset.theme=t;u()})();
+function sw(){let d=document.documentElement.dataset.theme==="dark"?"light":"dark";document.documentElement.dataset.theme=d;localStorage.setItem("prontuario_theme",d);u()}
+function u(){t.textContent=document.documentElement.dataset.theme==="dark"?"☀️":"🌙"}
+</script></body></html>
