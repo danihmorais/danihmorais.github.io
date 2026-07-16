@@ -78,7 +78,13 @@
 
         .hero {
             text-align: center;
-            padding: 20px 0 30px;
+            padding: 30px 0;
+        }
+
+        .hero-logo {
+            width: 90px;
+            height: 90px;
+            margin-bottom: 16px;
         }
 
         .grid {
@@ -133,21 +139,19 @@
 
 <body>
     <div class="top">
-        <div class="brand">
-            <img src="assets/logo.png" alt="Logo">
-            <h1>Universo da Licitação</h1>
-        </div>
-
+        <div></div>
         <button id="t" onclick="sw()"></button>
     </div>
 
     <div class="wrap">
         <div class="hero">
+            <img src="assets/logo.png" alt="Logo" class="hero-logo">
+            <h1>Universo da Licitação</h1>
             <p>Escolha o sistema que deseja utilizar.</p>
         </div>
 
         <div class="grid">
-            <div class="card main" onclick="location='MONTAEDITAL/'">
+            <div class="card" onclick="location='MONTAEDITAL/'">
                 <div class="icon">🗂️</div>
                 <h2>MontaEdital</h2>
                 <p>Sistema para elaboração da fase preparatória e montagem de editais.</p>
