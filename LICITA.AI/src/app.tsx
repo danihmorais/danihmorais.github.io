@@ -10,6 +10,7 @@ export default function App() {
   const [logado, setLogado] = useState(false);
   const [statusGemini, setStatusGemini] = useState<boolean | null>(null);
   const [statusOpenRouter, setStatusOpenRouter] = useState<boolean | null>(null);
+
   const { theme, toggleTheme } = useContext(ThemeContext);
 
   const isDark = theme === "dark";
@@ -70,10 +71,17 @@ export default function App() {
     }
 
     if (statusGemini === true) {
-      return { texto: "Conectado à API Gemini", cor: "var(--btn-success)" };
+      return {
+        texto: "Conectado à API Gemini",
+        cor: "var(--btn-success)",
+      };
     }
+
     if (statusOpenRouter === true) {
-      return { texto: "Conectado à API OpenRouter", cor: "var(--btn-success)" };
+      return {
+        texto: "Conectado à API OpenRouter",
+        cor: "var(--btn-success)",
+      };
     }
 
     return {
@@ -89,26 +97,92 @@ export default function App() {
   }
 
   return (
-    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", backgroundColor: "var(--bg-base)", transition: "background-color 0.3s", fontFamily: "sans-serif" }}>
-      
-      <button 
-        onClick={toggleTheme} 
-        style={{ position: "absolute", top: "20px", right: "20px", padding: "8px 16px", borderRadius: "8px", border: "none", cursor: "pointer", background: "var(--bg-subtle)", color: "var(--text-main)" }}
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        height: "100vh",
+        backgroundColor: "var(--bg-base)",
+        transition: "background-color 0.3s",
+        fontFamily: "sans-serif",
+      }}
+    >
+      <button
+        onClick={() => (window.location.href = "/")}
+        style={{
+          position: "absolute",
+          top: "20px",
+          left: "20px",
+          padding: "8px 16px",
+          borderRadius: "8px",
+          border: "none",
+          cursor: "pointer",
+          background: "var(--bg-subtle)",
+          color: "var(--text-main)",
+          fontWeight: 600,
+        }}
+      >
+        ← Voltar
+      </button>
+
+      <button
+        onClick={toggleTheme}
+        style={{
+          position: "absolute",
+          top: "20px",
+          right: "20px",
+          padding: "8px 16px",
+          borderRadius: "8px",
+          border: "none",
+          cursor: "pointer",
+          background: "var(--bg-subtle)",
+          color: "var(--text-main)",
+        }}
       >
         {isDark ? "☀️ Modo Claro" : "🌙 Modo Escuro"}
       </button>
 
-      <div style={{ background: "var(--bg-panel)", padding: "40px", borderRadius: "24px", boxShadow: "var(--shadow-lg)", width: "100%", maxWidth: "600px", textAlign: "center", transition: "background-color 0.3s" }}>
-        
-        <img src={logo} alt="Licita.AI Logo" style={{ width: "90px", marginBottom: "16px" }} />
-        <h1 style={{ margin: "0 0 8px 0", fontSize: "34px", color: "var(--text-main)" }}>Licita.AI</h1>
-        <p style={{ color: "var(--text-muted)", marginBottom: "35px" }}>
+      <div
+        style={{
+          background: "var(--bg-panel)",
+          padding: "40px",
+          borderRadius: "24px",
+          boxShadow: "var(--shadow-lg)",
+          width: "100%",
+          maxWidth: "600px",
+          textAlign: "center",
+          transition: "background-color 0.3s",
+        }}
+      >
+        <img
+          src={logo}
+          alt="Licita.AI Logo"
+          style={{ width: "90px", marginBottom: "16px" }}
+        />
+
+        <h1
+          style={{
+            margin: "0 0 8px 0",
+            fontSize: "34px",
+            color: "var(--text-main)",
+          }}
+        >
+          Licita.AI
+        </h1>
+
+        <p
+          style={{
+            color: "var(--text-muted)",
+            marginBottom: "35px",
+          }}
+        >
           Automatize a criação de DFD, ETP e TR com Inteligência Artificial
         </p>
 
-        <ConfigIA 
-          onSuccess={() => setLogado(true)} 
-          textoBotao="Acessar Sistema" 
+        <ConfigIA
+          onSuccess={() => setLogado(true)}
+          textoBotao="Acessar Sistema"
         />
 
         <div
