@@ -19,21 +19,51 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: 'npm'
-      - name: Install dependencies
-        run: npm install
-      - name: Build
-        run: npm run build
+          cache-dependency-path: |
+            MONTAEDITAL/package-lock.json
+            LICITA.AI/package-lock.json
+
+      # MONTAEDITAL e LICITA.AI são apps React/Vite de verdade (têm
+      # tsconfig.json + vite.config.js + src/). Cada um é buildado na sua
+      # própria pasta, para não misturar dependências/configs entre projetos.
+      - name: Build MontaEdital
+        working-directory: ./MONTAEDITAL
+        run: |
+          npm install
+          npm run build
+
+      - name: Build Licita.AI
+        working-directory: ./LICITA.AI
+        run: |
+          npm install
+          npm run build
+
+      # FIORIILICSVTOWORD é HTML/JS puro (sem React, sem build) — só copia o
+      # arquivo direto no passo de montagem abaixo.
+
+      - name: Assemble final site
+        run: |
+          mkdir -p site
+          cp index.html site/
+          cp -r MONTAEDITAL/dist site/MONTAEDITAL
+          cp -r LICITA.AI/dist site/LICITA.AI
+          mkdir -p site/FIORIILICSVTOWORD
+          cp -r FIORIILICSVTOWORD/. site/FIORIILICSVTOWORD/
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './dist'
+          path: './site'
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
