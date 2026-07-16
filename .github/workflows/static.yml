@@ -50,12 +50,8 @@ jobs:
           cp -r LICITA.AI/dist site/LICITA.AI
           mkdir -p site/FIORIILICSVTOWORD
           cp -r FIORIILICSVTOWORD/. site/FIORIILICSVTOWORD/
-
-          # documentos-modelo também é HTML/JS puro (sem build) — busca os
-          # arquivos da pasta "Documentos Modelo" direto do repo via API do
-          # GitHub em tempo de execução, então só a página precisa ser copiada.
-          mkdir -p site/documentos-modelo
-          cp -r documentos-modelo/. site/documentos-modelo/
+          mkdir -p "site/DOCUMENTOS MODELO"
+          cp -r "DOCUMENTOS MODELO/." "site/DOCUMENTOS MODELO/"
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
