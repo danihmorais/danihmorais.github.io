@@ -51,6 +51,7 @@ jobs:
         run: |
           mkdir -p site
           cp index.html site/
+          cp -r assets site/
           cp -r MONTAEDITAL/dist site/MONTAEDITAL
           cp -r LICITA.AI/dist site/LICITA.AI
           mkdir -p site/FIORIILICSVTOWORD
