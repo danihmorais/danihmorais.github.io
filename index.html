@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Universo da Licitação</title>
 
-    <link rel="icon" href="assets/logo.png">
+    <link rel="icon" href="assets/logo.png" type="image/png">
 
     <style>
         :root {
@@ -26,11 +26,16 @@
             --b: #243041;
         }
 
-        * { box-sizing: border-box; }
+        * {
+            box-sizing: border-box;
+        }
 
         body {
             margin: 0;
-            font-family: Segoe UI, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            font-family: "Segoe UI", sans-serif;
             background: linear-gradient(180deg, var(--bg), #dfe8e3);
             color: var(--text);
         }
@@ -41,9 +46,9 @@
 
         .top {
             display: flex;
-            justify-content: space-between;
+            justify-content: flex-end;
             align-items: center;
-            padding: 20px 30px;
+            padding: 10px 20px;
         }
 
         .brand {
@@ -68,38 +73,52 @@
             background: var(--card);
             border-radius: 999px;
             padding: 10px 14px;
+            color: var(--text);
         }
 
         .wrap {
+            flex: 1;
+            width: 100%;
             max-width: 1100px;
-            margin: auto;
-            padding: 20px;
+            margin: 0 auto;
+            padding: 0 20px 20px;
         }
 
         .hero {
             text-align: center;
-            padding: 30px 0;
+            padding: 8px 0 20px;
         }
 
         .hero-logo {
-            width: 90px;
-            height: 90px;
-            margin-bottom: 16px;
+            width: 80px;
+            height: 80px;
+            margin-bottom: 8px;
+        }
+
+        .hero h1 {
+            margin: 0 0 6px;
+            font-size: 2rem;
+        }
+
+        .hero p {
+            margin: 0;
+            color: var(--muted);
         }
 
         .grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 24px;
+            gap: 20px;
         }
 
         .card {
             background: var(--card);
             border: 2px solid var(--b);
             border-radius: 18px;
-            padding: 28px;
-            transition: .2s;
-            box-shadow: 0 10px 30px rgba(0,0,0,.08);
+            padding: 22px;
+            transition: 0.2s;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            cursor: pointer;
         }
 
         .card:hover {
@@ -114,11 +133,13 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background: rgba(47,111,79,.12);
+            background: rgba(47, 111, 79, 0.12);
             font-size: 34px;
         }
 
-        h2 { margin: 18px 0 10px; }
+        h2 {
+            margin: 18px 0 10px;
+        }
 
         p {
             color: var(--muted);
@@ -131,7 +152,7 @@
 
         footer {
             text-align: center;
-            padding: 40px;
+            padding: 20px 0 10px;
             color: var(--muted);
         }
     </style>
