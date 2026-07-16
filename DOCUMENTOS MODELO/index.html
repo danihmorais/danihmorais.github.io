@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentos Modelo | Universo da Licitação</title>
+
+    <link rel="icon" href="./assets/logo.png" type="image/png">
+
+    <style>
+        :root {
+            --bg: #f4f5f7;
+            --card: #fff;
+            --text: #1f2430;
+            --muted: #6b7280;
+            --pri: #2f6f4f;
+            --b: #e5e7eb;
+        }
+
+        [data-theme="dark"] {
+            --bg: #0b1220;
+            --card: #111827;
+            --text: #f3f4f6;
+            --muted: #94a3b8;
+            --pri: #34a06f;
+            --b: #243041;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            font-family: "Segoe UI", sans-serif;
+            background: linear-gradient(180deg, var(--bg), #dfe8e3);
+            color: var(--text);
+        }
+
+        [data-theme="dark"] body {
+            background: var(--bg);
+        }
+
+        .top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+        }
+
+        .back {
+            text-decoration: none;
+            color: var(--muted);
+            font-size: 0.95rem;
+        }
+
+        .back:hover {
+            color: var(--pri);
+        }
+
+        button {
+            cursor: pointer;
+            border: 2px solid var(--b);
+            background: var(--card);
+            border-radius: 999px;
+            padding: 10px 14px;
+            color: var(--text);
+        }
+
+        .wrap {
+            flex: 1;
+            width: 100%;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 0 20px 30px;
+        }
+
+        .hero {
+            text-align: center;
+            padding: 8px 0 24px;
+        }
+
+        .hero-logo {
+            width: 70px;
+            height: 70px;
+            margin-bottom: 8px;
+        }
+
+        .hero h1 {
+            margin: 0 0 6px;
+            font-size: 1.8rem;
+        }
+
+        .hero p {
+            margin: 0;
+            color: var(--muted);
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+
+        .toolbar input {
+            flex: 1;
+            padding: 10px 14px;
+            border-radius: 999px;
+            border: 2px solid var(--b);
+            background: var(--card);
+            color: var(--text);
+            font-size: 0.95rem;
+        }
+
+        .breadcrumb {
+            margin-bottom: 14px;
+            color: var(--muted);
+            font-size: 0.9rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            align-items: center;
+        }
+
+        .breadcrumb a {
+            color: var(--pri);
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        .panel {
+            background: var(--card);
+            border: 2px solid var(--b);
+            border-radius: 18px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+        }
+
+        .row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--b);
+            cursor: pointer;
+            transition: 0.15s;
+        }
+
+        .row:last-child {
+            border-bottom: none;
+        }
+
+        .row:hover {
+            background: rgba(47, 111, 79, 0.08);
+        }
+
+        .row .icon {
+            font-size: 22px;
+            width: 26px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .row .name {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .row .meta {
+            color: var(--muted);
+            font-size: 0.85rem;
+            flex-shrink: 0;
+        }
+
+        .row .dl {
+            text-decoration: none;
+            color: var(--pri);
+            font-weight: 600;
+            font-size: 0.9rem;
+            padding: 6px 12px;
+            border: 2px solid var(--pri);
+            border-radius: 999px;
+            flex-shrink: 0;
+        }
+
+        .row .dl:hover {
+            background: var(--pri);
+            color: #fff;
+        }
+
+        .state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--muted);
+        }
+
+        .state .spin {
+            font-size: 30px;
+            animation: rot 1s linear infinite;
+            display: inline-block;
+        }
+
+        @keyframes rot {
+            to { transform: rotate(360deg); }
+        }
+
+        footer {
+            text-align: center;
+            padding: 20px 0 10px;
+            color: var(--muted);
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="top">
+        <a class="back" href="../">← Voltar</a>
+        <button id="t" onclick="sw()"></button>
+    </div>
+
+    <div class="wrap">
+        <div class="hero">
+            <img src="./assets/logo.png" alt="Logo" class="hero-logo">
+            <h1>Documentos Modelo</h1>
+            <p>Navegue pelas pastas e baixe os arquivos disponíveis.</p>
+        </div>
+
+        <div class="toolbar">
+            <input id="search" type="text" placeholder="Buscar arquivo ou pasta..." oninput="renderCurrent()">
+        </div>
+
+        <div class="breadcrumb" id="breadcrumb"></div>
+
+        <div class="panel" id="panel">
+            <div class="state"><span class="spin">⏳</span><br>Carregando arquivos...</div>
+        </div>
+
+        <footer>© 2026 danih.morais</footer>
+    </div>
+
+    <script>
+        // ---- Configuração ----
+        const OWNER = "danihmorais";
+        const REPO = "danihmorais.github.io";
+        const BRANCH = "main";
+        const ROOT_FOLDER = "Documentos Modelo";
+
+        // ---- Tema (mesmo padrão do index principal) ----
+        (function () {
+            let theme = localStorage.getItem("prontuario_theme") || "light";
+            document.documentElement.dataset.theme = theme;
+            updateThemeBtn();
+        })();
+
+        function sw() {
+            let theme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+            document.documentElement.dataset.theme = theme;
+            localStorage.setItem("prontuario_theme", theme);
+            updateThemeBtn();
+        }
+
+        function updateThemeBtn() {
+            t.textContent = document.documentElement.dataset.theme === "dark" ? "☀️" : "🌙";
+        }
+
+        // ---- Estado ----
+        let tree = null;       // árvore aninhada { name, path, type, children: {} }
+        let currentPath = [];  // caminho atual dentro de ROOT_FOLDER, ex: ["Sub1","Sub2"]
+
+        const panel = document.getElementById("panel");
+        const breadcrumbEl = document.getElementById("breadcrumb");
+
+        function encodePath(path) {
+            return path.split("/").map(encodeURIComponent).join("/");
+        }
+
+        function rawUrl(path) {
+            return `https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}/${encodePath(path)}`;
+        }
+
+        async function loadTree() {
+            try {
+                const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/git/trees/${BRANCH}?recursive=1`);
+                if (!res.ok) {
+                    throw new Error("Falha ao consultar o GitHub (HTTP " + res.status + ")");
+                }
+                const data = await res.json();
+                if (!data.tree) throw new Error("Resposta inesperada da API do GitHub.");
+
+                const prefix = ROOT_FOLDER + "/";
+                const relevant = data.tree.filter(item =>
+                    item.path === ROOT_FOLDER || item.path.startsWith(prefix)
+                );
+
+                if (relevant.length === 0) {
+                    panel.innerHTML = `<div class="state">📁 A pasta <strong>${ROOT_FOLDER}</strong> ainda não foi encontrada no repositório.<br>Crie a pasta e adicione os arquivos para que apareçam aqui.</div>`;
+                    breadcrumbEl.innerHTML = "";
+                    return;
+                }
+
+                const root = { name: ROOT_FOLDER, path: ROOT_FOLDER, type: "tree", children: {} };
+                for (const item of relevant) {
+                    if (item.path === ROOT_FOLDER) continue;
+                    const rel = item.path.slice(prefix.length);
+                    const parts = rel.split("/");
+                    let node = root;
+                    let acc = ROOT_FOLDER;
+                    parts.forEach((part, idx) => {
+                        acc += "/" + part;
+                        const isLast = idx === parts.length - 1;
+                        if (!node.children[part]) {
+                            node.children[part] = {
+                                name: part,
+                                path: acc,
+                                type: isLast ? item.type : "tree",
+                                size: isLast ? item.size : undefined,
+                                children: {}
+                            };
+                        }
+                        node = node.children[part];
+                    });
+                }
+
+                tree = root;
+                renderCurrent();
+            } catch (err) {
+                panel.innerHTML = `<div class="state">⚠️ Não foi possível carregar a lista de arquivos.<br><small>${err.message}</small></div>`;
+                breadcrumbEl.innerHTML = "";
+            }
+        }
+
+        function getCurrentNode() {
+            let node = tree;
+            for (const part of currentPath) {
+                if (!node.children[part]) return node;
+                node = node.children[part];
+            }
+            return node;
+        }
+
+        function formatSize(bytes) {
+            if (bytes === undefined) return "";
+            if (bytes < 1024) return bytes + " B";
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+            return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+        }
+
+        function renderBreadcrumb() {
+            let html = `<a onclick="goTo(-1)">📁 ${ROOT_FOLDER}</a>`;
+            currentPath.forEach((part, idx) => {
+                html += ` / <a onclick="goTo(${idx})">${part}</a>`;
+            });
+            breadcrumbEl.innerHTML = html;
+        }
+
+        function goTo(idx) {
+            currentPath = idx < 0 ? [] : currentPath.slice(0, idx + 1);
+            renderCurrent();
+        }
+
+        function renderCurrent() {
+            if (!tree) return;
+            renderBreadcrumb();
+
+            const node = getCurrentNode();
+            const query = (document.getElementById("search").value || "").toLowerCase().trim();
+
+            let entries = Object.values(node.children).sort((a, b) => {
+                if (a.type !== b.type) return a.type === "tree" ? -1 : 1;
+                return a.name.localeCompare(b.name, "pt-BR");
+            });
+
+            if (query) {
+                entries = entries.filter(e => e.name.toLowerCase().includes(query));
+            }
+
+            if (entries.length === 0) {
+                panel.innerHTML = `<div class="state">Nenhum arquivo ou pasta encontrado.</div>`;
+                return;
+            }
+
+            panel.innerHTML = entries.map(entry => {
+                if (entry.type === "tree") {
+                    return `
+                        <div class="row" onclick="enterFolder('${escapeAttr(entry.name)}')">
+                            <div class="icon">📁</div>
+                            <div class="name">${escapeHtml(entry.name)}</div>
+                            <div class="meta">pasta</div>
+                        </div>`;
+                } else {
+                    const url = rawUrl(entry.path);
+                    return `
+                        <div class="row">
+                            <div class="icon">📄</div>
+                            <div class="name">${escapeHtml(entry.name)}</div>
+                            <div class="meta">${formatSize(entry.size)}</div>
+                            <a class="dl" href="${url}" download="${escapeAttr(entry.name)}" onclick="event.stopPropagation()">Baixar</a>
+                        </div>`;
+                }
+            }).join("");
+        }
+
+        function enterFolder(name) {
+            currentPath.push(name);
+            document.getElementById("search").value = "";
+            renderCurrent();
+        }
+
+        function escapeHtml(s) {
+            return s.replace(/[&<>"']/g, c => ({
+                "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+            }[c]));
+        }
+
+        function escapeAttr(s) {
+            return s.replace(/'/g, "\\'");
+        }
+
+        loadTree();
+    </script>
+</body>
+</html>

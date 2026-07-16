@@ -29,9 +29,6 @@ jobs:
             MONTAEDITAL/package-lock.json
             LICITA.AI/package-lock.json
 
-      # MONTAEDITAL e LICITA.AI são apps React/Vite de verdade (têm
-      # tsconfig.json + vite.config.js + src/). Cada um é buildado na sua
-      # própria pasta, para não misturar dependências/configs entre projetos.
       - name: Build MontaEdital
         working-directory: ./MONTAEDITAL
         run: |
@@ -44,9 +41,6 @@ jobs:
           npm install
           npm run build
 
-      # FIORIILICSVTOWORD é HTML/JS puro (sem React, sem build) — só copia o
-      # arquivo direto no passo de montagem abaixo.
-
       - name: Assemble final site
         run: |
           mkdir -p site
@@ -56,6 +50,12 @@ jobs:
           cp -r LICITA.AI/dist site/LICITA.AI
           mkdir -p site/FIORIILICSVTOWORD
           cp -r FIORIILICSVTOWORD/. site/FIORIILICSVTOWORD/
+
+          # documentos-modelo também é HTML/JS puro (sem build) — busca os
+          # arquivos da pasta "Documentos Modelo" direto do repo via API do
+          # GitHub em tempo de execução, então só a página precisa ser copiada.
+          mkdir -p site/documentos-modelo
+          cp -r documentos-modelo/. site/documentos-modelo/
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
