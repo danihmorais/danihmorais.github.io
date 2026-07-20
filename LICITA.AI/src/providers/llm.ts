@@ -1,9 +1,5 @@
 const MAX_TENTATIVAS = 3;
 
-// Antes gravava um arquivo .txt em disco via plugin-fs do Tauri
-// (exists/mkdir/writeTextFile + BaseDirectory.AppData). No navegador não há
-// acesso a sistema de arquivos, então registramos no console e mantemos um
-// histórico curto no localStorage para inspeção posterior (ex.: F12 > Application > Local Storage).
 const CHAVE_LOGS_ERRO = "licita_ai:logs_erro";
 const MAX_LOGS_GUARDADOS = 20;
 
@@ -111,7 +107,7 @@ function extrairEConverterJSON(rawText: string): any {
 export async function obterMelhorModelo(provedor: string, apiKey: string): Promise<string> {
   if (provedor === "gemini") {
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-pro:generateContent?key=${apiKey}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro:generateContent?key=${apiKey}`;
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -121,7 +117,7 @@ export async function obterMelhorModelo(provedor: string, apiKey: string): Promi
         })
       });
       if (response.ok) {
-        return "gemini-3.5-pro";
+        return "gemini-3.1-pro";
       }
     } catch (e) {}
     return "gemini-3.5-flash";
@@ -135,7 +131,7 @@ export async function obterMelhorModelo(provedor: string, apiKey: string): Promi
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          model: "anthropic/claude-3.5-sonnet",
+          model: "openrouter/free",
           max_tokens: 1,
           messages: [{ role: "user", content: "teste" }]
         })
@@ -150,7 +146,7 @@ export async function obterMelhorModelo(provedor: string, apiKey: string): Promi
 
 export async function validarChaveGemini(apiKey: string): Promise<boolean> {
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
