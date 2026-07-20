@@ -8,8 +8,8 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from processador_docx import preencher_documento
-from montador_variaveis import montar_variaveis_fixas
+from MONTAEDITAL.processador_docx import preencher_documento
+from MONTAEDITAL.montador_variaveis import montar_variaveis_fixas
 
 app = FastAPI()
 
