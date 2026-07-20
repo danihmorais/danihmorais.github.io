@@ -1,4 +1,4 @@
-const BASE_URL = import.meta.env.VITE_API_URL || 'https://danihmorais-github-io.onrender.com/api';
+const BASE_URL = import.meta.env.VITE_API_URL || 'https://danihmorais-github-io.onrender.com/monta/api';
 
 interface EditalResult {
   blob: Blob;
