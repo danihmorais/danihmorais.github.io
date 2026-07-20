@@ -11,6 +11,8 @@ from pydantic import BaseModel
 from MONTAEDITAL.processador_docx import preencher_documento
 from MONTAEDITAL.montador_variaveis import montar_variaveis_fixas
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 app = FastAPI()
 
 app.add_middleware(
@@ -51,8 +53,7 @@ def cleanup_temp_dir(path: str):
 
 @app.post("/api/gerar-edital")
 async def gerar_edital_endpoint(req: EditalRequest, background_tasks: BackgroundTasks):
-    base_dir = os.getcwd()
-    caminho_modelo = os.path.join(base_dir, MODELOS_DISPONIVEIS.get(req.tipo_edital, ""))
+    caminho_modelo = os.path.join(BASE_DIR, MODELOS_DISPONIVEIS.get(req.tipo_edital, ""))
 
     if req.tipo_edital not in MODELOS_DISPONIVEIS or not os.path.exists(caminho_modelo):
         raise HTTPException(status_code=400, detail=f"Modelo não encontrado para o tipo: {req.tipo_edital}")
