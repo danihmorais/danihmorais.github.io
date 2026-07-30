@@ -131,13 +131,13 @@ export async function obterMelhorModelo(provedor: string, apiKey: string): Promi
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          model: "openrouter/free",
+          model: "anthropic/claude-sonnet-4.5",
           max_tokens: 1,
           messages: [{ role: "user", content: "teste" }]
         })
       });
       if (response.ok) {
-        return "anthropic/claude-3.5-sonnet";
+        return "anthropic/claude-sonnet-4.5";
       }
     } catch (e) {}
     return "openrouter/free";
