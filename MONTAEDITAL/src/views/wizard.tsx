@@ -105,6 +105,7 @@ export default function Wizard() {
             dados.quantidadeItens &&
             dados.quantidadeLotes &&
             dados.objeto &&
+            dados.retirada &&
             hasG &&
             hasF
           );
@@ -138,6 +139,7 @@ export default function Wizard() {
           dados.vigencia &&
           dados.valor &&
           dados.exclusivo &&
+          dados.pagamento &&
           dados.prorrogacaoCheck &&
           dados.arquivoDfd &&
           dados.arquivoEtp &&

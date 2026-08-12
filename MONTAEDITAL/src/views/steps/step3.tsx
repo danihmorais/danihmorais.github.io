@@ -339,46 +339,68 @@ export default function Step3({ dados, atualizarDados }: any) {
       </div>
       )}
       {!isLeilao && (
-      <div className="wiz-card">
-        <div className="wiz-card-header">
-          <div className="wiz-card-icon">📝</div>
-          <div>
-            <div className="wiz-card-title">Cláusulas Adicionais</div>
-            <div className="wiz-card-subtitle">Condições extras de contratante, contratada e pagamento</div>
+      <>
+        <div className="wiz-card">
+          <div className="wiz-card-header">
+            <div className="wiz-card-icon">📝</div>
+            <div>
+              <div className="wiz-card-title">Cláusulas Adicionais</div>
+              <div className="wiz-card-subtitle">
+                Condições extras da contratante e contratada
+              </div>
+            </div>
+          </div>
+
+          <div className="wiz-field" style={{ marginBottom: "16px" }}>
+            <label className="wiz-label">Cláusulas da Contratante</label>
+            <textarea
+              className="wiz-textarea"
+              value={dados.contratante || ""}
+              onChange={(e) =>
+                atualizarDados({ contratante: e.target.value })
+              }
+              placeholder="Insira as cláusulas da contratante (separe uma a uma com quebra de linha)..."
+            />
+          </div>
+
+          <div className="wiz-field">
+            <label className="wiz-label">Cláusulas da Contratada</label>
+            <textarea
+              className="wiz-textarea"
+              value={dados.contratada || ""}
+              onChange={(e) =>
+                atualizarDados({ contratada: e.target.value })
+              }
+              placeholder="Insira as cláusulas da contratada (separe uma a uma com quebra de linha)..."
+            />
           </div>
         </div>
 
-        <div className="wiz-field" style={{ marginBottom: "16px" }}>
-          <label className="wiz-label">Cláusulas da Contratante</label>
-          <textarea
-            className="wiz-textarea"
-            value={dados.contratante || ""}
-            onChange={(e) => atualizarDados({ contratante: e.target.value })}
-            placeholder="Insira as cláusulas da contratante (separe uma a uma com quebra de linha)..."
-          />
-        </div>
+        <div className="wiz-card">
+          <div className="wiz-card-header">
+            <div className="wiz-card-icon">💳</div>
+            <div>
+              <div className="wiz-card-title">Pagamento</div>
+              <div className="wiz-card-subtitle">
+                Condições e regras para pagamento <span className="req-star">*</span>
+              </div>
+            </div>
+          </div>
 
-        <div className="wiz-field">
-          <label className="wiz-label">Cláusulas da Contratada</label>
-          <textarea
-            className="wiz-textarea"
-            value={dados.contratada || ""}
-            onChange={(e) => atualizarDados({ contratada: e.target.value })}
-            placeholder="Insira as cláusulas da contratada (separe uma a uma com quebra de linha)..."
-          />
+          <div className="wiz-field">
+            <label className="wiz-label">Cláusulas de Pagamento</label>
+            <textarea
+              className="wiz-textarea"
+              value={dados.pagamento || ""}
+              onChange={(e) =>
+                atualizarDados({ pagamento: e.target.value })
+              }
+              placeholder="Insira as cláusulas de pagamento (separe uma a uma com quebra de linha)..."
+            />
+          </div>
         </div>
-
-        <div className="wiz-field" style={{ marginTop: "16px" }}>
-          <label className="wiz-label">Cláusulas de Pagamento</label>
-          <textarea
-            className="wiz-textarea"
-            value={dados.pagamento || ""}
-            onChange={(e) => atualizarDados({ pagamento: e.target.value })}
-            placeholder="Insira as cláusulas de pagamento (separe uma a uma com quebra de linha)..."
-          />
-        </div>
-      </div>
-      )}
+      </>
+    )}
       <div className="wiz-bottom-pad" />
     </div>
   );
