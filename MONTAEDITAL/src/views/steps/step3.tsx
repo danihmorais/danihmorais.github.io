@@ -382,13 +382,13 @@ export default function Step3({ dados, atualizarDados }: any) {
             <div>
               <div className="wiz-card-title">Pagamento</div>
               <div className="wiz-card-subtitle">
-                Condições e regras para pagamento <span className="req-star">*</span>
+                Condições e regras para pagamento
               </div>
             </div>
           </div>
 
-          <div className="wiz-field">
-            <label className="wiz-label">Cláusulas de Pagamento</label>
+          <div className="wiz-field" style={{ marginBottom: "16px" }}>
+            <label className="wiz-label">Cláusulas de Pagamento <span className="req-star">*</span></label>
             <textarea
               className="wiz-textarea"
               value={dados.pagamento || ""}

@@ -225,7 +225,7 @@ export default function Step2({ dados, atualizarDados }: any) {
           </div>
         </div>
           {!isLeilao && (
-          <div className="wiz-field">
+          <div className="wiz-field" style={{ marginBottom: "16px" }}>
             <label className="wiz-label">
               Prazo de Devolução <span className="req-star">*</span>
             </label>
@@ -239,7 +239,7 @@ export default function Step2({ dados, atualizarDados }: any) {
           </div>
           )}
         <div
-        className={isLeilao ? "wiz-grid-1" : "wiz-grid-1-2"}
+        className="wiz-grid-1"
           style={{ marginBottom: "16px" }}
         >
           <div className="wiz-field">
