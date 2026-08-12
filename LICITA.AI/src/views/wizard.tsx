@@ -103,6 +103,8 @@ export default function Wizard() {
   const voltar = () => {
     if (etapaAtual > 0) {
       setEtapaAtual(etapaAtual - 1);
+    } else {
+      window.location.href = "/";
     }
   };
 
