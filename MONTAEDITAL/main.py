@@ -24,10 +24,10 @@ app.add_middleware(
 )
 
 MODELOS_DISPONIVEIS = {
-    "dispensa": "modelos/Dispensa xx Proc xx -  MINUTA DP 13.07.2026.docx",
-    "dispensa_bll": "modelos/Dispensa xx Proc xx -  MINUTA DE 13.07.2026.docx",
-    "pregao_eletronico": "modelos/Pregão xx Proc xx -  MINUTA PE 13.07.2026.docx",
-    "pregao_presencial": "modelos/Pregão xx Proc xx -  MINUTA PP 13.07.2026.docx"
+    "dispensa": "modelos/Dispensa xx Proc xx -  MINUTA DP.docx",
+    "dispensa_bll": "modelos/Dispensa xx Proc xx -  MINUTA DE.docx",
+    "pregao_eletronico": "modelos/Pregão xx Proc xx -  MINUTA PE.docx",
+    "pregao_presencial": "modelos/Pregão xx Proc xx -  MINUTA PP.docx"
 }
 
 MOD_ABR_MAP = {
@@ -84,7 +84,7 @@ async def gerar_edital_endpoint(req: EditalRequest, background_tasks: Background
     
     dados_edital = dados_processados.copy()
     dados_edital["{{MINUTA DE}}"] = ""
-    nome_arq_edital = f"{modalidade_nome} {num_mod_arq} Proc {num_proc_arq} - {mod_abr} 13.07.2026.docx"
+    nome_arq_edital = f"{modalidade_nome} {num_mod_arq} Proc {num_proc_arq} - {mod_abr}.docx"
     caminho_edital = os.path.join(temp_dir, nome_arq_edital)
     preencher_documento(caminho_modelo, caminho_edital, dados_edital)
     
@@ -100,7 +100,7 @@ async def gerar_edital_endpoint(req: EditalRequest, background_tasks: Background
     dados_minuta["{{HORA INICIO DO REC}}"] = "XXhXXmin"
     dados_minuta["{{HORA FIM DO REC}}"] = "XXhXXmin"
     dados_minuta["{{HORA INICIO CRED}}"] = "XXhXXmin"
-    nome_arq_minuta = f"{modalidade_nome} XX Proc {num_proc_arq} - MINUTA DE {mod_abr} 13.07.2026.docx"
+    nome_arq_minuta = f"{modalidade_nome} XX Proc {num_proc_arq} - MINUTA DE {mod_abr}.docx"
     caminho_minuta = os.path.join(temp_dir, nome_arq_minuta)
     preencher_documento(caminho_modelo, caminho_minuta, dados_minuta)
 

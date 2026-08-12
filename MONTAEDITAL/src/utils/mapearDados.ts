@@ -125,6 +125,7 @@ export const mapearDadosWizard = async (dados: any) => {
         "{{DECL.ADICIONAIS}}": dados.declAdicionais || "",
         "{{CONTRATANTE}}": dados.contratante || "",
         "{{CONTRATADA}}": dados.contratada || "",
+        "{{PAGAMENTO}}": dados.pagamento || "",
         "{{EXECUCAO}}": dados.execucao || "",
         "{{PRAZO DEVOLUCAO}}": dados.prazoDevolucao || "",
         "{{ESPECIFICACOES ESPECIAIS}}": dados.especificacoesEspeciais || "",

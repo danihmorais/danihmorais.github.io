@@ -323,27 +323,37 @@ export default function Step3({ dados, atualizarDados }: any) {
           <div className="wiz-card-icon">📝</div>
           <div>
             <div className="wiz-card-title">Cláusulas Adicionais</div>
-            <div className="wiz-card-subtitle">Condições extras de contratante e contratada</div>
+            <div className="wiz-card-subtitle">Condições extras de contratante, contratada e pagamento</div>
           </div>
         </div>
 
         <div className="wiz-field" style={{ marginBottom: "16px" }}>
-          <label className="wiz-label">Cláusulas Adicionais da Contratante</label>
+          <label className="wiz-label">Cláusulas da Contratante</label>
           <textarea
             className="wiz-textarea"
             value={dados.contratante || ""}
             onChange={(e) => atualizarDados({ contratante: e.target.value })}
-            placeholder="Insira as cláusulas adicionais da contratante (separe uma a uma com quebra de linha)..."
+            placeholder="Insira as cláusulas da contratante (separe uma a uma com quebra de linha)..."
           />
         </div>
 
         <div className="wiz-field">
-          <label className="wiz-label">Cláusulas Adicionais da Contratada</label>
+          <label className="wiz-label">Cláusulas da Contratada</label>
           <textarea
             className="wiz-textarea"
             value={dados.contratada || ""}
             onChange={(e) => atualizarDados({ contratada: e.target.value })}
-            placeholder="Insira as cláusulas adicionais da contratada (separe uma a uma com quebra de linha)..."
+            placeholder="Insira as cláusulas da contratada (separe uma a uma com quebra de linha)..."
+          />
+        </div>
+
+        <div className="wiz-field" style={{ marginTop: "16px" }}>
+          <label className="wiz-label">Cláusulas de Pagamento</label>
+          <textarea
+            className="wiz-textarea"
+            value={dados.pagamento || ""}
+            onChange={(e) => atualizarDados({ pagamento: e.target.value })}
+            placeholder="Insira as cláusulas de pagamento (separe uma a uma com quebra de linha)..."
           />
         </div>
       </div>

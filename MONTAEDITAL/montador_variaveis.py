@@ -372,6 +372,9 @@ def montar_variaveis_fixas(dados_usuario: dict) -> dict:
     contratada_str = dados_usuario.get("{{CONTRATADA}}", "")
     resultado["{{CONTRATADA}}"] = contratada_str
 
+    pagamento_str = dados_usuario.get("{{PAGAMENTO}}", "")
+    resultado["{{PAGAMENTO}}"] = pagamento_str
+
     vigencia = dados_usuario.get("{{VIGENCIA}}", "")
     resultado["{{VIGENCIA}}"] = vigencia
 

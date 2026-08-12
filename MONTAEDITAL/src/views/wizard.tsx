@@ -43,6 +43,7 @@ export default function Wizard() {
     declAdicionais: "",
     contratante: "",
     contratada: "",
+    pagamento: "",
     valor: "",
     exclusivo: "NAO",
     prorrogacaoCheck: "SIM",

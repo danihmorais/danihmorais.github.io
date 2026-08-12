@@ -164,8 +164,21 @@ def _converter_listas_para_texto(caminho_docx):
         return caminho_docx, False
 
     try:
+        styles_tree = None
+        style_num_map = {}
         if 'word/styles.xml' in conteudos:
             styles_tree = etree.fromstring(conteudos['word/styles.xml'])
+            for style in styles_tree.findall(qn('w:style')):
+                style_id = style.get(qn('w:styleId'))
+                numPr = style.find(f".//{qn('w:numPr')}")
+                if numPr is not None:
+                    numId_el = numPr.find(qn('w:numId'))
+                    ilvl_el = numPr.find(qn('w:ilvl'))
+                    if numId_el is not None:
+                        nId = numId_el.get(qn('w:val'))
+                        ilvl = int(ilvl_el.get(qn('w:val'), '0')) if ilvl_el is not None else 0
+                        style_num_map[style_id] = (nId, ilvl)
+
             modificado_styles = False
             for style in styles_tree.findall(qn('w:style')):
                 numPrs = style.findall(f".//{qn('w:numPr')}")
@@ -210,19 +223,6 @@ def _converter_listas_para_texto(caminho_docx):
                 start_ov = lvl_override.find(qn('w:startOverride'))
                 if start_ov is not None:
                     nums[num_id]['overrides'][ilvl] = int(start_ov.get(qn('w:val'), '1'))
-
-        style_num_map = {}
-        if 'word/styles.xml' in conteudos:
-            for style in styles_tree.findall(qn('w:style')):
-                style_id = style.get(qn('w:styleId'))
-                numPr = style.find(f".//{qn('w:numPr')}")
-                if numPr is not None:
-                    numId_el = numPr.find(qn('w:numId'))
-                    ilvl_el = numPr.find(qn('w:ilvl'))
-                    if numId_el is not None:
-                        nId = numId_el.get(qn('w:val'))
-                        ilvl = int(ilvl_el.get(qn('w:val'), '0')) if ilvl_el is not None else 0
-                        style_num_map[style_id] = (nId, ilvl)
 
         xml_targets = [
             n for n in conteudos
