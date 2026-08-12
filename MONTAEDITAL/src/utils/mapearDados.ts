@@ -42,9 +42,14 @@ export const mapearDadosWizard = async (dados: any) => {
       modalidadeFormatada = "Dispensa Eletrônica BLL";
       arquivoBase = "dispensa_bll";
       break;
+    case "LEILAO_ELETRONICO":
+      modalidadeFormatada = "Leilão Eletrônico";
+      arquivoBase = "leilao_eletronico";
+      break;
     default:
       modalidadeFormatada = "Pregão Eletrônico";
       arquivoBase = "pregao_eletronico";
+      break;
   }
 
   const gestoresNomes = (dados.gestores || []).map((g: any) => g.nome).join(", ");
@@ -130,6 +135,7 @@ export const mapearDadosWizard = async (dados: any) => {
         "{{PRAZO DEVOLUCAO}}": dados.prazoDevolucao || "",
         "{{ESPECIFICACOES ESPECIAIS}}": dados.especificacoesEspeciais || "",
         "{{VIGENCIA}}": dados.vigencia || "",
+        "{{RETIRADA}}": dados.retirada || "",
         "{{DOTACAO}}": dados.dotacao || "",
         "{{TIPO_OBJETO}}": dados.tipoObjeto || "AQUISICAO",
         "{{VISTORIA_CHECK}}": dados.vistoria ? "SIM" : "NAO",

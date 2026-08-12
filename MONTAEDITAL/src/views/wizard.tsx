@@ -44,6 +44,7 @@ export default function Wizard() {
     contratante: "",
     contratada: "",
     pagamento: "",
+    retirada: "",
     valor: "",
     exclusivo: "NAO",
     prorrogacaoCheck: "SIM",

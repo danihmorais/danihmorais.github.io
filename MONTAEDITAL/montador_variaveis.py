@@ -381,6 +381,9 @@ def montar_variaveis_fixas(dados_usuario: dict) -> dict:
     execucao = resultado.get("{{EXECUCAO}}", resultado.get("EXECUCAO", ""))
     resultado["{{EXECUCAO}}"] = execucao
 
+    retirada = dados_usuario.get("{{RETIRADA}}", "")
+    resultado["{{RETIRADA}}"] = retirada
+
     prazo_dev = resultado.get("{{PRAZO DEVOLUCAO}}", resultado.get("PRAZO DEVOLUCAO", ""))
     if prazo_dev:
         try:

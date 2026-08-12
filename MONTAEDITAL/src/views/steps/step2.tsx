@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 
 interface Pessoa {
   nome: string;
@@ -74,6 +74,16 @@ function PessoaList({ label, singularLabel, items, onChange }: PessoaListProps) 
 }
 
 export default function Step2({ dados, atualizarDados }: any) {
+  const isLeilao = dados.modalidade === "LEILAO_ELETRONICO";
+    useEffect(() => {
+    if (isLeilao) {
+      atualizarDados({
+        vistoria: true,
+        amostra: false,
+        especificacoesEspeciais: "",
+      });
+    }
+  }, [isLeilao]);
   return (
     <div className="wiz-view">
       <div className="wiz-card">
@@ -86,19 +96,21 @@ export default function Step2({ dados, atualizarDados }: any) {
         </div>
 
         <div className="wiz-grid-3" style={{ marginBottom: "16px" }}>
-          <div className="wiz-field">
-            <label className="wiz-label">
-              Tipo de Objeto <span className="req-star">*</span>
-            </label>
-            <select
-              className="wiz-select"
-              value={dados.tipoObjeto || "AQUISICAO"}
-              onChange={(e) => atualizarDados({ tipoObjeto: e.target.value })}
-            >
-              <option value="AQUISICAO">Aquisição</option>
-              <option value="SERVICO">Serviço</option>
-            </select>
-          </div>
+          {!isLeilao && (
+            <div className="wiz-field">
+              <label className="wiz-label">
+                Tipo de Objeto <span className="req-star">*</span>
+              </label>
+              <select
+                className="wiz-select"
+                value={dados.tipoObjeto || "AQUISICAO"}
+                onChange={(e) => atualizarDados({ tipoObjeto: e.target.value })}
+              >
+                <option value="AQUISICAO">Aquisição</option>
+                <option value="SERVICO">Serviço</option>
+              </select>
+            </div>
+          )}
           <div className="wiz-field">
             <label className="wiz-label">
               Quantidade de Itens <span className="req-star">*</span>
@@ -215,26 +227,26 @@ export default function Step2({ dados, atualizarDados }: any) {
         <div className="wiz-grid-1-2" style={{ marginBottom: "16px" }}>
           <div className="wiz-field">
             <label className="wiz-label">
-              Prazo de Devolução <span className="req-star">*</span>
+              {isLeilao ? "Local de Retirada" : "Local e Prazo de Execução/Entrega"}{" "}
+              <span className="req-star">*</span>
             </label>
-            <input
-              type="number"
-              className="wiz-input"
-              value={dados.prazoDevolucao || ""}
-              onChange={(e) => atualizarDados({ prazoDevolucao: e.target.value })}
-              placeholder="Ex: 5 (dias)"
-            />
-          </div>
-          <div className="wiz-field">
-            <label className="wiz-label">
-              Local e Prazo de Execução/Entrega <span className="req-star">*</span>
-            </label>
+
             <textarea
               className="wiz-textarea"
               style={{ minHeight: "80px" }}
-              value={dados.execucao || ""}
-              onChange={(e) => atualizarDados({ execucao: e.target.value })}
-              placeholder="Descreva as condições, prazos e locais..."
+              value={isLeilao ? (dados.retirada || "") : (dados.execucao || "")}
+              onChange={(e) =>
+                atualizarDados(
+                  isLeilao
+                    ? { retirada: e.target.value }
+                    : { execucao: e.target.value }
+                )
+              }
+              placeholder={
+                isLeilao
+                  ? "Informe o local de retirada..."
+                  : "Descreva as condições, prazos e locais..."
+              }
             />
           </div>
         </div>
@@ -245,56 +257,109 @@ export default function Step2({ dados, atualizarDados }: any) {
           <div className="wiz-card-icon">📑</div>
           <div>
             <div className="wiz-card-title">Especificações e Exigências</div>
-            <div className="wiz-card-subtitle">Regras extras, vistoria e amostras</div>
+            <div className="wiz-card-subtitle">
+              Regras extras, vistoria e amostras
+            </div>
           </div>
         </div>
-        
-        <div className="wiz-field" style={{ marginBottom: "20px" }}>
-          <label className="wiz-label">Especificações Especiais</label>
-          <textarea
-            className="wiz-textarea"
-            value={dados.especificacoesEspeciais || ""}
-            onChange={(e) => atualizarDados({ especificacoesEspeciais: e.target.value })}
-            placeholder="Insira especificações especiais (opcional)..."
-          />
-        </div>
+
+        {!isLeilao && (
+          <div className="wiz-field" style={{ marginBottom: "20px" }}>
+            <label className="wiz-label">Especificações Especiais</label>
+            <textarea
+              className="wiz-textarea"
+              value={dados.especificacoesEspeciais || ""}
+              onChange={(e) =>
+                atualizarDados({ especificacoesEspeciais: e.target.value })
+              }
+              placeholder="Insira especificações especiais (opcional)..."
+            />
+          </div>
+        )}
 
         <div className="wiz-grid-2">
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            <div className="wiz-toggle-row" onClick={() => atualizarDados({ vistoria: !dados.vistoria })}>
+            <div
+              className="wiz-toggle-row"
+              onClick={() => {
+                if (!isLeilao) {
+                  atualizarDados({ vistoria: !dados.vistoria });
+                }
+              }}
+              style={{
+                cursor: isLeilao ? "default" : "pointer",
+                opacity: isLeilao ? 0.8 : 1,
+              }}
+            >
               <div className="wiz-toggle-info">
                 <div className="wiz-toggle-title">Exigir Vistoria</div>
-                <div className="wiz-toggle-desc">Obriga os licitantes a realizarem vistoria técnica.</div>
+                <div className="wiz-toggle-desc">
+                  Obriga os licitantes a realizarem vistoria técnica.
+                </div>
               </div>
-              <div className={`wiz-switch ${dados.vistoria ? "on" : ""}`} />
+
+              <div
+                className={`wiz-switch ${
+                  isLeilao || dados.vistoria ? "on" : ""
+                }`}
+              />
             </div>
-            {dados.vistoria && (
+
+            {dados.vistoria && !isLeilao && (
               <textarea
                 className="wiz-textarea"
                 value={dados.textoVistoria || ""}
-                onChange={(e) => atualizarDados({ textoVistoria: e.target.value })}
+                onChange={(e) =>
+                  atualizarDados({ textoVistoria: e.target.value })
+                }
+                placeholder="Descreva as condições da vistoria..."
+              />
+            )}
+
+            {isLeilao && (
+              <textarea
+                className="wiz-textarea"
+                value={dados.textoVistoria || ""}
+                onChange={(e) =>
+                  atualizarDados({ textoVistoria: e.target.value })
+                }
                 placeholder="Descreva as condições da vistoria..."
               />
             )}
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            <div className="wiz-toggle-row" onClick={() => atualizarDados({ amostra: !dados.amostra })}>
-              <div className="wiz-toggle-info">
-                <div className="wiz-toggle-title">Exigir Amostra</div>
-                <div className="wiz-toggle-desc">Obriga o fornecimento de amostras para análise.</div>
+          {!isLeilao && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              <div
+                className="wiz-toggle-row"
+                onClick={() =>
+                  atualizarDados({ amostra: !dados.amostra })
+                }
+              >
+                <div className="wiz-toggle-info">
+                  <div className="wiz-toggle-title">Exigir Amostra</div>
+                  <div className="wiz-toggle-desc">
+                    Obriga o fornecimento de amostras para análise.
+                  </div>
+                </div>
+
+                <div
+                  className={`wiz-switch ${dados.amostra ? "on" : ""}`}
+                />
               </div>
-              <div className={`wiz-switch ${dados.amostra ? "on" : ""}`} />
+
+              {dados.amostra && (
+                <textarea
+                  className="wiz-textarea"
+                  value={dados.textoAmostra || ""}
+                  onChange={(e) =>
+                    atualizarDados({ textoAmostra: e.target.value })
+                  }
+                  placeholder="Descreva as condições da amostra..."
+                />
+              )}
             </div>
-            {dados.amostra && (
-              <textarea
-                className="wiz-textarea"
-                value={dados.textoAmostra || ""}
-                onChange={(e) => atualizarDados({ textoAmostra: e.target.value })}
-                placeholder="Descreva as condições da amostra..."
-              />
-            )}
-          </div>
+          )}
         </div>
       </div>
 

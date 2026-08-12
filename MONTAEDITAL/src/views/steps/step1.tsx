@@ -13,6 +13,12 @@ export default function Step1({ dados, atualizarDados }: any) {
       updates.instrumento = "CONTRATO";
     }
 
+    if (val === "LEILAO_ELETRONICO") {
+    updates.instrumento = "SEM_CONTRATO";
+    } else if (dados.instrumento === "SEM_CONTRATO") {
+      updates.instrumento = "CONTRATO";
+    }
+
     atualizarDados(updates);
   };
 
@@ -76,6 +82,7 @@ export default function Step1({ dados, atualizarDados }: any) {
               <option value="PREGAO_PRESENCIAL">Pregão Presencial</option>
               <option value="DISPENSA">Dispensa por E-Mail</option>
               <option value="DISPENSA_BLL">Dispensa Eletrônica BLL</option>
+              <option value="LEILAO_ELETRONICO">Leilão Eletrônico</option>
             </select>
           </div>
           <div className="wiz-field">
@@ -100,10 +107,20 @@ export default function Step1({ dados, atualizarDados }: any) {
               className="wiz-select"
               value={dados.instrumento || "CONTRATO"}
               onChange={(e) => atualizarDados({ instrumento: e.target.value })}
+              disabled={dados.modalidade === "LEILAO_ELETRONICO"}
             >
-              <option value="CONTRATO">Contrato Regular</option>
-              {!(dados.modalidade === "DISPENSA" || dados.modalidade === "DISPENSA_BLL") && (
-                <option value="ATA">Ata de Registro de Preços</option>
+              {dados.modalidade === "LEILAO_ELETRONICO" ? (
+                <option value="SEM_CONTRATO">Sem contrato</option>
+              ) : (
+                <>
+                  <option value="CONTRATO">Contrato Regular</option>
+                  {(dados.modalidade === "DISPENSA" || dados.modalidade === "DISPENSA_BLL") && (
+                    <option value="SEM_CONTRATO">Sem contrato</option>
+                  )}
+                  {!(dados.modalidade === "DISPENSA" || dados.modalidade === "DISPENSA_BLL") && (
+                    <option value="ATA">Ata de Registro de Preços</option>
+                  )}
+                </>
               )}
             </select>
           </div>

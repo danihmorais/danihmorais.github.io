@@ -27,12 +27,14 @@ MODELOS_DISPONIVEIS = {
     "dispensa": "modelos/Dispensa xx Proc xx -  MINUTA DP.docx",
     "dispensa_bll": "modelos/Dispensa xx Proc xx -  MINUTA DE.docx",
     "pregao_eletronico": "modelos/Pregão xx Proc xx -  MINUTA PE.docx",
-    "pregao_presencial": "modelos/Pregão xx Proc xx -  MINUTA PP.docx"
+    "pregao_presencial": "modelos/Pregão xx Proc xx -  MINUTA PP.docx",
+    "leilao_eletronico": "modelos/Leilão xx Proc xx -  MINUTA LE.docx"
 }
 
 MOD_ABR_MAP = {
     "PREGAO_PRESENCIAL": "PP",
     "PREGAO_ELETRONICO": "PE",
+    "LEILAO_ELETRONICO": "LE",
     "DISPENSA_BLL": "DE",
     "DISPENSA": "DP"
 }
@@ -41,7 +43,8 @@ MODALIDADE_TEXTO = {
     "PREGAO_ELETRONICO": "Pregão Eletrônico",
     "DISPENSA": "Dispensa",
     "DISPENSA_BLL": "Dispensa Eletrônica BLL",
-    "PREGAO_PRESENCIAL": "Pregão Presencial"
+    "PREGAO_PRESENCIAL": "Pregão Presencial",
+    "LEILAO_ELETRONICO": "Leilão Eletrônico"
 }
 
 class EditalRequest(BaseModel):

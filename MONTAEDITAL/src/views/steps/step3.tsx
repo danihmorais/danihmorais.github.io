@@ -1,6 +1,7 @@
 import React from "react";
 
 export default function Step3({ dados, atualizarDados }: any) {
+  const isLeilao = dados.modalidade === "LEILAO_ELETRONICO";
   const handleValorChange = (e: any) => {
     let v = e.target.value.replace(/\D/g, "");
     if (v === "") {
@@ -64,61 +65,80 @@ export default function Step3({ dados, atualizarDados }: any) {
             </div>
           </div>
 
-          <div className="wiz-field">
-            <label className="wiz-label">
-              Vigência <span className="req-star">*</span>
-            </label>
-            <div style={{ display: "flex", gap: "8px" }}>
-              <input
-                type="number"
-                className="wiz-input"
-                value={numVigencia}
-                onChange={(e) => atualizarDados({ vigencia: `${e.target.value} ${unitVigencia}`.trim() })}
-                placeholder="Ex: 12"
-                style={{ width: "60%" }}
-              />
+          {!isLeilao && (
+            <div className="wiz-field">
+              <label className="wiz-label">
+                Vigência <span className="req-star">*</span>
+              </label>
+
+              <div style={{ display: "flex", gap: "8px" }}>
+                <input
+                  type="number"
+                  className="wiz-input"
+                  value={numVigencia}
+                  onChange={(e) =>
+                    atualizarDados({
+                      vigencia: `${e.target.value} ${unitVigencia}`.trim(),
+                    })
+                  }
+                  placeholder="Ex: 12"
+                  style={{ width: "60%" }}
+                />
+
+                <select
+                  className="wiz-select"
+                  value={unitVigencia}
+                  onChange={(e) =>
+                    atualizarDados({
+                      vigencia: `${numVigencia} ${e.target.value}`.trim(),
+                    })
+                  }
+                  style={{ width: "40%" }}
+                >
+                  <option value="dias">Dias</option>
+                  <option value="meses">Meses</option>
+                  <option value="anos">Anos</option>
+                </select>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {!isLeilao && (
+          <div className="wiz-grid-2">
+            <div className="wiz-field">
+              <label className="wiz-label">
+                Exclusivo para ME/EPP <span className="req-star">*</span>
+              </label>
               <select
                 className="wiz-select"
-                value={unitVigencia}
-                onChange={(e) => atualizarDados({ vigencia: `${numVigencia} ${e.target.value}`.trim() })}
-                style={{ width: "40%" }}
+                value={dados.exclusivo || "NAO"}
+                onChange={(e) =>
+                  atualizarDados({ exclusivo: e.target.value })
+                }
               >
-                <option value="dias">Dias</option>
-                <option value="meses">Meses</option>
-                <option value="anos">Anos</option>
+                <option value="NAO">Não</option>
+                <option value="SIM">Sim</option>
+              </select>
+            </div>
+
+            <div className="wiz-field">
+              <label className="wiz-label">
+                Permitir Prorrogação? <span className="req-star">*</span>
+              </label>
+              <select
+                className="wiz-select"
+                value={dados.prorrogacaoCheck || "NAO"}
+                onChange={(e) =>
+                  atualizarDados({ prorrogacaoCheck: e.target.value })
+                }
+              >
+                <option value="NAO">Não</option>
+                <option value="SIM">Sim</option>
               </select>
             </div>
           </div>
-        </div>
-
-        <div className="wiz-grid-2">
-          <div className="wiz-field">
-            <label className="wiz-label">
-              Exclusivo para ME/EPP <span className="req-star">*</span>
-            </label>
-            <select
-              className="wiz-select"
-              value={dados.exclusivo || "NAO"}
-              onChange={(e) => atualizarDados({ exclusivo: e.target.value })}
-            >
-              <option value="NAO">Não</option>
-              <option value="SIM">Sim</option>
-            </select>
-          </div>
-          <div className="wiz-field">
-            <label className="wiz-label">
-              Permitir Prorrogação? <span className="req-star">*</span>
-            </label>
-            <select
-              className="wiz-select"
-              value={dados.prorrogacaoCheck || "NAO"}
-              onChange={(e) => atualizarDados({ prorrogacaoCheck: e.target.value })}
-            >
-              <option value="NAO">Não</option>
-              <option value="SIM">Sim</option>
-            </select>
-          </div>
-        </div>
+        )}
       </div>
 
       <div className="wiz-card">
@@ -225,7 +245,7 @@ export default function Step3({ dados, atualizarDados }: any) {
           </div>
         </div>
       </div>
-
+      {!isLeilao && (
       <div className="wiz-card">
         <div className="wiz-card-header">
           <div className="wiz-card-icon">➕</div>
@@ -317,7 +337,8 @@ export default function Step3({ dados, atualizarDados }: any) {
           </div>
         </div>
       </div>
-
+      )}
+      {!isLeilao && (
       <div className="wiz-card">
         <div className="wiz-card-header">
           <div className="wiz-card-icon">📝</div>
@@ -357,7 +378,7 @@ export default function Step3({ dados, atualizarDados }: any) {
           />
         </div>
       </div>
-
+      )}
       <div className="wiz-bottom-pad" />
     </div>
   );
