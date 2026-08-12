@@ -72,15 +72,78 @@ export default function Wizard() {
   }, [etapaAtual]);
 
   const validarEtapa = () => {
+    const isLeilao = dados.modalidade === "LEILAO";
+
     switch (etapaAtual) {
       case 0:
-        return !!(dados.numeroProcesso && dados.numeroModalidade && dados.modalidade && dados.criterios && dados.instrumento && dados.dataRecProp1 && dados.dataSessao && dados.horaSessao && dados.dataEdital);
-      case 1:
-        const hasG = dados.gestores && dados.gestores.length > 0 && dados.gestores[0].nome.trim() && dados.gestores[0].cargo.trim();
-        const hasF = dados.fiscais && dados.fiscais.length > 0 && dados.fiscais[0].nome.trim() && dados.fiscais[0].cargo.trim();
-        return !!(dados.tipoObjeto && dados.quantidadeItens && dados.quantidadeLotes && dados.dotacao && dados.objeto && dados.execucao && dados.prazoDevolucao && hasG && hasF);
+        return !!(
+          dados.numeroProcesso &&
+          dados.numeroModalidade &&
+          dados.modalidade &&
+          dados.criterios &&
+          dados.instrumento &&
+          dados.dataRecProp1 &&
+          dados.dataSessao &&
+          dados.horaSessao &&
+          dados.dataEdital
+        );
+
+      case 1: {
+        const hasG =
+          dados.gestores?.length > 0 &&
+          dados.gestores[0].nome.trim() &&
+          dados.gestores[0].cargo.trim();
+
+        const hasF =
+          dados.fiscais?.length > 0 &&
+          dados.fiscais[0].nome.trim() &&
+          dados.fiscais[0].cargo.trim();
+
+        // LEILÃO
+        if (isLeilao) {
+          return !!(
+            dados.quantidadeItens &&
+            dados.quantidadeLotes &&
+            dados.objeto &&
+            hasG &&
+            hasF
+          );
+        }
+
+        // DEMAIS MODALIDADES
+        return !!(
+          dados.tipoObjeto &&
+          dados.quantidadeItens &&
+          dados.quantidadeLotes &&
+          dados.dotacao &&
+          dados.objeto &&
+          dados.execucao &&
+          dados.prazoDevolucao &&
+          hasG &&
+          hasF
+        );
+      }
+
       case 2:
-        return !!(dados.vigencia && dados.valor && dados.exclusivo && dados.prorrogacaoCheck && dados.arquivoDfd && dados.arquivoEtp && dados.arquivoTr);
+        if (isLeilao) {
+          return !!(
+            dados.exclusivo &&
+            dados.arquivoDfd &&
+            dados.arquivoEtp &&
+            dados.arquivoTr
+          );
+        }
+
+        return !!(
+          dados.vigencia &&
+          dados.valor &&
+          dados.exclusivo &&
+          dados.prorrogacaoCheck &&
+          dados.arquivoDfd &&
+          dados.arquivoEtp &&
+          dados.arquivoTr
+        );
+
       default:
         return true;
     }

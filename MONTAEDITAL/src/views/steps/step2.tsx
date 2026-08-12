@@ -221,19 +221,26 @@ export default function Step2({ dados, atualizarDados }: any) {
           <div className="wiz-card-icon">📍</div>
           <div>
             <div className="wiz-card-title">Prazos e Locais</div>
-            <div className="wiz-card-subtitle">Execução, entrega e devoluções</div>
+            <div className="wiz-card-subtitle">Execução, entrega e devoluções ou retirada</div>
           </div>
         </div>
-        <div className="wiz-grid-1-2" style={{ marginBottom: "16px" }}>
+        <div
+        className={isLeilao ? "wiz-grid-1" : "wiz-grid-1-2"}
+          style={{ marginBottom: "16px" }}
+        >
           <div className="wiz-field">
             <label className="wiz-label">
-              {isLeilao ? "Local de Retirada" : "Local e Prazo de Execução/Entrega"}{" "}
+              {isLeilao
+                ? "Local de Retirada"
+                : "Local e Prazo de Execução/Entrega"}{" "}
               <span className="req-star">*</span>
             </label>
 
             <textarea
               className="wiz-textarea"
-              style={{ minHeight: "80px" }}
+              style={{
+                minHeight: isLeilao ? "140px" : "80px",
+              }}
               value={isLeilao ? (dados.retirada || "") : (dados.execucao || "")}
               onChange={(e) =>
                 atualizarDados(
@@ -244,7 +251,7 @@ export default function Step2({ dados, atualizarDados }: any) {
               }
               placeholder={
                 isLeilao
-                  ? "Informe o local de retirada..."
+                  ? "Informe o local de retirada, endereço, condições e demais informações pertinentes..."
                   : "Descreva as condições, prazos e locais..."
               }
             />
@@ -277,7 +284,7 @@ export default function Step2({ dados, atualizarDados }: any) {
           </div>
         )}
 
-        <div className="wiz-grid-2">
+        <div className={isLeilao ? "wiz-grid-1" : "wiz-grid-2"}>
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             <div
               className="wiz-toggle-row"
@@ -319,11 +326,12 @@ export default function Step2({ dados, atualizarDados }: any) {
             {isLeilao && (
               <textarea
                 className="wiz-textarea"
+                style={{ minHeight: "140px" }}
                 value={dados.textoVistoria || ""}
                 onChange={(e) =>
                   atualizarDados({ textoVistoria: e.target.value })
                 }
-                placeholder="Descreva as condições da vistoria..."
+                placeholder="Descreva as condições, local, horários e demais informações da vistoria..."
               />
             )}
           </div>
