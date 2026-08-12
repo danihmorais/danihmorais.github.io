@@ -224,6 +224,20 @@ export default function Step2({ dados, atualizarDados }: any) {
             <div className="wiz-card-subtitle">Execução, entrega e devoluções ou retirada</div>
           </div>
         </div>
+          {!isLeilao && (
+          <div className="wiz-field">
+            <label className="wiz-label">
+              Prazo de Devolução <span className="req-star">*</span>
+            </label>
+            <input
+              type="number"
+              className="wiz-input"
+              value={dados.prazoDevolucao || ""}
+              onChange={(e) => atualizarDados({ prazoDevolucao: e.target.value })}
+              placeholder="Ex: 5 (dias)"
+            />
+          </div>
+          )}
         <div
         className={isLeilao ? "wiz-grid-1" : "wiz-grid-1-2"}
           style={{ marginBottom: "16px" }}
