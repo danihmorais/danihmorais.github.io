@@ -255,6 +255,7 @@ def montar_variaveis_fixas(dados_usuario: dict) -> dict:
     instrumento_raw = dados_usuario.get("{{INSTRUMENTO}}", "CONTRATO")
     resultado["E_ARP"] = True if instrumento_raw == "ATA" else False
     resultado["APENAS_CONTRATO"] = instrumento_raw != "ATA"
+    resultado["SEM_CONTRATO"] = instrumento_raw == "SEM_CONTRATO"
 
     modalidade_raw = dados_usuario.get("{{MODALIDADE}}", "PREGAO_ELETRONICO")
 

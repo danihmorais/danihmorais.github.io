@@ -476,9 +476,89 @@ def _remover_secao_arp(doc):
     if len(body.findall(qn('w:p'))) == 0:
         body.insert(0, OxmlElement('w:p'))
 
+def _remover_secao_contrato(doc):
+    body = doc.element.body
+    elementos_body = list(body)
+    contrato_element = None
+
+    for p in reversed(doc.paragraphs):
+        texto = p.text.strip().upper()
+        if "MINUTA DO CONTRATO" in texto:
+            if len(texto) < 200:
+                contrato_element = p._element
+                break
+
+    for p in doc.paragraphs:
+        texto = p.text.strip().upper()
+        if "MINUTA DO CONTRATO" in texto:
+            if p._element is not contrato_element:
+                xml_str = etree.tostring(p._element, encoding='unicode').upper()
+                if 'TOC' in xml_str or 'PAGEREF' in xml_str or 'HYPERLINK' in xml_str:
+                    try:
+                        parent = p._element.getparent()
+                        if parent is not None:
+                            parent.remove(p._element)
+                            if len(parent.findall(qn('w:p'))) == 0:
+                                parent.append(OxmlElement('w:p'))
+                    except Exception:
+                        pass
+
+    if contrato_element is None:
+        return
+
+    el = contrato_element
+    while el is not None and el.getparent() is not body:
+        el = el.getparent()
+
+    if el is None:
+        return
+
+    try:
+        idx_corte = elementos_body.index(el)
+    except ValueError:
+        return
+
+    temp_idx = idx_corte
+    limite_busca = max(0, idx_corte - 10)
+    for j in range(idx_corte - 1, limite_busca - 1, -1):
+        el_j = elementos_body[j]
+        txt = re.sub(r'\s+', ' ', "".join(el_j.itertext()).strip().upper())
+        try:
+            xml_str = etree.tostring(el_j, encoding='unicode').upper()
+        except Exception:
+            xml_str = ""
+
+        is_page_break = ('TYPE="PAGE"' in xml_str.replace(" ", "") or
+                         "PAGEBREAKBEFORE" in xml_str.replace(" ", "") or
+                         "BREAK" in xml_str)
+
+        if is_page_break:
+            temp_idx = j
+            break
+
+        if txt.startswith("ANEXO") and len(txt) < 80:
+            temp_idx = j
+
+    idx_corte = temp_idx
+
+    ultimo_elemento = elementos_body[-1] if elementos_body else None
+    for el in elementos_body[idx_corte:]:
+        if el is ultimo_elemento and el.tag.endswith('sectPr'):
+            continue
+        try:
+            parent = el.getparent()
+            if parent is not None:
+                parent.remove(el)
+        except Exception:
+            pass
+
+    if len(body.findall(qn('w:p'))) == 0:
+        body.insert(0, OxmlElement('w:p'))
+
 def preencher_documento(caminho_modelo: str, caminho_saida: str, dados: dict) -> str:
     doc = Document(caminho_modelo)
     e_arp = dados.get("E_ARP", False)
+    sem_contrato = dados.get("SEM_CONTRATO", False)
     remover_amostra = dados.get("__REMOVER_AMOSTRA__", False)
     remover_vistoria = dados.get("__REMOVER_VISTORIA__", False)
     apenas_contrato = dados.get("APENAS_CONTRATO", False) or dados.get("__APENAS_CONTRATO__", False)
@@ -580,7 +660,10 @@ def preencher_documento(caminho_modelo: str, caminho_saida: str, dados: dict) ->
 
     if not e_arp:
         _remover_secao_arp(doc)
-        
+
+    if sem_contrato:
+        _remover_secao_contrato(doc)
+
     for paragrafo in list(doc.paragraphs):
         _processar_paragrafo(paragrafo, dados, e_arp)
         
@@ -800,7 +883,7 @@ def _processar_paragrafo(paragrafo, dados, e_arp):
                     
     paragrafos_para_processar = [paragrafo]
     for chave, valor in dados.items():
-        if chave in ["E_ARP", "__REMOVER_AMOSTRA__", "__REMOVER_VISTORIA__", "APENAS_CONTRATO", "__APENAS_CONTRATO__"]:
+        if chave in ["E_ARP", "SEM_CONTRATO", "__REMOVER_AMOSTRA__", "__REMOVER_VISTORIA__", "APENAS_CONTRATO", "__APENAS_CONTRATO__"]:
             continue
         marcador = chave if chave.startswith("{{") and chave.endswith("}}") else f"{{{{{chave}}}}}"
         if isinstance(valor, list):
