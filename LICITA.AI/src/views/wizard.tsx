@@ -409,7 +409,6 @@ export default function Wizard() {
       <div style={{ padding: "24px 40px", display: "flex", justifyContent: "space-between" }}>
         <button
           onClick={voltar}
-          disabled={etapaAtual === 0}
           style={{
             width: "140px",
             height: "44px",
@@ -419,7 +418,6 @@ export default function Wizard() {
             color: "var(--text-main)",
             fontWeight: "bold",
             fontSize: "14px",
-            cursor: etapaAtual === 0 ? "not-allowed" : "pointer",
             opacity: etapaAtual === 0 ? 0.5 : 1
           }}
         >
