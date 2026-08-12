@@ -519,7 +519,7 @@ def _remover_secao_contrato(doc):
         return
 
     temp_idx = idx_corte
-    limite_busca = max(0, idx_corte - 5)
+    limite_busca = max(0, idx_corte - 10)
     for j in range(idx_corte - 1, limite_busca - 1, -1):
         el_j = elementos_body[j]
         txt = re.sub(r'\s+', ' ', "".join(el_j.itertext()).strip().upper())
