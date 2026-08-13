@@ -348,6 +348,33 @@ body.dark {
 .wiz-input::placeholder,
 .wiz-textarea::placeholder { color: var(--wiz-text-3); }
 
+.wiz-dotacao-editor {
+  cursor: text;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.wiz-dotacao-editor:empty:before {
+  content: attr(data-placeholder);
+  color: var(--wiz-text-3);
+  pointer-events: none;
+}
+
+.wiz-dotacao-editor img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 8px 0;
+  border-radius: 6px;
+  border: 1px solid var(--wiz-border);
+}
+
+.wiz-dotacao-hint {
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--wiz-text-3);
+}
+
 .wiz-err {
   font-size: 11.5px;
   color: var(--wiz-error);

@@ -77,29 +77,17 @@ export const mapearDadosWizard = async (dados: any) => {
   const declNum = docCount.toString().padStart(2, '0');
   const propNum = (docCount + 1).toString().padStart(2, '0');
 
-  // Agora processamos MÚLTIPLAS imagens
-  let dotacaoBase64List: string[] = [];
-  let tipoDotacao = "TEXTO";
-
-  if (dados.dotacaoImagens && dados.dotacaoImagens.length > 0) {
-    tipoDotacao = "IMAGEM";
-    for (const file of dados.dotacaoImagens) {
-      try {
-        const b64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.readAsDataURL(file);
-          reader.onload = () => {
-            const result = reader.result as string;
-            resolve(result.split(",")[1]);
-          };
-          reader.onerror = (error) => reject(error);
-        });
-        dotacaoBase64List.push(b64);
-      } catch (e) {
-        console.error("Erro ao converter imagem", e);
-      }
+  // Dotação Orçamentária: editor WYSIWYG permite intercalar blocos de texto
+  // (com **negrito**) e imagens em qualquer ordem. Convertemos as imagens
+  // (data URLs) para base64 puro, mantendo a ordem original dos blocos.
+  const dotacaoBlocos = (dados.dotacaoBlocos || []).map((bloco: any) => {
+    if (bloco.tipo === "imagem") {
+      const dataUrl: string = bloco.imagemBase64 || "";
+      const base64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
+      return { tipo: "imagem", imagemBase64: base64 };
     }
-  }
+    return { tipo: "texto", texto: bloco.texto || "" };
+  });
 
   return {
     dadosMapeados: {
@@ -136,7 +124,7 @@ export const mapearDadosWizard = async (dados: any) => {
         "{{ESPECIFICACOES ESPECIAIS}}": dados.especificacoesEspeciais || "",
         "{{VIGENCIA}}": dados.vigencia || "",
         "{{RETIRADA}}": dados.retirada || "",
-        "{{DOTACAO}}": dados.dotacao || "",
+        "{{DOTACAO}}": "",
         "{{TIPO_OBJETO}}": dados.tipoObjeto || "AQUISICAO",
         "{{VISTORIA_CHECK}}": dados.vistoria ? "SIM" : "NAO",
         "{{VISTORIA_TXT}}": dados.textoVistoria || "",
@@ -147,8 +135,7 @@ export const mapearDadosWizard = async (dados: any) => {
         "{{ETP}}": dados.arquivoEtp ? dados.arquivoEtp.path : "",
         "{{TR}}": dados.arquivoTr ? dados.arquivoTr.path : "",
         
-        "{{TIPO_DOTACAO}}": tipoDotacao,
-        "{{DOTACAO_BASE64_LIST}}": dotacaoBase64List,
+        "{{DOTACAO_BLOCOS}}": dotacaoBlocos,
     },
     arquivoBase: arquivoBase
   };

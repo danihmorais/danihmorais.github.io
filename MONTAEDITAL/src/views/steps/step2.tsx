@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect } from "react";
+import DotacaoEditor, { DotacaoBloco } from "../../components/DotacaoEditor";
 
 interface Pessoa {
   nome: string;
@@ -75,39 +76,6 @@ function PessoaList({ label, singularLabel, items, onChange }: PessoaListProps) 
 
 export default function Step2({ dados, atualizarDados }: any) {
   const isLeilao = dados.modalidade === "LEILAO_ELETRONICO";
-  const dotacaoRef = useRef<HTMLTextAreaElement>(null);
-
-  const aplicarNegritoDotacao = () => {
-    const el = dotacaoRef.current;
-    if (!el) return;
-    const inicio = el.selectionStart ?? 0;
-    const fim = el.selectionEnd ?? 0;
-    const valorAtual = dados.dotacao || "";
-    const selecionado = valorAtual.slice(inicio, fim);
-
-    let novoValor: string;
-    let novaPosCursor: number;
-
-    if (selecionado) {
-      if (selecionado.startsWith("**") && selecionado.endsWith("**") && selecionado.length >= 4) {
-        const semNegrito = selecionado.slice(2, -2);
-        novoValor = valorAtual.slice(0, inicio) + semNegrito + valorAtual.slice(fim);
-        novaPosCursor = inicio + semNegrito.length;
-      } else {
-        novoValor = valorAtual.slice(0, inicio) + "**" + selecionado + "**" + valorAtual.slice(fim);
-        novaPosCursor = inicio + selecionado.length + 4;
-      }
-    } else {
-      novoValor = valorAtual.slice(0, inicio) + "****" + valorAtual.slice(fim);
-      novaPosCursor = inicio + 2;
-    }
-
-    atualizarDados({ dotacao: novoValor });
-    requestAnimationFrame(() => {
-      el.focus();
-      el.setSelectionRange(novaPosCursor, novaPosCursor);
-    });
-  };
 
     useEffect(() => {
     if (isLeilao) {
@@ -187,86 +155,11 @@ export default function Step2({ dados, atualizarDados }: any) {
           <label className="wiz-label">
             Dotação Orçamentária <span className="req-star">*</span>
           </label>
-          {dados.dotacaoImagens && dados.dotacaoImagens.length > 0 ? (
-            <div className="wiz-upload-area has-file" style={{ justifyContent: "space-between" }}>
-              <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-                <div className="wiz-upload-icon">🖼️</div>
-                <div className="wiz-upload-text">
-                  <div className="wiz-upload-label">Imagem em Anexo</div>
-                  <div className="wiz-upload-file">{dados.dotacaoImagens.length} arquivo(s) selecionado(s)</div>
-                </div>
-              </div>
-              <button 
-                type="button" 
-                className="wiz-btn-remove" 
-                onClick={() => atualizarDados({ dotacaoImagens: null, dotacao: "" })}
-                title="Remover imagem"
-              >
-                ✕
-              </button>
-            </div>
-          ) : (
-            <div style={{ position: "relative" }}>
-              <textarea
-                ref={dotacaoRef}
-                className="wiz-textarea"
-                style={{ minHeight: "90px", paddingBottom: "40px" }}
-                value={dados.dotacao || ""}
-                onChange={(e) => atualizarDados({ dotacao: e.target.value })}
-                placeholder="Descreva a dotação ou anexe uma imagem... (selecione um trecho e use B para negrito)"
-              />
-              <div style={{ position: "absolute", bottom: "8px", left: "8px", display: "flex", gap: "6px" }}>
-                <button
-                  type="button"
-                  className="wiz-btn-ghost"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={aplicarNegritoDotacao}
-                  title="Negrito (selecione o texto e clique, ou clique e digite)"
-                  style={{
-                    padding: "4px 10px",
-                    fontSize: "12px",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    borderRadius: "6px",
-                    background: "var(--wiz-surface)",
-                    border: "1px solid var(--wiz-border)",
-                    margin: 0
-                  }}
-                >
-                  B
-                </button>
-                <label 
-                  className="wiz-btn-ghost" 
-                  style={{ 
-                    padding: "4px 10px", 
-                    fontSize: "12px", 
-                    cursor: "pointer", 
-                    borderRadius: "6px", 
-                    display: "flex", 
-                    gap: "6px", 
-                    alignItems: "center",
-                    background: "var(--wiz-surface)",
-                    border: "1px solid var(--wiz-border)",
-                    margin: 0
-                  }}
-                >
-                  <span style={{ fontSize: "14px" }}>📎</span> Anexar Imagem
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    style={{ display: "none" }}
-                    onChange={(e) => {
-                      const files = Array.from(e.target.files || []);
-                      if (files.length > 0) {
-                        atualizarDados({ dotacaoImagens: files, dotacao: "Ver imagem em anexo" });
-                      }
-                    }}
-                  />
-                </label>
-              </div>
-            </div>
-          )}
+          <DotacaoEditor
+            value={dados.dotacaoBlocos || []}
+            onChange={(blocos: DotacaoBloco[]) => atualizarDados({ dotacaoBlocos: blocos })}
+            placeholder="Descreva a dotação e insira imagens onde precisar — dá pra intercalar texto e imagens livremente..."
+          />
         </div>
       </div>
 
