@@ -30,8 +30,9 @@ def remover_paginas_em_branco(caminho_docx: str):
             tem_quebra_hard = bool(el.xpath('.//w:br[@w:type="page"]'))
             tem_quebra_api = getattr(p, 'contains_page_break', False)
             tem_quebra_format = bool(p.paragraph_format and p.paragraph_format.page_break_before)
+            tem_quebra_secao = bool(el.xpath('./w:pPr/w:sectPr'))
             
-            if not texto and not (tem_quebra_hard or tem_quebra_api or tem_quebra_format):
+            if not texto and not (tem_quebra_hard or tem_quebra_api or tem_quebra_format or tem_quebra_secao):
                 try:
                     parent = el.getparent()
                     if parent is not None:

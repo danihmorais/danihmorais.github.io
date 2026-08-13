@@ -58,6 +58,8 @@ export default function Wizard() {
   const [statusTexto, setStatusTexto] = useState("Iniciando...");
   const [erroMsg, setErroMsg] = useState<string | null>(null);
   const [geracaoSucesso, setGeracaoSucesso] = useState(false);
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [downloadFilename, setDownloadFilename] = useState<string>("edital.zip");
   const scrollRef = useRef<HTMLDivElement>(null);
   const { theme, toggleTheme } = useContext(ThemeContext);
 
@@ -185,15 +187,12 @@ export default function Wizard() {
     try {
       const { dadosMapeados } = await mapearDadosWizard(dados);
 
-      // Cast para Record<string, any> para contornar o erro TS7053
       const payload: Record<string, any> = { ...dadosMapeados };
 
-      // Converte anexos para Base64 para suportar a arquitetura REST
       if (dados.arquivoDfd) payload["DFD_B64"] = await fileToBase64(dados.arquivoDfd as unknown as File);
       if (dados.arquivoEtp) payload["ETP_B64"] = await fileToBase64(dados.arquivoEtp as unknown as File);
       if (dados.arquivoTr)  payload["TR_B64"]  = await fileToBase64(dados.arquivoTr as unknown as File);
 
-      // Mapeia a seleção do front para a chave exata exigida pelo backend
       let tipoEditalStr = "pregao_eletronico";
       if (dados.modalidade === "DISPENSA") tipoEditalStr = "dispensa";
       else if (dados.modalidade === "DISPENSA_BLL") tipoEditalStr = "dispensa_bll";
@@ -204,7 +203,6 @@ export default function Wizard() {
         dados_preenchimento: payload
       });
 
-      // Dispara o download do .zip retornado pelo backend
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -212,8 +210,9 @@ export default function Wizard() {
       document.body.appendChild(a);
       a.click();
       a.remove();
-      window.URL.revokeObjectURL(url);
 
+      setDownloadUrl(url);
+      setDownloadFilename(filename);
       setGeracaoSucesso(true);
     } catch (erro: any) {
       let msg: string;
@@ -231,6 +230,26 @@ export default function Wizard() {
     } finally {
       setCarregando(false);
     }
+  };
+
+  const baixarManualmente = () => {
+    if (!downloadUrl) return;
+    const a = document.createElement("a");
+    a.href = downloadUrl;
+    a.download = downloadFilename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+
+  const encerrarFluxo = () => {
+    if (downloadUrl) {
+      window.URL.revokeObjectURL(downloadUrl);
+    }
+    setDownloadUrl(null);
+    setCarregando(false);
+    setGeracaoSucesso(false);
+    setEtapaAtual(0);
   };
 
   const renderizarEtapa = () => {
@@ -261,10 +280,21 @@ export default function Wizard() {
             <>
               <div style={{ fontSize: "44px", marginBottom: "12px" }}>✅</div>
               <h2 style={{ margin: "0 0 16px 0", color: "var(--wiz-success)", fontSize: "22px" }}>Edital Gerado com Sucesso!</h2>
-              <p style={{ color: "var(--wiz-text-3)", margin: "0 0 24px 0", fontSize: "14px" }}>
+              <p style={{ color: "var(--wiz-text-3)", margin: "0 0 16px 0", fontSize: "14px" }}>
                 Os documentos foram baixados. Verifique sua pasta Downloads.
               </p>
-              <button onClick={() => { setCarregando(false); setGeracaoSucesso(false); setEtapaAtual(0); }} className="wiz-btn" style={{ background: "var(--wiz-success)", color: "#fff" }}>✓ Concluir</button>
+              {downloadUrl && (
+                <button
+                  onClick={baixarManualmente}
+                  className="wiz-btn wiz-btn-ghost"
+                  style={{ marginBottom: "16px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                >
+                  ⬇️ Baixar novamente (caso não tenha baixado automaticamente)
+                </button>
+              )}
+              <div>
+                <button onClick={encerrarFluxo} className="wiz-btn" style={{ background: "var(--wiz-success)", color: "#fff" }}>✓ Concluir</button>
+              </div>
             </>
           )}
 

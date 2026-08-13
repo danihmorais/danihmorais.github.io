@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 
 interface Pessoa {
   nome: string;
@@ -75,6 +75,40 @@ function PessoaList({ label, singularLabel, items, onChange }: PessoaListProps) 
 
 export default function Step2({ dados, atualizarDados }: any) {
   const isLeilao = dados.modalidade === "LEILAO_ELETRONICO";
+  const dotacaoRef = useRef<HTMLTextAreaElement>(null);
+
+  const aplicarNegritoDotacao = () => {
+    const el = dotacaoRef.current;
+    if (!el) return;
+    const inicio = el.selectionStart ?? 0;
+    const fim = el.selectionEnd ?? 0;
+    const valorAtual = dados.dotacao || "";
+    const selecionado = valorAtual.slice(inicio, fim);
+
+    let novoValor: string;
+    let novaPosCursor: number;
+
+    if (selecionado) {
+      if (selecionado.startsWith("**") && selecionado.endsWith("**") && selecionado.length >= 4) {
+        const semNegrito = selecionado.slice(2, -2);
+        novoValor = valorAtual.slice(0, inicio) + semNegrito + valorAtual.slice(fim);
+        novaPosCursor = inicio + semNegrito.length;
+      } else {
+        novoValor = valorAtual.slice(0, inicio) + "**" + selecionado + "**" + valorAtual.slice(fim);
+        novaPosCursor = inicio + selecionado.length + 4;
+      }
+    } else {
+      novoValor = valorAtual.slice(0, inicio) + "****" + valorAtual.slice(fim);
+      novaPosCursor = inicio + 2;
+    }
+
+    atualizarDados({ dotacao: novoValor });
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(novaPosCursor, novaPosCursor);
+    });
+  };
+
     useEffect(() => {
     if (isLeilao) {
       atualizarDados({
@@ -174,13 +208,33 @@ export default function Step2({ dados, atualizarDados }: any) {
           ) : (
             <div style={{ position: "relative" }}>
               <textarea
+                ref={dotacaoRef}
                 className="wiz-textarea"
                 style={{ minHeight: "90px", paddingBottom: "40px" }}
                 value={dados.dotacao || ""}
                 onChange={(e) => atualizarDados({ dotacao: e.target.value })}
-                placeholder="Descreva a dotação ou anexe uma imagem..."
+                placeholder="Descreva a dotação ou anexe uma imagem... (selecione um trecho e use B para negrito)"
               />
-              <div style={{ position: "absolute", bottom: "8px", left: "8px" }}>
+              <div style={{ position: "absolute", bottom: "8px", left: "8px", display: "flex", gap: "6px" }}>
+                <button
+                  type="button"
+                  className="wiz-btn-ghost"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={aplicarNegritoDotacao}
+                  title="Negrito (selecione o texto e clique, ou clique e digite)"
+                  style={{
+                    padding: "4px 10px",
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    borderRadius: "6px",
+                    background: "var(--wiz-surface)",
+                    border: "1px solid var(--wiz-border)",
+                    margin: 0
+                  }}
+                >
+                  B
+                </button>
                 <label 
                   className="wiz-btn-ghost" 
                   style={{ 
