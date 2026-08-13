@@ -37,8 +37,8 @@ main {
 }
 
 .header-title img {
-  width: 46px;
-  height: 46px;
+  width: 88px;
+  height: 88px;
   object-fit: contain;
 }
 
@@ -368,8 +368,8 @@ footer p {
   }
 
   .header-title img {
-    width: 38px;
-    height: 38px;
+    width: 60px;
+    height: 60px;
   }
 
   .header-title h1 {
