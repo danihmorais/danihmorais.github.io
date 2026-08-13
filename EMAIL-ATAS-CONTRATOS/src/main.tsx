@@ -44,13 +44,19 @@ function App() {
     if (!valid.length) return setNotice('Selecione arquivos no formato PDF.')
     setLoading(true); setNotice('Lendo os e-mails institucionais nos PDFs…')
     const form = new FormData(); valid.forEach(file => form.append('files', file))
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 60000)
     try {
-      const response = await fetch(`${API_URL}/extract-recipients`, { method: 'POST', body: form })
+      const response = await fetch(`${API_URL}/extract-recipients`, { method: 'POST', body: form, signal: controller.signal })
+      if (!response.ok) throw new Error(`Servidor respondeu ${response.status}.`)
       const results: { filename: string; recipient: string | null; error?: string }[] = await response.json()
       const newDocs = valid.map((file, index) => ({ file, recipient: results[index]?.recipient || '', error: results[index]?.error || (!results[index]?.recipient ? 'Segundo “E-mail institucional” não localizado.' : undefined) }))
       setDocuments(old => [...old, ...newDocs]); setNotice('Revise os destinatários antes de enviar.')
-    } catch { setNotice('Não foi possível analisar os documentos. Verifique se o backend está em execução.') }
-    finally { setLoading(false); if (inputRef.current) inputRef.current.value = '' }
+    } catch (error) {
+      setNotice(error instanceof DOMException && error.name === 'AbortError'
+        ? 'O servidor demorou demais para responder (pode estar "acordando" no Render — tente novamente em instantes).'
+        : 'Não foi possível analisar os documentos. Verifique se o backend está em execução.')
+    } finally { clearTimeout(timeoutId); setLoading(false); if (inputRef.current) inputRef.current.value = '' }
   }
 
   async function saveConfiguration() {

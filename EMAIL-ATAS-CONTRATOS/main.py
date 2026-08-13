@@ -1,6 +1,7 @@
 """Backend local para o enviador de instrumentos contratuais."""
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import smtplib
@@ -16,6 +17,9 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from pypdf import PdfReader
+from starlette.concurrency import run_in_threadpool
+
+PDF_EXTRACTION_TIMEOUT_SECONDS = 20
 
 app = FastAPI(title="Enviador de Atas e Contratos")
 app.add_middleware(
@@ -101,6 +105,21 @@ def _pdf_text(file_path: str) -> str:
         raise ValueError(f"Não foi possível ler o PDF: {exc}") from exc
 
 
+async def _pdf_text_with_timeout(file_path: str) -> str:
+    """Executa a extração (síncrona/CPU-bound) numa thread própria, com timeout,
+    para nunca travar o event loop nem a requisição indefinidamente."""
+    try:
+        return await asyncio.wait_for(
+            run_in_threadpool(_pdf_text, file_path),
+            timeout=PDF_EXTRACTION_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError as exc:
+        raise ValueError(
+            f"Tempo limite ({PDF_EXTRACTION_TIMEOUT_SECONDS}s) ao ler o PDF. "
+            "O arquivo pode estar corrompido, protegido por senha ou com conteúdo muito complexo."
+        ) from exc
+
+
 def find_institutional_email(text: str) -> str | None:
     """Retorna o e-mail associado à segunda ocorrência de 'E-mail institucional'."""
     matches = list(re.finditer(r"e[\-\s]*mail\s+institucional", text, flags=re.IGNORECASE))
@@ -132,9 +151,10 @@ async def extract_recipients(files: list[UploadFile] = File(...)):
     for upload in files:
         temp_path = await _save_upload(upload)
         try:
+            text = await _pdf_text_with_timeout(temp_path)
             results.append({
                 "filename": upload.filename or "documento.pdf",
-                "recipient": find_institutional_email(_pdf_text(temp_path)),
+                "recipient": find_institutional_email(text),
             })
         except ValueError as exc:
             results.append({"filename": upload.filename or "documento.pdf", "recipient": None, "error": str(exc)})
