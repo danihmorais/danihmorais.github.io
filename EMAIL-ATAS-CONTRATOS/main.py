@@ -7,6 +7,8 @@ import smtplib
 import ssl
 import tempfile
 from email.message import EmailMessage
+from html import escape
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Literal
 
@@ -27,6 +29,7 @@ app.add_middleware(
 )
 
 EMAIL_RE = re.compile(r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}", re.IGNORECASE)
+ALLOWED_EMAIL_TAGS = {"p", "br", "strong", "b", "em", "i", "ul", "ol", "li"}
 
 
 class SmtpSettings(BaseModel):
@@ -36,6 +39,58 @@ class SmtpSettings(BaseModel):
     password: str = ""
     security: Literal["starttls", "ssl", "none"] = "starttls"
     save_locally: bool = False
+
+
+class _EmailHtmlSanitizer(HTMLParser):
+    """Preserva somente marcação básica, sem atributos ou conteúdo executável."""
+    def __init__(self):
+        super().__init__()
+        self.html_parts: list[str] = []
+        self.text_parts: list[str] = []
+        self.ignored_depth = 0
+
+    def handle_starttag(self, tag: str, attrs):
+        tag = tag.lower()
+        if tag in {"script", "style"}:
+            self.ignored_depth += 1
+            return
+        if self.ignored_depth:
+            return
+        if tag not in ALLOWED_EMAIL_TAGS:
+            return
+        self.html_parts.append(f"<{tag}>")
+        if tag == "br":
+            self.text_parts.append("\n")
+        elif tag in {"p", "li"} and self.text_parts:
+            self.text_parts.append("\n")
+
+    def handle_endtag(self, tag: str):
+        tag = tag.lower()
+        if tag in {"script", "style"}:
+            self.ignored_depth = max(0, self.ignored_depth - 1)
+            return
+        if self.ignored_depth:
+            return
+        if tag in ALLOWED_EMAIL_TAGS and tag != "br":
+            self.html_parts.append(f"</{tag}>")
+            if tag in {"p", "li"}:
+                self.text_parts.append("\n")
+
+    def handle_data(self, data: str):
+        if self.ignored_depth:
+            return
+        self.html_parts.append(escape(data))
+        self.text_parts.append(data)
+
+
+def sanitize_email_html(value: str) -> tuple[str, str]:
+    sanitizer = _EmailHtmlSanitizer()
+    sanitizer.feed(value)
+    sanitizer.close()
+    html_body = "".join(sanitizer.html_parts).strip() or "<p></p>"
+    text_body = "".join(sanitizer.text_parts)
+    text_body = re.sub(r"\n{3,}", "\n\n", text_body).strip()
+    return html_body, text_body
 
 
 def _pdf_text(file_path: str) -> str:
@@ -105,7 +160,7 @@ async def send_documents(
     files: list[UploadFile] = File(...),
     recipients: str = Form(...),
     subject: str = Form(...),
-    body: str = Form(...),
+    body_html: str = Form(...),
     settings_json: str = Form(...),
 ):
     try:
@@ -117,6 +172,7 @@ async def send_documents(
         raise HTTPException(status_code=400, detail="Informe o servidor SMTP e o e-mail remetente.")
     if len(files) != len(recipient_list):
         raise HTTPException(status_code=400, detail="A lista de destinatários não corresponde aos arquivos.")
+    clean_html, plain_body = sanitize_email_html(body_html)
 
     sent, failures = [], []
     for upload, recipient in zip(files, recipient_list):
@@ -130,7 +186,8 @@ async def send_documents(
             message["To"] = recipient.strip()
             message["Cc"] = settings.username
             message["Subject"] = subject
-            message.set_content(body)
+            message.set_content(plain_body)
+            message.add_alternative(clean_html, subtype="html")
             with open(temp_path, "rb") as pdf:
                 message.add_attachment(pdf.read(), maintype="application", subtype="pdf", filename=upload.filename or "documento.pdf")
             with _smtp_client(settings) as client:

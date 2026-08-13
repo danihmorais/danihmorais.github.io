@@ -3,11 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './styles.css'
 
 const DEFAULT_SUBJECT = 'INSTRUMENTO CONTRATUAL (SÃO FRANCISCO - SP)'
-const DEFAULT_BODY = `Prezados,
-Anexo instrumento contratual para assinatura.
-*Prazo: 02 (dois) dias úteis*
-Atenciosamente,
-Setor de Licitações e Contratos de São Francisco - SP.`
+const DEFAULT_BODY_HTML = `<p>Prezados,</p><p>Anexo instrumento contratual para assinatura.</p><p><strong>Prazo: 02 (dois) dias úteis</strong></p><p>Atenciosamente,</p><p>Setor de Licitações e Contratos de São Francisco - SP.</p>`
 const API_URL = import.meta.env.VITE_API_URL || 'https://danihmorais-github-io.onrender.com/email/api'
 const SETTINGS_STORAGE_KEY = 'enviador-atas-contratos.smtp-settings'
 
@@ -19,10 +15,11 @@ const blankSettings: SmtpSettings = { host: '', port: 587, username: '', passwor
 
 function App() {
   const inputRef = useRef<HTMLInputElement>(null)
+  const editorRef = useRef<HTMLDivElement>(null)
   const [documents, setDocuments] = useState<Document[]>([])
   const [settings, setSettings] = useState<SmtpSettings>(blankSettings)
   const [subject, setSubject] = useState(DEFAULT_SUBJECT)
-  const [body, setBody] = useState(DEFAULT_BODY)
+  const [bodyHtml, setBodyHtml] = useState(DEFAULT_BODY_HTML)
   const [loading, setLoading] = useState(false)
   const [notice, setNotice] = useState('')
 
@@ -34,6 +31,12 @@ function App() {
   }, [])
 
   const updateSettings = <K extends keyof SmtpSettings>(key: K, value: SmtpSettings[K]) => setSettings(s => ({ ...s, [key]: value }))
+
+  function formatEmail(command: 'bold' | 'italic' | 'insertUnorderedList' | 'insertOrderedList') {
+    editorRef.current?.focus()
+    document.execCommand(command)
+    setBodyHtml(editorRef.current?.innerHTML || '')
+  }
 
   async function addFiles(files: FileList | null) {
     if (!files?.length) return
@@ -70,7 +73,7 @@ function App() {
     const form = new FormData()
     documents.forEach(d => form.append('files', d.file))
     form.append('recipients', JSON.stringify(documents.map(d => d.recipient.trim())))
-    form.append('subject', subject); form.append('body', body); form.append('settings_json', JSON.stringify(settings))
+    form.append('subject', subject); form.append('body_html', bodyHtml); form.append('settings_json', JSON.stringify(settings))
     try {
       const response = await fetch(`${API_URL}/send`, { method: 'POST', body: form })
       const result = await response.json()
@@ -91,7 +94,16 @@ function App() {
     <section className="card">
       <div className="section-title"><span>2</span><div><h2>Mensagem</h2><p>O assunto e o texto já vêm preenchidos e podem ser ajustados.</p></div></div>
       <label>Assunto<input value={subject} onChange={e => setSubject(e.target.value)} /></label>
-      <label>Corpo do e-mail<textarea rows={7} value={body} onChange={e => setBody(e.target.value)} /></label>
+      <label>Corpo do e-mail</label>
+      <div className="rich-editor" role="group" aria-label="Editor do corpo do e-mail">
+        <div className="editor-toolbar" role="toolbar" aria-label="Formatação do texto">
+          <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => formatEmail('bold')} title="Negrito"><strong>N</strong></button>
+          <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => formatEmail('italic')} title="Itálico"><em>I</em></button>
+          <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => formatEmail('insertUnorderedList')} title="Lista com marcadores">• Lista</button>
+          <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => formatEmail('insertOrderedList')} title="Lista numerada">1. Lista</button>
+        </div>
+        <div ref={editorRef} className="editor-content" contentEditable suppressContentEditableWarning role="textbox" aria-multiline="true" onInput={e => setBodyHtml(e.currentTarget.innerHTML)} dangerouslySetInnerHTML={{ __html: bodyHtml }} />
+      </div>
     </section>
     <section className="card">
       <div className="section-title"><span>3</span><div><h2>Servidor de e-mail</h2><p>Uma cópia de cada mensagem será enviada automaticamente ao e-mail remetente.</p></div></div>
