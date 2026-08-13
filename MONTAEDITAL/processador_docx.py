@@ -624,38 +624,103 @@ def preencher_documento(caminho_modelo: str, caminho_saida: str, dados: dict) ->
         dados[chave_ph] = ""
 
     dados = dict(dados)
-    tipo_dotacao = dados.get("{{TIPO_DOTACAO}}", "TEXTO")
-    dotacao_b64_list = dados.get("{{DOTACAO_BASE64_LIST}}", [])
+    dotacao_blocos = dados.get("{{DOTACAO_BLOCOS}}") or []
 
-    if tipo_dotacao == "IMAGEM" and dotacao_b64_list:
-        try:
-            image_streams = []
-            for b64_str in dotacao_b64_list:
-                if b64_str:
-                    image_data = base64.b64decode(b64_str)
-                    image_streams.append(BytesIO(image_data))
+    if not dotacao_blocos:
+        tipo_dotacao = dados.get("{{TIPO_DOTACAO}}", "TEXTO")
+        dotacao_b64_list = dados.get("{{DOTACAO_BASE64_LIST}}") or []
+        if tipo_dotacao == "IMAGEM" and dotacao_b64_list:
+            for b64 in dotacao_b64_list:
+                if b64:
+                    dotacao_blocos.append({"tipo": "imagem", "imagemBase64": b64})
             
-            if image_streams:
-                def substituir_dotacao_imagens(p):
-                    if "{{DOTACAO}}" in p.text:
-                        _substituir_texto_mantendo_formatacao(p, "{{DOTACAO}}", "")
-                        run = p.add_run()
-                        for img_stream in image_streams:
-                            run.add_picture(img_stream, width=Inches(5.5))
-                            img_stream.seek(0)
-                
-                for p in list(doc.paragraphs):
-                    substituir_dotacao_imagens(p)
-                for table in doc.tables:
-                    for row in table.rows:
-                        for cell in row.cells:
-                            for p in list(cell.paragraphs):
-                                substituir_dotacao_imagens(p)
-                                
-                dados["{{DOTACAO}}"] = ""
-        except Exception as e:
-            pass
+    if dotacao_blocos:
+        try:
+            def _inserir_blocos_dotacao(paragrafo_alvo):
+                """Substitui {{DOTACAO}} pelo conteúdo intercalado de texto + imagens."""
+                if "{{DOTACAO}}" not in paragrafo_alvo.text:
+                    return False
 
+                _substituir_texto_mantendo_formatacao(paragrafo_alvo, "{{DOTACAO}}", "")
+
+                rPr_base = None
+                pPr_base = None
+                if paragrafo_alvo.runs:
+                    for r in paragrafo_alvo.runs:
+                        if r._element.rPr is not None:
+                            rPr_base = copy.deepcopy(r._element.rPr)
+                            break
+                if paragrafo_alvo._p.pPr is not None:
+                    pPr_base = copy.deepcopy(paragrafo_alvo._p.pPr)
+
+                paragrafo_atual = paragrafo_alvo
+                primeiro_bloco = True
+
+                for bloco in dotacao_blocos:
+                    tipo = (bloco.get("tipo") or "").lower()
+
+                    if tipo == "imagem":
+                        b64 = bloco.get("imagemBase64") or bloco.get("base64") or ""
+                        if not b64:
+                            continue
+                        try:
+                            if "," in b64:
+                                b64 = b64.split(",", 1)[1]
+                            img_data = base64.b64decode(b64)
+                            stream = BytesIO(img_data)
+
+                            if not primeiro_bloco:
+                                novo_p = OxmlElement("w:p")
+                                paragrafo_atual._p.addnext(novo_p)
+                                if pPr_base is not None:
+                                    novo_p.append(copy.deepcopy(pPr_base))
+                                paragrafo_atual = Paragraph(novo_p, paragrafo_atual._parent)
+
+                            run = paragrafo_atual.add_run()
+                            run.add_picture(stream, width=Inches(5.5))
+                            primeiro_bloco = False
+                        except Exception:
+                            continue
+
+                    else:
+                        texto = (bloco.get("texto") or "").replace("\r", "")
+                        if not texto.strip() and primeiro_bloco:
+                            continue
+
+                        linhas = texto.split("\n")
+                        for i, linha in enumerate(linhas):
+                            if not primeiro_bloco or i > 0:
+                                novo_p = OxmlElement("w:p")
+                                paragrafo_atual._p.addnext(novo_p)
+                                if pPr_base is not None:
+                                    novo_p.append(copy.deepcopy(pPr_base))
+                                paragrafo_atual = Paragraph(novo_p, paragrafo_atual._parent)
+
+                            if linha:
+                                run = paragrafo_atual.add_run(linha)
+                                if rPr_base is not None:
+                                    run._element.insert(0, copy.deepcopy(rPr_base))
+                                _aplicar_formatacao_markdown_avancado(paragrafo_atual)
+
+                            primeiro_bloco = False
+
+                return True
+
+            for p in list(doc.paragraphs):
+                _inserir_blocos_dotacao(p)
+
+            for table in doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        for p in list(cell.paragraphs):
+                            _inserir_blocos_dotacao(p)
+
+            dados["{{DOTACAO}}"] = ""
+
+        except Exception:
+            dados["{{DOTACAO}}"] = ""
+
+    dados.pop("{{DOTACAO_BLOCOS}}", None)
     dados.pop("{{DOTACAO_BASE64_LIST}}", None)
     dados.pop("{{TIPO_DOTACAO}}", None)
 

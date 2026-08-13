@@ -233,7 +233,11 @@ def montar_variaveis_fixas(dados_usuario: dict) -> dict:
         resultado["{{VISTORIA}}"] = ""
         
     resultado["{{DOTACAO}}"] = dados_usuario.get("{{DOTACAO}}", "")
-    
+
+    blocos = dados_usuario.get("{{DOTACAO_BLOCOS}}")
+    if isinstance(blocos, list) and blocos:
+            resultado["{{DOTACAO_BLOCOS}}"] = blocos
+
     tipo_objeto = dados_usuario.get("{{TIPO_OBJETO}}", "AQUISICAO")
     if tipo_objeto == "SERVICO":
         resultado["{{PRAZO PUB}}"] = ("(...)\n""II - no caso de serviços e obras:\n""***10 (dez) dias úteis***, quando adotados os critérios de julgamento de menor preço ou de maior desconto, no caso de serviços comuns e de obras e serviços comuns de engenharia; (grifo nosso)")
@@ -244,7 +248,7 @@ def montar_variaveis_fixas(dados_usuario: dict) -> dict:
 
     arq_mag = _converter_para_sim(dados_usuario.get("{{ARQ_MAG_CHECK}}", "NAO"))
     if arq_mag:
-        resultado["{{ARQ MAG}}"] = "Adicionalmente, o licitante deverá OBRIGATORIAMNETE preencher o arquivo magnético e armazená-lo em um pen-drive próprio, às suas custas, INDEPENDENTEMENTE DE QUANTOS ITENS FOR PARTICIPAR, devendo ele estar acondicionado dentro do envelope “01 – PROPOSTA COMERCIAL” junto com a proposta impressa.\n\tA instrução de acondicionar o pen-drive dentro do envelope vista orientar licitantes que somente enviem suas propostas via Correios. No caso de licitantes credenciados, poderá ser aceito a entrega do arquivo magnético em mãos, fora do envelope.\nO arquivo para preenchimento estará disponível, junto com o tutorial, no site da prefeitura municipal, em link próprio, junto del presente Edital, com o nome “ARQUIVO MAGNÉTICO”.\nCaso haja necessidade, o licitante poderá solicitar o arquivo magnético para preenchimento previamente à sessão pública, junto com o tutorial, no e-mail licitacao@saofrancisco.sp.gov.br.\nQuaisquer dúvidas sobre o funcionamento do arquivo magnético deverão ser dirimidas ANTES da sessão pública por meio do telefone (17) 3693-1101 ou e-mail licitacao@saofrancisco.sp.gov.br."
+        resultado["{{ARQ MAG}}"] = "Adicionalmente, o licitante deverá OBRIGATORIAMENTE preencher o arquivo magnético e armazená-lo em um pen-drive próprio, às suas custas, INDEPENDENTEMENTE DE QUANTOS ITENS FOR PARTICIPAR, devendo ele estar acondicionado dentro do envelope “01 – PROPOSTA COMERCIAL” junto com a proposta impressa.\n\tA instrução de acondicionar o pen-drive dentro do envelope vista orientar licitantes que somente enviem suas propostas via Correios. No caso de licitantes credenciados, poderá ser aceito a entrega do arquivo magnético em mãos, fora do envelope.\nO arquivo para preenchimento estará disponível, junto com o tutorial, no site da prefeitura municipal, em link próprio, junto del presente Edital, com o nome “ARQUIVO MAGNÉTICO”.\nCaso haja necessidade, o licitante poderá solicitar o arquivo magnético para preenchimento previamente à sessão pública, junto com o tutorial, no e-mail licitacao@saofrancisco.sp.gov.br.\nQuaisquer dúvidas sobre o funcionamento do arquivo magnético deverão ser dirimidas ANTES da sessão pública por meio do telefone (17) 3693-1101 ou e-mail licitacao@saofrancisco.sp.gov.br."
         resultado["{{ARQ MAG 2}}"] = "ou operar o arquivo magnético"
         resultado["{{ARQ MAG 3}}"] = "ou arquivo magnético"
     else:
@@ -295,7 +299,7 @@ def montar_variaveis_fixas(dados_usuario: dict) -> dict:
         resultado["{{LOTE}}"] = ""
     elif criterio_raw == "LOTE":
         resultado["{{CRITERIO}}"] = "POR LOTE"
-        resultado["{{LOTE}}"] = "Quando a licitação se der por lote, o Pregoeiro convocará o licitante vencedor para readequar, INCLUSIVE e ESPECIALMENTE, os values unitários.\n\tO Pregoeiro estipulará o prazo para readequação de que trata este item, conforme a complexidade do objeto."
+        resultado["{{LOTE}}"] = "Quando a licitação se der por lote, o Pregoeiro convocará o licitante vencedor para readequar, INCLUSIVE e ESPECIALMENTE, os valores unitários.\n\tO Pregoeiro estipulará o prazo para readequação de que trata este item, conforme a complexidade do objeto."
     elif criterio_raw == "GLOBAL":
         resultado["{{CRITERIO}}"] = "GLOBAL"
         resultado["{{LOTE}}"] = ""
