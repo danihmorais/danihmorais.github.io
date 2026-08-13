@@ -28,6 +28,7 @@ jobs:
           cache-dependency-path: |
             MONTAEDITAL/package-lock.json
             LICITA.AI/package-lock.json
+            EMAIL-ATAS-CONTRATOS/package-lock.json
 
       - name: Build MontaEdital
         working-directory: ./MONTAEDITAL
@@ -41,6 +42,12 @@ jobs:
           npm install
           npm run build
 
+      - name: Build Enviador de Atas e Contratos
+        working-directory: ./EMAIL-ATAS-CONTRATOS
+        run: |
+          npm install
+          npm run build
+
       - name: Assemble final site
         run: |
           mkdir -p site
@@ -49,6 +56,7 @@ jobs:
           cp -r assets site/
           cp -r MONTAEDITAL/dist site/MONTAEDITAL
           cp -r LICITA.AI/dist site/LICITA.AI
+          cp -r EMAIL-ATAS-CONTRATOS/dist site/EMAIL-ATAS-CONTRATOS
           mkdir -p site/FIORIILICSVTOWORD
           cp -r FIORIILICSVTOWORD/. site/FIORIILICSVTOWORD/
           mkdir -p "site/DOCUMENTOS MODELO"
