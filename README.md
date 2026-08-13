@@ -14,6 +14,7 @@ Hub de ferramentas web para automação de processos de **licitação pública m
 | 🤖 **[Licita.AI](./LICITA.AI)** | Automatiza a criação de **DFD, ETP e TR** usando Inteligência Artificial (Gemini / OpenRouter) a partir dos dados do processo. |
 | 📄 **[Conversor Fiorilli](./FIORIILICSVTOWORD)** | Converte relatórios `.txt`/`.csv` exportados do sistema Fiorilli em documentos Word (`.docx`), rodando 100% no navegador. |
 | 📁 **[Documentos Modelo](./DOCUMENTOS%20MODELO)** | Página para navegar e baixar modelos, minutas e arquivos padrão usados nos processos licitatórios. |
+| ✉️ **[Email ARPs/Contratos](./EMAIL-ATAS-CONTRATOS)** | Envia e-mails com contratos ou ARPs de uma só vez para vários fornecedores, utilizando, para cada destinatário, o e-mail institucional informado no Anexo LC02. |
 
 ---
 
@@ -22,15 +23,16 @@ Hub de ferramentas web para automação de processos de **licitação pública m
 O projeto é composto por múltiplos front-ends independentes, unificados por uma página inicial (`index.html`) e, quando necessário, por um back-end Python:
 
 - **Front-end:** React + TypeScript + Vite (MontaEdital e Licita.AI), além de páginas estáticas em HTML/CSS/JS puro (Conversor Fiorilli e Documentos Modelo).
-- **Back-end:** FastAPI (Python), com `python-docx` e `lxml` para geração e manipulação de documentos `.docx`. O `main.py` na raiz monta os apps do MontaEdital e do Licita.AI sob os prefixos `/monta` e `/licita`.
-- **Deploy:** GitHub Actions (`.github/workflows/static.yml`) builda o MontaEdital e o Licita.AI com Node/Vite, monta o site final na pasta `site/` e publica automaticamente no GitHub Pages a cada push na branch `main`.
+- **Back-end:** FastAPI (Python), com `python-docx` e `lxml` para geração e manipulação de documentos `.docx`. O `main.py` na raiz monta os apps do MontaEdital, do Licita.AI e do Email ARPs/Contratos sob os prefixos `/monta`, `/licita` e `/email`.
+- **Deploy:** GitHub Actions (`.github/workflows/static.yml`) builda o MontaEdital, o Licita.AI e o Email ARPs/Contratos com Node/Vite, monta o site final na pasta `site/` e publica automaticamente no GitHub Pages a cada push na branch `main`.
 
 ```
 danihmorais.github.io/
-├── index.html                # Landing page (hub)
-├── main.py                   # Monta os back-ends FastAPI (opcional/local)
-├── MONTAEDITAL/               # App React + back-end FastAPI
-├── LICITA.AI/                 # App React + back-end FastAPI
+├── index.html                  # Landing page (hub)
+├── main.py                     # Monta os back-ends FastAPI (opcional/local)
+├── MONTAEDITAL/                # App React + back-end FastAPI
+├── LICITA.AI/                  # App React + back-end FastAPI
+├── EMAIL-ATAS-CONTRATOS/       # App React + back-end FastAPI
 ├── FIORIILICSVTOWORD/          # Página estática (gera .docx no browser)
 ├── DOCUMENTOS MODELO/          # Página estática de download de modelos
 └── .github/workflows/          # Pipeline de deploy no GitHub Pages
@@ -40,10 +42,10 @@ danihmorais.github.io/
 
 ## 🚀 Rodando localmente
 
-Cada ferramenta React (`MONTAEDITAL/` e `LICITA.AI/`) tem seu próprio `package.json`:
+Cada ferramenta React (`MONTAEDITAL/`, `LICITA.AI/` e `EMAIL-ATAS-CONTRATOS/`) tem seu próprio `package.json`:
 
 ```bash
-cd MONTAEDITAL   # ou LICITA.AI
+cd MONTAEDITAL   # ou LICITA.AI ou EMAIL-ATAS-CONTRATOS
 npm install
 npm run dev
 ```
@@ -51,7 +53,7 @@ npm run dev
 Para subir os back-ends Python:
 
 ```bash
-cd MONTAEDITAL   # ou LICITA.AI
+cd MONTAEDITAL   # ou LICITA.AI ou EMAIL-ATAS-CONTRATOS
 pip install -r requirements.txt
 uvicorn main:app --reload
 ```
