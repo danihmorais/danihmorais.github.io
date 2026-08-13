@@ -156,7 +156,7 @@ export default function Step3({ dados, atualizarDados }: any) {
               Documento de Formalização da Demanda (DFD) <span className="req-star">*</span>
             </label>
             {!dados.arquivoDfd ? (
-              <label className="wiz-upload-area" style={{ cursor: "pointer", display: "flex", width: "100%" }}>
+              <label className="wiz-upload-area" style={{ cursor: "pointer" }}>
                 <input
                   type="file"
                   accept=".doc,.docx"
@@ -187,7 +187,7 @@ export default function Step3({ dados, atualizarDados }: any) {
               Estudo Técnico Preliminar (ETP) <span className="req-star">*</span>
             </label>
             {!dados.arquivoEtp ? (
-              <label className="wiz-upload-area" style={{ cursor: "pointer", display: "flex", width: "100%" }}>
+              <label className="wiz-upload-area" style={{ cursor: "pointer" }}>
                 <input
                   type="file"
                   accept=".doc,.docx"
@@ -218,7 +218,7 @@ export default function Step3({ dados, atualizarDados }: any) {
               Termo de Referência (TR) <span className="req-star">*</span>
             </label>
             {!dados.arquivoTr ? (
-              <label className="wiz-upload-area" style={{ cursor: "pointer", display: "flex", width: "100%" }}>
+              <label className="wiz-upload-area" style={{ cursor: "pointer" }}>
                 <input
                   type="file"
                   accept=".doc,.docx"

@@ -419,6 +419,8 @@ body.dark {
 .wiz-switch.on::after { transform: translateX(20px); }
 
 .wiz-upload-area {
+  width: 100%;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 12px;
