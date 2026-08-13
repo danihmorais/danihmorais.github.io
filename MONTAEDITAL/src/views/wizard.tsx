@@ -21,6 +21,7 @@ export default function Wizard() {
     instrumento: "CONTRATO",
     dotacao: "",
     dotacaoImagens: [],
+    dotacaoBlocos: [],
     quantidadeItens: "",
     quantidadeLotes: "",
     arquivoMagnetico: false,
@@ -118,7 +119,7 @@ export default function Wizard() {
           dados.tipoObjeto &&
           dados.quantidadeItens &&
           dados.quantidadeLotes &&
-          dados.dotacao &&
+          (dados.dotacao || dados.dotacaoBlocos) &&
           dados.objeto &&
           dados.execucao &&
           dados.prazoDevolucao &&

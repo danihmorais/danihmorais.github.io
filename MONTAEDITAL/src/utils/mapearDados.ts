@@ -77,9 +77,6 @@ export const mapearDadosWizard = async (dados: any) => {
   const declNum = docCount.toString().padStart(2, '0');
   const propNum = (docCount + 1).toString().padStart(2, '0');
 
-  // Dotação Orçamentária: editor WYSIWYG permite intercalar blocos de texto
-  // (com **negrito**) e imagens em qualquer ordem. Convertemos as imagens
-  // (data URLs) para base64 puro, mantendo a ordem original dos blocos.
   const dotacaoBlocos = (dados.dotacaoBlocos || []).map((bloco: any) => {
     if (bloco.tipo === "imagem") {
       const dataUrl: string = bloco.imagemBase64 || "";
