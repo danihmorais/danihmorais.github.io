@@ -84,7 +84,7 @@ function App() {
   return <main>
     <header className="app-header">
       <a className="back-link" href="/" aria-label="Voltar para a página inicial">← <span>Voltar</span></a>
-      <div className="header-title"><img src="./assets/logo.png" alt="" /><div><h1>Envio de instrumentos contratuais</h1><p className="sub">Envie atas e contratos em lote, com um e-mail individual por documento.</p></div></div>
+      <div className="header-title"><img src="./logo.png" alt="" /><div><h1>Envio de instrumentos contratuais</h1><p className="sub">Envie atas e contratos em lote, com um e-mail individual por documento.</p></div></div>
     </header>
     <section className="card">
       <div className="section-title"><span>1</span><div><h2>Documentos e destinatários</h2><p>O sistema usa o segundo resultado de “E-mail institucional” encontrado em cada PDF.</p></div></div>
