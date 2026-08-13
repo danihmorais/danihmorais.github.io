@@ -131,6 +131,25 @@ main {
   color: #237440;
 }
 
+.upload.is-loading {
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+.upload-spinner {
+  width: 26px;
+  height: 26px;
+  margin: 0 auto 10px;
+  border: 3px solid #cfe3d2;
+  border-top-color: #237440;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .upload input {
   position: absolute;
   inset: 0;

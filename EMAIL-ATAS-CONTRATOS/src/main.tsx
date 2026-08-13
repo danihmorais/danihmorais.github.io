@@ -20,7 +20,8 @@ function App() {
   const [settings, setSettings] = useState<SmtpSettings>(blankSettings)
   const [subject, setSubject] = useState(DEFAULT_SUBJECT)
   const [bodyHtml, setBodyHtml] = useState(DEFAULT_BODY_HTML)
-  const [loading, setLoading] = useState(false)
+  const [extracting, setExtracting] = useState(false)
+  const [sending, setSending] = useState(false)
   const [notice, setNotice] = useState('')
 
   useEffect(() => {
@@ -42,7 +43,7 @@ function App() {
     if (!files?.length) return
     const valid = Array.from(files).filter(file => file.name.toLowerCase().endsWith('.pdf'))
     if (!valid.length) return setNotice('Selecione arquivos no formato PDF.')
-    setLoading(true); setNotice('Lendo os e-mails institucionais nos PDFs…')
+    setExtracting(true); setNotice('Lendo os e-mails institucionais nos PDFs…')
     const form = new FormData(); valid.forEach(file => form.append('files', file))
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 60000)
@@ -56,7 +57,7 @@ function App() {
       setNotice(error instanceof DOMException && error.name === 'AbortError'
         ? 'O servidor demorou demais para responder (pode estar "acordando" no Render — tente novamente em instantes).'
         : 'Não foi possível analisar os documentos. Verifique se o backend está em execução.')
-    } finally { clearTimeout(timeoutId); setLoading(false); if (inputRef.current) inputRef.current.value = '' }
+    } finally { clearTimeout(timeoutId); setExtracting(false); if (inputRef.current) inputRef.current.value = '' }
   }
 
   async function saveConfiguration() {
@@ -72,19 +73,29 @@ function App() {
     if (!documents.length) return setNotice('Adicione pelo menos um PDF.')
     if (!settings.host || !settings.username) return setNotice('Preencha o servidor SMTP e o e-mail remetente.')
     if (documents.some(d => !d.recipient)) return setNotice('Informe ou corrija todos os destinatários antes de enviar.')
-    setLoading(true); setNotice('Enviando os e-mails individualmente…')
+    setSending(true); setNotice('Enviando os e-mails individualmente…')
     const form = new FormData()
     documents.forEach(d => form.append('files', d.file))
     form.append('recipients', JSON.stringify(documents.map(d => d.recipient.trim())))
     form.append('subject', subject); form.append('body_html', bodyHtml); form.append('settings_json', JSON.stringify(settings))
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 120000)
     try {
-      const response = await fetch(`${API_URL}/send`, { method: 'POST', body: form })
-      const result = await response.json()
-      if (!response.ok) throw new Error(result.detail || 'Falha no envio.')
-      const failed = result.failures as { filename: string; error: string }[]
-      setNotice(failed.length ? `${result.sent.length} enviado(s). Falharam: ${failed.map(f => f.filename).join(', ')}.` : `${result.sent.length} e-mail(s) enviado(s) com sucesso.`)
-    } catch (error) { setNotice(error instanceof Error ? error.message : 'Falha no envio.') }
-    finally { setLoading(false) }
+      const response = await fetch(`${API_URL}/send`, { method: 'POST', body: form, signal: controller.signal })
+      let result: { sent?: { filename: string; recipient: string }[]; failures?: { filename: string; error: string }[]; detail?: string }
+      try { result = await response.json() }
+      catch { throw new Error(`Servidor respondeu ${response.status} sem corpo válido (verifique os logs do backend no Render).`) }
+      if (!response.ok) throw new Error(result.detail || `Servidor respondeu ${response.status}.`)
+      const sent = result.sent || []
+      const failed = result.failures || []
+      setNotice(failed.length
+        ? `${sent.length} enviado(s). Falharam: ${failed.map(f => `${f.filename} — ${f.error}`).join('; ')}`
+        : `${sent.length} e-mail(s) enviado(s) com sucesso.`)
+    } catch (error) {
+      setNotice(error instanceof DOMException && error.name === 'AbortError'
+        ? 'O envio demorou demais e foi cancelado. Verifique a conexão com o servidor SMTP e tente novamente.'
+        : error instanceof Error ? error.message : 'Falha no envio.')
+    } finally { clearTimeout(timeoutId); setSending(false) }
   }
 
   return <main>
@@ -94,7 +105,12 @@ function App() {
     </header>
     <section className="card">
       <div className="section-title"><span>1</span><div><h2>Documentos e destinatários</h2><p>O sistema usa o segundo resultado de “E-mail institucional” encontrado em cada PDF.</p></div></div>
-      <div className="upload"><input ref={inputRef} type="file" accept="application/pdf" multiple onChange={e => addFiles(e.target.files)} /><strong>Selecionar PDFs</strong><small>Você pode selecionar vários contratos ou atas.</small></div>
+      <div className={`upload${extracting ? ' is-loading' : ''}`}>
+        <input ref={inputRef} type="file" accept="application/pdf" multiple disabled={extracting} onChange={e => addFiles(e.target.files)} />
+        {extracting
+          ? <><div className="upload-spinner" role="status" aria-label="Lendo PDFs" /><strong>Lendo os PDFs…</strong><small>Isso pode levar alguns segundos.</small></>
+          : <><strong>Selecionar PDFs</strong><small>Você pode selecionar vários contratos ou atas.</small></>}
+      </div>
       {documents.length > 0 && <div className="documents">{documents.map((doc, index) => <div className="doc" key={`${doc.file.name}-${index}`}><div><strong>{doc.file.name}</strong><small>{(doc.file.size / 1024 / 1024).toFixed(2)} MB {doc.error && <em>{doc.error}</em>}</small></div><input aria-label={`Destinatário de ${doc.file.name}`} value={doc.recipient} placeholder="destinatario@instituicao.gov.br" onChange={e => setDocuments(all => all.map((d, i) => i === index ? { ...d, recipient: e.target.value, error: undefined } : d))}/><button className="remove" onClick={() => setDocuments(all => all.filter((_, i) => i !== index))} aria-label="Remover documento">×</button></div>)}</div>}
     </section>
     <section className="card">
@@ -117,7 +133,7 @@ function App() {
       <div className="settings-action"><button className="secondary" onClick={saveConfiguration}>Salvar configurações neste navegador</button></div>
       <p className="privacy">As configurações ficam apenas no armazenamento local deste navegador. A senha é enviada ao servidor exclusivamente durante o envio SMTP e não é armazenada no Render.</p>
     </section>
-    <footer><p className={notice.includes('sucesso') ? 'success' : ''}>{notice}</p><button className="send" disabled={loading} onClick={send}>{loading ? 'Aguarde…' : `Enviar ${documents.length || ''} ${documents.length === 1 ? 'documento' : 'documentos'}`}</button></footer>
+    <footer><p className={notice.includes('sucesso') ? 'success' : ''}>{notice}</p><button className="send" disabled={extracting || sending} onClick={send}>{sending ? 'Enviando…' : `Enviar ${documents.length || ''} ${documents.length === 1 ? 'documento' : 'documentos'}`}</button></footer>
   </main>
 }
 
