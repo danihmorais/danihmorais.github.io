@@ -55,13 +55,10 @@ function App() {
 
   async function saveConfiguration() {
     try {
-      if (settings.save_locally) {
-        localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings))
-        setNotice('Configurações salvas somente neste navegador.')
-      } else {
-        localStorage.removeItem(SETTINGS_STORAGE_KEY)
-        setNotice('Configurações locais removidas.')
-      }
+      const savedSettings = { ...settings, save_locally: true }
+      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(savedSettings))
+      setSettings(savedSettings)
+      setNotice('Configurações salvas somente neste navegador.')
     } catch { setNotice('Não foi possível acessar o armazenamento local do navegador.') }
   }
 
@@ -111,7 +108,7 @@ function App() {
     <section className="card">
       <div className="section-title"><span>3</span><div><h2>Servidor de e-mail</h2><p>Uma cópia de cada mensagem será enviada automaticamente ao e-mail remetente.</p></div></div>
       <div className="grid"><label>Servidor SMTP<input placeholder="smtp.exemplo.com" value={settings.host} onChange={e => updateSettings('host', e.target.value)} /></label><label>Porta<input type="number" value={settings.port} onChange={e => updateSettings('port', Number(e.target.value))} /></label><label>E-mail remetente<input type="email" placeholder="voce@prefeitura.sp.gov.br" value={settings.username} onChange={e => updateSettings('username', e.target.value)} /></label><label>Senha ou senha de aplicativo<input type="password" value={settings.password} onChange={e => updateSettings('password', e.target.value)} /></label><label>Segurança<select value={settings.security} onChange={e => updateSettings('security', e.target.value as Security)}><option value="starttls">STARTTLS (recomendado)</option><option value="ssl">SSL/TLS</option><option value="none">Sem criptografia</option></select></label></div>
-      <div className="settings-action"><label className="check"><input type="checkbox" checked={settings.save_locally} onChange={e => updateSettings('save_locally', e.target.checked)} /> Salvar dados neste computador</label><button className="secondary" onClick={saveConfiguration}>Salvar configurações</button></div>
+      <div className="settings-action"><button className="secondary" onClick={saveConfiguration}>Salvar configurações neste navegador</button></div>
       <p className="privacy">As configurações ficam apenas no armazenamento local deste navegador. A senha é enviada ao servidor exclusivamente durante o envio SMTP e não é armazenada no Render.</p>
     </section>
     <footer><p className={notice.includes('sucesso') ? 'success' : ''}>{notice}</p><button className="send" disabled={loading} onClick={send}>{loading ? 'Aguarde…' : `Enviar ${documents.length || ''} ${documents.length === 1 ? 'documento' : 'documentos'}`}</button></footer>
