@@ -75,7 +75,7 @@ export default function Wizard() {
   }, [etapaAtual]);
 
   const validarEtapa = () => {
-    const isLeilao = dados.modalidade === "LEILAO";
+    const isLeilao = dados.modalidade === "LEILAO_ELETRONICO";
 
     switch (etapaAtual) {
       case 0:
@@ -198,6 +198,7 @@ export default function Wizard() {
       if (dados.modalidade === "DISPENSA") tipoEditalStr = "dispensa";
       else if (dados.modalidade === "DISPENSA_BLL") tipoEditalStr = "dispensa_bll";
       else if (dados.modalidade === "PREGAO_PRESENCIAL") tipoEditalStr = "pregao_presencial";
+      else if (dados.modalidade === "LEILAO_ELETRONICO") tipoEditalStr = "leilao_eletronico";
 
       const { blob, filename } = await gerarEdital({
         tipo_edital: tipoEditalStr,
