@@ -44,6 +44,8 @@ jobs:
 
       - name: Build Enviador de Atas e Contratos
         working-directory: ./EMAIL-ATAS-CONTRATOS
+        env:
+          VITE_API_URL: ${{ secrets.EMAIL_API_URL }}
         run: |
           npm install
           npm run build
