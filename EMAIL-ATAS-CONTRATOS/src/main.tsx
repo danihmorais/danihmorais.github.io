@@ -4,7 +4,7 @@ import './styles.css'
 
 const DEFAULT_SUBJECT = 'INSTRUMENTO CONTRATUAL (SÃO FRANCISCO - SP)'
 const DEFAULT_BODY_HTML = `<p>Prezados,</p><p>Anexo instrumento contratual para assinatura.</p><p><strong>Prazo: 02 (dois) dias úteis</strong></p><p>Atenciosamente,</p><p>Setor de Licitações e Contratos de São Francisco - SP.</p>`
-const API_URL = import.meta.env.VITE_API_URL || 'https://danihmorais-github-io.onrender.com/email/api'
+const API_URL = import.meta.env.VITE_API_URL || 'https://SEU-PROJETO.vercel.app/api'
 const SETTINGS_STORAGE_KEY = 'enviador-atas-contratos.smtp-settings'
 
 type Security = 'starttls' | 'ssl' | 'none'
