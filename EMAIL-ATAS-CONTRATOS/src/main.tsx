@@ -7,11 +7,52 @@ const DEFAULT_BODY_HTML = `<p>Prezados,</p><p>Anexo instrumento contratual para 
 const API_URL = import.meta.env.VITE_API_URL || 'https://SEU-PROJETO.vercel.app/api'
 const SETTINGS_STORAGE_KEY = 'enviador-atas-contratos.smtp-settings'
 
+// O Vercel Serverless Functions recusa requisições com corpo acima de 4.5MB.
+// Os PDFs são agrupados em lotes que ficam abaixo desse teto (com margem de
+// segurança para o overhead do multipart/form-data e dos demais campos do
+// formulário) e enviados em requisições sequenciais, sem que o usuário perceba.
+const VERCEL_BODY_LIMIT_BYTES = 4.5 * 1024 * 1024
+const CHUNK_SAFETY_MARGIN_BYTES = 200 * 1024
+const MAX_CHUNK_BYTES = VERCEL_BODY_LIMIT_BYTES - CHUNK_SAFETY_MARGIN_BYTES
+
 type Security = 'starttls' | 'ssl' | 'none'
 type SmtpSettings = { host: string; port: number; username: string; password: string; security: Security; save_locally: boolean }
 type Document = { file: File; recipient: string; error?: string }
 
 const blankSettings: SmtpSettings = { host: '', port: 587, username: '', password: '', security: 'starttls', save_locally: false }
+
+/** Agrupa itens em lotes cuja soma de tamanhos não ultrapassa maxBytes.
+ *  Um item individual maior que maxBytes fica sozinho em seu próprio lote
+ *  (não há como fragmentar um único PDF sem recompô-lo no backend). */
+function chunkBySize<T>(items: T[], getSize: (item: T) => number, maxBytes: number): T[][] {
+  const chunks: T[][] = []
+  let current: T[] = []
+  let currentSize = 0
+  for (const item of items) {
+    const size = getSize(item)
+    if (current.length && currentSize + size > maxBytes) {
+      chunks.push(current)
+      current = []
+      currentSize = 0
+    }
+    current.push(item)
+    currentSize += size
+  }
+  if (current.length) chunks.push(current)
+  return chunks
+}
+
+/** fetch com timeout próprio por requisição — cada lote tem seu próprio prazo,
+ *  em vez de um único timeout compartilhado por toda a operação. */
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { ...init, signal: controller.signal })
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
 
 function App() {
   const inputRef = useRef<HTMLInputElement>(null)
@@ -44,20 +85,25 @@ function App() {
     const valid = Array.from(files).filter(file => file.name.toLowerCase().endsWith('.pdf'))
     if (!valid.length) return setNotice('Selecione arquivos no formato PDF.')
     setExtracting(true); setNotice('Lendo os e-mails institucionais nos PDFs…')
-    const form = new FormData(); valid.forEach(file => form.append('files', file))
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 60000)
+    const batches = chunkBySize(valid, file => file.size, MAX_CHUNK_BYTES)
+    const results: { filename: string; recipient: string | null; error?: string }[] = []
     try {
-      const response = await fetch(`${API_URL}/extract-recipients`, { method: 'POST', body: form, signal: controller.signal })
-      if (!response.ok) throw new Error(`Servidor respondeu ${response.status}.`)
-      const results: { filename: string; recipient: string | null; error?: string }[] = await response.json()
+      for (let i = 0; i < batches.length; i++) {
+        if (batches.length > 1) setNotice(`Lendo os e-mails institucionais nos PDFs… (${results.length + batches[i].length}/${valid.length})`)
+        const form = new FormData()
+        batches[i].forEach(file => form.append('files', file))
+        const response = await fetchWithTimeout(`${API_URL}/extract-recipients`, { method: 'POST', body: form }, 60000)
+        if (!response.ok) throw new Error(`Servidor respondeu ${response.status}.`)
+        const batchResults: { filename: string; recipient: string | null; error?: string }[] = await response.json()
+        results.push(...batchResults)
+      }
       const newDocs = valid.map((file, index) => ({ file, recipient: results[index]?.recipient || '', error: results[index]?.error || (!results[index]?.recipient ? 'Segundo “E-mail institucional” não localizado.' : undefined) }))
       setDocuments(old => [...old, ...newDocs]); setNotice('Revise os destinatários antes de enviar.')
     } catch (error) {
       setNotice(error instanceof DOMException && error.name === 'AbortError'
         ? 'O servidor demorou demais para responder (pode estar "acordando" no Render — tente novamente em instantes).'
         : 'Não foi possível analisar os documentos. Verifique se o backend está em execução.')
-    } finally { clearTimeout(timeoutId); setExtracting(false); if (inputRef.current) inputRef.current.value = '' }
+    } finally { setExtracting(false); if (inputRef.current) inputRef.current.value = '' }
   }
 
   async function saveConfiguration() {
@@ -74,28 +120,34 @@ function App() {
     if (!settings.host || !settings.username) return setNotice('Preencha o servidor SMTP e o e-mail remetente.')
     if (documents.some(d => !d.recipient)) return setNotice('Informe ou corrija todos os destinatários antes de enviar.')
     setSending(true); setNotice('Enviando os e-mails individualmente…')
-    const form = new FormData()
-    documents.forEach(d => form.append('files', d.file))
-    form.append('recipients', JSON.stringify(documents.map(d => d.recipient.trim())))
-    form.append('subject', subject); form.append('body_html', bodyHtml); form.append('settings_json', JSON.stringify(settings))
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 120000)
+    const batches = chunkBySize(documents, d => d.file.size, MAX_CHUNK_BYTES)
+    const sent: { filename: string; recipient: string }[] = []
+    const failures: { filename: string; error: string }[] = []
     try {
-      const response = await fetch(`${API_URL}/send`, { method: 'POST', body: form, signal: controller.signal })
-      let result: { sent?: { filename: string; recipient: string }[]; failures?: { filename: string; error: string }[]; detail?: string }
-      try { result = await response.json() }
-      catch { throw new Error(`Servidor respondeu ${response.status} sem corpo válido (verifique os logs do backend no Render).`) }
-      if (!response.ok) throw new Error(result.detail || `Servidor respondeu ${response.status}.`)
-      const sent = result.sent || []
-      const failed = result.failures || []
-      setNotice(failed.length
-        ? `${sent.length} enviado(s). Falharam: ${failed.map(f => `${f.filename} — ${f.error}`).join('; ')}`
+      for (let i = 0; i < batches.length; i++) {
+        const batch = batches[i]
+        if (batches.length > 1) setNotice(`Enviando os e-mails individualmente… (${sent.length + failures.length + batch.length}/${documents.length})`)
+        const form = new FormData()
+        batch.forEach(d => form.append('files', d.file))
+        form.append('recipients', JSON.stringify(batch.map(d => d.recipient.trim())))
+        form.append('subject', subject); form.append('body_html', bodyHtml); form.append('settings_json', JSON.stringify(settings))
+        const response = await fetchWithTimeout(`${API_URL}/send`, { method: 'POST', body: form }, 120000)
+        let result: { sent?: { filename: string; recipient: string }[]; failures?: { filename: string; error: string }[]; detail?: string }
+        try { result = await response.json() }
+        catch { throw new Error(`Servidor respondeu ${response.status} sem corpo válido (verifique os logs do backend no Render).`) }
+        if (!response.ok) throw new Error(result.detail || `Servidor respondeu ${response.status}.`)
+        sent.push(...(result.sent || []))
+        failures.push(...(result.failures || []))
+      }
+      setNotice(failures.length
+        ? `${sent.length} enviado(s). Falharam: ${failures.map(f => `${f.filename} — ${f.error}`).join('; ')}`
         : `${sent.length} e-mail(s) enviado(s) com sucesso.`)
     } catch (error) {
-      setNotice(error instanceof DOMException && error.name === 'AbortError'
+      const partial = sent.length || failures.length ? ` (${sent.length} já enviado(s) antes da falha)` : ''
+      setNotice((error instanceof DOMException && error.name === 'AbortError'
         ? 'O envio demorou demais e foi cancelado. Verifique a conexão com o servidor SMTP e tente novamente.'
-        : error instanceof Error ? error.message : 'Falha no envio.')
-    } finally { clearTimeout(timeoutId); setSending(false) }
+        : error instanceof Error ? error.message : 'Falha no envio.') + partial)
+    } finally { setSending(false) }
   }
 
   return <main>
