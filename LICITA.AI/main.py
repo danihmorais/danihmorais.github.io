@@ -6,9 +6,10 @@ import zipfile
 import tempfile
 from datetime import datetime
 
+import httpx
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 import config
@@ -24,6 +25,51 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+NVIDIA_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
+
+
+class NvidiaChatRequest(BaseModel):
+    apiKey: str
+    model: str
+    messages: list
+    max_tokens: int = 8000
+    temperature: float = 0.3
+    response_format: dict | None = None
+
+
+@app.post("/api/nvidia/chat-completions")
+async def nvidia_chat_completions_proxy(req: NvidiaChatRequest):
+    """
+    Proxy server-side para a API da NVIDIA (integrate.api.nvidia.com).
+    Necessário porque a NVIDIA não responde com headers de CORS, então o
+    navegador bloqueia chamadas feitas diretamente do frontend estático.
+    """
+    payload = {
+        "model": req.model,
+        "temperature": req.temperature,
+        "max_tokens": req.max_tokens,
+        "messages": req.messages,
+    }
+    if req.response_format:
+        payload["response_format"] = req.response_format
+
+    headers = {
+        "Authorization": f"Bearer {req.apiKey}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            resp = await client.post(NVIDIA_API_URL, json=payload, headers=headers)
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=502, detail=f"Erro de comunicação com a NVIDIA: {e}")
+
+    return Response(
+        content=resp.content,
+        status_code=resp.status_code,
+        media_type=resp.headers.get("content-type", "application/json"),
+    )
 
 
 class FasePreparatoriaRequest(BaseModel):

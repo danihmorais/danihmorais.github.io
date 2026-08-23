@@ -1,3 +1,5 @@
+import { chamarNvidiaChatCompletions } from '../api';
+
 const MAX_TENTATIVAS = 3;
 
 export interface OpcaoModelo {
@@ -23,6 +25,7 @@ export const MODELOS_DISPONIVEIS: Record<string, OpcaoModelo[]> = {
     { value: "deepseek/deepseek-r1", label: "DeepSeek R1" },
   ],
   nvidia: [
+    { value: "deepseek-ai/deepseek-v4-flash-0731", label: "DeepSeek V4 Flash (padrão)" },
     { value: "meta/llama-3.3-70b-instruct", label: "Llama 3.3 70B Instruct (Meta)" },
     { value: "meta/llama-3.1-405b-instruct", label: "Llama 3.1 405B Instruct (Meta)" },
     { value: "nvidia/llama-3.1-nemotron-70b-instruct", label: "Nemotron 70B Instruct (NVIDIA)" },
@@ -34,7 +37,7 @@ export const MODELOS_DISPONIVEIS: Record<string, OpcaoModelo[]> = {
 export const MODELO_PADRAO_POR_PROVEDOR: Record<string, string> = {
   gemini: "gemini-3.5-flash",
   openrouter: "openrouter/free",
-  nvidia: "meta/llama-3.3-70b-instruct",
+  nvidia: "deepseek-ai/deepseek-v4-flash-0731",
 };
 
 const CHAVE_LOGS_ERRO = "licita_ai:logs_erro";
@@ -141,9 +144,9 @@ function extrairEConverterJSON(rawText: string): any {
   }
 }
 
-export async function validarChaveGemini(apiKey: string): Promise<boolean> {
+export async function validarChaveGemini(apiKey: string, model: string = MODELO_PADRAO_POR_PROVEDOR.gemini): Promise<boolean> {
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -164,7 +167,7 @@ export async function validarChaveGemini(apiKey: string): Promise<boolean> {
   }
 }
 
-export async function validarChaveOpenRouter(apiKey: string): Promise<boolean> {
+export async function validarChaveOpenRouter(apiKey: string, model: string = MODELO_PADRAO_POR_PROVEDOR.openrouter): Promise<boolean> {
   try {
     const url = "https://openrouter.ai/api/v1/chat/completions";
     const response = await fetch(url, {
@@ -174,7 +177,7 @@ export async function validarChaveOpenRouter(apiKey: string): Promise<boolean> {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "openrouter/free",
+        model: model,
         max_tokens: 1,
         messages: [{ role: "user", content: "teste" }]
       })
@@ -191,20 +194,13 @@ export async function validarChaveOpenRouter(apiKey: string): Promise<boolean> {
   }
 }
 
-export async function validarChaveNvidia(apiKey: string): Promise<boolean> {
+export async function validarChaveNvidia(apiKey: string, model: string = MODELO_PADRAO_POR_PROVEDOR.nvidia): Promise<boolean> {
   try {
-    const url = "https://integrate.api.nvidia.com/v1/chat/completions";
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: MODELO_PADRAO_POR_PROVEDOR.nvidia,
-        max_tokens: 1,
-        messages: [{ role: "user", content: "teste" }]
-      })
+    const response = await chamarNvidiaChatCompletions({
+      apiKey,
+      model,
+      max_tokens: 1,
+      messages: [{ role: "user", content: "teste" }]
     });
 
     if (!response.ok) {
@@ -278,26 +274,18 @@ export async function gerarTextoGemini(prompt: string, apiKey: string, model: st
 }
 
 export async function gerarTextoNvidia(prompt: string, apiKey: string, model: string): Promise<any> {
-  const url = "https://integrate.api.nvidia.com/v1/chat/completions";
-
   let tentativaAtual = 0;
   let ultimoErro = "";
 
   while (tentativaAtual < MAX_TENTATIVAS) {
     try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: model,
-          temperature: 0.3,
-          max_tokens: 8000,
-          response_format: { type: "json_object" },
-          messages: [{ role: "user", content: prompt }]
-        })
+      const response = await chamarNvidiaChatCompletions({
+        apiKey,
+        model,
+        temperature: 0.3,
+        max_tokens: 8000,
+        response_format: { type: "json_object" },
+        messages: [{ role: "user", content: prompt }]
       });
 
       if (!response.ok) {

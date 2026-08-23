@@ -39,11 +39,11 @@ export default function ConfigIA({ onSuccess, textoBotao = "Acessar Sistema" }: 
     try {
       let valida = false;
       if (provedor === "gemini") {
-        valida = await validarChaveGemini(chaveApi);
+        valida = await validarChaveGemini(chaveApi, modelo);
       } else if (provedor === "nvidia") {
-        valida = await validarChaveNvidia(chaveApi);
+        valida = await validarChaveNvidia(chaveApi, modelo);
       } else {
-        valida = await validarChaveOpenRouter(chaveApi);
+        valida = await validarChaveOpenRouter(chaveApi, modelo);
       }
 
       console.log("Retorno da função de validação (booleano):", valida);
