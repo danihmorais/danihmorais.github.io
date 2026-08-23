@@ -4,13 +4,13 @@ import { ThemeContext } from "./context/ThemeContext";
 import Wizard from "./views/wizard";
 import ConfigIA from "./components/configIA";
 import { lerConfigIA } from "./utils/storageLocal";
-import { validarChaveGemini, validarChaveOpenRouter } from "./providers/llm";
+import { validarChaveGemini, validarChaveOpenRouter, validarChaveNvidia } from "./providers/llm";
 
 export default function App() {
   const [logado, setLogado] = useState(false);
   const [statusGemini, setStatusGemini] = useState<boolean | null>(null);
   const [statusOpenRouter, setStatusOpenRouter] = useState<boolean | null>(null);
-
+  const [statusNvidia, setStatusNvidia] = useState<boolean | null>(null);
   const { theme, toggleTheme } = useContext(ThemeContext);
 
   const isDark = theme === "dark";
@@ -33,16 +33,13 @@ export default function App() {
     }
   };
 
-  // Não existe mais um backend que guarde chaves mestras: cada usuário usa a
-  // própria chave (Gemini ou OpenRouter), salva no navegador. Por isso aqui
-  // apenas validamos, no cliente, se a chave configurada pelo usuário ainda
-  // está ativa junto ao provedor escolhido.
   const verificarApis = async () => {
     const config = lerConfigIA();
 
     if (!config?.chave_api) {
       setStatusGemini(null);
       setStatusOpenRouter(null);
+      setStatusNvidia(null);
       return;
     }
 
@@ -51,19 +48,37 @@ export default function App() {
         const ok = await validarChaveOpenRouter(config.chave_api);
         setStatusOpenRouter(ok);
         setStatusGemini(null);
+        setStatusNvidia(null);
+      } else if (config.provedor === "nvidia") {
+        const ok = await validarChaveNvidia(config.chave_api);
+        setStatusNvidia(ok);
+        setStatusGemini(null);
+        setStatusOpenRouter(null);
       } else {
         const ok = await validarChaveGemini(config.chave_api);
         setStatusGemini(ok);
         setStatusOpenRouter(null);
+        setStatusNvidia(null);
       }
     } catch {
-      setStatusGemini(false);
-      setStatusOpenRouter(false);
+      if (config.provedor === "nvidia") {
+        setStatusNvidia(false);
+        setStatusGemini(null);
+        setStatusOpenRouter(null);
+      } else if (config.provedor === "openrouter") {
+        setStatusOpenRouter(false);
+        setStatusGemini(null);
+        setStatusNvidia(null);
+      } else {
+        setStatusGemini(false);
+        setStatusOpenRouter(null);
+        setStatusNvidia(null);
+      }
     }
   };
 
   const obterStatus = () => {
-    if (statusGemini === null && statusOpenRouter === null) {
+    if (statusGemini === null && statusOpenRouter === null && statusNvidia === null) {
       return {
         texto: "Configure sua chave de API para começar",
         cor: "var(--text-muted)",
@@ -80,6 +95,13 @@ export default function App() {
     if (statusOpenRouter === true) {
       return {
         texto: "Conectado à API OpenRouter",
+        cor: "var(--btn-success)",
+      };
+    }
+
+    if (statusNvidia === true) {
+      return {
+        texto: "Conectado à API Nvidia",
         cor: "var(--btn-success)",
       };
     }

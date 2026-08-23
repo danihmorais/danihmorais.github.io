@@ -11,7 +11,7 @@ else:
 
 MODEL_OPENROUTER = "openrouter/free"
 MODEL_GEMINI = "gemini-3.5-flash"
-MODEL_NVIDIA = "meta/llama-3.3-70b-instruct"
+MODEL_NVIDIA = "deepseek-ai/deepseek-v4-flash-0731"
 
 PROVEDORES_IA = {
     "openrouter": "OpenRouter",
