@@ -1,5 +1,42 @@
 const MAX_TENTATIVAS = 3;
 
+export interface OpcaoModelo {
+  value: string;
+  label: string;
+}
+
+// Catálogo de modelos disponíveis para seleção manual, por provedor.
+// Usado pela UI (ConfigIA) para montar o dropdown de escolha de modelo.
+export const MODELOS_DISPONIVEIS: Record<string, OpcaoModelo[]> = {
+  gemini: [
+    { value: "gemini-3.5-flash", label: "Gemini 3.5 Flash (rápido e econômico)" },
+    { value: "gemini-3.1-pro", label: "Gemini 3.1 Pro (mais qualidade)" },
+    { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+    { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+  ],
+  openrouter: [
+    { value: "openrouter/free", label: "OpenRouter Free (modelo automático gratuito)" },
+    { value: "anthropic/claude-sonnet-4.5", label: "Claude Sonnet 4.5 (Anthropic)" },
+    { value: "openai/gpt-5", label: "GPT-5 (OpenAI)" },
+    { value: "google/gemini-3.1-pro", label: "Gemini 3.1 Pro (via OpenRouter)" },
+    { value: "meta-llama/llama-3.3-70b-instruct", label: "Llama 3.3 70B Instruct (Meta)" },
+    { value: "deepseek/deepseek-r1", label: "DeepSeek R1" },
+  ],
+  nvidia: [
+    { value: "meta/llama-3.3-70b-instruct", label: "Llama 3.3 70B Instruct (Meta)" },
+    { value: "meta/llama-3.1-405b-instruct", label: "Llama 3.1 405B Instruct (Meta)" },
+    { value: "nvidia/llama-3.1-nemotron-70b-instruct", label: "Nemotron 70B Instruct (NVIDIA)" },
+    { value: "mistralai/mixtral-8x22b-instruct-v0.1", label: "Mixtral 8x22B Instruct (Mistral)" },
+    { value: "deepseek-ai/deepseek-r1", label: "DeepSeek R1 (via NVIDIA NIM)" },
+  ],
+};
+
+export const MODELO_PADRAO_POR_PROVEDOR: Record<string, string> = {
+  gemini: "gemini-3.5-flash",
+  openrouter: "openrouter/free",
+  nvidia: "meta/llama-3.3-70b-instruct",
+};
+
 const CHAVE_LOGS_ERRO = "licita_ai:logs_erro";
 const MAX_LOGS_GUARDADOS = 20;
 
@@ -104,46 +141,6 @@ function extrairEConverterJSON(rawText: string): any {
   }
 }
 
-export async function obterMelhorModelo(provedor: string, apiKey: string): Promise<string> {
-  if (provedor === "gemini") {
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro:generateContent?key=${apiKey}`;
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: "teste" }] }],
-          generationConfig: { maxOutputTokens: 1 }
-        })
-      });
-      if (response.ok) {
-        return "gemini-3.1-pro";
-      }
-    } catch (e) {}
-    return "gemini-3.5-flash";
-  } else {
-    try {
-      const url = "https://openrouter.ai/api/v1/chat/completions";
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: "anthropic/claude-sonnet-4.5",
-          max_tokens: 1,
-          messages: [{ role: "user", content: "teste" }]
-        })
-      });
-      if (response.ok) {
-        return "anthropic/claude-sonnet-4.5";
-      }
-    } catch (e) {}
-    return "openrouter/free";
-  }
-}
-
 export async function validarChaveGemini(apiKey: string): Promise<boolean> {
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
@@ -190,6 +187,33 @@ export async function validarChaveOpenRouter(apiKey: string): Promise<boolean> {
     return response.ok;
   } catch (error) {
     await salvarLogErro("excecao-validacao-openrouter", error);
+    return false;
+  }
+}
+
+export async function validarChaveNvidia(apiKey: string): Promise<boolean> {
+  try {
+    const url = "https://integrate.api.nvidia.com/v1/chat/completions";
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: MODELO_PADRAO_POR_PROVEDOR.nvidia,
+        max_tokens: 1,
+        messages: [{ role: "user", content: "teste" }]
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      await salvarLogErro("validacao-nvidia", `HTTP ${response.status}`, errText);
+    }
+    return response.ok;
+  } catch (error) {
+    await salvarLogErro("excecao-validacao-nvidia", error);
     return false;
   }
 }
@@ -248,6 +272,65 @@ export async function gerarTextoGemini(prompt: string, apiKey: string, model: st
       }
 
       // Espera de 2 ou 4 segundos antes de realizar uma nova tentativa com a IA
+      await new Promise(r => setTimeout(r, tentativaAtual * 2000));
+    }
+  }
+}
+
+export async function gerarTextoNvidia(prompt: string, apiKey: string, model: string): Promise<any> {
+  const url = "https://integrate.api.nvidia.com/v1/chat/completions";
+
+  let tentativaAtual = 0;
+  let ultimoErro = "";
+
+  while (tentativaAtual < MAX_TENTATIVAS) {
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: model,
+          temperature: 0.3,
+          max_tokens: 8000,
+          response_format: { type: "json_object" },
+          messages: [{ role: "user", content: prompt }]
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text().catch(() => "Sem detalhes");
+        if (response.status === 503 || response.status === 429 || response.status === 500 || response.status === 502) {
+          throw new Error(`Erro temporário no servidor (HTTP ${response.status})`);
+        }
+        throw new Error(`FATAL: Erro na API da NVIDIA (HTTP ${response.status}): ${errorData}`);
+      }
+
+      const data = await response.json();
+      if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+        throw new Error("A API retornou uma resposta vazia ou bloqueada pelos filtros de segurança.");
+      }
+
+      const rawText = data.choices[0].message.content;
+
+      return extrairEConverterJSON(rawText);
+
+    } catch (erro: any) {
+      ultimoErro = erro.message || String(erro);
+      tentativaAtual++;
+
+      if (ultimoErro.startsWith("FATAL:")) {
+        await salvarLogErro("nvidia-erro-fatal", erro);
+        throw new Error(ultimoErro.replace("FATAL: ", ""));
+      }
+
+      if (tentativaAtual >= MAX_TENTATIVAS) {
+        await salvarLogErro("nvidia-falha-limite", erro);
+        throw new Error(`O sistema tentou ${MAX_TENTATIVAS} vezes, mas a inteligência artificial não conseguiu concluir o texto corretamente. Por favor, tente novamente.\nÚltimo erro: ${ultimoErro}`);
+      }
+
       await new Promise(r => setTimeout(r, tentativaAtual * 2000));
     }
   }

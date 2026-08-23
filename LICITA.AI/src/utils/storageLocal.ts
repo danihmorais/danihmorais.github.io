@@ -10,6 +10,7 @@ const CHAVE_DADOS_USUARIO = "licita_ai:dados_usuario";
 export interface ConfigIA {
   provedor?: string;
   chave_api?: string;
+  modelo?: string;
 }
 
 export function lerConfigIA(): ConfigIA {

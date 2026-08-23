@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { validarChaveGemini, validarChaveOpenRouter } from "../providers/llm";
+import { validarChaveGemini, validarChaveOpenRouter, validarChaveNvidia, MODELOS_DISPONIVEIS, MODELO_PADRAO_POR_PROVEDOR } from "../providers/llm";
 import { lerConfigIA, salvarConfigIA } from "../utils/storageLocal";
 
 interface ConfigIAProps {
@@ -10,6 +10,7 @@ interface ConfigIAProps {
 export default function ConfigIA({ onSuccess, textoBotao = "Acessar Sistema" }: ConfigIAProps) {
   const [provedor, setProvedor] = useState("gemini");
   const [chaveApi, setChaveApi] = useState("");
+  const [modelo, setModelo] = useState(MODELO_PADRAO_POR_PROVEDOR["gemini"]);
   const [carregando, setCarregando] = useState(false);
 
   useEffect(() => {
@@ -17,10 +18,18 @@ export default function ConfigIA({ onSuccess, textoBotao = "Acessar Sistema" }: 
     const config = lerConfigIA();
     console.log("Configurações carregadas no componente:", config);
     if (config && config.chave_api) {
-      setProvedor(config.provedor || "gemini");
+      const provedorSalvo = config.provedor || "gemini";
+      setProvedor(provedorSalvo);
       setChaveApi(config.chave_api);
+      setModelo(config.modelo || MODELO_PADRAO_POR_PROVEDOR[provedorSalvo]);
     }
   }, []);
+
+  // Ao trocar de provedor, seleciona o modelo padrão desse provedor
+  const handleTrocarProvedor = (novoProvedor: string) => {
+    setProvedor(novoProvedor);
+    setModelo(MODELO_PADRAO_POR_PROVEDOR[novoProvedor]);
+  };
 
   const salvar = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,6 +40,8 @@ export default function ConfigIA({ onSuccess, textoBotao = "Acessar Sistema" }: 
       let valida = false;
       if (provedor === "gemini") {
         valida = await validarChaveGemini(chaveApi);
+      } else if (provedor === "nvidia") {
+        valida = await validarChaveNvidia(chaveApi);
       } else {
         valida = await validarChaveOpenRouter(chaveApi);
       }
@@ -45,7 +56,7 @@ export default function ConfigIA({ onSuccess, textoBotao = "Acessar Sistema" }: 
       }
 
       console.log("Validação aprovada. Salvando chave localmente...");
-      salvarConfigIA({ provedor, chave_api: chaveApi });
+      salvarConfigIA({ provedor, chave_api: chaveApi, modelo });
       console.log("Chave salva com sucesso no navegador.");
       
       if (textoBotao !== "Acessar Sistema") {
@@ -66,11 +77,15 @@ export default function ConfigIA({ onSuccess, textoBotao = "Acessar Sistema" }: 
   };
 
   const abrirAjuda = () => {
-    const url = provedor === "openrouter" 
-      ? "https://openrouter.ai/settings/keys" 
-      : "https://aistudio.google.com/app/apikey";
-    window.open(url, "_blank", "noopener,noreferrer");
+    const urls: Record<string, string> = {
+      openrouter: "https://openrouter.ai/settings/keys",
+      nvidia: "https://build.nvidia.com/",
+      gemini: "https://aistudio.google.com/app/apikey",
+    };
+    window.open(urls[provedor] || urls.gemini, "_blank", "noopener,noreferrer");
   };
+
+  const modelosDoProvedor = MODELOS_DISPONIVEIS[provedor] || [];
 
   return (
     <div>
@@ -83,7 +98,7 @@ export default function ConfigIA({ onSuccess, textoBotao = "Acessar Sistema" }: 
             type="radio" 
             value="gemini" 
             checked={provedor === "gemini"} 
-            onChange={(e) => setProvedor(e.target.value)} 
+            onChange={(e) => handleTrocarProvedor(e.target.value)} 
             style={{accentColor: "var(--btn-primary)", outline: "none", boxShadow: "none"}} 
           />
           Google Gemini
@@ -93,10 +108,20 @@ export default function ConfigIA({ onSuccess, textoBotao = "Acessar Sistema" }: 
             type="radio" 
             value="openrouter" 
             checked={provedor === "openrouter"} 
-            onChange={(e) => setProvedor(e.target.value)} 
+            onChange={(e) => handleTrocarProvedor(e.target.value)} 
             style={{accentColor: "var(--btn-primary)", outline: "none", boxShadow: "none"}} 
           />
           OpenRouter
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+          <input 
+            type="radio" 
+            value="nvidia" 
+            checked={provedor === "nvidia"} 
+            onChange={(e) => handleTrocarProvedor(e.target.value)} 
+            style={{accentColor: "var(--btn-primary)", outline: "none", boxShadow: "none"}} 
+          />
+          NVIDIA
         </label>
       </div>
 
@@ -112,6 +137,28 @@ export default function ConfigIA({ onSuccess, textoBotao = "Acessar Sistema" }: 
             onChange={(e) => setChaveApi(e.target.value)}
             required
             style={{ width: "100%", padding: "14px", borderRadius: "14px", border: "1px solid var(--input-border)", backgroundColor: "var(--input-bg)", color: "var(--text-main)", fontSize: "14px", boxSizing: "border-box" }}
+          />
+        </div>
+
+        <div style={{ textAlign: "left" }}>
+          <label style={{ fontWeight: "bold", fontSize: "14px", color: "var(--text-main)", display: "block", marginBottom: "8px" }}>
+            Modelo de IA
+          </label>
+          <select
+            value={modelo}
+            onChange={(e) => setModelo(e.target.value)}
+            style={{ width: "100%", padding: "14px", borderRadius: "14px", border: "1px solid var(--input-border)", backgroundColor: "var(--input-bg)", color: "var(--text-main)", fontSize: "14px", boxSizing: "border-box" }}
+          >
+            {modelosDoProvedor.map((opcao) => (
+              <option key={opcao.value} value={opcao.value}>{opcao.label}</option>
+            ))}
+          </select>
+          <input
+            type="text"
+            placeholder="Ou digite o identificador de outro modelo (opcional)"
+            value={modelosDoProvedor.some((o) => o.value === modelo) ? "" : modelo}
+            onChange={(e) => setModelo(e.target.value)}
+            style={{ width: "100%", padding: "12px", borderRadius: "14px", border: "1px solid var(--input-border)", backgroundColor: "var(--input-bg)", color: "var(--text-main)", fontSize: "13px", boxSizing: "border-box", marginTop: "8px" }}
           />
         </div>
         

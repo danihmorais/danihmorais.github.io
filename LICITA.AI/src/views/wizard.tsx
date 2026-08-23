@@ -6,7 +6,7 @@ import Step4 from "./steps/step4";
 import Step5 from "./steps/step5";
 import { mapearDadosWizard } from "../utils/mapearDados";
 import { processarDadosIA } from "../providers/services/geradorIA";
-import { obterMelhorModelo } from "../providers/llm";
+import { MODELO_PADRAO_POR_PROVEDOR } from "../providers/llm";
 import ConfigIA from "../components/configIA";
 import PromptModal from "../components/promptModal";
 import { ThemeContext } from "../context/ThemeContext";
@@ -119,6 +119,7 @@ export default function Wizard() {
       const config = lerConfigIA();
       const provedor = config.provedor || "gemini";
       const chaveApi = config.chave_api || "";
+      const modeloEscolhido = config.modelo || MODELO_PADRAO_POR_PROVEDOR[provedor] || MODELO_PADRAO_POR_PROVEDOR.gemini;
 
       if (!chaveApi) {
         setErroMsg("Chave de API não configurada. Por favor, volte ao início e insira a sua chave.");
@@ -129,9 +130,6 @@ export default function Wizard() {
       dadosMapeados["INSTRUCOES_EXTRAS"] = instrucoes;
       
       const meeppExclusivo = dados.meepp === "SIM";
-
-      setStatusTexto("A identificar a melhor inteligência artificial disponível para a sua conta...");
-      const modeloEscolhido = await obterMelhorModelo(provedor, chaveApi);
 
       setStatusTexto(`A gerar Documento de Formalização de Demanda (DFD) via ${modeloEscolhido}...`);
       const dadosIaDfd = await processarDadosIA(dadosMapeados, chaveApi, provedor, meeppExclusivo, "DFD", modeloEscolhido);
