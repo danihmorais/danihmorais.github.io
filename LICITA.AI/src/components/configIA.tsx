@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { validarChaveGemini, validarChaveOpenRouter, validarChaveNvidia, MODELOS_DISPONIVEIS, MODELO_PADRAO_POR_PROVEDOR } from "../providers/llm";
+import { validarChaveOpenRouter, MODELOS_DISPONIVEIS, MODELO_PADRAO_POR_PROVEDOR } from "../providers/llm";
 import { lerConfigIA, salvarConfigIA } from "../utils/storageLocal";
 
 interface ConfigIAProps {
@@ -8,9 +8,9 @@ interface ConfigIAProps {
 }
 
 export default function ConfigIA({ onSuccess, textoBotao = "Acessar Sistema" }: ConfigIAProps) {
-  const [provedor, setProvedor] = useState("gemini");
+  const [provedor, setProvedor] = useState("openrouter");
   const [chaveApi, setChaveApi] = useState("");
-  const [modelo, setModelo] = useState(MODELO_PADRAO_POR_PROVEDOR["gemini"]);
+  const [modelo, setModelo] = useState(MODELO_PADRAO_POR_PROVEDOR["openrouter"]);
   const [carregando, setCarregando] = useState(false);
 
   useEffect(() => {
@@ -18,18 +18,12 @@ export default function ConfigIA({ onSuccess, textoBotao = "Acessar Sistema" }: 
     const config = lerConfigIA();
     console.log("Configurações carregadas no componente:", config);
     if (config && config.chave_api) {
-      const provedorSalvo = config.provedor || "gemini";
+      const provedorSalvo = config.provedor || "openrouter";
       setProvedor(provedorSalvo);
       setChaveApi(config.chave_api);
       setModelo(config.modelo || MODELO_PADRAO_POR_PROVEDOR[provedorSalvo]);
     }
   }, []);
-
-  // Ao trocar de provedor, seleciona o modelo padrão desse provedor
-  const handleTrocarProvedor = (novoProvedor: string) => {
-    setProvedor(novoProvedor);
-    setModelo(MODELO_PADRAO_POR_PROVEDOR[novoProvedor]);
-  };
 
   const salvar = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,14 +31,7 @@ export default function ConfigIA({ onSuccess, textoBotao = "Acessar Sistema" }: 
     setCarregando(true);
     
     try {
-      let valida = false;
-      if (provedor === "gemini") {
-        valida = await validarChaveGemini(chaveApi, modelo);
-      } else if (provedor === "nvidia") {
-        valida = await validarChaveNvidia(chaveApi, modelo);
-      } else {
-        valida = await validarChaveOpenRouter(chaveApi, modelo);
-      }
+      const valida = await validarChaveOpenRouter(chaveApi, modelo);
 
       console.log("Retorno da função de validação (booleano):", valida);
 
@@ -77,12 +64,7 @@ export default function ConfigIA({ onSuccess, textoBotao = "Acessar Sistema" }: 
   };
 
   const abrirAjuda = () => {
-    const urls: Record<string, string> = {
-      openrouter: "https://openrouter.ai/settings/keys",
-      nvidia: "https://build.nvidia.com/",
-      gemini: "https://aistudio.google.com/app/apikey",
-    };
-    window.open(urls[provedor] || urls.gemini, "_blank", "noopener,noreferrer");
+    window.open("https://openrouter.ai/settings/keys", "_blank", "noopener,noreferrer");
   };
 
   const modelosDoProvedor = MODELOS_DISPONIVEIS[provedor] || [];
@@ -90,40 +72,8 @@ export default function ConfigIA({ onSuccess, textoBotao = "Acessar Sistema" }: 
   return (
     <div>
       <h3 style={{ fontSize: "16px", color: "var(--text-main)", marginBottom: "16px", textAlign: "center" }}>
-        Selecione o motor de Inteligência Artificial
+        Motor de Inteligência Artificial: OpenRouter
       </h3>
-      <div style={{ display: "flex", justifyContent: "center", gap: "24px", marginBottom: "35px", color: "var(--text-main)" }}>
-        <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
-          <input 
-            type="radio" 
-            value="gemini" 
-            checked={provedor === "gemini"} 
-            onChange={(e) => handleTrocarProvedor(e.target.value)} 
-            style={{accentColor: "var(--btn-primary)", outline: "none", boxShadow: "none"}} 
-          />
-          Google Gemini
-        </label>
-        <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
-          <input 
-            type="radio" 
-            value="openrouter" 
-            checked={provedor === "openrouter"} 
-            onChange={(e) => handleTrocarProvedor(e.target.value)} 
-            style={{accentColor: "var(--btn-primary)", outline: "none", boxShadow: "none"}} 
-          />
-          OpenRouter
-        </label>
-        <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
-          <input 
-            type="radio" 
-            value="nvidia" 
-            checked={provedor === "nvidia"} 
-            onChange={(e) => handleTrocarProvedor(e.target.value)} 
-            style={{accentColor: "var(--btn-primary)", outline: "none", boxShadow: "none"}} 
-          />
-          NVIDIA
-        </label>
-      </div>
 
       <form onSubmit={salvar} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
         <div style={{ textAlign: "left" }}>
