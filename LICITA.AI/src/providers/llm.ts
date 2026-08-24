@@ -1,5 +1,3 @@
-import { chamarNvidiaChatCompletions } from '../api';
-
 const MAX_TENTATIVAS = 3;
 
 export interface OpcaoModelo {
@@ -10,12 +8,6 @@ export interface OpcaoModelo {
 // Catálogo de modelos disponíveis para seleção manual, por provedor.
 // Usado pela UI (ConfigIA) para montar o dropdown de escolha de modelo.
 export const MODELOS_DISPONIVEIS: Record<string, OpcaoModelo[]> = {
-  gemini: [
-    { value: "gemini-3.5-flash", label: "Gemini 3.5 Flash (rápido e econômico)" },
-    { value: "gemini-3.1-pro", label: "Gemini 3.1 Pro (mais qualidade)" },
-    { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
-    { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
-  ],
   openrouter: [
     { value: "openrouter/free", label: "OpenRouter Free (modelo automático gratuito)" },
     { value: "anthropic/claude-sonnet-4.5", label: "Claude Sonnet 4.5 (Anthropic)" },
@@ -24,20 +16,10 @@ export const MODELOS_DISPONIVEIS: Record<string, OpcaoModelo[]> = {
     { value: "meta-llama/llama-3.3-70b-instruct", label: "Llama 3.3 70B Instruct (Meta)" },
     { value: "deepseek/deepseek-r1", label: "DeepSeek R1" },
   ],
-  nvidia: [
-    { value: "deepseek-ai/deepseek-v4-flash-0731", label: "DeepSeek V4 Flash (padrão)" },
-    { value: "meta/llama-3.3-70b-instruct", label: "Llama 3.3 70B Instruct (Meta)" },
-    { value: "meta/llama-3.1-405b-instruct", label: "Llama 3.1 405B Instruct (Meta)" },
-    { value: "nvidia/llama-3.1-nemotron-70b-instruct", label: "Nemotron 70B Instruct (NVIDIA)" },
-    { value: "mistralai/mixtral-8x22b-instruct-v0.1", label: "Mixtral 8x22B Instruct (Mistral)" },
-    { value: "deepseek-ai/deepseek-r1", label: "DeepSeek R1 (via NVIDIA NIM)" },
-  ],
 };
 
 export const MODELO_PADRAO_POR_PROVEDOR: Record<string, string> = {
-  gemini: "gemini-3.5-flash",
   openrouter: "openrouter/free",
-  nvidia: "deepseek-ai/deepseek-v4-flash-0731",
 };
 
 const CHAVE_LOGS_ERRO = "licita_ai:logs_erro";
@@ -144,29 +126,6 @@ function extrairEConverterJSON(rawText: string): any {
   }
 }
 
-export async function validarChaveGemini(apiKey: string, model: string = MODELO_PADRAO_POR_PROVEDOR.gemini): Promise<boolean> {
-  try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: "teste" }] }],
-        generationConfig: { maxOutputTokens: 1 }
-      })
-    });
-    
-    if (!response.ok) {
-      const errText = await response.text();
-      await salvarLogErro("validacao-gemini", `HTTP ${response.status}`, errText);
-    }
-    return response.ok;
-  } catch (error) {
-    await salvarLogErro("excecao-validacao-gemini", error);
-    return false;
-  }
-}
-
 export async function validarChaveOpenRouter(apiKey: string, model: string = MODELO_PADRAO_POR_PROVEDOR.openrouter): Promise<boolean> {
   try {
     const url = "https://openrouter.ai/api/v1/chat/completions";
@@ -191,136 +150,6 @@ export async function validarChaveOpenRouter(apiKey: string, model: string = MOD
   } catch (error) {
     await salvarLogErro("excecao-validacao-openrouter", error);
     return false;
-  }
-}
-
-export async function validarChaveNvidia(apiKey: string, model: string = MODELO_PADRAO_POR_PROVEDOR.nvidia): Promise<boolean> {
-  try {
-    const response = await chamarNvidiaChatCompletions({
-      apiKey,
-      model,
-      max_tokens: 1,
-      messages: [{ role: "user", content: "teste" }]
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      await salvarLogErro("validacao-nvidia", `HTTP ${response.status}`, errText);
-    }
-    return response.ok;
-  } catch (error) {
-    await salvarLogErro("excecao-validacao-nvidia", error);
-    return false;
-  }
-}
-
-export async function gerarTextoGemini(prompt: string, apiKey: string, model: string): Promise<any> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-  
-  let tentativaAtual = 0;
-  let ultimoErro = "";
-
-  while (tentativaAtual < MAX_TENTATIVAS) {
-    try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.3,
-            maxOutputTokens: 8192,
-            responseMimeType: "application/json"
-          }
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.text().catch(() => "Sem detalhes");
-        if (response.status === 503 || response.status === 429 || response.status === 500 || response.status === 502) {
-          throw new Error(`Erro temporário no servidor (HTTP ${response.status})`);
-        }
-        throw new Error(`FATAL: Erro na API do Gemini (HTTP ${response.status}): ${errorData}`);
-      }
-
-      const data = await response.json();
-      if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
-        throw new Error("A API retornou uma resposta vazia ou bloqueada pelos filtros de segurança.");
-      }
-      
-      const rawText = data.candidates[0].content.parts[0].text;
-      
-      return extrairEConverterJSON(rawText);
-
-    } catch (erro: any) {
-      ultimoErro = erro.message || String(erro);
-      tentativaAtual++;
-      
-      // Se for um erro fatal de senha incorreta (401, 400), não precisa ficar tentando de novo
-      if (ultimoErro.startsWith("FATAL:")) {
-        await salvarLogErro("gemini-erro-fatal", erro);
-        throw new Error(ultimoErro.replace("FATAL: ", ""));
-      }
-
-      if (tentativaAtual >= MAX_TENTATIVAS) {
-        await salvarLogErro("gemini-falha-limite", erro);
-        throw new Error(`O sistema tentou ${MAX_TENTATIVAS} vezes, mas a inteligência artificial não conseguiu concluir o texto corretamente. Por favor, tente novamente.\nÚltimo erro: ${ultimoErro}`);
-      }
-
-      // Espera de 2 ou 4 segundos antes de realizar uma nova tentativa com a IA
-      await new Promise(r => setTimeout(r, tentativaAtual * 2000));
-    }
-  }
-}
-
-export async function gerarTextoNvidia(prompt: string, apiKey: string, model: string): Promise<any> {
-  let tentativaAtual = 0;
-  let ultimoErro = "";
-
-  while (tentativaAtual < MAX_TENTATIVAS) {
-    try {
-      const response = await chamarNvidiaChatCompletions({
-        apiKey,
-        model,
-        temperature: 0.3,
-        max_tokens: 8000,
-        response_format: { type: "json_object" },
-        messages: [{ role: "user", content: prompt }]
-      });
-
-      if (!response.ok) {
-        const errorData = await response.text().catch(() => "Sem detalhes");
-        if (response.status === 503 || response.status === 429 || response.status === 500 || response.status === 502) {
-          throw new Error(`Erro temporário no servidor (HTTP ${response.status})`);
-        }
-        throw new Error(`FATAL: Erro na API da NVIDIA (HTTP ${response.status}): ${errorData}`);
-      }
-
-      const data = await response.json();
-      if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-        throw new Error("A API retornou uma resposta vazia ou bloqueada pelos filtros de segurança.");
-      }
-
-      const rawText = data.choices[0].message.content;
-
-      return extrairEConverterJSON(rawText);
-
-    } catch (erro: any) {
-      ultimoErro = erro.message || String(erro);
-      tentativaAtual++;
-
-      if (ultimoErro.startsWith("FATAL:")) {
-        await salvarLogErro("nvidia-erro-fatal", erro);
-        throw new Error(ultimoErro.replace("FATAL: ", ""));
-      }
-
-      if (tentativaAtual >= MAX_TENTATIVAS) {
-        await salvarLogErro("nvidia-falha-limite", erro);
-        throw new Error(`O sistema tentou ${MAX_TENTATIVAS} vezes, mas a inteligência artificial não conseguiu concluir o texto corretamente. Por favor, tente novamente.\nÚltimo erro: ${ultimoErro}`);
-      }
-
-      await new Promise(r => setTimeout(r, tentativaAtual * 2000));
-    }
   }
 }
 
