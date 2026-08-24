@@ -1,4 +1,4 @@
-import { gerarTextoGemini, gerarTextoOpenRouter, gerarTextoNvidia } from '../llm';
+import { gerarTextoOpenRouter } from '../llm';
 
 const STAGE_CHAVES: Record<string, string[]> = {
     "DFD": [
@@ -221,10 +221,6 @@ export async function processarDadosIA(
 
     if (provider === "openrouter") {
         return await gerarTextoOpenRouter(prompt, apiKey, modelo);
-    } else if (provider === "gemini") {
-        return await gerarTextoGemini(prompt, apiKey, modelo);
-    } else if (provider === "nvidia") {
-        return await gerarTextoNvidia(prompt, apiKey, modelo);
     } else {
         throw new Error(`Provedor IA não suportado: ${provider}`);
     }
