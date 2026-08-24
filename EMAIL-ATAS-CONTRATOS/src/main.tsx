@@ -4,7 +4,7 @@ import './styles.css'
 
 const DEFAULT_SUBJECT = 'INSTRUMENTO CONTRATUAL (SÃO FRANCISCO - SP)'
 const DEFAULT_BODY_HTML = `<p>Prezados,</p><p>Anexo instrumento contratual para assinatura.</p><p><strong>Prazo: 02 (dois) dias úteis</strong></p><p>Atenciosamente,</p><p>Setor de Licitações e Contratos de São Francisco - SP.</p>`
-const API_URL = import.meta.env.VITE_API_URL || 'https://SEU-PROJETO.vercel.app/api'
+const API_URL = import.meta.env.VITE_API_URL || 'https://servidor.tail7d4aa4.ts.net/email/api'
 const SETTINGS_STORAGE_KEY = 'enviador-atas-contratos.smtp-settings'
 
 // O Vercel Serverless Functions recusa requisições com corpo acima de 4.5MB.
