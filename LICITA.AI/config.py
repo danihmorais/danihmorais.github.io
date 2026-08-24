@@ -10,16 +10,12 @@ else:
     EXECUTABLE_DIR = BASE_DIR
 
 MODEL_OPENROUTER = "openrouter/free"
-MODEL_GEMINI = "gemini-3.5-flash"
-MODEL_NVIDIA = "deepseek-ai/deepseek-v4-flash-0731"
 
 PROVEDORES_IA = {
     "openrouter": "OpenRouter",
-    "gemini": "Gemini (Google)",
-    "nvidia": "NVIDIA"
 }
 
-DEFAULT_PROVIDER = "gemini"
+DEFAULT_PROVIDER = "openrouter"
 
 BASE_FILES = [
     "DFD - BASE.docx",

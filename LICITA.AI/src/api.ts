@@ -5,28 +5,6 @@ interface FasePreparatoriaResult {
   filename: string;
 }
 
-interface NvidiaChatPayload {
-  apiKey: string;
-  model: string;
-  messages: { role: string; content: string }[];
-  max_tokens?: number;
-  temperature?: number;
-  response_format?: { type: string };
-}
-
-// A API da NVIDIA (integrate.api.nvidia.com) não envia headers de CORS,
-// então a chamada precisa passar pelo nosso backend, que repassa a
-// requisição server-side e devolve a resposta ao navegador.
-export const chamarNvidiaChatCompletions = async (payload: NvidiaChatPayload): Promise<Response> => {
-  return fetch(`${BASE_URL}/nvidia/chat-completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(payload)
-  });
-};
-
 export const gerarFasePreparatoria = async (dados: any): Promise<FasePreparatoriaResult> => {
   const response = await fetch(`${BASE_URL}/gerar-fase-preparatoria`, {
     method: 'POST',

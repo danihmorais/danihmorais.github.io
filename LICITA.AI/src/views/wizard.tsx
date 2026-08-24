@@ -117,9 +117,9 @@ export default function Wizard() {
 
     try {
       const config = lerConfigIA();
-      const provedor = config.provedor || "gemini";
+      const provedor = config.provedor || "openrouter";
       const chaveApi = config.chave_api || "";
-      const modeloEscolhido = config.modelo || MODELO_PADRAO_POR_PROVEDOR[provedor] || MODELO_PADRAO_POR_PROVEDOR.gemini;
+      const modeloEscolhido = config.modelo || MODELO_PADRAO_POR_PROVEDOR[provedor] || MODELO_PADRAO_POR_PROVEDOR.openrouter;
 
       if (!chaveApi) {
         setErroMsg("Chave de API não configurada. Por favor, volte ao início e insira a sua chave.");

@@ -4,13 +4,11 @@ import { ThemeContext } from "./context/ThemeContext";
 import Wizard from "./views/wizard";
 import ConfigIA from "./components/configIA";
 import { lerConfigIA } from "./utils/storageLocal";
-import { validarChaveGemini, validarChaveOpenRouter, validarChaveNvidia } from "./providers/llm";
+import { validarChaveOpenRouter } from "./providers/llm";
 
 export default function App() {
   const [logado, setLogado] = useState(false);
-  const [statusGemini, setStatusGemini] = useState<boolean | null>(null);
   const [statusOpenRouter, setStatusOpenRouter] = useState<boolean | null>(null);
-  const [statusNvidia, setStatusNvidia] = useState<boolean | null>(null);
   const { theme, toggleTheme } = useContext(ThemeContext);
 
   const isDark = theme === "dark";
@@ -37,71 +35,29 @@ export default function App() {
     const config = lerConfigIA();
 
     if (!config?.chave_api) {
-      setStatusGemini(null);
       setStatusOpenRouter(null);
-      setStatusNvidia(null);
       return;
     }
 
     try {
-      if (config.provedor === "openrouter") {
-        const ok = await validarChaveOpenRouter(config.chave_api);
-        setStatusOpenRouter(ok);
-        setStatusGemini(null);
-        setStatusNvidia(null);
-      } else if (config.provedor === "nvidia") {
-        const ok = await validarChaveNvidia(config.chave_api);
-        setStatusNvidia(ok);
-        setStatusGemini(null);
-        setStatusOpenRouter(null);
-      } else {
-        const ok = await validarChaveGemini(config.chave_api);
-        setStatusGemini(ok);
-        setStatusOpenRouter(null);
-        setStatusNvidia(null);
-      }
+      const ok = await validarChaveOpenRouter(config.chave_api);
+      setStatusOpenRouter(ok);
     } catch {
-      if (config.provedor === "nvidia") {
-        setStatusNvidia(false);
-        setStatusGemini(null);
-        setStatusOpenRouter(null);
-      } else if (config.provedor === "openrouter") {
-        setStatusOpenRouter(false);
-        setStatusGemini(null);
-        setStatusNvidia(null);
-      } else {
-        setStatusGemini(false);
-        setStatusOpenRouter(null);
-        setStatusNvidia(null);
-      }
+      setStatusOpenRouter(false);
     }
   };
 
   const obterStatus = () => {
-    if (statusGemini === null && statusOpenRouter === null && statusNvidia === null) {
+    if (statusOpenRouter === null) {
       return {
         texto: "Configure sua chave de API para começar",
         cor: "var(--text-muted)",
       };
     }
 
-    if (statusGemini === true) {
-      return {
-        texto: "Conectado à API Gemini",
-        cor: "var(--btn-success)",
-      };
-    }
-
     if (statusOpenRouter === true) {
       return {
         texto: "Conectado à API OpenRouter",
-        cor: "var(--btn-success)",
-      };
-    }
-
-    if (statusNvidia === true) {
-      return {
-        texto: "Conectado à API Nvidia",
         cor: "var(--btn-success)",
       };
     }
