@@ -126,19 +126,88 @@ export default function Wizard() {
         return;
       }
 
+      // O contexto-base é congelado no início da geração. O mesmo modelo e provedor
+      // permanecem sendo utilizados nas três etapas; apenas o contexto acumulado muda.
       const dadosMapeados = mapearDadosWizard(dados);
-      dadosMapeados["INSTRUCOES_EXTRAS"] = instrucoes;
-      
+      const instrucoesBase = instrucoes.trim();
       const meeppExclusivo = dados.meepp === "SIM";
 
+      const criarContextoEtapa = (
+        etapaAtualNome: "DFD" | "ETP" | "TR",
+        documentosAnteriores: Record<string, Record<string, string>> = {}
+      ) => {
+        const blocosAnteriores = Object.entries(documentosAnteriores)
+          .map(([nomeDocumento, conteudo]) => (
+            `DOCUMENTO ${nomeDocumento} JÁ GERADO PARA ESTA MESMA CONTRATAÇÃO.\n` +
+            `Use este documento como CONTEXTO AUTORITATIVO e preserve sua coerência no documento atual.\n` +
+            `${JSON.stringify(conteudo, null, 2)}`
+          ))
+          .join("\n\n");
+
+        const contexto = [
+          instrucoesBase,
+          `CONTEXTO DE GERAÇÃO ENCADEADA - ETAPA ATUAL: ${etapaAtualNome}`,
+          "As três etapas DFD → ETP → TR pertencem à mesma contratação e devem ser tratadas como uma única linha de raciocínio.",
+          "Não contradiga informações já estabelecidas nos documentos anteriores.",
+          "Quando houver conflito entre uma inferência genérica e um documento anterior, preserve a informação já estabelecida no documento anterior, salvo instrução expressa em contrário.",
+          blocosAnteriores,
+        ].filter(Boolean).join("\n\n");
+
+        return contexto;
+      };
+
+      // 1) DFD: primeiro documento, usando apenas o contexto-base da contratação.
+      const dadosDfdInput = {
+        ...dadosMapeados,
+        INSTRUCOES_EXTRAS: criarContextoEtapa("DFD"),
+      };
+
       setStatusTexto(`A gerar Documento de Formalização de Demanda (DFD) via ${modeloEscolhido}...`);
-      const dadosIaDfd = await processarDadosIA(dadosMapeados, chaveApi, provedor, meeppExclusivo, "DFD", modeloEscolhido);
+      const dadosIaDfd = await processarDadosIA(
+        dadosDfdInput,
+        chaveApi,
+        provedor,
+        meeppExclusivo,
+        "DFD",
+        modeloEscolhido
+      );
+
+      // 2) ETP: recebe o contexto-base + DFD completo já gerado pelo mesmo modelo.
+      const dadosEtpInput = {
+        ...dadosMapeados,
+        INSTRUCOES_EXTRAS: criarContextoEtapa("ETP", { DFD: dadosIaDfd }),
+      };
 
       setStatusTexto(`A estruturar o Estudo Técnico Preliminar (ETP) via ${modeloEscolhido}...`);
-      const dadosIaEtp = await processarDadosIA(dadosMapeados, chaveApi, provedor, meeppExclusivo, "ETP", modeloEscolhido);
+      const dadosIaEtp = await processarDadosIA(
+        dadosEtpInput,
+        chaveApi,
+        provedor,
+        meeppExclusivo,
+        "ETP",
+        modeloEscolhido
+      );
+
+      // 3) TR: recebe o contexto-base + DFD + ETP completos. Além disso,
+      // alimenta explicitamente o campo que o gerador utiliza para REQUISITOS_TR.
+      const dadosTrInput = {
+        ...dadosMapeados,
+        INSTRUCOES_EXTRAS: criarContextoEtapa("TR", {
+          DFD: dadosIaDfd,
+          ETP: dadosIaEtp,
+        }),
+        REQUISITOS_ETP_ANTERIOR: dadosIaEtp.REQUISITOS_ETP || "Não informados.",
+      };
 
       setStatusTexto(`A compor o Termo de Referência (TR) via ${modeloEscolhido}...`);
-      const dadosIaTr = await processarDadosIA(dadosMapeados, chaveApi, provedor, meeppExclusivo, "TR", modeloEscolhido);
+      const dadosIaTr = await processarDadosIA(
+        dadosTrInput,
+        chaveApi,
+        provedor,
+        meeppExclusivo,
+        "TR",
+        modeloEscolhido
+      );
 
       const dadosIaFinais = { ...dadosIaDfd, ...dadosIaEtp, ...dadosIaTr };
 
