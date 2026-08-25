@@ -21,7 +21,7 @@ jobs:
       - name: Trigger Ubuntu deployment
         env:
           WEBHOOK_SECRET: ${{ secrets.DEPLOY_WEBHOOK_SECRET }}
-          DEPLOY_URL: https://servidor.tail7d4aa4.ts.net/deploy
+          DEPLOY_URL: ${{ secrets.API_URL }}/deploy
           SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
@@ -41,7 +41,7 @@ jobs:
 
       - name: Wait for deployment
         env:
-          STATUS_URL: https://servidor.tail7d4aa4.ts.net/deploy-status
+          STATUS_URL: ${{ secrets.API_URL }}/deploy-status
           SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
