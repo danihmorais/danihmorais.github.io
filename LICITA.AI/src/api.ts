@@ -1,4 +1,4 @@
-const BASE_URL = import.meta.env.VITE_API_URL || 'https://servidor.tail7d4aa4.ts.net/licita/api';
+const BASE_URL = import.meta.env.VITE_API_URL;
 
 interface FasePreparatoriaResult {
   blob: Blob;

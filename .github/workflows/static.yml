@@ -32,12 +32,16 @@ jobs:
 
       - name: Build MontaEdital
         working-directory: ./MONTAEDITAL
+        env:
+          VITE_API_URL: ${{ secrets.API_URL }}
         run: |
           npm install
           npm run build
 
       - name: Build Licita.AI
         working-directory: ./LICITA.AI
+        env:
+          VITE_API_URL: ${{ secrets.API_URL }}
         run: |
           npm install
           npm run build
@@ -45,7 +49,7 @@ jobs:
       - name: Build Enviador de Atas e Contratos
         working-directory: ./EMAIL-ATAS-CONTRATOS
         env:
-          VITE_API_URL: ${{ secrets.EMAIL_API_URL }}
+          VITE_API_URL: ${{ secrets.API_URL }}
         run: |
           npm install
           npm run build
