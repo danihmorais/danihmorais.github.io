@@ -170,7 +170,6 @@ export async function gerarTextoOpenRouter(prompt: string, apiKey: string, model
         body: JSON.stringify({
           model: model,
           temperature: 0.3,
-          max_tokens: 8000,
           response_format: { type: "json_object" },
           messages: [{ role: "user", content: prompt }]
         })
