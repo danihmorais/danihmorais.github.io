@@ -23,7 +23,7 @@ Hub de ferramentas web para automação de processos de **licitação pública m
 O projeto é composto por múltiplos front-ends independentes, unificados por uma página inicial (`index.html`) e, quando necessário, por um back-end Python:
 
 - **Front-end:** React + TypeScript + Vite (MontaEdital e Licita.AI), além de páginas estáticas em HTML/CSS/JS puro (Conversor Fiorilli e Documentos Modelo).
-- **Back-end:** FastAPI (Python), com `python-docx` e `lxml` para geração e manipulação de documentos `.docx`. O `main.py` na raiz monta os apps do MontaEdital, do Licita.AI e do Email ARPs/Contratos sob os prefixos `/monta`, `/licita` e `/email`.
+- **Back-end:** FastAPI (Python) em servidor privado com Tailscale, com `python-docx` e `lxml` para geração e manipulação de documentos `.docx`. O `main.py` na raiz monta os apps do MontaEdital, do Licita.AI e do Email ARPs/Contratos sob os prefixos `/monta`, `/licita` e `/email`.
 - **Deploy:** GitHub Actions (`.github/workflows/static.yml`) builda o MontaEdital, o Licita.AI e o Email ARPs/Contratos com Node/Vite, monta o site final na pasta `site/` e publica automaticamente no GitHub Pages a cada push na branch `main`.
 
 ```
