@@ -164,8 +164,13 @@ export async function gerarTextoOpenRouter(
 ): Promise<any> {
   const url = "https://openrouter.ai/api/v1/chat/completions";
 
-  // O DFD inicia uma nova cadeia. Para openrouter/free, a primeira resposta
-  // resolve o modelo efetivo e as etapas seguintes reutilizam esse modelo.
+  // O DFD marca o início de uma nova cadeia de geração.
+  if (model === "openrouter/free" && prompt.includes("ETAPA: DOCUMENTO DE FORMALIZAÇÃO DE DEMANDA.")) {
+    modeloLivreFixado = null;
+  }
+
+  // Para openrouter/free, a primeira resposta resolve o modelo efetivo e
+  // as etapas seguintes reutilizam esse modelo.
   const modeloDaRequisicao = model === "openrouter/free" && modeloLivreFixado
     ? modeloLivreFixado
     : model;
@@ -206,8 +211,6 @@ export async function gerarTextoOpenRouter(
         ? data.model
         : modeloDaRequisicao;
 
-      // Se a requisição foi feita com openrouter/free, fixa o modelo real
-      // retornado pela API para as próximas chamadas da mesma cadeia.
       if (model === "openrouter/free" && !modeloLivreFixado) {
         modeloLivreFixado = modeloEfetivamenteUtilizado;
       }
