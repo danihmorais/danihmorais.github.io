@@ -6,7 +6,7 @@ interface FasePreparatoriaResult {
 }
 
 export const gerarFasePreparatoria = async (dados: any): Promise<FasePreparatoriaResult> => {
-  const response = await fetch(`${BASE_URL}/gerar-fase-preparatoria`, {
+  const response = await fetch(`${BASE_URL}/licita/api/gerar-fase-preparatoria`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
