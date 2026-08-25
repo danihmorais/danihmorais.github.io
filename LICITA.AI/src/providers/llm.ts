@@ -5,8 +5,6 @@ export interface OpcaoModelo {
   label: string;
 }
 
-// Catálogo de modelos disponíveis para seleção manual, por provedor.
-// Usado pela UI (ConfigIA) para montar o dropdown de escolha de modelo.
 export const MODELOS_DISPONIVEIS: Record<string, OpcaoModelo[]> = {
   openrouter: [
     { value: "openrouter/free", label: "OpenRouter Free (modelo automático gratuito)" },
@@ -24,6 +22,11 @@ export const MODELO_PADRAO_POR_PROVEDOR: Record<string, string> = {
 
 const CHAVE_LOGS_ERRO = "licita_ai:logs_erro";
 const MAX_LOGS_GUARDADOS = 20;
+
+// openrouter/free é um roteador que pode escolher um modelo diferente a cada requisição.
+// Durante uma geração DFD → ETP → TR, guardamos o modelo efetivamente usado no DFD
+// para que ETP e TR utilizem exatamente o mesmo modelo.
+let modeloLivreFixado: string | null = null;
 
 async function salvarLogErro(prefixo: string, erro: any, dadosCrus: any = null) {
   try {
@@ -161,6 +164,12 @@ export async function gerarTextoOpenRouter(
 ): Promise<any> {
   const url = "https://openrouter.ai/api/v1/chat/completions";
 
+  // O DFD inicia uma nova cadeia. Para openrouter/free, a primeira resposta
+  // resolve o modelo efetivo e as etapas seguintes reutilizam esse modelo.
+  const modeloDaRequisicao = model === "openrouter/free" && modeloLivreFixado
+    ? modeloLivreFixado
+    : model;
+
   let tentativaAtual = 0;
   let ultimoErro = "";
 
@@ -173,7 +182,7 @@ export async function gerarTextoOpenRouter(
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          model: model,
+          model: modeloDaRequisicao,
           temperature: 0.3,
           response_format: { type: "json_object" },
           messages: [{ role: "user", content: prompt }]
@@ -193,17 +202,19 @@ export async function gerarTextoOpenRouter(
         throw new Error("A API retornou uma resposta vazia ou bloqueada pelos filtros de segurança.");
       }
 
-      // O OpenRouter informa no campo `model` qual modelo efetivamente respondeu.
-      // Isso é essencial para `openrouter/free`, que escolhe um modelo diferente
-      // potencialmente a cada requisição. A orquestração do Wizard usa esse valor
-      // para fixar o mesmo modelo nas etapas seguintes.
-      const modeloEfetivamenteUtilizado = typeof data.model === "string" ? data.model : model;
+      const modeloEfetivamenteUtilizado = typeof data.model === "string"
+        ? data.model
+        : modeloDaRequisicao;
+
+      // Se a requisição foi feita com openrouter/free, fixa o modelo real
+      // retornado pela API para as próximas chamadas da mesma cadeia.
+      if (model === "openrouter/free" && !modeloLivreFixado) {
+        modeloLivreFixado = modeloEfetivamenteUtilizado;
+      }
+
       onModelResolved?.(modeloEfetivamenteUtilizado);
 
       const rawText = data.choices[0].message.content;
-      
-      // Mesma proteção para a OpenRouter. Se o texto foi interrompido (Unterminated String), 
-      // ele força uma re-execução.
       return extrairEConverterJSON(rawText);
 
     } catch (erro: any) {
