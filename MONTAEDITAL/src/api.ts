@@ -6,7 +6,7 @@ interface EditalResult {
 }
 
 export const gerarEdital = async (dados: any): Promise<EditalResult> => {
-  const response = await fetch(`${BASE_URL}/gerar-edital`, {
+  const response = await fetch(`${BASE_URL}/api/gerar-edital`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
