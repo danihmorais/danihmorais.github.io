@@ -153,7 +153,12 @@ export async function validarChaveOpenRouter(apiKey: string, model: string = MOD
   }
 }
 
-export async function gerarTextoOpenRouter(prompt: string, apiKey: string, model: string): Promise<any> {
+export async function gerarTextoOpenRouter(
+  prompt: string,
+  apiKey: string,
+  model: string,
+  onModelResolved?: (modelUsed: string) => void
+): Promise<any> {
   const url = "https://openrouter.ai/api/v1/chat/completions";
 
   let tentativaAtual = 0;
@@ -187,6 +192,13 @@ export async function gerarTextoOpenRouter(prompt: string, apiKey: string, model
       if (!data.choices || !data.choices[0] || !data.choices[0].message) {
         throw new Error("A API retornou uma resposta vazia ou bloqueada pelos filtros de segurança.");
       }
+
+      // O OpenRouter informa no campo `model` qual modelo efetivamente respondeu.
+      // Isso é essencial para `openrouter/free`, que escolhe um modelo diferente
+      // potencialmente a cada requisição. A orquestração do Wizard usa esse valor
+      // para fixar o mesmo modelo nas etapas seguintes.
+      const modeloEfetivamenteUtilizado = typeof data.model === "string" ? data.model : model;
+      onModelResolved?.(modeloEfetivamenteUtilizado);
 
       const rawText = data.choices[0].message.content;
       
