@@ -6,11 +6,8 @@ const DEFAULT_SUBJECT = 'INSTRUMENTO CONTRATUAL (SÃO FRANCISCO - SP)'
 const DEFAULT_BODY_HTML = `<p>Prezados,</p><p>Anexo instrumento contratual para assinatura.</p><p><strong>Prazo: 02 (dois) dias úteis</strong></p><p>Atenciosamente,</p><p>Setor de Licitações e Contratos de São Francisco - SP.</p>`
 const API_URL = `${import.meta.env.VITE_API_URL}/email/api`
 const SETTINGS_STORAGE_KEY = 'enviador-atas-contratos.smtp-settings'
+const THEME_STORAGE_KEY = 'prontuario_theme'
 
-// O Vercel Serverless Functions recusa requisições com corpo acima de 4.5MB.
-// Os PDFs são agrupados em lotes que ficam abaixo desse teto (com margem de
-// segurança para o overhead do multipart/form-data e dos demais campos do
-// formulário) e enviados em requisições sequenciais, sem que o usuário perceba.
 const VERCEL_BODY_LIMIT_BYTES = 4.5 * 1024 * 1024
 const CHUNK_SAFETY_MARGIN_BYTES = 200 * 1024
 const MAX_CHUNK_BYTES = VERCEL_BODY_LIMIT_BYTES - CHUNK_SAFETY_MARGIN_BYTES
@@ -21,9 +18,6 @@ type Document = { file: File; recipient: string; error?: string }
 
 const blankSettings: SmtpSettings = { host: '', port: 587, username: '', password: '', security: 'starttls', save_locally: false }
 
-/** Agrupa itens em lotes cuja soma de tamanhos não ultrapassa maxBytes.
- *  Um item individual maior que maxBytes fica sozinho em seu próprio lote
- *  (não há como fragmentar um único PDF sem recompô-lo no backend). */
 function chunkBySize<T>(items: T[], getSize: (item: T) => number, maxBytes: number): T[][] {
   const chunks: T[][] = []
   let current: T[] = []
@@ -42,8 +36,6 @@ function chunkBySize<T>(items: T[], getSize: (item: T) => number, maxBytes: numb
   return chunks
 }
 
-/** fetch com timeout próprio por requisição — cada lote tem seu próprio prazo,
- *  em vez de um único timeout compartilhado por toda a operação. */
 async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
@@ -64,13 +56,28 @@ function App() {
   const [extracting, setExtracting] = useState(false)
   const [sending, setSending] = useState(false)
   const [notice, setNotice] = useState('')
+  const [theme, setTheme] = useState<'light' | 'dark'>('light')
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem(SETTINGS_STORAGE_KEY)
       if (saved) setSettings({ ...blankSettings, ...JSON.parse(saved) })
-    } catch { localStorage.removeItem(SETTINGS_STORAGE_KEY) }
+
+      const savedTheme = localStorage.getItem(THEME_STORAGE_KEY)
+      const initialTheme = savedTheme === 'dark' || savedTheme === 'light' ? savedTheme : 'light'
+      document.documentElement.setAttribute('data-theme', initialTheme)
+      setTheme(initialTheme)
+    } catch {
+      localStorage.removeItem(SETTINGS_STORAGE_KEY)
+    }
   }, [])
+
+  const alternarTema = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark'
+    document.documentElement.setAttribute('data-theme', nextTheme)
+    setTheme(nextTheme)
+    try { localStorage.setItem(THEME_STORAGE_KEY, nextTheme) } catch { /* armazenamento indisponível */ }
+  }
 
   const updateSettings = <K extends keyof SmtpSettings>(key: K, value: SmtpSettings[K]) => setSettings(s => ({ ...s, [key]: value }))
 
@@ -154,6 +161,9 @@ function App() {
     <header className="app-header">
       <a className="back-link" href="/" aria-label="Voltar para a página inicial">← <span>Voltar</span></a>
       <div className="header-title"><img src="./logo.png" alt="" /><div><h1>Envio de instrumentos contratuais</h1><p className="sub">Envie atas e contratos em lote, com um e-mail individual por documento.</p></div></div>
+      <div className="header-actions">
+        <button type="button" className="theme-toggle" onClick={alternarTema} title="Alternar modo claro/escuro" aria-label="Alternar modo claro/escuro">{theme === 'dark' ? '☀️' : '🌙'}</button>
+      </div>
     </header>
     <section className="card">
       <div className="section-title"><span>1</span><div><h2>Documentos e destinatários</h2><p>O sistema usa o segundo resultado de “E-mail institucional” encontrado em cada PDF.</p></div></div>
