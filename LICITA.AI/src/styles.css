@@ -30,6 +30,7 @@
   --radius: 8px;
   --radius-lg: 12px;
   --radius-xl: 16px;
+  color-scheme: light;
 }
 
 [data-theme="dark"] {
@@ -59,6 +60,7 @@
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
   --shadow-md: 0 4px 6px rgba(0,0,0,0.35);
   --shadow-lg: 0 10px 15px rgba(0,0,0,0.4);
+  color-scheme: dark;
 }
 
 *, *::before, *::after {
@@ -97,6 +99,16 @@ input, select, textarea {
   font-size: 14px;
   transition: border-color 0.2s, box-shadow 0.2s;
   outline: none;
+}
+
+select option {
+  background-color: var(--input-bg);
+  color: var(--text-main);
+}
+
+[data-theme="dark"] select option {
+  background-color: #1e293b;
+  color: #f1f5f9;
 }
 
 input:focus, select:focus, textarea:focus {
