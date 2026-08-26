@@ -26,6 +26,7 @@
   --wiz-shadow:        0 1px 3px rgba(0,0,0,.06), 0 2px 8px rgba(0,0,0,.05);
   --wiz-shadow-md:     0 4px 16px rgba(0,0,0,.10);
   --wiz-input-bg:      #f8fafc;
+  color-scheme: light;
 }
 
 [data-theme="dark"],
@@ -41,6 +42,7 @@ body.dark {
   --wiz-shadow:    0 1px 3px rgba(0,0,0,.3), 0 2px 8px rgba(0,0,0,.25);
   --wiz-shadow-md: 0 4px 20px rgba(0,0,0,.4);
   --wiz-input-bg:  rgba(255,255,255,.04);
+  color-scheme: dark;
 }
 
 .wiz-root {
@@ -315,6 +317,22 @@ body.dark {
   outline: none;
   appearance: none;
   -webkit-appearance: none;
+}
+
+.wiz-select,
+.wiz-select option {
+  color: var(--wiz-text);
+  background-color: var(--wiz-input-bg);
+}
+
+[data-theme="dark"] .wiz-select,
+[data-theme="dark"] .wiz-select option,
+.dark .wiz-select,
+.dark .wiz-select option,
+body.dark .wiz-select,
+body.dark .wiz-select option {
+  color: #f1f5f9;
+  background-color: #1e293b;
 }
 
 .wiz-select {
