@@ -1,11 +1,12 @@
-// Substitui os antigos comandos Tauri "ler_config_ia" / "salvar_config_ia" /
-// "ler_dados_usuario" / "salvar_dados_usuario", que persistiam dados num
-// arquivo local via Rust. Agora que o app roda no navegador (GitHub Pages +
-// FastAPI), esses dados (chave de API do usuário, contatos/gestores/fiscais
-// salvos) são preferências puramente client-side, então usamos localStorage.
+// Configuração da IA é fornecida pelo build via GitHub Actions.
+// As chaves ficam nos secrets API_UNSLOTH/API_OPENROUTER e são injetadas
+// como variáveis VITE_* durante o build do Licita.AI.
 
 const CHAVE_CONFIG_IA = "licita_ai:config_ia";
 const CHAVE_DADOS_USUARIO = "licita_ai:dados_usuario";
+
+const API_UNSLOTH = import.meta.env.VITE_API_UNSLOTH_KEY || "";
+const API_OPENROUTER = import.meta.env.VITE_API_OPENROUTER_KEY || "";
 
 export interface ConfigIA {
   provedor?: string;
@@ -16,14 +17,40 @@ export interface ConfigIA {
 export function lerConfigIA(): ConfigIA {
   try {
     const raw = localStorage.getItem(CHAVE_CONFIG_IA);
-    return raw ? JSON.parse(raw) : {};
+    const salvo = raw ? JSON.parse(raw) : {};
+
+    if (API_UNSLOTH) {
+      return {
+        provedor: "unsloth",
+        chave_api: API_UNSLOTH,
+        modelo: salvo.modelo || "unsloth-auto",
+      };
+    }
+
+    if (API_OPENROUTER) {
+      return {
+        provedor: "openrouter",
+        chave_api: API_OPENROUTER,
+        modelo: salvo.modelo || "openrouter/free",
+      };
+    }
+
+    return salvo;
   } catch {
-    return {};
+    return API_UNSLOTH
+      ? { provedor: "unsloth", chave_api: API_UNSLOTH, modelo: "unsloth-auto" }
+      : API_OPENROUTER
+        ? { provedor: "openrouter", chave_api: API_OPENROUTER, modelo: "openrouter/free" }
+        : {};
   }
 }
 
 export function salvarConfigIA(config: ConfigIA): void {
-  localStorage.setItem(CHAVE_CONFIG_IA, JSON.stringify(config));
+  // Mantém apenas preferências não sensíveis. As chaves vêm dos secrets do build.
+  localStorage.setItem(CHAVE_CONFIG_IA, JSON.stringify({
+    provedor: config.provedor,
+    modelo: config.modelo,
+  }));
 }
 
 export function lerDadosUsuario(): Record<string, any> {
