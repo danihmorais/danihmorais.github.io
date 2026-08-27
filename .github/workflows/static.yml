@@ -19,7 +19,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -29,7 +28,6 @@ jobs:
             MONTAEDITAL/package-lock.json
             LICITA.AI/package-lock.json
             EMAIL-ATAS-CONTRATOS/package-lock.json
-
       - name: Build MontaEdital
         working-directory: ./MONTAEDITAL
         env:
@@ -37,15 +35,15 @@ jobs:
         run: |
           npm install
           npm run build
-
       - name: Build Licita.AI
         working-directory: ./LICITA.AI
         env:
           VITE_API_URL: ${{ secrets.API_URL }}
+          VITE_API_UNSLOTH_KEY: ${{ secrets.API_UNSLOTH }}
+          VITE_API_OPENROUTER_KEY: ${{ secrets.API_OPENROUTER }}
         run: |
           npm install
           npm run build
-
       - name: Build Enviador de Atas e Contratos
         working-directory: ./EMAIL-ATAS-CONTRATOS
         env:
@@ -53,7 +51,6 @@ jobs:
         run: |
           npm install
           npm run build
-
       - name: Assemble final site
         run: |
           mkdir -p site
@@ -67,15 +64,12 @@ jobs:
           cp -r FIORIILICSVTOWORD/. site/FIORIILICSVTOWORD/
           mkdir -p "site/DOCUMENTOS MODELO"
           cp -r "DOCUMENTOS MODELO/." "site/DOCUMENTOS MODELO/"
-
       - name: Setup Pages
         uses: actions/configure-pages@v4
-
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: './site'
-
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
