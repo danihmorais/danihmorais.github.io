@@ -20,11 +20,22 @@ from pypdf import PdfReader
 from starlette.concurrency import run_in_threadpool
 
 DATE_RE = re.compile(r"(?<!\d)(\d{2})[./-](\d{2})[./-](\d{4})(?!\d)")
-CURRENCY_RE = re.compile(r"R\$?\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})|[0-9]+(?:,[0-9]{2}))", re.I)
-PLAIN_VALUE_RE = re.compile(r"(?<![\d.,])(?:[0-9]{1,3}(?:\.[0-9]{3})+|[0-9]+),[0-9]{2}(?![\d.,])")
+CURRENCY_RE = re.compile(
+    r"(?<![\d.,])R\$?\s*([0-9]{1,3}(?:\.[0-9]{3})+(?:,[0-9]{2})|[0-9]+(?:,[0-9]{2}))(?![\d.,])",
+    re.I,
+)
+PLAIN_VALUE_RE = re.compile(
+    r"(?<![\d.,])(?:[0-9]{1,3}(?:\.[0-9]{3})+(?:,[0-9]{2})|[0-9]+,[0-9]{2})(?![\d.,])"
+)
 NUMBER_RE = re.compile(r"(?<!\d)(\d{1,4})\s*/\s*(\d{4})(?!\d)")
-CNPJ_RE = re.compile(r"(?<!\d)(\d{2}[.\s]?\d{3}[.\s]?\d{3}[/\-]\d{4}[/\-]\d{2})(?!\d)")
-MONTHS_RE = re.compile(r"(?<!\d)(\d{1,3})\s*(?:mes|m[eê]s|meses)(?![a-z])", re.I)
+CNPJ_RE = re.compile(
+    r"(?<!\d)(?:"
+    r"\d{2}\s*[./-]?\s*\d{3}\s*[./-]?\s*\d{3}\s*/\s*\d{4}\s*[./-]?\s*\d{2}"
+    r"|\d{14}"
+    r")(?!\d)"
+)
+MONTHS_RE = re.compile(r"(?<!\d)(\d{1,3})\s*(?:\(\s*[^)]*\)\s*)?(?:mes(?:es)?|m[eê]s(?:es)?)(?![a-z])", re.I)
+YEARS_RE = re.compile(r"(?<!\d)(\d{1,2})\s*(?:\(\s*[^)]*\)\s*)?(?:ano(?:s)?)(?![a-z])", re.I)
 INSTRUMENT_RE = re.compile(r"(?<!\w)(ATA|CONTRATO)(?!\w)", re.I)
 MODALITIES = [
     ("Pregão Eletrônico", r"preg[aã]o\s+eletr[oô]nico"),
@@ -56,6 +67,30 @@ def number(v):
 def cnpj(v):
     d = re.sub(r"\D", "", v or "")
     return f"{d[:2]}.{d[2:5]}.{d[5:8]}/{d[8:12]}-{d[12:]}" if len(d) == 14 else (v or "").strip()
+
+
+def _valid_cnpj(v):
+    d = re.sub(r"\D", "", v or "")
+    if len(d) != 14 or len(set(d)) == 1:
+        return False
+    weights1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    s1 = sum(int(a) * b for a, b in zip(d[:12], weights1))
+    r1 = s1 % 11
+    c1 = 0 if r1 < 2 else 11 - r1
+    weights2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    s2 = sum(int(a) * b for a, b in zip(d[:13], weights2))
+    r2 = s2 % 11
+    c2 = 0 if r2 < 2 else 11 - r2
+    return d[12] == str(c1) and d[13] == str(c2)
+
+
+def _cnpj_candidates(text):
+    found = []
+    for m in CNPJ_RE.finditer(text or ""):
+        value = re.sub(r"\D", "", m.group())
+        if len(value) == 14 and _valid_cnpj(value):
+            found.append(m.group())
+    return found
 
 
 def dt_from(d, t=None):
@@ -119,6 +154,16 @@ def body_text(reader):
     return "\n\n".join(text_pages), text_pages
 
 
+def raw_text(reader):
+    pages = []
+    for page in reader.pages:
+        try:
+            pages.append(page.extract_text() or "")
+        except Exception:
+            pages.append("")
+    return "\n\n".join(pages), pages
+
+
 def signature_dates(reader, pages):
     found = []
     try:
@@ -157,7 +202,7 @@ def signature_dates(reader, pages):
         if not marker.search(line):
             continue
         block = line
-        for j in range(i + 1, min(i + 4, len(lines))):
+        for j in range(i + 1, min(i + 5, len(lines))):
             if lines[j].strip():
                 block += " " + lines[j]
             for m in DATE_RE.finditer(lines[j]):
@@ -187,7 +232,7 @@ def process(text):
         r"(?:n[ºo°]?|n[uú]mero)?\s*(?:do\s+)?processo(?:\s+administrativo)?\s*[:\-]?\s*(\d{1,4}\s*/\s*\d{4})",
         r"processo\s*(?:n[ºo°]?|n[uú]mero)\s*[:\-]?\s*(\d{1,4}\s*/\s*\d{4})",
     ]:
-        m = re.search(p, text, re.I)
+        m = re.search(p, text or "", re.I)
         if m:
             return number(m.group(1))
     return None
@@ -196,9 +241,9 @@ def process(text):
 def modality(text):
     found = []
     for label, pat in MODALITIES:
-        m = re.search(pat, text, re.I)
+        m = re.search(pat, text or "", re.I)
         if m:
-            n = NUMBER_RE.search(text[m.end():m.end() + 180])
+            n = NUMBER_RE.search((text or "")[m.end():m.end() + 220])
             found.append((m.start(), label, number(n.group()) if n else None))
     if not found:
         return None, None
@@ -209,26 +254,26 @@ def modality(text):
 def modality_number(text, detected):
     if detected:
         pat = dict(MODALITIES)[detected]
-        m = re.search(pat + r".{0,180}?((?:n[ºo°]?|n[uú]mero)?\s*\d{1,4}\s*/\s*\d{4})", text, re.I | re.S)
+        m = re.search(pat + r".{0,220}?((?:n[ºo°]?|n[uú]mero)?\s*\d{1,4}\s*/\s*\d{4})", text or "", re.I | re.S)
         if m:
             return number(m.group(1))
     for p in [
         r"(?:n[ºo°]?|n[uú]mero)\s*(?:da\s+)?modalidade\s*[:\-]?\s*(\d{1,4}\s*/\s*\d{4})",
         r"modalidade\s*[:\-]?\s*(\d{1,4}\s*/\s*\d{4})",
     ]:
-        m = re.search(p, text, re.I)
+        m = re.search(p, text or "", re.I)
         if m:
             return number(m.group(1))
     return None
 
 
 def instrument(text):
-    m = INSTRUMENT_RE.search(text)
+    m = INSTRUMENT_RE.search(text or "")
     return m.group(1).capitalize() if m else None
 
 
 def obj(text):
-    lines = text.splitlines()
+    lines = (text or "").splitlines()
     for i, line in enumerate(lines):
         m = re.match(r"^\s*OBJETO\s*[:\-]?\s*(.*)$", line, re.I)
         if not m:
@@ -246,29 +291,38 @@ def obj(text):
 
 
 def contractor(text):
-    m = re.search(r"^\s*CONTRATADA\s*[:\-]?\s*([^\r\n]+)", text, re.I | re.M)
+    m = re.search(r"^\s*CONTRATADA\s*[:\-]?\s*([^\r\n]+)", text or "", re.I | re.M)
+    if m:
+        return spaces(m.group(1))
+    m = re.search(r"^\s*CONTRATADO\s*[:\-]?\s*([^\r\n]+)", text or "", re.I | re.M)
     return spaces(m.group(1)) if m else None
 
 
 def cnpj_after_contractor(text):
-    m = re.search(r"^\s*CONTRATADA\s*[:\-]?\s*([^\r\n]+)", text, re.I | re.M)
+    m = re.search(r"^\s*(?:CONTRATADA|CONTRATADO)\s*[:\-]?\s*([^\r\n]+)", text or "", re.I | re.M)
     if not m:
         return None
-    candidate = CNPJ_RE.search(text[m.start(1):])
-    return candidate.group(1) if candidate else None
+    candidate = CNPJ_RE.search((text or "")[m.start(1):m.start(1) + 500])
+    if candidate and _valid_cnpj(candidate.group()):
+        return candidate.group()
+    return None
 
 
 def _money_after_label(text):
-    m = CURRENCY_RE.search(text)
+    m = CURRENCY_RE.search(text or "")
     if m:
         return f"R$ {m.group(1)}"
-    m = PLAIN_VALUE_RE.search(text)
+    m = PLAIN_VALUE_RE.search(text or "")
     return f"R$ {m.group(0)}" if m else None
 
 
 def value(text):
+    text = text or ""
     lines = text.splitlines()
-    label_re = re.compile(r"total\s+do\s+proponente|valor\s+total|valor\s*\(\s*r\$\s*\)", re.I)
+    label_re = re.compile(
+        r"(?:total\s+do\s+proponente|valor\s+total|valor\s*\(\s*r\s*\$\s*\))",
+        re.I,
+    )
     for idx in range(len(lines) - 1, -1, -1):
         matches = list(label_re.finditer(lines[idx]))
         if not matches:
@@ -277,53 +331,78 @@ def value(text):
             candidate = _money_after_label(lines[idx][match.end():])
             if candidate:
                 return candidate
-            for next_idx in range(idx + 1, min(idx + 4, len(lines))):
-                if not lines[next_idx].strip():
-                    break
-                candidate = _money_after_label(lines[next_idx])
-                if candidate:
-                    return candidate
+            window = " ".join(lines[idx + 1:idx + 8])
+            candidate = _money_after_label(window[:240])
+            if candidate:
+                return candidate
+    for m in reversed(list(label_re.finditer(text))):
+        window = text[m.end():m.end() + 240]
+        candidate = _money_after_label(window)
+        if candidate:
+            return candidate
     return None
 
 
 def months(text):
+    text = text or ""
     for m in reversed(list(re.finditer(r"vig[eê]ncia", text, re.I))):
-        v = MONTHS_RE.search(text[m.start():m.end() + 220])
+        window = text[m.end():m.end() + 420]
+        v = MONTHS_RE.search(window)
         if v:
             return int(v.group(1))
+        y = YEARS_RE.search(window)
+        if y:
+            return int(y.group(1)) * 12
     return None
 
 
 def extract(data, filename):
     reader = PdfReader(io.BytesIO(data))
     text, pages = body_text(reader)
-    if not spaces(text):
+    raw, raw_pages = raw_text(reader)
+    searchable = text if spaces(text) else raw
+    if not spaces(searchable):
         raise ValueError("Não foi possível extrair texto do PDF. O arquivo pode ser escaneado como imagem.")
 
     sd, sdt = signature_dates(reader, pages)
+    if not sd and raw_pages != pages:
+        sd, sdt = signature_dates(reader, raw_pages)
+
     mod, mnum = modality(text)
-    inst = instrument(text)
-    contractor_name = contractor(text)
-    cs = CNPJ_RE.findall(text)
-    selected_cnpj = cs[1] if len(cs) > 1 else cnpj_after_contractor(text)
-    if not selected_cnpj and cs:
-        selected_cnpj = cs[0]
+    if not mod and raw:
+        mod, mnum = modality(raw)
+    inst = instrument(text) or instrument(raw)
+    contractor_name = contractor(text) or contractor(raw)
+
+    body_cnpjs = _cnpj_candidates(text)
+    raw_cnpjs = _cnpj_candidates(raw)
+    cnpj_candidates = body_cnpjs if len(body_cnpjs) >= 2 else raw_cnpjs
+    selected_cnpj = None
+    if len(cnpj_candidates) >= 2:
+        selected_cnpj = cnpj_candidates[1]
+    elif len(cnpj_candidates) == 1:
+        selected_cnpj = cnpj_candidates[0]
+    if not selected_cnpj:
+        selected_cnpj = cnpj_after_contractor(text) or cnpj_after_contractor(raw)
+
+    extracted_value = value(text) or value(raw)
+    extracted_months = months(text) or months(raw)
 
     result = {
         "filename": filename,
-        "process_number": process(text),
-        "modality_number": modality_number(text, mod) or mnum,
+        "process_number": process(text) or process(raw),
+        "modality_number": modality_number(text, mod) or modality_number(raw, mod) or mnum,
         "detected_modality": mod,
         "modality": mod,
         "detected_instrument": inst,
         "instrument": inst,
-        "object": obj(text),
+        "object": obj(text) or obj(raw),
         "contractor": contractor_name,
         "cnpj": cnpj(selected_cnpj) if selected_cnpj else None,
-        "value": value(text),
+        "value": extracted_value,
         "signature_date": sd,
         "signature_datetime": sdt,
-        "vigencia_meses": months(text),
+        "vigencia_meses": extracted_months,
         "error": None,
     }
     missing = [
@@ -348,7 +427,7 @@ def extract(data, filename):
 
 
 def parse_date(v):
-    m = DATE_RE.fullmatch(v.strip())
+    m = DATE_RE.fullmatch((v or "").strip())
     if not m:
         raise ValueError("Data inválida. Use DD/MM/AAAA.")
     try:
