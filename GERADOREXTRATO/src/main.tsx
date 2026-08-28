@@ -1,202 +1,157 @@
-import React, { useEffect, useRef, useState } from 'react'
+import { ChangeEvent, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
 
-const DEFAULT_SUBJECT = 'INSTRUMENTO CONTRATUAL (SÃO FRANCISCO - SP)'
-const DEFAULT_BODY_HTML = `<p>Prezados,</p><p>Anexo instrumento contratual para assinatura.</p><p><strong>Prazo: 02 (dois) dias úteis</strong></p><p>Atenciosamente,</p><p>Setor de Licitações e Contratos de São Francisco - SP.</p>`
-const API_URL = `${import.meta.env.VITE_API_URL}/email/api`
-const SETTINGS_STORAGE_KEY = 'enviador-atas-contratos.smtp-settings'
-const THEME_STORAGE_KEY = 'prontuario_theme'
-
-const VERCEL_BODY_LIMIT_BYTES = 4.5 * 1024 * 1024
-const CHUNK_SAFETY_MARGIN_BYTES = 200 * 1024
-const MAX_CHUNK_BYTES = VERCEL_BODY_LIMIT_BYTES - CHUNK_SAFETY_MARGIN_BYTES
-
-type Security = 'starttls' | 'ssl' | 'none'
-type SmtpSettings = { host: string; port: number; username: string; password: string; security: Security; save_locally: boolean }
-type Document = { file: File; recipient: string; error?: string }
-
-const blankSettings: SmtpSettings = { host: '', port: 587, username: '', password: '', security: 'starttls', save_locally: false }
-
-function chunkBySize<T>(items: T[], getSize: (item: T) => number, maxBytes: number): T[][] {
-  const chunks: T[][] = []
-  let current: T[] = []
-  let currentSize = 0
-  for (const item of items) {
-    const size = getSize(item)
-    if (current.length && currentSize + size > maxBytes) {
-      chunks.push(current)
-      current = []
-      currentSize = 0
-    }
-    current.push(item)
-    currentSize += size
-  }
-  if (current.length) chunks.push(current)
-  return chunks
+type Modality = 'Pregão Eletrônico' | 'Pregão Presencial' | 'Dispensa' | 'Concorrência Eletrônica' | 'Concorrência Presencial' | 'Inexigibilidade'
+type Instrument = 'Ata' | 'Contrato'
+type SupplierData = {
+  filename: string
+  process_number: string | null
+  modality_number: string | null
+  detected_modality: string | null
+  object: string | null
+  contractor: string | null
+  cnpj: string | null
+  value: string | null
+  signature_date: string | null
+  signature_datetime: string | null
+  vigencia_meses: number | null
+  error?: string | null
 }
+type SupplierDocument = SupplierData & { file: File }
 
-async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    return await fetch(url, { ...init, signal: controller.signal })
-  } finally {
-    clearTimeout(timeoutId)
-  }
+const API_URL = import.meta.env.VITE_API_URL
+  ? `${String(import.meta.env.VITE_API_URL).replace(/\/$/, '')}/email/api`
+  : 'http://localhost:8000/api'
+const MODALITIES: Modality[] = ['Pregão Eletrônico', 'Pregão Presencial', 'Dispensa', 'Concorrência Eletrônica', 'Concorrência Presencial', 'Inexigibilidade']
+
+function maskDate(value: string) {
+  const digits = value.replace(/\D/g, '').slice(0, 8)
+  if (digits.length <= 2) return digits
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`
+}
+function isBrDate(value: string) {
+  if (!/^\d{2}\/\d{2}\/\d{4}$/.test(value)) return false
+  const [day, month, year] = value.split('/').map(Number)
+  const candidate = new Date(year, month - 1, day)
+  return candidate.getFullYear() === year && candidate.getMonth() === month - 1 && candidate.getDate() === day
+}
+function maskProcess(value: string) {
+  const digits = value.replace(/\D/g, '').slice(0, 8)
+  return digits.length <= 2 ? digits : `${digits.slice(0, 2)}/${digits.slice(2)}`
+}
+function addMonths(dateText: string, months: number | null) {
+  if (!isBrDate(dateText) || !months) return ''
+  const [day, month, year] = dateText.split('/').map(Number)
+  const base = new Date(year, month - 1, 1)
+  base.setMonth(base.getMonth() + months)
+  const lastDay = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate()
+  return `${String(Math.min(day, lastDay)).padStart(2, '0')}/${String(base.getMonth() + 1).padStart(2, '0')}/${base.getFullYear()}`
+}
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url; link.download = filename; document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url)
 }
 
 function App() {
   const inputRef = useRef<HTMLInputElement>(null)
-  const editorRef = useRef<HTMLDivElement>(null)
-  const [documents, setDocuments] = useState<Document[]>([])
-  const [settings, setSettings] = useState<SmtpSettings>(blankSettings)
-  const [subject, setSubject] = useState(DEFAULT_SUBJECT)
-  const [bodyHtml, setBodyHtml] = useState(DEFAULT_BODY_HTML)
-  const [extracting, setExtracting] = useState(false)
-  const [sending, setSending] = useState(false)
+  const [documents, setDocuments] = useState<SupplierDocument[]>([])
+  const [modality, setModality] = useState<Modality>('Pregão Eletrônico')
+  const [instrument, setInstrument] = useState<Instrument>('Ata')
+  const [sector, setSector] = useState('')
+  const [vigenciaInicial, setVigenciaInicial] = useState('')
+  const [dataExtrato, setDataExtrato] = useState('')
+  const [processNumberOverride, setProcessNumberOverride] = useState('')
+  const [modalityNumberOverride, setModalityNumberOverride] = useState('')
+  const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
-  const [theme, setTheme] = useState<'light' | 'dark'>('light')
+  const finalDates = useMemo(() => documents.map(document => addMonths(vigenciaInicial, document.vigencia_meses)), [documents, vigenciaInicial])
+  const updateDocument = (index: number, patch: Partial<SupplierDocument>) => setDocuments(current => current.map((document, position) => position === index ? { ...document, ...patch } : document))
 
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(SETTINGS_STORAGE_KEY)
-      if (saved) setSettings({ ...blankSettings, ...JSON.parse(saved) })
-
-      const savedTheme = localStorage.getItem(THEME_STORAGE_KEY)
-      const initialTheme = savedTheme === 'dark' || savedTheme === 'light' ? savedTheme : 'light'
-      document.documentElement.setAttribute('data-theme', initialTheme)
-      setTheme(initialTheme)
-    } catch {
-      localStorage.removeItem(SETTINGS_STORAGE_KEY)
-    }
-  }, [])
-
-  const alternarTema = () => {
-    const nextTheme = theme === 'dark' ? 'light' : 'dark'
-    document.documentElement.setAttribute('data-theme', nextTheme)
-    setTheme(nextTheme)
-    try { localStorage.setItem(THEME_STORAGE_KEY, nextTheme) } catch { /* armazenamento indisponível */ }
-  }
-
-  const updateSettings = <K extends keyof SmtpSettings>(key: K, value: SmtpSettings[K]) => setSettings(s => ({ ...s, [key]: value }))
-
-  function formatEmail(command: 'bold' | 'italic' | 'insertUnorderedList' | 'insertOrderedList') {
-    editorRef.current?.focus()
-    document.execCommand(command)
-    setBodyHtml(editorRef.current?.innerHTML || '')
-  }
-
-  async function addFiles(files: FileList | null) {
+  async function analyzeFiles(files: FileList | null) {
     if (!files?.length) return
-    const valid = Array.from(files).filter(file => file.name.toLowerCase().endsWith('.pdf'))
-    if (!valid.length) return setNotice('Selecione arquivos no formato PDF.')
-    setExtracting(true); setNotice('Lendo os e-mails institucionais nos PDFs…')
-    const batches = chunkBySize(valid, file => file.size, MAX_CHUNK_BYTES)
-    const results: { filename: string; recipient: string | null; error?: string }[] = []
+    const selected = Array.from(files).filter(file => file.name.toLowerCase().endsWith('.pdf'))
+    if (!selected.length) return setNotice('Selecione arquivos no formato PDF.')
+    setBusy(true); setNotice(`Analisando ${selected.length} PDF(s) e procurando as assinaturas digitais...`)
+    const form = new FormData(); selected.forEach(file => form.append('files', file))
     try {
-      for (let i = 0; i < batches.length; i++) {
-        if (batches.length > 1) setNotice(`Lendo os e-mails institucionais nos PDFs… (${results.length + batches[i].length}/${valid.length})`)
-        const form = new FormData()
-        batches[i].forEach(file => form.append('files', file))
-        const response = await fetchWithTimeout(`${API_URL}/extract-recipients`, { method: 'POST', body: form }, 60000)
-        if (!response.ok) throw new Error(`Servidor respondeu ${response.status}.`)
-        const batchResults: { filename: string; recipient: string | null; error?: string }[] = await response.json()
-        results.push(...batchResults)
-      }
-      const newDocs = valid.map((file, index) => ({ file, recipient: results[index]?.recipient || '', error: results[index]?.error || (!results[index]?.recipient ? 'Segundo “E-mail institucional” não localizado.' : undefined) }))
-      setDocuments(old => [...old, ...newDocs]); setNotice('Revise os destinatários antes de enviar.')
-    } catch (error) {
-      setNotice(error instanceof DOMException && error.name === 'AbortError'
-        ? 'O servidor demorou demais para responder (pode estar "acordando" no Render — tente novamente em instantes).'
-        : 'Não foi possível analisar os documentos. Verifique se o backend está em execução.')
-    } finally { setExtracting(false); if (inputRef.current) inputRef.current.value = '' }
+      const response = await fetch(`${API_URL}/analyze`, { method: 'POST', body: form })
+      const result: SupplierData[] | { detail?: string } = await response.json()
+      if (!response.ok || !Array.isArray(result)) throw new Error('detail' in result && result.detail ? result.detail : `Servidor respondeu ${response.status}.`)
+      setDocuments(result.map((item, index) => ({ ...item, file: selected[index] })))
+      setProcessNumberOverride(result[0]?.process_number || ''); setModalityNumberOverride(result[0]?.modality_number || '')
+      const detected = result.find(item => item.detected_modality)
+      if (detected && MODALITIES.includes(detected.detected_modality as Modality)) setModality(detected.detected_modality as Modality)
+      const failures = result.filter(item => item.error)
+      setNotice(failures.length ? `${failures.length} PDF(s) precisam de conferência.` : 'PDFs analisados. Confira os campos antes de gerar.')
+    } catch (error) { setNotice(error instanceof Error ? error.message : 'Não foi possível analisar os PDFs.') }
+    finally { setBusy(false); if (inputRef.current) inputRef.current.value = '' }
+  }
+  function handleFiles(event: ChangeEvent<HTMLInputElement>) { void analyzeFiles(event.target.files) }
+
+  async function generate() {
+    if (!documents.length) return setNotice('Selecione pelo menos um PDF.')
+    if (!sector.trim()) return setNotice('Informe o setor.')
+    if (!isBrDate(vigenciaInicial)) return setNotice('Informe a vigência inicial no formato DD/MM/AAAA.')
+    if (!isBrDate(dataExtrato)) return setNotice('Informe a data do extrato no formato DD/MM/AAAA.')
+    if (processNumberOverride && !/^\d{1,4}\/\d{4}$/.test(processNumberOverride)) return setNotice('Nº do processo deve estar no formato XX/XXXX.')
+    if (modalityNumberOverride && !/^\d{1,4}\/\d{4}$/.test(modalityNumberOverride)) return setNotice('Nº da modalidade deve estar no formato XX/XXXX.')
+    const invalid = documents.find(document => !document.process_number || !document.modality_number || !document.object || !document.contractor || !document.cnpj || !document.value || !document.signature_date || !document.vigencia_meses)
+    if (invalid) return setNotice(`Revise os dados de “${invalid.filename}”. Há campos obrigatórios sem preenchimento.`)
+    setBusy(true); setNotice('Gerando o documento Word a partir do modelo...')
+    const metadata = {
+      modality, instrument, process_number: processNumberOverride || null, modality_number: modalityNumberOverride || null,
+      sector: sector.trim(), vigencia_inicial: vigenciaInicial, data_extrato: dataExtrato,
+      documents: documents.map(({ file: _file, ...document }) => document),
+    }
+    try {
+      const form = new FormData(); form.append('metadata_json', JSON.stringify(metadata)); documents.forEach(document => form.append('files', document.file))
+      const response = await fetch(`${API_URL}/generate`, { method: 'POST', body: form })
+      if (!response.ok) { const result: { detail?: string } = await response.json().catch(() => ({})); throw new Error(result.detail || `Servidor respondeu ${response.status}.`) }
+      downloadBlob(await response.blob(), instrument === 'Ata' ? 'Extratos-Ata.docx' : 'Extratos-Contrato.docx')
+      setNotice('Documento gerado com sucesso.')
+    } catch (error) { setNotice(error instanceof Error ? error.message : 'Não foi possível gerar o documento.') }
+    finally { setBusy(false) }
   }
 
-  async function saveConfiguration() {
-    try {
-      const savedSettings = { ...settings, save_locally: true }
-      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(savedSettings))
-      setSettings(savedSettings)
-      setNotice('Configurações salvas somente neste navegador.')
-    } catch { setNotice('Não foi possível acessar o armazenamento local do navegador.') }
-  }
+  return <main className="page-shell">
+    <header className="hero"><div><a href="/" className="back-link">← Voltar</a><span className="eyebrow">DOCUMENTAÇÃO ADMINISTRATIVA</span><h1>Gerador de Extrato de Ata e Contrato</h1><p>Selecione os PDFs assinados, revise os dados extraídos e gere um único Word com um extrato por fornecedor.</p></div><div className="hero-mark" aria-hidden="true">EX</div></header>
 
-  async function send() {
-    if (!documents.length) return setNotice('Adicione pelo menos um PDF.')
-    if (!settings.host || !settings.username) return setNotice('Preencha o servidor SMTP e o e-mail remetente.')
-    if (documents.some(d => !d.recipient)) return setNotice('Informe ou corrija todos os destinatários antes de enviar.')
-    setSending(true); setNotice('Enviando os e-mails individualmente…')
-    const batches = chunkBySize(documents, d => d.file.size, MAX_CHUNK_BYTES)
-    const sent: { filename: string; recipient: string }[] = []
-    const failures: { filename: string; error: string }[] = []
-    try {
-      for (let i = 0; i < batches.length; i++) {
-        const batch = batches[i]
-        if (batches.length > 1) setNotice(`Enviando os e-mails individualmente… (${sent.length + failures.length + batch.length}/${documents.length})`)
-        const form = new FormData()
-        batch.forEach(d => form.append('files', d.file))
-        form.append('recipients', JSON.stringify(batch.map(d => d.recipient.trim())))
-        form.append('subject', subject); form.append('body_html', bodyHtml); form.append('settings_json', JSON.stringify(settings))
-        const response = await fetchWithTimeout(`${API_URL}/send`, { method: 'POST', body: form }, 120000)
-        let result: { sent?: { filename: string; recipient: string }[]; failures?: { filename: string; error: string }[]; detail?: string }
-        try { result = await response.json() }
-        catch { throw new Error(`Servidor respondeu ${response.status} sem corpo válido (verifique os logs do backend no Render).`) }
-        if (!response.ok) throw new Error(result.detail || `Servidor respondeu ${response.status}.`)
-        sent.push(...(result.sent || []))
-        failures.push(...(result.failures || []))
-      }
-      setNotice(failures.length
-        ? `${sent.length} enviado(s). Falharam: ${failures.map(f => `${f.filename} — ${f.error}`).join('; ')}`
-        : `${sent.length} e-mail(s) enviado(s) com sucesso.`)
-    } catch (error) {
-      const partial = sent.length || failures.length ? ` (${sent.length} já enviado(s) antes da falha)` : ''
-      setNotice((error instanceof DOMException && error.name === 'AbortError'
-        ? 'O envio demorou demais e foi cancelado. Verifique a conexão com o servidor SMTP e tente novamente.'
-        : error instanceof Error ? error.message : 'Falha no envio.') + partial)
-    } finally { setSending(false) }
-  }
-
-  return <main>
-    <header className="app-header">
-      <a className="back-link" href="/" aria-label="Voltar para a página inicial">← <span>Voltar</span></a>
-      <div className="header-title"><img src="./logo.png" alt="" /><div><h1>Envio de instrumentos contratuais</h1><p className="sub">Envie atas e contratos em lote, com um e-mail individual por documento.</p></div></div>
-      <div className="header-actions">
-        <button type="button" className="theme-toggle" onClick={alternarTema} title="Alternar modo claro/escuro" aria-label="Alternar modo claro/escuro">{theme === 'dark' ? '☀️' : '🌙'}</button>
+    <section className="card"><div className="card-heading"><div className="step">1</div><div><h2>Parâmetros do extrato</h2><p>Esses campos são aplicados a todos os fornecedores.</p></div></div>
+      <div className="fields-grid">
+        <label>Modalidade<select value={modality} onChange={event => setModality(event.target.value as Modality)}>{MODALITIES.map(item => <option key={item}>{item}</option>)}</select></label>
+        <label>Instrumento<select value={instrument} onChange={event => setInstrument(event.target.value as Instrument)}><option>Ata</option><option>Contrato</option></select></label>
+        <label>Setor<input value={sector} onChange={event => setSector(event.target.value)} placeholder="Ex.: Setor de Licitações e Contratos" /></label>
+        <label>Nº do processo <span className="hint">opcional para sobrescrever</span><input value={processNumberOverride} onChange={event => setProcessNumberOverride(maskProcess(event.target.value))} placeholder="XX/XXXX" inputMode="numeric" /></label>
+        <label>Nº da modalidade <span className="hint">opcional para sobrescrever</span><input value={modalityNumberOverride} onChange={event => setModalityNumberOverride(maskProcess(event.target.value))} placeholder="XX/XXXX" inputMode="numeric" /></label>
+        <label>Vigência inicial<input value={vigenciaInicial} onChange={event => setVigenciaInicial(maskDate(event.target.value))} placeholder="DD/MM/AAAA" inputMode="numeric" maxLength={10} /></label>
+        <label>Data do extrato<input value={dataExtrato} onChange={event => setDataExtrato(maskDate(event.target.value))} placeholder="DD/MM/AAAA" inputMode="numeric" maxLength={10} /></label>
       </div>
-    </header>
-    <section className="card">
-      <div className="section-title"><span>1</span><div><h2>Documentos e destinatários</h2><p>O sistema usa o segundo resultado de “E-mail institucional” encontrado em cada PDF.</p></div></div>
-      <div className={`upload${extracting ? ' is-loading' : ''}`}>
-        <input ref={inputRef} type="file" accept="application/pdf" multiple disabled={extracting} onChange={e => addFiles(e.target.files)} />
-        {extracting
-          ? <><div className="upload-spinner" role="status" aria-label="Lendo PDFs" /><strong>Lendo os PDFs…</strong><small>Isso pode levar alguns segundos.</small></>
-          : <><strong>Selecionar PDFs</strong><small>Você pode selecionar vários contratos ou atas.</small></>}
-      </div>
-      {documents.length > 0 && <div className="documents">{documents.map((doc, index) => <div className="doc" key={`${doc.file.name}-${index}`}><div><strong>{doc.file.name}</strong><small>{(doc.file.size / 1024 / 1024).toFixed(2)} MB {doc.error && <em>{doc.error}</em>}</small></div><input aria-label={`Destinatário de ${doc.file.name}`} value={doc.recipient} placeholder="destinatario@instituicao.gov.br" onChange={e => setDocuments(all => all.map((d, i) => i === index ? { ...d, recipient: e.target.value, error: undefined } : d))}/><button className="remove" onClick={() => setDocuments(all => all.filter((_, i) => i !== index))} aria-label="Remover documento">×</button></div>)}</div>}
     </section>
-    <section className="card">
-      <div className="section-title"><span>2</span><div><h2>Mensagem</h2><p>O assunto e o texto já vêm preenchidos e podem ser ajustados.</p></div></div>
-      <label>Assunto<input value={subject} onChange={e => setSubject(e.target.value)} /></label>
-      <label>Corpo do e-mail</label>
-      <div className="rich-editor" role="group" aria-label="Editor do corpo do e-mail">
-        <div className="editor-toolbar" role="toolbar" aria-label="Formatação do texto">
-          <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => formatEmail('bold')} title="Negrito"><strong>N</strong></button>
-          <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => formatEmail('italic')} title="Itálico"><em>I</em></button>
-          <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => formatEmail('insertUnorderedList')} title="Lista com marcadores">• Lista</button>
-          <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => formatEmail('insertOrderedList')} title="Lista numerada">1. Lista</button>
+
+    <section className="card"><div className="card-heading"><div className="step">2</div><div><h2>PDFs dos fornecedores</h2><p>O sistema lê a última assinatura digital, o segundo CNPJ distinto, objeto, contratada, valor, números e vigência.</p></div></div>
+      <div className={`dropzone${busy ? ' disabled' : ''}`} onClick={() => !busy && inputRef.current?.click()}><input ref={inputRef} type="file" accept="application/pdf" multiple disabled={busy} onChange={handleFiles}/><span className="upload-icon">↑</span><strong>{busy ? 'Processando PDFs...' : 'Selecionar vários PDFs'}</strong><small>Selecione todos os fornecedores de uma vez.</small></div>
+      {documents.length > 0 && <div className="documents-list">{documents.map((document, index) => <article className="document-card" key={`${document.filename}-${index}`}>
+        <div className="document-head"><div><strong>{document.filename}</strong>{document.detected_modality && <span className="tag">Detectado: {document.detected_modality}</span>}</div><button type="button" className="remove" onClick={() => setDocuments(current => current.filter((_, position) => position !== index))}>Remover</button></div>
+        {document.error && <div className="error-box">{document.error}</div>}
+        <div className="document-grid">
+          <label>Assinatura digital<input value={document.signature_date || ''} readOnly className="readonly" /></label>
+          <label>Nº do processo<input value={document.process_number || ''} onChange={event => updateDocument(index, { process_number: maskProcess(event.target.value) })} placeholder="XX/XXXX" /></label>
+          <label>Nº da modalidade<input value={document.modality_number || ''} onChange={event => updateDocument(index, { modality_number: maskProcess(event.target.value) })} placeholder="XX/XXXX" /></label>
+          <label>Contratada<input value={document.contractor || ''} onChange={event => updateDocument(index, { contractor: event.target.value })} /></label>
+          <label>CNPJ<input value={document.cnpj || ''} onChange={event => updateDocument(index, { cnpj: event.target.value })} /></label>
+          <label>Valor<input value={document.value || ''} onChange={event => updateDocument(index, { value: event.target.value })} /></label>
+          <label>Vigência (meses)<input type="number" min={1} max={240} value={document.vigencia_meses ?? ''} onChange={event => updateDocument(index, { vigencia_meses: event.target.value ? Number(event.target.value) : null })} /></label>
+          <label>Vigência final<input value={finalDates[index] || ''} readOnly className="readonly" placeholder="Calculada" /></label>
+          <label className="full">Objeto<textarea value={document.object || ''} onChange={event => updateDocument(index, { object: event.target.value })} rows={4}/></label>
         </div>
-        <div ref={editorRef} className="editor-content" contentEditable suppressContentEditableWarning role="textbox" aria-multiline="true" onInput={e => setBodyHtml(e.currentTarget.innerHTML)} dangerouslySetInnerHTML={{ __html: bodyHtml }} />
-      </div>
+      </article>)}</div>}
     </section>
-    <section className="card">
-      <div className="section-title"><span>3</span><div><h2>Servidor de e-mail</h2><p>Uma cópia de cada mensagem será enviada automaticamente ao e-mail remetente.</p></div></div>
-      <div className="grid"><label>Servidor SMTP<input placeholder="smtp.exemplo.com" value={settings.host} onChange={e => updateSettings('host', e.target.value)} /></label><label>Porta<input type="number" value={settings.port} onChange={e => updateSettings('port', Number(e.target.value))} /></label><label>E-mail remetente<input type="email" placeholder="voce@prefeitura.sp.gov.br" value={settings.username} onChange={e => updateSettings('username', e.target.value)} /></label><label>Senha ou senha de aplicativo<input type="password" value={settings.password} onChange={e => updateSettings('password', e.target.value)} /></label><label>Segurança<select value={settings.security} onChange={e => updateSettings('security', e.target.value as Security)}><option value="starttls">STARTTLS (recomendado)</option><option value="ssl">SSL/TLS</option><option value="none">Sem criptografia</option></select></label></div>
-      <div className="settings-action"><button className="secondary" onClick={saveConfiguration}>Salvar configurações neste navegador</button></div>
-      <p className="privacy">As configurações ficam apenas no armazenamento local deste navegador. A senha é enviada ao servidor exclusivamente durante o envio SMTP e não é armazenada no Render.</p>
-    </section>
-    <footer><p className={notice.includes('sucesso') ? 'success' : ''}>{notice}</p><button className="send" disabled={extracting || sending} onClick={send}>{sending ? 'Enviando…' : `Enviar ${documents.length || ''} ${documents.length === 1 ? 'documento' : 'documentos'}`}</button></footer>
+
+    <footer className="footer-bar"><div><p className={notice.includes('sucesso') ? 'success' : ''}>{notice || 'Confira os campos e gere o Word.'}</p><small>{documents.length} fornecedor(es) selecionado(s) • Modelo: {instrument === 'Ata' ? 'EXTRATO ATA.docx' : 'EXTRATO CONTRATO.docx'}</small></div><button type="button" className="primary" disabled={busy || !documents.length} onClick={() => void generate()}>{busy ? 'Processando...' : 'Gerar extrato em Word'}</button></footer>
   </main>
 }
 
-createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>)
+createRoot(document.getElementById('root')!).render(<App />)
