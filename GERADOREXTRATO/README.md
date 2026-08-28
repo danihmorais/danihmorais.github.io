@@ -1,32 +1,60 @@
-# Enviador de Atas e Contratos
+# Gerador de Extrato de Ata e Contrato
 
-Aplicação local para enviar instrumentos contratuais em PDF por e-mail. Para cada PDF, ela localiza o **segundo** campo `E-mail institucional`, usa o endereço seguinte como destinatário e envia uma mensagem individual com o arquivo anexado e cópia ao remetente.
+Gera um único arquivo Word a partir de vários PDFs de atas/contratos. Cada PDF corresponde a um fornecedor e ocupa um extrato independente, com quebra de página entre os fornecedores.
 
-## Como executar
+## Extração automática
 
-Em dois terminais, dentro desta pasta:
+Para cada PDF, o backend procura:
 
-```powershell
-# Terminal 1 — backend
+- **DATA.ASS**: a data/hora `M` da última assinatura digital PDF encontrada; no exemplo, as duas assinaturas são identificadas e é usada a mais recente.
+- **N.PROCESSO**: número do processo no formato `XX/XXXX`.
+- **N.MODALIDADE**: número associado à modalidade detectada.
+- **MODALIDADE**: detecta Pregão Eletrônico, Pregão Presencial, Dispensa, Concorrência Eletrônica, Concorrência Presencial ou Inexigibilidade.
+- **OBJETO**: conteúdo à frente de `OBJETO:`.
+- **CONTRATADA**: nome à frente de `CONTRATADA:`.
+- **CNPJ**: segundo CNPJ distinto encontrado no documento.
+- **VALOR**: primeiro tenta `Total do Proponente`; se não encontrar, procura `VALOR (R$)` na última página.
+- **VIGÊNCIA**: número de meses localizado junto ao texto de vigência.
+
+A interface permite conferir e corrigir os dados extraídos antes da geração.
+
+## Campos informados pelo usuário
+
+- Modalidade.
+- Instrumento: Ata ou Contrato.
+- Número do processo, com possibilidade de sobrescrever o valor extraído.
+- Número da modalidade, com possibilidade de sobrescrever o valor extraído.
+- Setor.
+- **VIG.INICIAL**, em `DD/MM/AAAA`.
+- **DATA.EXTRATO**, em `DD/MM/AAAA`.
+
+A **VIG.FINAL** é calculada adicionando o prazo em meses de cada PDF à VIG.INICIAL.
+
+## Modelos
+
+A geração usa os modelos existentes em `DOCUMENTOS MODELO/Documentos Modelo`:
+
+- `EXTRATO ATA.docx`
+- `EXTRATO CONTRATO.docx`
+
+Os placeholders são substituídos preservando a estrutura do modelo. Para cada fornecedor adicional, o conteúdo do modelo é copiado e precedido por `NextPage`/quebra de página.
+
+## Execução local
+
+Backend:
+
+```bash
 python -m pip install -r requirements.txt
-python -m uvicorn main:app --reload
+python -m uvicorn main:app --reload --port 8000
 ```
 
-```powershell
-# Terminal 2 — interface
+Interface:
+
+```bash
 npm install
 npm run dev
 ```
 
-Abra o endereço indicado pelo Vite, normalmente `http://localhost:5173`.
+A interface local usa `http://localhost:8000/api` quando `VITE_API_URL` não está definido. No GitHub Pages, o workflow continua usando `VITE_API_URL` e o roteamento `/email/api` existente.
 
-## Configuração SMTP
-
-Informe servidor, porta, e-mail remetente, senha (ou senha de aplicativo) e o tipo de segurança. Exemplos comuns:
-
-- Microsoft 365: `smtp.office365.com`, porta `587`, STARTTLS.
-- Gmail: `smtp.gmail.com`, porta `587`, STARTTLS e uma senha de aplicativo.
-
-O botão **Salvar configurações** é opcional. Quando ativado, os dados ficam exclusivamente no armazenamento local do navegador do usuário — nunca no servidor Render. A senha é encaminhada ao backend somente durante o envio SMTP.
-
-> PDFs escaneados sem camada de texto não podem ter o e-mail detectado automaticamente. Nesses casos, basta preencher manualmente o destinatário exibido na lista antes do envio.
+> PDFs escaneados sem camada de texto ou sem assinaturas digitais PDF estruturadas podem exigir conferência manual. O sistema não deve inventar dados ausentes.
