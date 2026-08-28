@@ -6,7 +6,6 @@ import io
 import json
 import os
 import re
-import tempfile
 from copy import deepcopy
 from datetime import date, datetime
 from pathlib import Path
@@ -28,8 +27,8 @@ CURRENCY_RE = re.compile(r"(?<![\d.,])R\$?\s*([0-9]{1,3}(?:\.[0-9]{3})+(?:,[0-9]
 PLAIN_VALUE_RE = re.compile(r"(?<![\d.,])(?:[0-9]{1,3}(?:\.[0-9]{3})+(?:,[0-9]{2})|[0-9]+,[0-9]{2})(?![\d.,])")
 NUMBER_RE = re.compile(r"(?<!\d)(\d{1,4})\s*/\s*(\d{4})(?!\d)")
 CNPJ_RE = re.compile(r"(?<!\d)(?:\d{2}\s*[./-]?\s*\d{3}\s*[./-]?\s*\d{3}\s*/\s*\d{4}\s*[./-]?\s*\d{2}|\d{14})(?!\d)")
-MONTHS_RE = re.compile(r"(?<!\d)(\d{1,3})\s*(?:\(\s*[^)]*\)\s*)?(?:mes(?:es)?|m[eê]s(?:es)?)(?![a-z])", re.I)
-YEARS_RE = re.compile(r"(?<!\d)(\d{1,2})\s*(?:\(\s*[^)]*\)\s*)?(?:ano(?:s)?)(?![a-z])", re.I)
+MONTHS_RE = re.compile(r"(?<!\d)(\d{1,3})\s*(?:\(\s*[^)]*\s*\))?\s*(?:mes(?:es)?|m[eê]s(?:es)?)(?![a-z])", re.I)
+YEARS_RE = re.compile(r"(?<!\d)(\d{1,2})\s*(?:\(\s*[^)]*\s*\))?\s*(?:ano(?:s)?)(?![a-z])", re.I)
 INSTRUMENT_RE = re.compile(r"(?<!\w)(ATA|CONTRATO)(?!\w)", re.I)
 INSTRUMENT_NUMBER_RE = re.compile(r"(?:n[ºo°]?|n[uú]mero)\s*[:\-]?\s*(\d{1,4}\s*/\s*\d{4})", re.I)
 MODALITIES = [("Pregão Eletrônico", r"preg[aã]o\s+eletr[oô]nico"), ("Pregão Presencial", r"preg[aã]o\s+presencial"), ("Concorrência Eletrônica", r"concorr[eê]ncia\s+eletr[oô]nica"), ("Concorrência Presencial", r"concorr[eê]ncia\s+presencial"), ("Dispensa", r"dispensa"), ("Inexigibilidade", r"inexigibilidade")]
@@ -340,31 +339,14 @@ def generate(meta):
                 clone=deepcopy(template); replace_element(clone,replacements); body.insert(insert_at,clone); insert_at+=1
     output=io.BytesIO(); document.save(output); output.seek(0); return output.getvalue(),instruments
 
-def convert_docx_to_pdf(docx_data):
-    try: import aspose.words as aw
-    except ImportError as exc: raise ValueError("A biblioteca 'aspose-words' não está instalada. Execute pip install -r requirements.txt.") from exc
-    license_path=os.getenv("ASPOSE_WORDS_LICENSE","").strip()
-    if license_path:
-        license_file=Path(license_path)
-        if not license_file.exists(): raise ValueError(f"ASPOSE_WORDS_LICENSE aponta para um arquivo inexistente: {license_path}")
-        try: aw.License().set_license(str(license_file))
-        except Exception as exc: raise ValueError(f"Não foi possível aplicar a licença do Aspose.Words: {exc}") from exc
-    with tempfile.TemporaryDirectory(prefix="geradorextrato-") as tmp_dir:
-        workdir=Path(tmp_dir); source=workdir/"extrato.docx"; target=workdir/"extrato.pdf"; source.write_bytes(docx_data)
-        try:
-            doc=aw.Document(str(source)); font_dir=os.getenv("ASPOSE_FONT_DIR","").strip()
-            if font_dir and Path(font_dir).exists(): doc.font_settings.set_fonts_folder(font_dir,True)
-            doc.save(str(target))
-        except Exception as exc: raise ValueError(f"Falha ao converter o extrato para PDF com Aspose.Words: {exc}") from exc
-        if not target.exists() or target.stat().st_size==0: raise ValueError("O Aspose.Words não produziu um PDF válido.")
-        return target.read_bytes()
-
-def export_name(instruments,extension):
-    unique=set(instruments); base="Extratos-Ata" if unique=={"Ata"} else "Extratos-Contrato" if unique=={"Contrato"} else "Extratos-Ata-e-Contrato"; return f"{base}.{extension}"
+def export_name(instruments):
+    unique=set(instruments)
+    base="Extratos-Ata" if unique=={"Ata"} else "Extratos-Contrato" if unique=={"Contrato"} else "Extratos-Ata-e-Contrato"
+    return f"{base}.docx"
 
 @app.get("/api/health")
 @app.get("/geradorextrato/api/health")
-async def health(): return {"status":"ok","pdf_converter":"aspose-words"}
+async def health(): return {"status":"ok"}
 
 @app.post("/api/analyze")
 @app.post("/geradorextrato/api/analyze")
@@ -375,18 +357,12 @@ async def analyze(files:list[UploadFile]=File(...)):
         except Exception as exc: return {"filename":upload.filename or "documento.pdf","process_number":None,"modality_number":None,"detected_modality":None,"modality":None,"detected_instrument":None,"instrument":None,"instrument_number":None,"object":None,"contractor":None,"cnpj":None,"value":None,"signature_date":None,"signature_datetime":None,"vigencia_meses":None,"error":str(exc)}
     return await asyncio.gather(*(one(upload) for upload in files))
 
-async def _generate_response(metadata_json,as_pdf):
-    try:
-        metadata=json.loads(metadata_json); docx_data,instruments=await run_in_threadpool(generate,metadata)
-        if as_pdf: data=await run_in_threadpool(convert_docx_to_pdf,docx_data); media_type="application/pdf"; extension="pdf"
-        else: data=docx_data; media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"; extension="docx"
-    except Exception as exc: raise HTTPException(status_code=400,detail=str(exc)) from exc
-    return StreamingResponse(io.BytesIO(data),media_type=media_type,headers={"Content-Disposition":f'attachment; filename="{export_name(instruments,extension)}"'})
-
 @app.post("/api/generate-docx")
 @app.post("/geradorextrato/api/generate-docx")
-async def generate_docx_api(metadata_json:str=Form(...)): return await _generate_response(metadata_json,False)
-
-@app.post("/api/generate")
-@app.post("/geradorextrato/api/generate")
-async def generate_api(metadata_json:str=Form(...)): return await _generate_response(metadata_json,True)
+async def generate_docx_api(metadata_json:str=Form(...)):
+    try:
+        metadata=json.loads(metadata_json)
+        data,instruments=await run_in_threadpool(generate,metadata)
+    except Exception as exc:
+        raise HTTPException(status_code=400,detail=str(exc)) from exc
+    return StreamingResponse(io.BytesIO(data),media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",headers={"Content-Disposition":f'attachment; filename="{export_name(instruments)}"'})
