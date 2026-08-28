@@ -502,8 +502,8 @@ def generate(meta):
 
     d = Document(str(path))
     body = d.element.body
+    sect = body.sectPr
     templates = [deepcopy(x) for x in body if x.tag != qn("w:sectPr")]
-    sect = deepcopy(body.sectPr)
 
     instruments = []
     for i, item in enumerate(docs):
@@ -543,12 +543,14 @@ def generate(meta):
         if i == 0:
             replace_element(body, repl)
         else:
-            if sect is not None:
-                sect.addprevious(break_next(sect))
+            insert_at = body.index(sect)
+            body.insert(insert_at, break_next(sect))
+            insert_at = body.index(sect)
             for t in templates:
                 x = deepcopy(t)
                 replace_element(x, repl)
-                sect.addprevious(x) if sect is not None else body.append(x)
+                body.insert(insert_at, x)
+                insert_at += 1
 
     out = io.BytesIO()
     d.save(out)
