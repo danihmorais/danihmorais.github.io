@@ -1,222 +1,155 @@
-"""Backend local para o enviador de instrumentos contratuais."""
-from __future__ import annotations
+import { ChangeEvent, useMemo, useRef, useState } from 'react'
+import { createRoot } from 'react-dom/client'
+import './styles.css'
 
-import asyncio
-import json
-import re
-import smtplib
-import ssl
-import tempfile
-from email.message import EmailMessage
-from html import escape
-from html.parser import HTMLParser
-from pathlib import Path
-from typing import Literal
+type Modality = 'Pregão Eletrônico' | 'Pregão Presencial' | 'Dispensa' | 'Concorrência Eletrônica' | 'Concorrência Presencial' | 'Inexigibilidade'
+type Instrument = 'Ata' | 'Contrato'
+type SupplierData = {
+  filename: string
+  process_number: string | null
+  modality_number: string | null
+  detected_modality: string | null
+  object: string | null
+  contractor: string | null
+  cnpj: string | null
+  value: string | null
+  signature_date: string | null
+  signature_datetime: string | null
+  vigencia_meses: number | null
+  error?: string | null
+}
+type SupplierDocument = SupplierData & { file: File }
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-from pypdf import PdfReader
-from starlette.concurrency import run_in_threadpool
+const API_URL = import.meta.env.VITE_API_URL
+const MODALITIES: Modality[] = ['Pregão Eletrônico', 'Pregão Presencial', 'Dispensa', 'Concorrência Eletrônica', 'Concorrência Presencial', 'Inexigibilidade']
 
-PDF_EXTRACTION_TIMEOUT_SECONDS = 20
+function maskDate(value: string) {
+  const digits = value.replace(/\D/g, '').slice(0, 8)
+  if (digits.length <= 2) return digits
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`
+}
+function isBrDate(value: string) {
+  if (!/^\d{2}\/\d{2}\/\d{4}$/.test(value)) return false
+  const [day, month, year] = value.split('/').map(Number)
+  const candidate = new Date(year, month - 1, day)
+  return candidate.getFullYear() === year && candidate.getMonth() === month - 1 && candidate.getDate() === day
+}
+function maskProcess(value: string) {
+  const digits = value.replace(/\D/g, '').slice(0, 8)
+  return digits.length <= 2 ? digits : `${digits.slice(0, 2)}/${digits.slice(2)}`
+}
+function addMonths(dateText: string, months: number | null) {
+  if (!isBrDate(dateText) || !months) return ''
+  const [day, month, year] = dateText.split('/').map(Number)
+  const base = new Date(year, month - 1, 1)
+  base.setMonth(base.getMonth() + months)
+  const lastDay = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate()
+  return `${String(Math.min(day, lastDay)).padStart(2, '0')}/${String(base.getMonth() + 1).padStart(2, '0')}/${base.getFullYear()}`
+}
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url; link.download = filename; document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url)
+}
 
-app = FastAPI(title="Enviador de Atas e Contratos")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "https://danihmorais.github.io",
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+function App() {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [documents, setDocuments] = useState<SupplierDocument[]>([])
+  const [modality, setModality] = useState<Modality>('Pregão Eletrônico')
+  const [instrument, setInstrument] = useState<Instrument>('Ata')
+  const [sector, setSector] = useState('')
+  const [vigenciaInicial, setVigenciaInicial] = useState('')
+  const [dataExtrato, setDataExtrato] = useState('')
+  const [processNumberOverride, setProcessNumberOverride] = useState('')
+  const [modalityNumberOverride, setModalityNumberOverride] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState('')
+  const finalDates = useMemo(() => documents.map(document => addMonths(vigenciaInicial, document.vigencia_meses)), [documents, vigenciaInicial])
+  const updateDocument = (index: number, patch: Partial<SupplierDocument>) => setDocuments(current => current.map((document, position) => position === index ? { ...document, ...patch } : document))
 
-EMAIL_RE = re.compile(r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}", re.IGNORECASE)
-ALLOWED_EMAIL_TAGS = {"p", "br", "strong", "b", "em", "i", "ul", "ol", "li"}
+  async function analyzeFiles(files: FileList | null) {
+    if (!files?.length) return
+    const selected = Array.from(files).filter(file => file.name.toLowerCase().endsWith('.pdf'))
+    if (!selected.length) return setNotice('Selecione arquivos no formato PDF.')
+    setBusy(true); setNotice(`Analisando ${selected.length} PDF(s) e procurando as assinaturas digitais...`)
+    const form = new FormData(); selected.forEach(file => form.append('files', file))
+    try {
+      const response = await fetch(`${API_URL}/analyze`, { method: 'POST', body: form })
+      const result: SupplierData[] | { detail?: string } = await response.json()
+      if (!response.ok || !Array.isArray(result)) throw new Error('detail' in result && result.detail ? result.detail : `Servidor respondeu ${response.status}.`)
+      setDocuments(result.map((item, index) => ({ ...item, file: selected[index] })))
+      setProcessNumberOverride(result[0]?.process_number || ''); setModalityNumberOverride(result[0]?.modality_number || '')
+      const detected = result.find(item => item.detected_modality)
+      if (detected && MODALITIES.includes(detected.detected_modality as Modality)) setModality(detected.detected_modality as Modality)
+      const failures = result.filter(item => item.error)
+      setNotice(failures.length ? `${failures.length} PDF(s) precisam de conferência.` : 'PDFs analisados. Confira os campos antes de gerar.')
+    } catch (error) { setNotice(error instanceof Error ? error.message : 'Não foi possível analisar os PDFs.') }
+    finally { setBusy(false); if (inputRef.current) inputRef.current.value = '' }
+  }
+  function handleFiles(event: ChangeEvent<HTMLInputElement>) { void analyzeFiles(event.target.files) }
 
+  async function generate() {
+    if (!documents.length) return setNotice('Selecione pelo menos um PDF.')
+    if (!sector.trim()) return setNotice('Informe o setor.')
+    if (!isBrDate(vigenciaInicial)) return setNotice('Informe a vigência inicial no formato DD/MM/AAAA.')
+    if (!isBrDate(dataExtrato)) return setNotice('Informe a data do extrato no formato DD/MM/AAAA.')
+    if (processNumberOverride && !/^\d{1,4}\/\d{4}$/.test(processNumberOverride)) return setNotice('Nº do processo deve estar no formato XX/XXXX.')
+    if (modalityNumberOverride && !/^\d{1,4}\/\d{4}$/.test(modalityNumberOverride)) return setNotice('Nº da modalidade deve estar no formato XX/XXXX.')
+    const invalid = documents.find(document => !document.process_number || !document.modality_number || !document.object || !document.contractor || !document.cnpj || !document.value || !document.signature_date || !document.vigencia_meses)
+    if (invalid) return setNotice(`Revise os dados de “${invalid.filename}”. Há campos obrigatórios sem preenchimento.`)
+    setBusy(true); setNotice('Gerando o documento Word a partir do modelo...')
+    const metadata = {
+      modality, instrument, process_number: processNumberOverride || null, modality_number: modalityNumberOverride || null,
+      sector: sector.trim(), vigencia_inicial: vigenciaInicial, data_extrato: dataExtrato,
+      documents: documents.map(({ file: _file, ...document }) => document),
+    }
+    try {
+      const form = new FormData(); form.append('metadata_json', JSON.stringify(metadata)); documents.forEach(document => form.append('files', document.file))
+      const response = await fetch(`${API_URL}/generate`, { method: 'POST', body: form })
+      if (!response.ok) { const result: { detail?: string } = await response.json().catch(() => ({})); throw new Error(result.detail || `Servidor respondeu ${response.status}.`) }
+      downloadBlob(await response.blob(), instrument === 'Ata' ? 'Extratos-Ata.docx' : 'Extratos-Contrato.docx')
+      setNotice('Documento gerado com sucesso.')
+    } catch (error) { setNotice(error instanceof Error ? error.message : 'Não foi possível gerar o documento.') }
+    finally { setBusy(false) }
+  }
 
-class SmtpSettings(BaseModel):
-    host: str = ""
-    port: int = Field(default=587, ge=1, le=65535)
-    username: str = ""
-    password: str = ""
-    security: Literal["starttls", "ssl", "none"] = "starttls"
-    save_locally: bool = False
+  return <main className="page-shell">
+    <header className="hero"><div><a href="/" className="back-link">← Voltar</a><span className="eyebrow">DOCUMENTAÇÃO ADMINISTRATIVA</span><h1>Gerador de Extrato de Ata e Contrato</h1><p>Selecione os PDFs assinados, revise os dados extraídos e gere um único Word com um extrato por fornecedor.</p></div><div className="hero-mark" aria-hidden="true">EX</div></header>
 
+    <section className="card"><div className="card-heading"><div className="step">1</div><div><h2>Parâmetros do extrato</h2><p>Esses campos são aplicados a todos os fornecedores.</p></div></div>
+      <div className="fields-grid">
+        <label>Modalidade<select value={modality} onChange={event => setModality(event.target.value as Modality)}>{MODALITIES.map(item => <option key={item}>{item}</option>)}</select></label>
+        <label>Instrumento<select value={instrument} onChange={event => setInstrument(event.target.value as Instrument)}><option>Ata</option><option>Contrato</option></select></label>
+        <label>Setor<input value={sector} onChange={event => setSector(event.target.value)} placeholder="Ex.: Setor de Licitações e Contratos" /></label>
+        <label>Nº do processo <span className="hint">opcional para sobrescrever</span><input value={processNumberOverride} onChange={event => setProcessNumberOverride(maskProcess(event.target.value))} placeholder="XX/XXXX" inputMode="numeric" /></label>
+        <label>Nº da modalidade <span className="hint">opcional para sobrescrever</span><input value={modalityNumberOverride} onChange={event => setModalityNumberOverride(maskProcess(event.target.value))} placeholder="XX/XXXX" inputMode="numeric" /></label>
+        <label>Vigência inicial<input value={vigenciaInicial} onChange={event => setVigenciaInicial(maskDate(event.target.value))} placeholder="DD/MM/AAAA" inputMode="numeric" maxLength={10} /></label>
+        <label>Data do extrato<input value={dataExtrato} onChange={event => setDataExtrato(maskDate(event.target.value))} placeholder="DD/MM/AAAA" inputMode="numeric" maxLength={10} /></label>
+      </div>
+    </section>
 
-class _EmailHtmlSanitizer(HTMLParser):
-    """Preserva somente marcação básica, sem atributos ou conteúdo executável."""
-    def __init__(self):
-        super().__init__()
-        self.html_parts: list[str] = []
-        self.text_parts: list[str] = []
-        self.ignored_depth = 0
+    <section className="card"><div className="card-heading"><div className="step">2</div><div><h2>PDFs dos fornecedores</h2><p>O sistema lê a última assinatura digital, o segundo CNPJ distinto, objeto, contratada, valor, números e vigência.</p></div></div>
+      <div className={`dropzone${busy ? ' disabled' : ''}`} onClick={() => !busy && inputRef.current?.click()}><input ref={inputRef} type="file" accept="application/pdf" multiple disabled={busy} onChange={handleFiles}/><span className="upload-icon">↑</span><strong>{busy ? 'Processando PDFs...' : 'Selecionar vários PDFs'}</strong><small>Selecione todos os fornecedores de uma vez.</small></div>
+      {documents.length > 0 && <div className="documents-list">{documents.map((document, index) => <article className="document-card" key={`${document.filename}-${index}`}>
+        <div className="document-head"><div><strong>{document.filename}</strong>{document.detected_modality && <span className="tag">Detectado: {document.detected_modality}</span>}</div><button type="button" className="remove" onClick={() => setDocuments(current => current.filter((_, position) => position !== index))}>Remover</button></div>
+        {document.error && <div className="error-box">{document.error}</div>}
+        <div className="document-grid">
+          <label>Assinatura digital<input value={document.signature_date || ''} readOnly className="readonly" /></label>
+          <label>Nº do processo<input value={document.process_number || ''} onChange={event => updateDocument(index, { process_number: maskProcess(event.target.value) })} placeholder="XX/XXXX" /></label>
+          <label>Nº da modalidade<input value={document.modality_number || ''} onChange={event => updateDocument(index, { modality_number: maskProcess(event.target.value) })} placeholder="XX/XXXX" /></label>
+          <label>Contratada<input value={document.contractor || ''} onChange={event => updateDocument(index, { contractor: event.target.value })} /></label>
+          <label>CNPJ<input value={document.cnpj || ''} onChange={event => updateDocument(index, { cnpj: event.target.value })} /></label>
+          <label>Valor<input value={document.value || ''} onChange={event => updateDocument(index, { value: event.target.value })} /></label>
+          <label>Vigência (meses)<input type="number" min={1} max={240} value={document.vigencia_meses ?? ''} onChange={event => updateDocument(index, { vigencia_meses: event.target.value ? Number(event.target.value) : null })} /></label>
+          <label>Vigência final<input value={finalDates[index] || ''} readOnly className="readonly" placeholder="Calculada" /></label>
+          <label className="full">Objeto<textarea value={document.object || ''} onChange={event => updateDocument(index, { object: event.target.value })} rows={4}/></label>
+        </div>
+      </article>)}</div>}
+    </section>
 
-    def handle_starttag(self, tag: str, attrs):
-        tag = tag.lower()
-        if tag in {"script", "style"}:
-            self.ignored_depth += 1
-            return
-        if self.ignored_depth:
-            return
-        if tag not in ALLOWED_EMAIL_TAGS:
-            return
-        self.html_parts.append(f"<{tag}>")
-        if tag == "br":
-            self.text_parts.append("\n")
-        elif tag in {"p", "li"} and self.text_parts:
-            self.text_parts.append("\n")
+    <footer className="footer-bar"><div><p className={notice.includes('sucesso') ? 'success' : ''}>{notice || 'Confira os campos e gere o Word.'}</p><small>{documents.length} fornecedor(es) selecionado(s) • Modelo: {instrument === 'Ata' ? 'EXTRATO ATA.docx' : 'EXTRATO CONTRATO.docx'}</small></div><button type="button" className="primary" disabled={busy || !documents.length} onClick={() => void generate()}>{busy ? 'Processando...' : 'Gerar extrato em Word'}</button></footer>
+  </main>
+}
 
-    def handle_endtag(self, tag: str):
-        tag = tag.lower()
-        if tag in {"script", "style"}:
-            self.ignored_depth = max(0, self.ignored_depth - 1)
-            return
-        if self.ignored_depth:
-            return
-        if tag in ALLOWED_EMAIL_TAGS and tag != "br":
-            self.html_parts.append(f"</{tag}>")
-            if tag in {"p", "li"}:
-                self.text_parts.append("\n")
-
-    def handle_data(self, data: str):
-        if self.ignored_depth:
-            return
-        self.html_parts.append(escape(data))
-        self.text_parts.append(data)
-
-
-def sanitize_email_html(value: str) -> tuple[str, str]:
-    sanitizer = _EmailHtmlSanitizer()
-    sanitizer.feed(value)
-    sanitizer.close()
-    html_body = "".join(sanitizer.html_parts).strip() or "<p></p>"
-    text_body = "".join(sanitizer.text_parts)
-    text_body = re.sub(r"\n{3,}", "\n\n", text_body).strip()
-    return html_body, text_body
-
-
-def _pdf_text(file_path: str) -> str:
-    try:
-        reader = PdfReader(file_path)
-        return "\n".join(page.extract_text() or "" for page in reader.pages)
-    except Exception as exc:
-        raise ValueError(f"Não foi possível ler o PDF: {exc}") from exc
-
-
-async def _pdf_text_with_timeout(file_path: str) -> str:
-    """Executa a extração (síncrona/CPU-bound) numa thread própria, com timeout,
-    para nunca travar o event loop nem a requisição indefinidamente."""
-    try:
-        return await asyncio.wait_for(
-            run_in_threadpool(_pdf_text, file_path),
-            timeout=PDF_EXTRACTION_TIMEOUT_SECONDS,
-        )
-    except asyncio.TimeoutError as exc:
-        raise ValueError(
-            f"Tempo limite ({PDF_EXTRACTION_TIMEOUT_SECONDS}s) ao ler o PDF. "
-            "O arquivo pode estar corrompido, protegido por senha ou com conteúdo muito complexo."
-        ) from exc
-
-
-def find_institutional_email(text: str) -> str | None:
-    """Retorna o e-mail associado à segunda ocorrência de 'E-mail institucional'."""
-    matches = list(re.finditer(r"e[\-\s]*mail\s+institucional", text, flags=re.IGNORECASE))
-    if len(matches) < 2:
-        return None
-    start = matches[1].end()
-    # O e-mail normalmente está logo à frente do rótulo; a janela evita pegar dados de outra seção.
-    nearby = text[start:start + 350]
-    email = EMAIL_RE.search(nearby)
-    return email.group(0).rstrip(".,;:") if email else None
-
-
-async def _save_upload(upload: UploadFile) -> str:
-    suffix = Path(upload.filename or "documento.pdf").suffix.lower()
-    if suffix != ".pdf":
-        raise HTTPException(status_code=400, detail=f"{upload.filename}: envie apenas arquivos PDF.")
-    handle = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-    try:
-        content = await upload.read()
-        handle.write(content)
-        return handle.name
-    finally:
-        handle.close()
-
-
-@app.post("/api/extract-recipients")
-async def extract_recipients(files: list[UploadFile] = File(...)):
-    results = []
-    for upload in files:
-        temp_path = await _save_upload(upload)
-        try:
-            text = await _pdf_text_with_timeout(temp_path)
-            results.append({
-                "filename": upload.filename or "documento.pdf",
-                "recipient": find_institutional_email(text),
-            })
-        except ValueError as exc:
-            results.append({"filename": upload.filename or "documento.pdf", "recipient": None, "error": str(exc)})
-        finally:
-            Path(temp_path).unlink(missing_ok=True)
-    return results
-
-
-def _smtp_client(settings: SmtpSettings):
-    timeout = 30
-    if settings.security == "ssl":
-        return smtplib.SMTP_SSL(settings.host, settings.port, timeout=timeout, context=ssl.create_default_context())
-    client = smtplib.SMTP(settings.host, settings.port, timeout=timeout)
-    client.ehlo()
-    if settings.security == "starttls":
-        client.starttls(context=ssl.create_default_context())
-        client.ehlo()
-    return client
-
-
-@app.post("/api/send")
-async def send_documents(
-    files: list[UploadFile] = File(...),
-    recipients: str = Form(...),
-    subject: str = Form(...),
-    body_html: str = Form(...),
-    settings_json: str = Form(...),
-):
-    try:
-        settings = SmtpSettings.model_validate_json(settings_json)
-        recipient_list = json.loads(recipients)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail="Dados de envio inválidos.") from exc
-    if not settings.host or not settings.username:
-        raise HTTPException(status_code=400, detail="Informe o servidor SMTP e o e-mail remetente.")
-    if len(files) != len(recipient_list):
-        raise HTTPException(status_code=400, detail="A lista de destinatários não corresponde aos arquivos.")
-    clean_html, plain_body = sanitize_email_html(body_html)
-
-    sent, failures = [], []
-    for upload, recipient in zip(files, recipient_list):
-        if not isinstance(recipient, str) or not EMAIL_RE.fullmatch(recipient.strip()):
-            failures.append({"filename": upload.filename, "error": "Destinatário inválido ou não localizado."})
-            continue
-        temp_path = await _save_upload(upload)
-        try:
-            message = EmailMessage()
-            message["From"] = settings.username
-            message["To"] = recipient.strip()
-            message["Cc"] = settings.username
-            message["Subject"] = subject
-            message.set_content(plain_body)
-            message.add_alternative(clean_html, subtype="html")
-            with open(temp_path, "rb") as pdf:
-                message.add_attachment(pdf.read(), maintype="application", subtype="pdf", filename=upload.filename or "documento.pdf")
-            with _smtp_client(settings) as client:
-                if settings.password:
-                    client.login(settings.username, settings.password)
-                client.send_message(message)
-            sent.append({"filename": upload.filename, "recipient": recipient.strip()})
-        except Exception as exc:
-            failures.append({"filename": upload.filename, "error": str(exc)})
-        finally:
-            Path(temp_path).unlink(missing_ok=True)
-    return {"sent": sent, "failures": failures}
+createRoot(document.getElementById('root')!).render(<App />)
