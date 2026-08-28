@@ -32,6 +32,7 @@ CNPJ_RE = re.compile(
     r"(?<!\d)(\d{2}[.\s]?\d{3}[.\s]?\d{3}[/\-]\d{4}[/\-]\d{2})(?!\d)"
 )
 MONTHS_RE = re.compile(r"(?<!\d)(\d{1,3})\s*(?:mes|m[eê]s|meses)(?![a-z])", re.I)
+INSTRUMENT_RE = re.compile(r"(?<!\w)(ATA|CONTRATO)(?!\w)", re.I)
 MODALITIES = [
     ("Pregão Eletrônico", r"preg[aã]o\s+eletr[oô]nico"),
     ("Pregão Presencial", r"preg[aã]o\s+presencial"),
@@ -222,12 +223,18 @@ def process(text):
 
 
 def modality(text):
+    """Retorna a primeira modalidade que aparece no corpo do documento."""
+    found = []
     for label, pat in MODALITIES:
         m = re.search(pat, text, re.I)
-        if m:
-            n = NUMBER_RE.search(text[m.end() : m.end() + 180])
-            return label, number(n.group()) if n else None
-    return None, None
+        if not m:
+            continue
+        n = NUMBER_RE.search(text[m.end() : m.end() + 180])
+        found.append((m.start(), label, number(n.group()) if n else None))
+    if not found:
+        return None, None
+    _, label, num = min(found, key=lambda item: item[0])
+    return label, num
 
 
 def modality_number(text, detected):
@@ -248,6 +255,14 @@ def modality_number(text, detected):
         if m:
             return number(m.group(1))
     return None
+
+
+def instrument(text):
+    """Instrumento = primeira palavra exata ATA ou CONTRATO encontrada no corpo."""
+    m = INSTRUMENT_RE.search(text)
+    if not m:
+        return None
+    return m.group(1).capitalize()
 
 
 def obj(text):
@@ -272,6 +287,15 @@ def obj(text):
 def contractor(text):
     m = re.search(r"^\s*CONTRATADA\s*[:\-]?\s*([^\r\n]+)", text, re.I | re.M)
     return spaces(m.group(1)) if m else None
+
+
+def cnpj_after_contractor(text):
+    """Fallback: primeiro CNPJ que aparecer depois do campo/nome da CONTRATADA."""
+    m = re.search(r"^\s*CONTRATADA\s*[:\-]?\s*([^\r\n]+)", text, re.I | re.M)
+    if not m:
+        return None
+    candidate = CNPJ_RE.search(text[m.start(1) :])
+    return candidate.group(1) if candidate else None
 
 
 def _money_after_label(text):
@@ -327,15 +351,21 @@ def extract(data, filename):
         )
     sd, sdt = signature_dates(reader, pages)
     mod, mnum = modality(text)
+    inst = instrument(text)
+    contractor_name = contractor(text)
     cs = CNPJ_RE.findall(text)
+    selected_cnpj = cs[1] if len(cs) > 1 else cnpj_after_contractor(text)
+    if not selected_cnpj and cs:
+        selected_cnpj = cs[0]
     result = {
         "filename": filename,
         "process_number": process(text),
         "modality_number": modality_number(text, mod) or mnum,
         "detected_modality": mod,
+        "detected_instrument": inst,
         "object": obj(text),
-        "contractor": contractor(text),
-        "cnpj": cnpj(cs[1] if len(cs) > 1 else cs[0]) if cs else None,
+        "contractor": contractor_name,
+        "cnpj": cnpj(selected_cnpj) if selected_cnpj else None,
         "value": value(text),
         "signature_date": sd,
         "signature_datetime": sdt,
@@ -495,6 +525,7 @@ async def analyze(files: list[UploadFile] = File(...)):
                 "process_number": None,
                 "modality_number": None,
                 "detected_modality": None,
+                "detected_instrument": None,
                 "object": None,
                 "contractor": None,
                 "cnpj": None,
