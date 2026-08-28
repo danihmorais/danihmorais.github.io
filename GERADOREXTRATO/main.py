@@ -602,6 +602,12 @@ def convert_docx_to_pdf(docx_data):
         return output.read_bytes()
 
 
+def export_name(instruments, extension):
+    unique = set(instruments)
+    base = "Extratos-Ata" if unique == {"Ata"} else "Extratos-Contrato" if unique == {"Contrato"} else "Extratos-Ata-e-Contrato"
+    return f"{base}.{extension}"
+
+
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "pdf_converter": "aspose-words"}
@@ -636,6 +642,21 @@ async def analyze(files: list[UploadFile] = File(...)):
     return await asyncio.gather(*(one(f) for f in files))
 
 
+@app.post("/api/generate-docx")
+async def generate_docx_api(metadata_json: str = Form(...)):
+    try:
+        meta = json.loads(metadata_json)
+        docx_data, instruments = await run_in_threadpool(generate, meta)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    return StreamingResponse(
+        io.BytesIO(docx_data),
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{export_name(instruments, "docx")}"'},
+    )
+
+
 @app.post("/api/generate")
 async def generate_api(metadata_json: str = Form(...)):
     try:
@@ -645,10 +666,8 @@ async def generate_api(metadata_json: str = Form(...)):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
-    unique = set(instruments)
-    name = "Extratos-Ata.pdf" if unique == {"Ata"} else "Extratos-Contrato.pdf" if unique == {"Contrato"} else "Extratos-Ata-e-Contrato.pdf"
     return StreamingResponse(
         io.BytesIO(pdf_data),
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+        headers={"Content-Disposition": f'attachment; filename="{export_name(instruments, "pdf")}"'},
     )
