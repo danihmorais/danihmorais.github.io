@@ -28,6 +28,7 @@ jobs:
             MONTAEDITAL/package-lock.json
             LICITA.AI/package-lock.json
             EMAIL-ATAS-CONTRATOS/package-lock.json
+            GERADOREXTRATO/package-lock.json
       - name: Build MontaEdital
         working-directory: ./MONTAEDITAL
         env:
@@ -51,6 +52,13 @@ jobs:
         run: |
           npm install
           npm run build
+      - name: Build Gerador de Extrato de Atas e Contratos
+        working-directory: ./GERADOREXTRATO
+        env:
+          VITE_API_URL: ${{ secrets.API_URL }}
+        run: |
+          npm install
+          npm run build
       - name: Assemble final site
         run: |
           mkdir -p site
@@ -60,6 +68,7 @@ jobs:
           cp -r MONTAEDITAL/dist site/MONTAEDITAL
           cp -r LICITA.AI/dist site/LICITA.AI
           cp -r EMAIL-ATAS-CONTRATOS/dist site/EMAIL-ATAS-CONTRATOS
+          cp -r GERADOREXTRATO/dist site/GERADOREXTRATO
           mkdir -p site/FIORIILICSVTOWORD
           cp -r FIORIILICSVTOWORD/. site/FIORIILICSVTOWORD/
           mkdir -p "site/DOCUMENTOS MODELO"

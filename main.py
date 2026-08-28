@@ -26,9 +26,11 @@ def load_app_from_path(module_name, file_path, dir_name):
 app_licita = load_app_from_path("licita_main", "LICITA.AI/main.py", "LICITA.AI")
 app_monta = load_app_from_path("monta_main", "MONTAEDITAL/main.py", "MONTAEDITAL")
 app_email = load_app_from_path("email_main", "EMAIL-ATAS-CONTRATOS/main.py", "EMAIL-ATAS-CONTRATOS")
+app_extrato = load_app_from_path("extrato_main", "GERADOREXTRATO/main.py", "GERADOREXTRATO")
 
 app = FastAPI()
 
 app.mount("/licita", app_licita)
 app.mount("/monta", app_monta)
 app.mount("/email", app_email)
+app.mount("/geradorextrato", app_extrato)
