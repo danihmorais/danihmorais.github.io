@@ -13,6 +13,9 @@ const MODALITIES: Modality[] = ['Pregão Eletrônico', 'Pregão Presencial', 'Di
 const maskDate=(v:string)=>{const d=v.replace(/\D/g,'').slice(0,8);return d.length<=2?d:d.length<=4?`${d.slice(0,2)}/${d.slice(2)}`:`${d.slice(0,2)}/${d.slice(2,4)}/${d.slice(4)}`}
 const maskNumber=(v:string)=>{const d=v.replace(/\D/g,'').slice(0,8);return d.length<=2?d:`${d.slice(0,2)}/${d.slice(2)}`}
 const maskCnpj=(v:string)=>{const d=v.replace(/\D/g,'').slice(0,14);if(d.length<=2)return d;if(d.length<=5)return `${d.slice(0,2)}.${d.slice(2)}`;if(d.length<=8)return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5)}`;if(d.length<=12)return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8)}`;return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8,12)}-${d.slice(12)}`}
+const formatBrDate=(d:Date)=>`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`
+const todayBr=()=>formatBrDate(new Date())
+const nextBusinessDayBr=()=>{const d=new Date();do{d.setDate(d.getDate()+1)}while(d.getDay()===0||d.getDay()===6);return formatBrDate(d)}
 const isBrDate=(v:string)=>{if(!/^\d{2}\/\d{2}\/\d{4}$/.test(v))return false;const[d,m,y]=v.split('/').map(Number);const x=new Date(y,m-1,d);return x.getFullYear()===y&&x.getMonth()===m-1&&x.getDate()===d}
 function addMonths(v:string,months:number|null){if(!isBrDate(v)||!months)return '';const[d,m,y]=v.split('/').map(Number);const x=new Date(y,m-1,1);x.setMonth(x.getMonth()+months);const last=new Date(x.getFullYear(),x.getMonth()+1,0).getDate();return `${String(Math.min(d,last)).padStart(2,'0')}/${String(x.getMonth()+1).padStart(2,'0')}/${x.getFullYear()}`}
 function download(blob:Blob,filename:string){const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url)}
@@ -20,7 +23,7 @@ function download(blob:Blob,filename:string){const url=URL.createObjectURL(blob)
 function App(){
  const inputRef=useRef<HTMLInputElement>(null)
  const [documents,setDocuments]=useState<SupplierDocument[]>([])
- const [sector,setSector]=useState('');const [vigenciaInicial,setVigenciaInicial]=useState('');const [dataExtrato,setDataExtrato]=useState('');const [busy,setBusy]=useState(false);const [notice,setNotice]=useState('');const [previewIndex,setPreviewIndex]=useState<number|null>(null)
+ const [sector,setSector]=useState('');const [vigenciaInicial,setVigenciaInicial]=useState(()=>nextBusinessDayBr());const [dataExtrato,setDataExtrato]=useState(()=>todayBr());const [busy,setBusy]=useState(false);const [notice,setNotice]=useState('');const [previewIndex,setPreviewIndex]=useState<number|null>(null)
  const finalDates=useMemo(()=>documents.map(d=>addMonths(vigenciaInicial,d.vigencia_meses)),[documents,vigenciaInicial])
  const update=(i:number,p:Partial<SupplierDocument>)=>setDocuments(c=>c.map((d,n)=>n===i?{...d,...p}:d))
  const previewFile=previewIndex===null?null:documents[previewIndex]?.file??null
