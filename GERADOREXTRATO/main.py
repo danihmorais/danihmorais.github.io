@@ -6,8 +6,6 @@ import io
 import json
 import os
 import re
-import shutil
-import subprocess
 import tempfile
 from copy import deepcopy
 from datetime import date, datetime
@@ -30,6 +28,7 @@ CNPJ_RE = re.compile(r"(?<!\d)(?:\d{2}\s*[./-]?\s*\d{3}\s*[./-]?\s*\d{3}\s*/\s*\
 MONTHS_RE = re.compile(r"(?<!\d)(\d{1,3})\s*(?:\(\s*[^)]*\)\s*)?(?:mes(?:es)?|m[eê]s(?:es)?)(?![a-z])", re.I)
 YEARS_RE = re.compile(r"(?<!\d)(\d{1,2})\s*(?:\(\s*[^)]*\)\s*)?(?:ano(?:s)?)(?![a-z])", re.I)
 INSTRUMENT_RE = re.compile(r"(?<!\w)(ATA|CONTRATO)(?!\w)", re.I)
+INSTRUMENT_NUMBER_RE = re.compile(r"(?:n[ºo°]?|n[uú]mero)\s*[:\-]?\s*(\d{1,4}\s*/\s*\d{4})", re.I)
 MODALITIES = [
     ("Pregão Eletrônico", r"preg[aã]o\s+eletr[oô]nico"),
     ("Pregão Presencial", r"preg[aã]o\s+presencial"),
@@ -41,6 +40,7 @@ MODALITIES = [
 HEADER_MARGIN_PT = 84
 FOOTER_MARGIN_PT = 72
 LINE_Y_TOLERANCE_PT = 2.5
+
 app = FastAPI(title="Gerador de Extrato de Atas e Contratos")
 origins = ["https://danihmorais.github.io", "http://localhost:5173", "http://127.0.0.1:5173"]
 origins += [x.strip() for x in os.getenv("CORS_ORIGINS", "").split(",") if x.strip()]
@@ -174,10 +174,7 @@ def signature_dates(reader, pages):
                 walk(y)
 
     walk(fields)
-    marker = re.compile(
-        r"assinado\s+digitalmente|assinatura\s+digital|documento\s+assinado|assinad[oa]\s+eletronicamente|assinatura\s+eletr[oô]nica|certificado\s+digital|ICP[-\s]?Brasil",
-        re.I,
-    )
+    marker = re.compile(r"assinado\s+digitalmente|assinatura\s+digital|documento\s+assinado|assinad[oa]\s+eletronicamente|assinatura\s+eletr[oô]nica|certificado\s+digital|ICP[-\s]?Brasil", re.I)
     lines = "\n".join(pages).splitlines()
     for i, line in enumerate(lines):
         if not marker.search(line):
@@ -235,11 +232,7 @@ def modality(text):
 def modality_number(text, detected):
     if detected:
         pat = dict(MODALITIES)[detected]
-        m = re.search(
-            pat + r".{0,220}?((?:n[ºo°]?|n[uú]mero)?\s*\d{1,4}\s*/\s*\d{4})",
-            text or "",
-            re.I | re.S,
-        )
+        m = re.search(pat + r".{0,220}?((?:n[ºo°]?|n[uú]mero)?\s*\d{1,4}\s*/\s*\d{4})", text or "", re.I | re.S)
         if m:
             return number(m.group(1))
     for p in [
@@ -252,9 +245,19 @@ def modality_number(text, detected):
     return None
 
 
-def instrument(text):
-    m = INSTRUMENT_RE.search(text or "")
-    return m.group(1).capitalize() if m else None
+def instrument_info(text):
+    """Localiza o primeiro ATA/CONTRATO no corpo do documento e seu número."""
+    for match in INSTRUMENT_RE.finditer(text or ""):
+        instrument_value = match.group(1).capitalize()
+        window = (text or "")[match.end():match.end() + 320]
+        number_match = INSTRUMENT_NUMBER_RE.search(window)
+        if number_match:
+            return instrument_value, number(number_match.group(1))
+        number_match = NUMBER_RE.search(window)
+        if number_match:
+            return instrument_value, number(number_match.group())
+        return instrument_value, None
+    return None, None
 
 
 def obj(text):
@@ -341,13 +344,19 @@ def extract(data, filename):
     searchable = text if spaces(text) else raw
     if not spaces(searchable):
         raise ValueError("Não foi possível extrair texto do PDF. O arquivo pode ser escaneado como imagem.")
+
     sd, sdt = signature_dates(reader, pages)
     if not sd and raw_pages != pages:
         sd, sdt = signature_dates(reader, raw_pages)
+
     mod, mnum = modality(text)
     if not mod and raw:
         mod, mnum = modality(raw)
-    inst = instrument(text) or instrument(raw)
+
+    inst, inst_number = instrument_info(text)
+    if not inst and raw:
+        inst, inst_number = instrument_info(raw)
+
     contractor_name = contractor(text) or contractor(raw)
     body_cnpjs = _cnpj_candidates(text)
     raw_cnpjs = _cnpj_candidates(raw)
@@ -359,6 +368,7 @@ def extract(data, filename):
         selected_cnpj = cnpj_candidates[0]
     if not selected_cnpj:
         selected_cnpj = cnpj_after_contractor(text) or cnpj_after_contractor(raw)
+
     result = {
         "filename": filename,
         "process_number": process(text) or process(raw),
@@ -367,6 +377,7 @@ def extract(data, filename):
         "modality": mod,
         "detected_instrument": inst,
         "instrument": inst,
+        "instrument_number": inst_number,
         "object": obj(text) or obj(raw),
         "contractor": contractor_name,
         "cnpj": cnpj(selected_cnpj) if selected_cnpj else None,
@@ -376,6 +387,7 @@ def extract(data, filename):
         "vigencia_meses": months(text) or months(raw),
         "error": None,
     }
+
     missing = [
         label
         for label, key in [
@@ -384,6 +396,7 @@ def extract(data, filename):
             ("nº da modalidade", "modality_number"),
             ("modalidade", "modality"),
             ("instrumento", "instrument"),
+            ("nº do instrumento", "instrument_number"),
             ("objeto", "object"),
             ("contratada", "contractor"),
             ("CNPJ", "cnpj"),
@@ -417,7 +430,6 @@ def add_months(base, n):
 
 
 def _formatted_replacement(run, value):
-    """Aplica a capitalização indicada pelo próprio placeholder no modelo."""
     value = str(value or "")
     rpr = run.find(qn("w:rPr"))
     if rpr is not None:
@@ -432,7 +444,7 @@ def _formatted_replacement(run, value):
 
 
 def replace_element(el, repls):
-    """Substitui placeholders entre runs sem destruir o rPr do modelo."""
+    """Substitui placeholders entre runs sem destruir a formatação do modelo."""
     for p in el.iter(qn("w:p")):
         nodes = [x for x in p.iter(qn("w:t")) if x.text is not None]
         for token, repl in repls.items():
@@ -491,24 +503,28 @@ def generate(meta):
     path = Path(__file__).parent / "modelo" / "EXTRATO.docx"
     if not path.exists():
         raise ValueError("Modelo EXTRATO.docx não encontrado.")
+
     d = Document(str(path))
     body = d.element.body
     sect = body.sectPr
     templates = [deepcopy(x) for x in body if x.tag != qn("w:sectPr")]
     instruments = []
+
     for i, item in enumerate(docs):
-        if not item.get("signature_date"):
-            raise ValueError(f"Assinatura digital não localizada para {item.get('filename', 'fornecedor')}.")
-        if not item.get("process_number"):
-            raise ValueError(f"Nº do processo não localizado para {item.get('filename', 'fornecedor')}.")
-        if not item.get("modality_number"):
-            raise ValueError(f"Nº da modalidade não localizado para {item.get('filename', 'fornecedor')}.")
-        modality_value = item.get("modality") or item.get("detected_modality")
-        instrument_value = item.get("instrument") or item.get("detected_instrument")
-        if not modality_value:
-            raise ValueError(f"Modalidade não localizada para {item.get('filename', 'fornecedor')}.")
-        if not instrument_value:
-            raise ValueError(f"Instrumento não localizado para {item.get('filename', 'fornecedor')}.")
+        required = [
+            ("signature_date", "Assinatura digital"),
+            ("process_number", "Nº do processo"),
+            ("modality_number", "Nº da modalidade"),
+            ("modality", "Modalidade"),
+            ("instrument", "Instrumento"),
+            ("instrument_number", "Nº do instrumento"),
+        ]
+        for key, label in required:
+            if not item.get(key):
+                raise ValueError(f"{label} não localizado para {item.get('filename', 'fornecedor')}.")
+
+        instrument_value = item["instrument"]
+        modality_value = item["modality"]
         instruments.append(instrument_value)
         n = int(item.get("vigencia_meses") or 0)
         if n <= 0:
@@ -518,6 +534,7 @@ def generate(meta):
             "{{DATA.ASS}}": item.get("signature_date", ""),
             "{{MODALIDADE}}": modality_value,
             "{{INSTRUMENTO}}": instrument_value,
+            "{{N.INST}}": item.get("instrument_number", ""),
             "{{N.PROC}}": item["process_number"],
             "{{N.PROCESSO}}": item["process_number"],
             "{{N.MODALIDADE}}": item["modality_number"],
@@ -541,6 +558,7 @@ def generate(meta):
                 replace_element(x, repl)
                 body.insert(insert_at, x)
                 insert_at += 1
+
     out = io.BytesIO()
     d.save(out)
     out.seek(0)
@@ -548,47 +566,45 @@ def generate(meta):
 
 
 def convert_docx_to_pdf(docx_data):
-    """Converte o DOCX montado pelo modelo em PDF e retorna somente os bytes do PDF."""
-    soffice = shutil.which("libreoffice") or shutil.which("soffice")
-    if not soffice:
-        raise ValueError(
-            "Não foi possível gerar o PDF porque o LibreOffice não está instalado no servidor. "
-            "Instale o pacote 'libreoffice' e tente novamente."
-        )
+    """Converte DOCX em PDF usando o engine de layout do Aspose.Words, sem LibreOffice/Office."""
+    try:
+        import aspose.words as aw
+    except ImportError as exc:
+        raise ValueError("A biblioteca 'aspose-words' não está instalada. Execute pip install -r requirements.txt.") from exc
+
+    license_path = os.getenv("ASPOSE_WORDS_LICENSE", "").strip()
+    if license_path:
+        license_file = Path(license_path)
+        if not license_file.exists():
+            raise ValueError(f"ASPOSE_WORDS_LICENSE aponta para um arquivo inexistente: {license_path}")
+        try:
+            aw.License().set_license(str(license_file))
+        except Exception as exc:
+            raise ValueError(f"Não foi possível aplicar a licença do Aspose.Words: {exc}") from exc
 
     with tempfile.TemporaryDirectory(prefix="geradorextrato-") as tmp:
         work = Path(tmp)
         source = work / "extrato.docx"
         output = work / "extrato.pdf"
-        profile = work / "libreoffice-profile"
         source.write_bytes(docx_data)
-        command = [
-            soffice,
-            "--headless",
-            "--nologo",
-            "--nodefault",
-            "--nolockcheck",
-            "--norestore",
-            f"-env:UserInstallation={profile.as_uri()}",
-            "--convert-to",
-            "pdf:writer_pdf_Export",
-            "--outdir",
-            str(work),
-            str(source),
-        ]
+
         try:
-            result = subprocess.run(command, capture_output=True, text=True, timeout=120, check=False)
-        except subprocess.TimeoutExpired as exc:
-            raise ValueError("A conversão do extrato para PDF excedeu o tempo limite de 120 segundos.") from exc
-        if result.returncode != 0 or not output.exists():
-            detail = spaces((result.stderr or result.stdout or "").strip())
-            raise ValueError(f"Falha ao converter o extrato para PDF.{(' ' + detail) if detail else ''}")
+            doc = aw.Document(str(source))
+            font_dir = os.getenv("ASPOSE_FONT_DIR", "").strip()
+            if font_dir and Path(font_dir).exists():
+                doc.font_settings.set_fonts_folder(font_dir, True)
+            doc.save(str(output))
+        except Exception as exc:
+            raise ValueError(f"Falha ao converter o extrato para PDF com Aspose.Words: {exc}") from exc
+
+        if not output.exists() or output.stat().st_size == 0:
+            raise ValueError("O Aspose.Words não produziu um PDF válido.")
         return output.read_bytes()
 
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok"}
+    return {"status": "ok", "pdf_converter": "aspose-words"}
 
 
 @app.post("/api/analyze")
@@ -606,6 +622,7 @@ async def analyze(files: list[UploadFile] = File(...)):
                 "modality": None,
                 "detected_instrument": None,
                 "instrument": None,
+                "instrument_number": None,
                 "object": None,
                 "contractor": None,
                 "cnpj": None,
