@@ -1,20 +1,28 @@
-const THEME_KEY = 'geradorextrato-theme'
+const THEME_KEY = 'prontuario_theme'
+const LEGACY_THEME_KEY = 'geradorextrato-theme'
 type Theme = 'light' | 'dark'
 
 function getInitialTheme(): Theme {
-  const stored = localStorage.getItem(THEME_KEY)
-  if (stored === 'light' || stored === 'dark') return stored
-  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  try {
+    const stored = localStorage.getItem(THEME_KEY)
+    if (stored === 'light' || stored === 'dark') return stored
+
+    const legacy = localStorage.getItem(LEGACY_THEME_KEY)
+    if (legacy === 'light' || legacy === 'dark') return legacy
+  } catch {}
+
+  return 'light'
 }
 
 function setTheme(theme: Theme) {
   document.documentElement.dataset.theme = theme
-  localStorage.setItem(THEME_KEY, theme)
+  try { localStorage.setItem(THEME_KEY, theme) } catch {}
+
   const button = document.getElementById('theme-toggle')
   if (button) {
-    button.textContent = theme === 'dark' ? '☀ Claro' : '☾ Escuro'
+    button.textContent = theme === 'dark' ? '☀️' : '🌙'
     button.setAttribute('aria-label', theme === 'dark' ? 'Ativar modo claro' : 'Ativar modo escuro')
-    button.title = theme === 'dark' ? 'Modo claro' : 'Modo escuro'
+    button.title = 'Alternar modo claro/escuro'
   }
 }
 
@@ -36,6 +44,7 @@ function installThemeToggle(attempt = 0) {
     })
     hero.appendChild(button)
   }
+
   setTheme((document.documentElement.dataset.theme as Theme) || 'light')
 }
 
