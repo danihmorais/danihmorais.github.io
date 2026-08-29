@@ -260,7 +260,7 @@
 
         // ---- Tema (mesmo padrão do index principal) ----
         (function () {
-            let theme = localStorage.getItem("prontuario_theme") || "light";
+            let theme = localStorage.getItem("app_theme") || "light";
             document.documentElement.dataset.theme = theme;
             updateThemeBtn();
         })();
@@ -268,7 +268,7 @@
         function sw() {
             let theme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
             document.documentElement.dataset.theme = theme;
-            localStorage.setItem("prontuario_theme", theme);
+            localStorage.setItem("app_theme", theme);
             updateThemeBtn();
         }
 
