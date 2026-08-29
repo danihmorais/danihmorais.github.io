@@ -6,7 +6,7 @@ const DEFAULT_SUBJECT = 'INSTRUMENTO CONTRATUAL (SÃO FRANCISCO - SP)'
 const DEFAULT_BODY_HTML = `<p>Prezados,</p><p>Anexo instrumento contratual para assinatura.</p><p><strong>Prazo: 02 (dois) dias úteis</strong></p><p>Atenciosamente,</p><p>Setor de Licitações e Contratos de São Francisco - SP.</p>`
 const API_URL = `${import.meta.env.VITE_API_URL}/email/api`
 const SETTINGS_STORAGE_KEY = 'enviador-atas-contratos.smtp-settings'
-const THEME_STORAGE_KEY = 'prontuario_theme'
+const THEME_STORAGE_KEY = 'app_theme'
 
 const VERCEL_BODY_LIMIT_BYTES = 4.5 * 1024 * 1024
 const CHUNK_SAFETY_MARGIN_BYTES = 200 * 1024
