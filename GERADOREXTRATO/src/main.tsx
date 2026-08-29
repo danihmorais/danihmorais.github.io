@@ -1,4 +1,4 @@
-const THEME_KEY = 'prontuario_theme'
+const THEME_KEY = 'app_theme'
 const LEGACY_THEME_KEY = 'geradorextrato-theme'
 type Theme = 'light' | 'dark'
 
