@@ -1,32 +1,56 @@
 # Enviador de Atas e Contratos
 
-Aplicação local para enviar instrumentos contratuais em PDF por e-mail. Para cada PDF, ela localiza o **segundo** campo `E-mail institucional`, usa o endereço seguinte como destinatário e envia uma mensagem individual com o arquivo anexado e cópia ao remetente.
+Aplicação web para envio em lote de **Atas de Registro de Preços e Contratos em PDF** por e-mail.
 
-## Como executar
+Para cada documento, o backend identifica o destinatário no conteúdo do PDF, monta uma mensagem individual e envia o arquivo como anexo.
 
-Em dois terminais, dentro desta pasta:
+## Recursos
+
+- processamento de vários PDFs;
+- identificação automática do e-mail institucional;
+- uma mensagem individual por documento/fornecedor;
+- anexo do PDF correspondente;
+- cópia ao remetente;
+- preenchimento manual quando a leitura automática não encontrar o destinatário;
+- configurações SMTP armazenadas somente no navegador quando o usuário opta por salvá-las.
+
+## Execução local
+
+### Backend
 
 ```powershell
-# Terminal 1 — backend
 python -m pip install -r requirements.txt
 python -m uvicorn main:app --reload
 ```
 
+### Frontend
+
 ```powershell
-# Terminal 2 — interface
 npm install
 npm run dev
 ```
 
-Abra o endereço indicado pelo Vite, normalmente `http://localhost:5173`.
+Abra a URL indicada pelo Vite, normalmente `http://localhost:5173`.
 
-## Configuração SMTP
+## SMTP
 
-Informe servidor, porta, e-mail remetente, senha (ou senha de aplicativo) e o tipo de segurança. Exemplos comuns:
+Informe:
 
-- Microsoft 365: `smtp.office365.com`, porta `587`, STARTTLS.
-- Gmail: `smtp.gmail.com`, porta `587`, STARTTLS e uma senha de aplicativo.
+- servidor SMTP;
+- porta;
+- e-mail remetente;
+- senha ou senha de aplicativo;
+- tipo de segurança.
 
-O botão **Salvar configurações** é opcional. Quando ativado, os dados ficam exclusivamente no armazenamento local do navegador do usuário — nunca no servidor Render. A senha é encaminhada ao backend somente durante o envio SMTP.
+Exemplos comuns:
 
-> PDFs escaneados sem camada de texto não podem ter o e-mail detectado automaticamente. Nesses casos, basta preencher manualmente o destinatário exibido na lista antes do envio.
+| Serviço | Servidor | Porta | Segurança |
+|---|---|---:|---|
+| Microsoft 365 | `smtp.office365.com` | 587 | STARTTLS |
+| Gmail | `smtp.gmail.com` | 587 | STARTTLS |
+
+A opção **Salvar configurações** mantém os dados no armazenamento local do navegador. A senha é enviada ao backend somente durante a operação SMTP.
+
+## Limitação de PDFs escaneados
+
+A identificação automática depende de uma camada de texto no PDF. Quando o documento é apenas uma imagem digitalizada, o destinatário pode não ser localizado. Nesse caso, o endereço pode ser conferido e preenchido manualmente antes do envio.
