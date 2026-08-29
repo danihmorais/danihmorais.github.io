@@ -33,18 +33,6 @@ O backend agregador da raiz monta as aplicações FastAPI sob estes prefixos:
 /geradorextrato
 ```
 
-### Gerador de Extrato
-
-O Gerador de Extrato possui uma etapa específica de extração contextual para evitar confusão entre números de **processo**, **modalidade** e **instrumento**. Por exemplo, em um PDF que apresenta:
-
-```text
-Processo nº 76/2025 – Pregão Presencial nº 46/2025
-ATA DE REGISTRO DE PREÇOS
-ATA nº 01/2026
-```
-
-o número da ATA deve ser `01/2026`. A estratégia atual procura o número junto ao título do instrumento e nas linhas posteriores, sem usar números anteriores ao título como fallback.
-
 ## 📂 Estrutura
 
 ```text
