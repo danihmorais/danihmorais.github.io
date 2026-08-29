@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
+import logo from './assets/logo.png'
 
 const DEFAULT_SUBJECT = 'INSTRUMENTO CONTRATUAL (SÃO FRANCISCO - SP)'
 const DEFAULT_BODY_HTML = `<p>Prezados,</p><p>Anexo instrumento contratual para assinatura.</p><p><strong>Prazo: 02 (dois) dias úteis</strong></p><p>Atenciosamente,</p><p>Setor de Licitações e Contratos de São Francisco - SP.</p>`
@@ -160,7 +161,7 @@ function App() {
   return <main>
     <header className="app-header">
       <a className="back-link" href="/" aria-label="Voltar para a página inicial">← <span>Voltar</span></a>
-      <div className="header-title"><img src="./assets/logo.png" alt="" /><div><h1>Envio de instrumentos contratuais</h1><p className="sub">Envie atas e contratos em lote, com um e-mail individual por documento.</p></div></div>
+      <div className="header-title"><img src={logo} alt="" /><div><h1>Envio de instrumentos contratuais</h1><p className="sub">Envie atas e contratos em lote, com um e-mail individual por documento.</p></div></div>
       <div className="header-actions">
         <button type="button" className="theme-toggle" onClick={alternarTema} title="Alternar modo claro/escuro" aria-label="Alternar modo claro/escuro">{theme === 'dark' ? '☀️' : '🌙'}</button>
       </div>
