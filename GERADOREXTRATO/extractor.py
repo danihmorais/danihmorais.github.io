@@ -6,6 +6,7 @@ import unicodedata
 NUMBER_RE = re.compile(r"(?<!\d)(\d{1,4})\s*/\s*(\d{4})(?!\d)")
 LABELED_NUMBER_RE = re.compile(r"(?:n[ºo°]?|n[úu]mero|n[úu]m\.?)\s*[:\-.]?\s*(\d{1,4}\s*/\s*\d{4})(?!\d)", re.I)
 INSTRUMENT_RE = re.compile(r"\b(ATA|CONTRATO)\b", re.I)
+OTHER_NUMBER_CONTEXT_RE = re.compile(r"\b(?:processo|preg[aã]o|concorr[eê]ncia|modalidade|edital|dispensa|inexigibilidade|leil[aã]o|concurso)\b", re.I)
 DATE_RE = re.compile(r"(?<!\d)(\d{2})[./-](\d{2})[./-](\d{4})(?!\d)")
 ISO_DATE_RE = re.compile(r"(?<!\d)(\d{4})[./-](\d{2})[./-](\d{2})(?!\d)")
 CNPJ_RE = re.compile(r"(?<!\d)(?:\d{2}\s*[./-]?\s*\d{3}\s*[./-]?\s*\d{3}\s*/\s*\d{4}\s*[./-]?\s*\d{2}|\d{14})(?!\d)")
@@ -19,7 +20,6 @@ YEAR_RE = re.compile(r"(?<!\d)(\d{1,2})\s*(?:\([^)]*\)\s*)?ano(?:s)?(?![a-z])", 
 def normalize_text(value: str) -> str:
     value = unicodedata.normalize("NFKC", value or "").replace("\xa0", " ").replace("\u200b", "")
     value = re.sub(r"[ \t]+", " ", value)
-    # Corrige apenas fragmentações inequívocas de números produzidas por PDFs.
     value = re.sub(r"(?<=\d)\s*/\s*(?=\d)", "/", value)
     value = re.sub(r"(\d{1,4})/(\d{2})\s+(\d)(?!\d)", r"\1/\2\3", value)
     return "\n".join(line.rstrip() for line in value.splitlines()).strip()
@@ -46,8 +46,12 @@ def _labeled(value: str) -> str | None:
     return number(match.group(1)) if match else None
 
 
+def _is_other_context(value: str) -> bool:
+    return bool(OTHER_NUMBER_CONTEXT_RE.search(value or ""))
+
+
 def instrument_info(text: str):
-    """Identifica ATA/CONTRATO e o número por proximidade sem confundir processo/modalidade."""
+    """Identifica ATA/CONTRATO por contexto e nunca usa rótulos de outro campo."""
     ls = [x.strip() for x in normalize_text(text).splitlines()]
     candidates = []
     for i, line in enumerate(ls):
@@ -55,22 +59,24 @@ def instrument_info(text: str):
         if not hit:
             continue
         instrument = hit.group(1).capitalize()
-        # Somente texto posterior ao título na mesma linha.
         same = line[hit.end():]
-        if (n := _labeled(same)):
-            candidates.append((110, instrument, n))
-        elif (m := NUMBER_RE.search(same)) and number(m.group()):
-            candidates.append((90, instrument, number(m.group())))
-        # Linhas posteriores recebem pontuação decrescente; números rotulados
-        # continuam mais fortes que números soltos.
+        # A própria linha tem prioridade. Se o número estiver associado a
+        # processo/modalidade, ele não pertence ao instrumento.
+        if not _is_other_context(same):
+            if (n := _labeled(same)):
+                candidates.append((120, instrument, n))
+            elif (m := NUMBER_RE.search(same)) and number(m.group()):
+                candidates.append((100, instrument, number(m.group())))
         for d in range(1, 7):
             if i + d >= len(ls):
                 break
             candidate = ls[i + d]
+            if _is_other_context(candidate) and not INSTRUMENT_RE.search(candidate):
+                continue
             if (n := _labeled(candidate)):
-                candidates.append((105 - d * 2, instrument, n))
+                candidates.append((112 - d * 3, instrument, n))
             elif (m := NUMBER_RE.search(candidate)) and number(m.group()):
-                candidates.append((70 - d * 7, instrument, number(m.group())))
+                candidates.append((75 - d * 8, instrument, number(m.group())))
     if not candidates:
         return None, None
     _, instrument, n = max(candidates, key=lambda x: x[0])
@@ -170,8 +176,10 @@ def value(text: str):
     labels = re.compile(r"valor\s+(?:total|global|contratado|da\s+contrata[cç][aã]o|registrado)|pre[cç]o\s+total|total\s+(?:do|da)\s+(?:proponente|fornecedor|ata)", re.I)
     for m in labels.finditer(t):
         local = t[m.end():m.end()+180]
-        q = CURRENCY_RE.search(local) or PLAIN_VALUE_RE.search(local)
-        if q: return f"R$ {q.group(1) if q.re is CURRENCY_RE else q.group()}"
+        q = CURRENCY_RE.search(local)
+        if q: return f"R$ {q.group(1)}"
+        q = PLAIN_VALUE_RE.search(local)
+        if q: return f"R$ {q.group()}"
     return None
 
 
