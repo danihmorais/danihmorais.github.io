@@ -59,11 +59,20 @@
 :root[data-theme="dark"] .preview { background: var(--primary-soft); border-color: var(--input); color: var(--primary); }
 :root[data-theme="dark"] .hero-mark { color: #263244; }
 
+/* Os controles do cabeçalho ocupam áreas independentes. */
+.hero { padding-top: 34px; }
+.back-link {
+  right: 54px;
+  top: 0;
+  z-index: 3;
+  white-space: nowrap;
+}
+
 .theme-toggle {
   position: absolute;
-  top: -4px;
+  top: 0;
   right: 0;
-  z-index: 2;
+  z-index: 4;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--primary-soft);
@@ -76,5 +85,7 @@
 .theme-toggle:hover { filter: brightness(.96); }
 
 @media (max-width: 560px) {
-  .theme-toggle { top: -8px; right: 0; padding: 7px 8px; }
+  .hero { padding-top: 48px; }
+  .back-link { left: 0; right: auto; top: 0; }
+  .theme-toggle { top: 0; right: 0; padding: 7px 8px; }
 }
