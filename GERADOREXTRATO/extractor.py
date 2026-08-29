@@ -3,10 +3,13 @@ from __future__ import annotations
 import re
 import unicodedata
 
-NUMBER_RE = re.compile(r"(?<!\d)(\d{1,4})\s*/\s*(\d{4})(?!\d)")
+# O início do número também não pode estar imediatamente após dígito/ponto:
+# isso impede capturar "133/2021" de "14.133/2021".
+NUMBER_RE = re.compile(r"(?<![\d.])(\d{1,4})\s*/\s*(\d{4})(?!\d)")
 LABELED_NUMBER_RE = re.compile(r"(?:n[ºo°]?|n[úu]mero|n[úu]m\.?)\s*[:\-.]?\s*(\d{1,4}\s*/\s*\d{4})(?!\d)", re.I)
 INSTRUMENT_RE = re.compile(r"\b(ATA|CONTRATO)\b", re.I)
 OTHER_NUMBER_CONTEXT_RE = re.compile(r"\b(?:processo|preg[aã]o|concorr[eê]ncia|modalidade|edital|dispensa|inexigibilidade|leil[aã]o|concurso)\b", re.I)
+LEGAL_CONTEXT_RE = re.compile(r"\b(?:lei|art(?:igo)?\.?|inciso|decreto|s[uú]mula|resolu[cç][aã]o|portaria)\b", re.I)
 DATE_RE = re.compile(r"(?<!\d)(\d{2})[./-](\d{2})[./-](\d{4})(?!\d)")
 ISO_DATE_RE = re.compile(r"(?<!\d)(\d{4})[./-](\d{2})[./-](\d{2})(?!\d)")
 CNPJ_RE = re.compile(r"(?<!\d)(?:\d{2}\s*[./-]?\s*\d{3}\s*[./-]?\s*\d{3}\s*/\s*\d{4}\s*[./-]?\s*\d{2}|\d{14})(?!\d)")
@@ -35,8 +38,14 @@ def format_number(prefix: str, year: str) -> str:
 
 
 def number(value: str | None) -> str | None:
-    match = NUMBER_RE.search(normalize_text(value or ""))
+    """Extrai somente números autônomos; referências como Lei 14.133/2021 são ignoradas."""
+    text = normalize_text(value or "")
+    match = NUMBER_RE.search(text)
     if not match or not 1900 <= int(match.group(2)) <= 2200:
+        return None
+    # Proteção semântica adicional: a ocorrência pertence a uma referência normativa.
+    before = text[max(0, match.start() - 45):match.start()]
+    if re.search(r"(?:\blei\s+\d*\.?|\bart(?:igo)?\.?\s*\d*\s*(?:da|do)\s+lei|\bdecreto\s+\d*\.?|\bs[uú]mula\s+\d*\.?|\bportaria\s+\d*\.?)\s*$", before, re.I):
         return None
     return format_number(match.group(1), match.group(2))
 
@@ -46,37 +55,51 @@ def _labeled(value: str) -> str | None:
     return number(match.group(1)) if match else None
 
 
-def _is_other_context(value: str) -> bool:
-    return bool(OTHER_NUMBER_CONTEXT_RE.search(value or ""))
+def _candidate_allowed(value: str) -> bool:
+    """Impede que referências normativas ou outros identificadores contaminem o campo."""
+    if not value:
+        return False
+    if LEGAL_CONTEXT_RE.search(value):
+        # Exceção: o texto pode conter uma palavra legal longe do número, mas
+        # nunca aceitamos um candidato quando a própria linha parece ser uma
+        # referência normativa.
+        if re.search(r"\b(?:lei|decreto|portaria|s[uú]mula)\b.{0,35}\d{1,4}\s*/\s*\d{4}", value, re.I):
+            return False
+    if OTHER_NUMBER_CONTEXT_RE.search(value):
+        return False
+    return True
 
 
 def instrument_info(text: str):
-    """Identifica ATA/CONTRATO por contexto e nunca usa rótulos de outro campo."""
+    """Identifica ATA/CONTRATO por contexto, sem capturar processo, lei ou decreto."""
     ls = [x.strip() for x in normalize_text(text).splitlines()]
     candidates = []
     for i, line in enumerate(ls):
-        hit = INSTRUMENT_RE.search(line)
-        if not hit:
-            continue
-        instrument = hit.group(1).capitalize()
-        same = line[hit.end():]
-        # A própria linha tem prioridade. Se o número estiver associado a
-        # processo/modalidade, ele não pertence ao instrumento.
-        if not _is_other_context(same):
-            if (n := _labeled(same)):
-                candidates.append((120, instrument, n))
-            elif (m := NUMBER_RE.search(same)) and number(m.group()):
-                candidates.append((100, instrument, number(m.group())))
-        for d in range(1, 7):
-            if i + d >= len(ls):
-                break
-            candidate = ls[i + d]
-            if _is_other_context(candidate) and not INSTRUMENT_RE.search(candidate):
-                continue
-            if (n := _labeled(candidate)):
-                candidates.append((112 - d * 3, instrument, n))
-            elif (m := NUMBER_RE.search(candidate)) and number(m.group()):
-                candidates.append((75 - d * 8, instrument, number(m.group())))
+        hits = list(INSTRUMENT_RE.finditer(line))
+        for hit in hits:
+            instrument = hit.group(1).capitalize()
+            same = line[hit.end():]
+            # Número na mesma linha só é válido se estiver claramente associado
+            # ao instrumento e não fizer parte de lei/decreto/processo/etc.
+            if _candidate_allowed(same):
+                if (n := _labeled(same)):
+                    candidates.append((150, instrument, n))
+                else:
+                    m = NUMBER_RE.search(same)
+                    if m and number(m.group()):
+                        candidates.append((120, instrument, number(m.group())))
+            for d in range(1, 7):
+                if i + d >= len(ls):
+                    break
+                candidate = ls[i + d]
+                if not _candidate_allowed(candidate):
+                    continue
+                if (n := _labeled(candidate)):
+                    candidates.append((140 - d * 3, instrument, n))
+                elif d <= 2:
+                    m = NUMBER_RE.search(candidate)
+                    if m and number(m.group()):
+                        candidates.append((90 - d * 10, instrument, number(m.group())))
     if not candidates:
         return None, None
     _, instrument, n = max(candidates, key=lambda x: x[0])
