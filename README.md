@@ -1,66 +1,83 @@
 # 🏛️ Universo da Licitação
 
-Hub de ferramentas web para automação de processos de **licitação pública municipal**, publicado via GitHub Pages. Reúne, em um só lugar, sistemas para montagem de editais, geração de documentos com IA e conversão de relatórios.
+Hub de ferramentas web para automação de processos de **licitação pública municipal**, publicado via GitHub Pages.
 
 🔗 **Site:** [danihmorais.github.io](https://danihmorais.github.io)
 
----
+## 📦 Ferramentas
 
-## 📦 Ferramentas disponíveis
-
-| Ferramenta | Descrição |
+| Ferramenta | Finalidade |
 |---|---|
-| 🗂️ **[MontaEdital](./MONTAEDITAL)** | Sistema para elaboração da fase preparatória e montagem de editais (Pregão, Dispensa etc.), a partir de modelos `.docx`. |
-| 🤖 **[Licita.AI](./LICITA.AI)** | Automatiza a criação de **DFD, ETP e TR** usando Inteligência Artificial (Gemini / OpenRouter) a partir dos dados do processo. |
-| 📄 **[Conversor Fiorilli](./FIORIILICSVTOWORD)** | Converte relatórios `.txt`/`.csv` exportados do sistema Fiorilli em documentos Word (`.docx`), rodando 100% no navegador. |
-| 📁 **[Documentos Modelo](./DOCUMENTOS%20MODELO)** | Página para navegar e baixar modelos, minutas e arquivos padrão usados nos processos licitatórios. |
-| ✉️ **[Email ARPs/Contratos](./EMAIL-ATAS-CONTRATOS)** | Envia e-mails com contratos ou ARPs de uma só vez para vários fornecedores, utilizando, para cada destinatário, o e-mail institucional informado no Anexo LC02. |
-
----
+| 🗂️ **[MontaEdital](./MONTAEDITAL)** | Elaboração da fase preparatória e montagem de editais a partir de modelos `.docx`. |
+| 🤖 **[Licita.AI](./LICITA.AI)** | Geração assistida por IA de DFD, ETP e TR a partir dos dados do processo. |
+| 📄 **[Conversor Fiorilli](./FIORIILICSVTOWORD)** | Conversão de relatórios `.txt`/`.csv` do Fiorilli para Word. |
+| 📁 **[Documentos Modelo](./DOCUMENTOS%20MODELO)** | Catálogo de modelos, minutas e documentos usados nos processos licitatórios. |
+| ✉️ **[Email ARPs/Contratos](./EMAIL-ATAS-CONTRATOS)** | Envio em lote de atas e contratos em PDF por e-mail. |
+| 📑 **[Gerador de Extrato](./GERADOREXTRATO)** | Leitura de PDFs de atas/contratos e geração de extratos padronizados em DOCX. |
 
 ## 🧱 Arquitetura
 
-O projeto é composto por múltiplos front-ends independentes, unificados por uma página inicial (`index.html`) e, quando necessário, por um back-end Python:
+O repositório reúne aplicações independentes em uma mesma publicação:
 
-- **Front-end:** React + TypeScript + Vite (MontaEdital e Licita.AI), além de páginas estáticas em HTML/CSS/JS puro (Conversor Fiorilli e Documentos Modelo).
-- **Back-end:** FastAPI (Python) em servidor privado com Tailscale, com `python-docx` e `lxml` para geração e manipulação de documentos `.docx`. O `main.py` na raiz monta os apps do MontaEdital, do Licita.AI e do Email ARPs/Contratos sob os prefixos `/monta`, `/licita` e `/email`.
-- **Deploy:** GitHub Actions (`.github/workflows/static.yml`) builda o MontaEdital, o Licita.AI e o Email ARPs/Contratos com Node/Vite, monta o site final na pasta `site/` e publica automaticamente no GitHub Pages a cada push na branch `main`.
+- **React + TypeScript + Vite:** MontaEdital, Licita.AI, Email ARPs/Contratos e Gerador de Extrato.
+- **HTML/CSS/JS:** Conversor Fiorilli e Documentos Modelo.
+- **FastAPI/Python:** backends para processamento, análise de PDFs e geração/manipulação de `.docx`.
+- **GitHub Actions:** build e publicação automática no GitHub Pages.
 
+O backend agregador da raiz monta as aplicações FastAPI sob estes prefixos:
+
+```text
+/licita
+/monta
+/email
+/geradorextrato
 ```
+
+### Gerador de Extrato
+
+O Gerador de Extrato possui uma etapa específica de extração contextual para evitar confusão entre números de **processo**, **modalidade** e **instrumento**. Por exemplo, em um PDF que apresenta:
+
+```text
+Processo nº 76/2025 – Pregão Presencial nº 46/2025
+ATA DE REGISTRO DE PREÇOS
+ATA nº 01/2026
+```
+
+o número da ATA deve ser `01/2026`. A estratégia atual procura o número junto ao título do instrumento e nas linhas posteriores, sem usar números anteriores ao título como fallback.
+
+## 📂 Estrutura
+
+```text
 danihmorais.github.io/
-├── index.html                  # Landing page (hub)
-├── main.py                     # Monta os back-ends FastAPI (opcional/local)
-├── MONTAEDITAL/                # App React + back-end FastAPI
-├── LICITA.AI/                  # App React + back-end FastAPI
-├── EMAIL-ATAS-CONTRATOS/       # App React + back-end FastAPI
-├── FIORIILICSVTOWORD/          # Página estática (gera .docx no browser)
-├── DOCUMENTOS MODELO/          # Página estática de download de modelos
-└── .github/workflows/          # Pipeline de deploy no GitHub Pages
+├── index.html
+├── main.py
+├── MONTAEDITAL/
+├── LICITA.AI/
+├── EMAIL-ATAS-CONTRATOS/
+├── GERADOREXTRATO/
+├── FIORIILICSVTOWORD/
+├── DOCUMENTOS MODELO/
+└── .github/workflows/
 ```
 
----
+## 🚀 Desenvolvimento local
 
-## 🚀 Rodando localmente
+Cada aplicação React possui seu próprio `package.json`:
 
-Cada ferramenta React (`MONTAEDITAL/`, `LICITA.AI/` e `EMAIL-ATAS-CONTRATOS/`) tem seu próprio `package.json`:
-
-```bash
-cd MONTAEDITAL   # ou LICITA.AI ou EMAIL-ATAS-CONTRATOS
+```powershell
+cd GERADOREXTRATO   # ou MONTAEDITAL, LICITA.AI ou EMAIL-ATAS-CONTRATOS
 npm install
 npm run dev
 ```
 
-Para subir os back-ends Python:
+Para o backend correspondente:
 
-```bash
-cd MONTAEDITAL   # ou LICITA.AI ou EMAIL-ATAS-CONTRATOS
-pip install -r requirements.txt
-uvicorn main:app --reload
+```powershell
+python -m pip install -r requirements.txt
+python -m uvicorn main:app --reload
 ```
 
-As páginas estáticas (Conversor Fiorilli e Documentos Modelo) podem ser abertas diretamente no navegador, sem build.
-
----
+As páginas estáticas podem ser abertas diretamente no navegador.
 
 ## 📄 Licença
 
