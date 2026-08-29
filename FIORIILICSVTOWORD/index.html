@@ -10,7 +10,7 @@
     <script>
         (function () {
             try {
-                var salvo = localStorage.getItem("prontuario_theme");
+                var salvo = localStorage.getItem("app_theme");
                 if (salvo === "dark" || salvo === "light") {
                     document.documentElement.setAttribute("data-theme", salvo);
                 }
@@ -260,7 +260,7 @@
             const atual = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
             const proximo = atual === "dark" ? "light" : "dark";
             document.documentElement.setAttribute("data-theme", proximo);
-            try { localStorage.setItem("prontuario_theme", proximo); } catch (e) {}
+            try { localStorage.setItem("app_theme", proximo); } catch (e) {}
             atualizarIconeTema();
         }
 
