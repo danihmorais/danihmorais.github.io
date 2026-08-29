@@ -17,7 +17,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("prontuario_theme") as Theme;
+      const saved = localStorage.getItem("app_theme") as Theme;
       const initial = saved === "dark" || saved === "light" ? saved : "light";
       setTheme(initial);
       document.documentElement.setAttribute("data-theme", initial);
@@ -29,7 +29,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const toggleTheme = () => {
     const next: Theme = theme === "light" ? "dark" : "light";
     setTheme(next);
-    try { localStorage.setItem("prontuario_theme", next); } catch {}
+    try { localStorage.setItem("app_theme", next); } catch {}
     document.documentElement.setAttribute("data-theme", next);
   };
 
