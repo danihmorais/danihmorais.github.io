@@ -1,65 +1,35 @@
-"""API do Gerador de Extrato com extração contextual do número do instrumento."""
-from __future__ import annotations
+"""Ponto de entrada da API do GERADOR.
 
-import re
-
+A camada HTTP continua em ``main_original``. A extração fica isolada em
+``extractor.py`` para ser testada e evoluída independentemente dos endpoints.
+"""
 import main_original
-
-INSTRUMENT_RE = re.compile(r"(?<![\wÀ-ÿ])(ATA|CONTRATO)(?![\wÀ-ÿ])", re.I)
-NUMBER_RE = re.compile(r"(?<!\d)(\d{1,4})\s*/\s*(\d{4})(?!\d)")
-LABELED_NUMBER_RE = re.compile(
-    r"(?:n[ºo°]?|n[uú]mero)\s*[:\-]?\s*(\d{1,4})\s*/\s*(\d{4})",
-    re.I,
+from extractor import (
+    cnpj as _cnpj,
+    cnpj_after_contractor as _cnpj_after_contractor,
+    cnpj_candidates as _cnpj_candidates,
+    contractor as _contractor,
+    instrument_info as _instrument_info,
+    modality as _modality,
+    modality_number as _modality_number,
+    months as _months,
+    number as _number,
+    obj as _obj,
+    process as _process,
+    value as _value,
 )
 
+main_original.number = _number
+main_original.cnpj = _cnpj
+main_original._cnpj_candidates = _cnpj_candidates
+main_original.process = _process
+main_original.modality = _modality
+main_original.modality_number = _modality_number
+main_original.instrument_info = _instrument_info
+main_original.obj = _obj
+main_original.contractor = _contractor
+main_original.cnpj_after_contractor = _cnpj_after_contractor
+main_original.value = _value
+main_original.months = _months
 
-def _normalize_extracted_text(text: str) -> str:
-    value = text or ""
-    value = re.sub(r"(?<=\d)\s*/\s*(?=\d)", "/", value)
-    # Corrige somente ano quebrado, sem backreference inválido.
-    value = re.sub(r"(?<=/)(\d{2})\s+(\d)(?!\d)", lambda m: m.group(1) + m.group(2), value)
-    value = re.sub(r"[ \t]+", " ", value)
-    return value
-
-
-def _format_number(prefix: str, year: str) -> str:
-    value = str(int(prefix))
-    return f"{int(value):02d}/{year}" if len(value) <= 2 else f"{value}/{year}"
-
-
-def instrument_info(text: str):
-    """Identifica ATA/CONTRATO sem capturar números que aparecem antes do título."""
-    lines = _normalize_extracted_text(text).splitlines()
-
-    for index, line in enumerate(lines):
-        match = INSTRUMENT_RE.search(line)
-        if not match:
-            continue
-
-        instrument = match.group(1).capitalize()
-        after_instrument = line[match.end():]
-        window_lines = [after_instrument]
-
-        for offset in range(1, 6):
-            if index + offset < len(lines):
-                candidate = lines[index + offset].strip()
-                if candidate:
-                    window_lines.append(candidate)
-
-        for candidate in window_lines:
-            labeled = LABELED_NUMBER_RE.search(candidate)
-            if labeled:
-                return instrument, _format_number(labeled.group(1), labeled.group(2))
-
-        for candidate in window_lines:
-            plain = NUMBER_RE.search(candidate)
-            if plain:
-                return instrument, _format_number(plain.group(1), plain.group(2))
-
-        return instrument, None
-
-    return None, None
-
-
-main_original.instrument_info = instrument_info
 app = main_original.app
