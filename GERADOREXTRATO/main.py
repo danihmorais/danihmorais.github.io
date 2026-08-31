@@ -32,4 +32,28 @@ main_original.cnpj_after_contractor = _cnpj_after_contractor
 main_original.value = _value
 main_original.months = _months
 
+_original_generate = main_original.generate
+
+class _FirstUpperModality(str):
+    def __new__(cls, value):
+        obj = super().__new__(cls, value)
+        obj._first = True
+        return obj
+
+    def __str__(self):
+        if self._first:
+            self._first = False
+            return super().__str__().upper()
+        return super().__str__()
+
+
+def _generate_with_first_modality_upper(meta):
+    for item in meta.get("documents") or []:
+        if item.get("modality"):
+            item["modality"] = _FirstUpperModality(item["modality"])
+    return _original_generate(meta)
+
+
+main_original.generate = _generate_with_first_modality_upper
+
 app = main_original.app
