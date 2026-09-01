@@ -2,12 +2,14 @@ import { useState, useContext, useEffect } from "react";
 import logo from "./assets/logo.png";
 import { ThemeContext } from "./context/ThemeContext";
 import Wizard from "./views/wizard";
+import CompraDiretaWizard from "./views/CompraDiretaWizard";
 import ConfigIA from "./components/configIA";
 import { lerConfigIA } from "./utils/storageLocal";
 import { validarChaveOpenRouter, validarChaveUnsloth } from "./providers/llm";
 
 export default function App() {
   const [logado, setLogado] = useState(false);
+  const [modo, setModo] = useState<"completa" | "compra_direta" | null>(null);
   const [statusIA, setStatusIA] = useState<boolean | null>(null);
   const { theme, toggleTheme } = useContext(ThemeContext);
   const isDark = theme === "dark";
@@ -40,7 +42,42 @@ export default function App() {
   };
 
   const status = obterStatus();
-  if (logado) return <Wizard />;
+
+  if (logado && modo === "completa") return <Wizard />;
+  if (logado && modo === "compra_direta") return <CompraDiretaWizard onVoltar={() => setModo(null)} />;
+
+  if (logado) {
+    return (
+      <div style={{ minHeight: "100vh", background: "var(--bg-base)", padding: "40px", fontFamily: "sans-serif" }}>
+        <div style={{ maxWidth: "920px", margin: "0 auto" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px" }}>
+            <div>
+              <h1 style={{ margin: 0, color: "var(--text-main)", fontSize: "32px" }}>Licita.AI</h1>
+              <p style={{ color: "var(--text-muted)", margin: "8px 0 0" }}>O que você deseja confeccionar?</p>
+            </div>
+            <button onClick={toggleTheme} style={{ padding: "10px 16px", borderRadius: "10px", border: "none", cursor: "pointer", background: "var(--bg-subtle)", color: "var(--text-main)" }}>{isDark ? "☀️" : "🌙"}</button>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "20px" }}>
+            <button onClick={() => setModo("completa")} style={{ textAlign: "left", padding: "28px", borderRadius: "20px", border: "1px solid var(--border)", background: "var(--bg-panel)", color: "var(--text-main)", boxShadow: "var(--shadow-md)", cursor: "pointer" }}>
+              <div style={{ fontSize: "36px", marginBottom: "12px" }}>📚</div>
+              <h2 style={{ margin: "0 0 10px" }}>Fase preparatória completa</h2>
+              <p style={{ margin: 0, color: "var(--text-muted)", lineHeight: 1.5 }}>Gera DFD → ETP → TR em sequência, mantendo os documentos coerentes entre si.</p>
+            </button>
+
+            <button onClick={() => setModo("compra_direta")} style={{ textAlign: "left", padding: "28px", borderRadius: "20px", border: "1px solid var(--border)", background: "var(--bg-panel)", color: "var(--text-main)", boxShadow: "var(--shadow-md)", cursor: "pointer" }}>
+              <div style={{ fontSize: "36px", marginBottom: "12px" }}>🧾</div>
+              <h2 style={{ margin: "0 0 10px" }}>Compra direta — DFD detalhado</h2>
+              <p style={{ margin: 0, color: "var(--text-muted)", lineHeight: 1.5 }}>Para compras diretas e nota avulsa. Gera somente um DFD mais completo, com nível de detalhamento próximo ao de um TR.</p>
+            </button>
+          </div>
+
+          <div style={{ marginTop: "28px", textAlign: "center", color: status.cor, fontSize: "12px", fontWeight: "bold" }}>{status.texto}</div>
+          <div style={{ textAlign: "center", marginTop: "12px" }}><button onClick={() => setLogado(false)} style={{ border: "none", background: "transparent", color: "var(--text-muted)", cursor: "pointer" }}>Sair</button></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", backgroundColor: "var(--bg-base)", transition: "background-color 0.3s", fontFamily: "sans-serif" }}>
