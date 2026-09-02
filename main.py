@@ -36,8 +36,7 @@ app_monta = load_app_from_path("monta_main", "MONTAEDITAL/main.py", "MONTAEDITAL
 app_email = load_app_from_path("email_main", "EMAIL-ATAS-CONTRATOS/main.py", "EMAIL-ATAS-CONTRATOS")
 app_extrato = load_app_from_path("extrato_main", "GERADOREXTRATO/main.py", "GERADOREXTRATO")
 
-# O repositório PROJETO-TJSP fica como projeto irmão no servidor Ubuntu.
-# PROJETO_TJSP_ROOT pode sobrescrever esse caminho no ambiente de produção.
+# O PROJETO-TJSP continua sendo um projeto independente exposto em /estudos.
 site_root = Path(__file__).resolve().parent
 tjsp_root = Path(
     os.environ.get(
@@ -54,12 +53,13 @@ else:
 
 app = FastAPI(title="Universo da Licitação API")
 
-# A página do GitHub Pages acessa diretamente o agregador via Tailscale.
-# Mantemos a lista explícita e permitimos extensões por variável de ambiente.
+# /files pertence ao agregador deste repositório e é consumido pelo GitHub Pages.
 cors_origins = {
     "https://danihmorais.github.io",
     "http://localhost",
+    "http://localhost:8000",
     "http://127.0.0.1",
+    "http://127.0.0.1:8000",
 }
 cors_origins.update(
     origin.strip().rstrip("/")
@@ -80,34 +80,26 @@ app.mount("/monta", app_monta)
 app.mount("/email", app_email)
 app.mount("/geradorextrato", app_extrato)
 
-# Namespace sem o nome do projeto: o frontend usa API_URL/estudos.
 if app_tjsp is not None:
     app.mount("/estudos", app_tjsp)
 
 
+# Pasta física usada pelos Documentos Modelo no servidor.
+# Pode ser sobrescrita por DOCUMENTOS_MODELO_DIR sem alterar o código.
+DEFAULT_DOCUMENTS_DIR = "/run/media/daniel/c1eb5cb7-675f-4e8c-9564-4dabc66d9164"
+
+
 def _documents_root() -> Path:
-    """Resolve a pasta dos Documentos Modelo sem expor outras pastas do servidor.
-
-    A variável DOCUMENTOS_MODELO_DIR é a configuração recomendada em produção.
-    O fallback para LICITA.AI/modelos mantém a instalação atual funcionando sem
-    exigir alteração manual no systemd.
-    """
     configured = os.getenv("DOCUMENTOS_MODELO_DIR", "").strip()
-    candidates = []
-
-    if configured:
-        candidates.append(Path(configured).expanduser())
-
+    candidates = [Path(configured).expanduser()] if configured else []
     candidates.extend(
         [
-            site_root / "LICITA.AI" / "modelos",
+            Path(DEFAULT_DOCUMENTS_DIR),
             site_root / "documentos-modelo",
             site_root / "documentos_modelo",
             site_root / "DOCUMENTOS-MODELO",
             site_root / "modelos",
             site_root / "modelos_documentos",
-            site_root.parent / "Documentos Modelo",
-            site_root.parent / "Documentos_Modelo",
             Path.home() / "Documentos Modelo",
             Path.home() / "Documentos_Modelo",
             Path.home() / "documentos-modelo",
@@ -115,7 +107,7 @@ def _documents_root() -> Path:
         ]
     )
 
-    seen = set()
+    seen: set[Path] = set()
     for candidate in candidates:
         try:
             resolved = candidate.resolve()
@@ -127,19 +119,17 @@ def _documents_root() -> Path:
         if resolved.is_dir():
             return resolved
 
-    configured_text = configured or "não configurado"
+    configured_text = configured or DEFAULT_DOCUMENTS_DIR
     raise HTTPException(
         status_code=503,
         detail=(
-            "A pasta de Documentos Modelo não foi encontrada. "
-            f"DOCUMENTOS_MODELO_DIR={configured_text}. "
-            "Configure essa variável no serviço FastAPI apontando para a pasta dos modelos."
+            "A pasta de Documentos Modelo não está disponível. "
+            f"Caminho configurado/fallback: {configured_text}."
         ),
     )
 
 
 def _safe_file(root: Path, relative_path: str) -> Path:
-    """Impede path traversal e garante que o arquivo esteja dentro de root."""
     clean = relative_path.strip().replace("\\", "/").lstrip("/")
     if not clean or clean in {".", ".."}:
         raise HTTPException(status_code=404, detail="Arquivo não informado.")
@@ -147,8 +137,8 @@ def _safe_file(root: Path, relative_path: str) -> Path:
     requested = (root / clean).resolve()
     try:
         requested.relative_to(root)
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Arquivo não encontrado.")
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Arquivo não encontrado.") from exc
 
     if not requested.is_file() or requested.name.startswith("."):
         raise HTTPException(status_code=404, detail="Arquivo não encontrado.")
@@ -158,31 +148,28 @@ def _safe_file(root: Path, relative_path: str) -> Path:
 
 @app.get("/health")
 async def health():
-    """Endpoint simples para verificar se o agregador está ativo."""
-    return {"status": "ok"}
+    return {"status": "ok", "service": "danihmorais-github-pages"}
 
 
 @app.get("/files")
 async def list_model_files():
-    """Lista os arquivos de modelos disponíveis, incluindo subpastas."""
+    """Lista exclusivamente os Documentos Modelo disponibilizados pelo servidor."""
     root = _documents_root()
     entries = []
-
     for path in root.rglob("*"):
         if not path.is_file() or path.name.startswith("."):
             continue
         try:
             relative = path.relative_to(root).as_posix()
-            stat = path.stat()
+            size = path.stat().st_size
         except OSError:
             continue
-
         entries.append(
             {
                 "name": path.name,
                 "path": relative,
                 "type": "file",
-                "size": stat.st_size,
+                "size": size,
                 "url": f"/files/{relative}",
             }
         )
@@ -193,10 +180,6 @@ async def list_model_files():
 
 @app.get("/files/{file_path:path}")
 async def download_model_file(file_path: str):
-    """Entrega um modelo individual com validação contra path traversal."""
     root = _documents_root()
     requested = _safe_file(root, file_path)
-    return FileResponse(
-        path=requested,
-        filename=requested.name,
-    )
+    return FileResponse(path=requested, filename=requested.name)
