@@ -36,7 +36,7 @@ app_monta = load_app_from_path("monta_main", "MONTAEDITAL/main.py", "MONTAEDITAL
 app_email = load_app_from_path("email_main", "EMAIL-ATAS-CONTRATOS/main.py", "EMAIL-ATAS-CONTRATOS")
 app_extrato = load_app_from_path("extrato_main", "GERADOREXTRATO/main.py", "GERADOREXTRATO")
 
-# O PROJETO-TJSP continua sendo um projeto independente exposto em /estudos.
+# O módulo TJSP fica separado do agregador para evitar importação circular.
 site_root = Path(__file__).resolve().parent
 tjsp_root = Path(
     os.environ.get(
@@ -44,16 +44,15 @@ tjsp_root = Path(
         str(site_root.parent / "PROJETO-TJSP"),
     )
 ).expanduser().resolve()
-tjsp_main = tjsp_root / "tjsp_main.py"
+tjsp_api = tjsp_root / "app" / "tjsp_api.py"
 
-if tjsp_main.is_file():
-    app_tjsp = load_app_from_path("tjsp_main", str(tjsp_main), str(tjsp_root))
+if tjsp_api.is_file():
+    app_tjsp = load_app_from_path("tjsp_api_standalone", str(tjsp_api), str(tjsp_root))
 else:
     app_tjsp = None
 
 app = FastAPI(title="Universo da Licitação API")
 
-# /files pertence ao agregador deste repositório e é consumido pelo GitHub Pages.
 cors_origins = {
     "https://danihmorais.github.io",
     "http://localhost",
@@ -84,7 +83,7 @@ if app_tjsp is not None:
     app.mount("/estudos", app_tjsp)
 
 
-# Pasta física usada pelos Documentos Modelo no servidor.
+# Pasta física usada pelos Documentos Modelo.
 # Pode ser sobrescrita por DOCUMENTOS_MODELO_DIR sem alterar o código.
 DEFAULT_DOCUMENTS_DIR = "/run/media/daniel/c1eb5cb7-675f-4e8c-9564-4dabc66d9164"
 
@@ -153,7 +152,7 @@ async def health():
 
 @app.get("/files")
 async def list_model_files():
-    """Lista exclusivamente os Documentos Modelo disponibilizados pelo servidor."""
+    """Lista exclusivamente os Documentos Modelo disponibilizados pelo backend."""
     root = _documents_root()
     entries = []
     for path in root.rglob("*"):
