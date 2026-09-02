@@ -112,9 +112,7 @@
             overflow: hidden;
         }
 
-        .tree {
-            padding: 8px 0;
-        }
+        .tree { padding: 8px 0; }
 
         .tree-node + .tree-node {
             border-top: 1px solid rgba(229, 231, 235, 0.55);
@@ -186,13 +184,8 @@
             color: #fff;
         }
 
-        .children {
-            display: none;
-        }
-
-        .children.open {
-            display: block;
-        }
+        .children { display: none; }
+        .children.open { display: block; }
 
         .state {
             text-align: center;
@@ -206,9 +199,7 @@
             display: inline-block;
         }
 
-        .error {
-            color: #b91c1c;
-        }
+        .error { color: #b91c1c; }
 
         @keyframes rot { to { transform: rotate(360deg); } }
 
@@ -257,6 +248,12 @@
         const API_URL = __API_URL_JSON__.replace(/\/+$/, "");
         const FILES_URL = `${API_URL}/files`;
 
+        const collator = new Intl.Collator("pt-BR", {
+            sensitivity: "base",
+            numeric: true,
+            ignorePunctuation: false
+        });
+
         (function () {
             const theme = localStorage.getItem("app_theme") || "light";
             document.documentElement.dataset.theme = theme;
@@ -303,11 +300,15 @@
         }
 
         function extractEntries(data) {
-            if (Array.isArray(data)) return data.map(normalizeEntry).filter(e => e.path || e.name);
+            if (Array.isArray(data)) {
+                return data.map(normalizeEntry).filter(e => e.path || e.name);
+            }
 
             if (data && typeof data === "object") {
                 const candidate = data.files || data.items || data.entries || data.results;
-                if (Array.isArray(candidate)) return candidate.map(normalizeEntry).filter(e => e.path || e.name);
+                if (Array.isArray(candidate)) {
+                    return candidate.map(normalizeEntry).filter(e => e.path || e.name);
+                }
             }
 
             return [];
@@ -342,12 +343,21 @@
                 return `${API_URL}/${String(entry.url).replace(/^\/+/, "")}`;
             }
 
-            const path = String(entry.path || entry.name).split("/").map(encodeURIComponent).join("/");
+            const path = String(entry.path || entry.name)
+                .split("/")
+                .map(encodeURIComponent)
+                .join("/");
+
             return `${FILES_URL}/${path}`;
         }
 
         function createTreeNodes() {
-            const root = { name: "", path: "", folders: new Map(), files: new Map() };
+            const root = {
+                name: "",
+                path: "",
+                folders: new Map(),
+                files: new Map()
+            };
 
             const ensureFolder = (parent, name, path) => {
                 if (!parent.folders.has(name)) {
@@ -362,7 +372,9 @@
             };
 
             entries.forEach(entry => {
-                const normalizedPath = String(entry.path || entry.name || "").replace(/^\/+|\/+$/g, "");
+                const normalizedPath = String(entry.path || entry.name || "")
+                    .replace(/^\/+|\/+$/g, "");
+
                 if (!normalizedPath) return;
 
                 const parts = normalizedPath.split("/").filter(Boolean);
@@ -392,10 +404,14 @@
 
         function nodeMatches(node, query) {
             if (!query) return true;
-            if (node.name.toLowerCase().includes(query) || node.path.toLowerCase().includes(query)) return true;
+            if (node.name.toLowerCase().includes(query) || node.path.toLowerCase().includes(query)) {
+                return true;
+            }
 
             for (const file of node.files.values()) {
-                if (file.name.toLowerCase().includes(query) || file.path.toLowerCase().includes(query)) return true;
+                if (file.name.toLowerCase().includes(query) || file.path.toLowerCase().includes(query)) {
+                    return true;
+                }
             }
 
             for (const folder of node.folders.values()) {
@@ -406,33 +422,60 @@
         }
 
         function shouldShowFile(file, query) {
-            return !query || file.name.toLowerCase().includes(query) || file.path.toLowerCase().includes(query);
+            return !query ||
+                file.name.toLowerCase().includes(query) ||
+                file.path.toLowerCase().includes(query);
+        }
+
+        function compareEntries(a, b) {
+            const nameCompare = collator.compare(a.name, b.name);
+            if (nameCompare !== 0) return nameCompare;
+
+            // Apenas em caso de nomes idênticos, mantém a pasta antes do arquivo.
+            if (a.kind !== b.kind) return a.kind === "folder" ? -1 : 1;
+            return collator.compare(a.path || "", b.path || "");
         }
 
         function renderFolder(folder, depth, query, forceOpen) {
             if (query && !nodeMatches(folder, query)) return "";
 
             const folderId = `folder-${folder.path.replace(/[^a-zA-Z0-9_-]/g, "-") || "root"}`;
+            const children = [];
+
+            for (const child of folder.folders.values()) {
+                children.push({
+                    kind: "folder",
+                    name: child.name,
+                    path: child.path,
+                    value: child
+                });
+            }
+
+            for (const file of folder.files.values()) {
+                if (shouldShowFile(file, query)) {
+                    children.push({
+                        kind: "file",
+                        name: file.name,
+                        path: file.path,
+                        value: file
+                    });
+                }
+            }
+
+            children.sort(compareEntries);
+
             const visibleChildren = [];
+            for (const child of children) {
+                const childHtml = child.kind === "folder"
+                    ? renderFolder(child.value, depth + 1, query, forceOpen)
+                    : renderFile(child.value, depth + 1);
 
-            const folders = Array.from(folder.folders.values())
-                .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
-
-            folders.forEach(child => {
-                const childHtml = renderFolder(child, depth + 1, query, forceOpen);
                 if (childHtml) visibleChildren.push(childHtml);
-            });
-
-            const files = Array.from(folder.files.values())
-                .filter(file => shouldShowFile(file, query))
-                .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
-
-            files.forEach(file => visibleChildren.push(renderFile(file, depth + 1)));
+            }
 
             if (!visibleChildren.length) return "";
 
-            const hasChildren = visibleChildren.length > 0;
-            const open = forceOpen || !query ? false : true;
+            const open = forceOpen || Boolean(query);
 
             return `
                 <div class="tree-node">
@@ -470,20 +513,40 @@
             const panel = document.getElementById("panel");
             const query = document.getElementById("search").value.toLowerCase().trim();
             const root = createTreeNodes();
+            const items = [];
 
-            const folders = Array.from(root.folders.values())
-                .filter(folder => !query || nodeMatches(folder, query))
-                .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+            for (const folder of root.folders.values()) {
+                if (!query || nodeMatches(folder, query)) {
+                    items.push({
+                        kind: "folder",
+                        name: folder.name,
+                        path: folder.path,
+                        value: folder
+                    });
+                }
+            }
 
-            const files = Array.from(root.files.values())
-                .filter(file => shouldShowFile(file, query))
-                .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+            for (const file of root.files.values()) {
+                if (shouldShowFile(file, query)) {
+                    items.push({
+                        kind: "file",
+                        name: file.name,
+                        path: file.path,
+                        value: file
+                    });
+                }
+            }
 
-            const html = [];
-            folders.forEach(folder => html.push(renderFolder(folder, 0, query, Boolean(query))));
-            files.forEach(file => html.push(renderFile(file, 0)));
+            // Ordenação única: pastas e arquivos ficam juntos em ordem alfabética.
+            items.sort(compareEntries);
 
-            const result = html.filter(Boolean).join("");
+            const html = items.map(item =>
+                item.kind === "folder"
+                    ? renderFolder(item.value, 0, query, Boolean(query))
+                    : renderFile(item.value, 0)
+            ).filter(Boolean);
+
+            const result = html.join("");
 
             if (!result) {
                 panel.innerHTML = '<div class="state">Nenhum arquivo ou pasta encontrado.</div>';
