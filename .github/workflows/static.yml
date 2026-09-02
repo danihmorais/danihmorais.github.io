@@ -60,6 +60,8 @@ jobs:
           npm install
           npm run build
       - name: Assemble final site
+        env:
+          API_URL: ${{ secrets.API_URL }}
         run: |
           mkdir -p site
           cp index.html site/
@@ -69,10 +71,19 @@ jobs:
           cp -r LICITA.AI/dist site/LICITA.AI
           cp -r EMAIL-ATAS-CONTRATOS/dist site/EMAIL-ATAS-CONTRATOS
           cp -r GERADOREXTRATO/dist site/GERADOREXTRATO
-          mkdir -p site/FIORIILICSVTOWORD
           cp -r FIORIILICSVTOWORD/. site/FIORIILICSVTOWORD/
-          mkdir -p "site/DOCUMENTOS MODELO"
-          cp -r "DOCUMENTOS MODELO/." "site/DOCUMENTOS MODELO/"
+          cp documentos-modelo.html site/documentos-modelo.html
+          python - <<'PY'
+          from pathlib import Path
+          import os
+
+          path = Path("site/documentos-modelo.html")
+          content = path.read_text(encoding="utf-8")
+          api_url = os.environ.get("API_URL", "").rstrip("/")
+          if not api_url:
+              raise SystemExit("O secret API_URL não foi configurado.")
+          path.write_text(content.replace("__API_URL__", api_url), encoding="utf-8")
+          PY
       - name: Setup Pages
         uses: actions/configure-pages@v4
       - name: Upload artifact
