@@ -1,24 +1,30 @@
 name: Deploy static content to Pages
+
 on:
   push:
     branches: ["main"]
   workflow_dispatch:
+
 permissions:
   contents: read
   pages: write
   id-token: write
+
 concurrency:
   group: "pages"
   cancel-in-progress: true
+
 jobs:
   deploy:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -29,6 +35,7 @@ jobs:
             LICITA.AI/package-lock.json
             EMAIL-ATAS-CONTRATOS/package-lock.json
             GERADOREXTRATO/package-lock.json
+
       - name: Build MontaEdital
         working-directory: ./MONTAEDITAL
         env:
@@ -36,6 +43,7 @@ jobs:
         run: |
           npm install
           npm run build
+
       - name: Build Licita.AI
         working-directory: ./LICITA.AI
         env:
@@ -45,6 +53,7 @@ jobs:
         run: |
           npm install
           npm run build
+
       - name: Build Enviador de Atas e Contratos
         working-directory: ./EMAIL-ATAS-CONTRATOS
         env:
@@ -52,6 +61,7 @@ jobs:
         run: |
           npm install
           npm run build
+
       - name: Build Gerador de Extrato de Atas e Contratos
         working-directory: ./GERADOREXTRATO
         env:
@@ -59,6 +69,7 @@ jobs:
         run: |
           npm install
           npm run build
+
       - name: Assemble final site
         env:
           API_URL: ${{ secrets.API_URL }}
@@ -85,8 +96,6 @@ jobs:
           api_url = os.environ.get("API_URL", "").strip()
           version = os.environ.get("PAGES_VERSION", "").strip()
 
-          # Aceita tanto https://servidor... quanto "https://servidor..."
-          # caso o secret tenha sido salvo acidentalmente com aspas externas.
           if len(api_url) >= 2 and api_url[0] == api_url[-1] and api_url[0] in "\"'":
               api_url = api_url[1:-1].strip()
           api_url = api_url.rstrip("/")
@@ -103,11 +112,9 @@ jobs:
           placeholder = "__API_URL_JSON__"
           if placeholder not in doc_content:
               raise SystemExit(f"Placeholder {placeholder} não encontrado em documentos-modelo.html")
-
           doc_content = doc_content.replace(placeholder, json.dumps(api_url, ensure_ascii=False))
           if placeholder in doc_content:
               raise SystemExit("O placeholder da API_URL permaneceu no HTML após a substituição.")
-
           doc_path.write_text(doc_content, encoding="utf-8")
 
           index_path = Path("site/index.html")
@@ -118,8 +125,6 @@ jobs:
           if "__PAGES_VERSION__" in index_content:
               raise SystemExit("O cache-buster __PAGES_VERSION__ permaneceu no index.html")
 
-          # Validação sintática mínima: a página publicada não pode conter
-          # placeholders nem uma declaração de API_URL quebrada.
           published = doc_path.read_text(encoding="utf-8")
           if "__API_URL_JSON__" in published:
               raise SystemExit("Placeholder __API_URL_JSON__ ainda está presente no HTML publicado.")
@@ -130,12 +135,18 @@ jobs:
           print("Placeholder __API_URL_JSON__: removido")
           print("Cache-buster do index.html: aplicado")
           PY
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
+          name: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
           path: './site'
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          artifact_name: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
