@@ -215,8 +215,8 @@
     </div>
 
     <script>
-        // Substituído pelo GitHub Actions durante o deploy com o secret API_URL.
-        const API_URL = "__API_URL__".replace(/\/+$/, "");
+        // O GitHub Actions substitui este placeholder por uma string JSON válida.
+        const API_URL = __API_URL_JSON__.replace(/\/+$/, "");
         const FILES_URL = `${API_URL}/files`;
 
         (function () {
@@ -276,7 +276,7 @@
         }
 
         async function loadFiles() {
-            if (!API_URL || API_URL === "__API_URL__") {
+            if (!API_URL) {
                 throw new Error("API_URL não foi configurada no deploy.");
             }
 
