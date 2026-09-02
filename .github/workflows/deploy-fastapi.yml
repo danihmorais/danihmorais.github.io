@@ -39,7 +39,7 @@ jobs:
             '{ref:$ref,after:$after,repository:{full_name:$repository},project:$project}')
           signature=$(printf '%s' "$body" | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" -hex | awk '{print $2}')
 
-          response=$(curl --fail-with-body --silent --show-error --max-time 30 \
+          response=$(curl --fail-with-body --silent --show-error --retry 3 --retry-delay 2 --max-time 30 \
             --request POST \
             --url "$DEPLOY_URL" \
             --header 'Content-Type: application/json' \
@@ -61,7 +61,7 @@ jobs:
 
           STATUS_URL="${API_URL%/}/deploy-status"
           for i in $(seq 1 60); do
-            response=$(curl --fail --silent --show-error --max-time 30 \
+            response=$(curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 30 \
               --get --url "$STATUS_URL" \
               --data-urlencode "sha=$SHA" \
               --data-urlencode "project=$PROJECT")
@@ -94,7 +94,7 @@ jobs:
           trap 'rm -f "$BODY_FILE" "$HEADERS_FILE"' EXIT
 
           echo 'Validando /health...'
-          curl --fail --silent --show-error --max-time 30 \
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 30 \
             --header "Origin: $ORIGIN" \
             --output "$BODY_FILE" \
             "$BASE_URL/health"
@@ -109,14 +109,14 @@ jobs:
 
           echo 'Validando namespace do agregador...'
           for endpoint in /licita/openapi.json /monta/openapi.json /email/openapi.json /geradorextrato/openapi.json /estudos/openapi.json; do
-            curl --fail --silent --show-error --max-time 30 \
+            curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 30 \
               --output /dev/null \
               "$BASE_URL$endpoint"
             echo "$endpoint OK"
           done
 
           echo 'Validando /files e CORS...'
-          curl --fail --silent --show-error --max-time 30 \
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 30 \
             --header "Origin: $ORIGIN" \
             --dump-header "$HEADERS_FILE" \
             --output "$BODY_FILE" \
