@@ -9,7 +9,7 @@ permissions:
   id-token: write
 concurrency:
   group: "pages"
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   deploy:
     environment:
@@ -106,10 +106,12 @@ jobs:
           if "__PAGES_VERSION__" in index_content:
               index_content = index_content.replace("__PAGES_VERSION__", version)
               index_path.write_text(index_content, encoding="utf-8")
+          if "__PAGES_VERSION__" in index_content:
+              raise SystemExit("O cache-buster __PAGES_VERSION__ permaneceu no index.html")
 
           print("API_URL aplicada ao site com sucesso.")
-          print(f"documentos-modelo.html contém placeholder: {'__API_URL__' in doc_content}")
-          print(f"index.html contém cache-buster: {'__PAGES_VERSION__' not in index_content}")
+          print("Placeholder __API_URL__: removido")
+          print("Cache-buster do index.html: aplicado")
           PY
       - name: Setup Pages
         uses: actions/configure-pages@v4
