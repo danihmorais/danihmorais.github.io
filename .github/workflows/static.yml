@@ -62,7 +62,10 @@ jobs:
       - name: Assemble final site
         env:
           API_URL: ${{ secrets.API_URL }}
+          PAGES_VERSION: ${{ github.sha }}
         run: |
+          set -euo pipefail
+
           mkdir -p site
           cp index.html site/
           cp ads.txt site/
@@ -73,16 +76,40 @@ jobs:
           cp -r GERADOREXTRATO/dist site/GERADOREXTRATO
           cp -r FIORIILICSVTOWORD/. site/FIORIILICSVTOWORD/
           cp documentos-modelo.html site/documentos-modelo.html
+
           python - <<'PY'
           from pathlib import Path
+          import json
           import os
 
-          path = Path("site/documentos-modelo.html")
-          content = path.read_text(encoding="utf-8")
-          api_url = os.environ.get("API_URL", "").rstrip("/")
+          api_url = os.environ.get("API_URL", "").strip().rstrip("/")
+          version = os.environ.get("PAGES_VERSION", "").strip()
+
           if not api_url:
               raise SystemExit("O secret API_URL não foi configurado.")
-          path.write_text(content.replace("__API_URL__", api_url), encoding="utf-8")
+          if not api_url.startswith(("http://", "https://")):
+              raise SystemExit("O secret API_URL deve começar com http:// ou https://")
+          if not version:
+              raise SystemExit("PAGES_VERSION não foi configurado.")
+
+          doc_path = Path("site/documentos-modelo.html")
+          doc_content = doc_path.read_text(encoding="utf-8")
+          if "__API_URL__" not in doc_content:
+              raise SystemExit("Placeholder __API_URL__ não encontrado em documentos-modelo.html")
+          doc_content = doc_content.replace("__API_URL__", json.dumps(api_url, ensure_ascii=False))
+          if "__API_URL__" in doc_content:
+              raise SystemExit("O placeholder __API_URL__ permaneceu no HTML após a substituição.")
+          doc_path.write_text(doc_content, encoding="utf-8")
+
+          index_path = Path("site/index.html")
+          index_content = index_path.read_text(encoding="utf-8")
+          if "__PAGES_VERSION__" in index_content:
+              index_content = index_content.replace("__PAGES_VERSION__", version)
+              index_path.write_text(index_content, encoding="utf-8")
+
+          print("API_URL aplicada ao site com sucesso.")
+          print(f"documentos-modelo.html contém placeholder: {'__API_URL__' in doc_content}")
+          print(f"index.html contém cache-buster: {'__PAGES_VERSION__' not in index_content}")
           PY
       - name: Setup Pages
         uses: actions/configure-pages@v4
