@@ -31,9 +31,18 @@ O backend agregador da raiz monta as aplicações FastAPI sob estes prefixos:
 /monta
 /email
 /geradorextrato
+/estudos
 ```
 
-A página de **Documentos Modelo** consulta o endpoint `API_URL/files` do servidor e não depende mais dos arquivos armazenados neste repositório.
+A página de **Documentos Modelo** consulta o endpoint `API_URL/files` do servidor. O agregador raiz também expõe `/files/{caminho}` para download individual e `/health` para verificação básica do serviço.
+
+### Documentos Modelo
+
+A pasta dos arquivos é determinada pela variável de ambiente `DOCUMENTOS_MODELO_DIR`. Em produção, ela deve apontar para a pasta que contém os modelos que devem ser publicados. Como fallback, o backend utiliza `LICITA.AI/modelos` no checkout do servidor e alguns caminhos legados conhecidos.
+
+O endpoint `/files` retorna uma lista JSON com nome, caminho relativo, tamanho e URL de download. O endpoint `/files/{caminho}` valida o caminho antes de servir o arquivo e rejeita tentativas de `path traversal`.
+
+O agregador possui CORS explícito para `https://danihmorais.github.io`, além de permitir origens adicionais configuradas em `CORS_ORIGINS`.
 
 ## 📂 Estrutura
 
@@ -65,6 +74,14 @@ Para o backend correspondente:
 ```powershell
 python -m pip install -r requirements.txt
 python -m uvicorn main:app --reload
+```
+
+Para testar a API do agregador localmente:
+
+```text
+GET /health
+GET /files
+GET /files/<caminho-do-arquivo>
 ```
 
 As páginas estáticas podem ser abertas diretamente no navegador. No GitHub Pages, `documentos-modelo.html` recebe o valor do secret `API_URL` durante o deploy.
