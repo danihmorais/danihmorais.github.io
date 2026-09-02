@@ -29,6 +29,7 @@ jobs:
           set -euo pipefail
           test -n "$WEBHOOK_SECRET" || { echo 'Secret DEPLOY_WEBHOOK_SECRET não configurado.'; exit 1; }
           test -n "$API_URL" || { echo 'Secret API_URL não configurado.'; exit 1; }
+
           DEPLOY_URL="${API_URL%/}/deploy"
           body=$(jq -nc \
             --arg ref 'refs/heads/main' \
@@ -37,6 +38,7 @@ jobs:
             --arg project "$PROJECT" \
             '{ref:$ref,after:$after,repository:{full_name:$repository},project:$project}')
           signature=$(printf '%s' "$body" | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" -hex | awk '{print $2}')
+
           response=$(curl --fail-with-body --silent --show-error --max-time 30 \
             --request POST \
             --url "$DEPLOY_URL" \
@@ -45,7 +47,8 @@ jobs:
             --header "X-Deploy-Project: $PROJECT" \
             --header "X-Hub-Signature-256: sha256=$signature" \
             --data "$body")
-          echo "Deploy server respondeu: $response"
+
+          echo "Deploy remoto iniciado: $response"
 
       - name: Wait for deployment
         env:
@@ -55,6 +58,7 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$API_URL" || { echo 'Secret API_URL não configurado.'; exit 1; }
+
           STATUS_URL="${API_URL%/}/deploy-status"
           for i in $(seq 1 60); do
             response=$(curl --fail --silent --show-error --max-time 30 \
@@ -81,6 +85,8 @@ jobs:
           API_URL: ${{ secrets.API_URL }}
         run: |
           set -euo pipefail
+          test -n "$API_URL" || { echo 'Secret API_URL não configurado.'; exit 1; }
+
           BASE_URL="${API_URL%/}"
           ORIGIN='https://danihmorais.github.io'
           BODY_FILE="$(mktemp)"
@@ -96,9 +102,18 @@ jobs:
           import json, sys
           from pathlib import Path
           payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-          if payload.get("status") != "ok" or payload.get("service") != "danihmorais-github-pages":
-              raise SystemExit("/health não corresponde ao backend do danihmorais.github.io")
+          if payload.get("status") != "ok":
+              raise SystemExit("/health não retornou status=ok")
+          print("/health OK")
           PY
+
+          echo 'Validando namespace do agregador...'
+          for endpoint in /licita/openapi.json /monta/openapi.json /email/openapi.json /geradorextrato/openapi.json /estudos/openapi.json; do
+            curl --fail --silent --show-error --max-time 30 \
+              --output /dev/null \
+              "$BASE_URL$endpoint"
+            echo "$endpoint OK"
+          done
 
           echo 'Validando /files e CORS...'
           curl --fail --silent --show-error --max-time 30 \
@@ -118,5 +133,5 @@ jobs:
           files = payload.get("files") if isinstance(payload, dict) else None
           if not isinstance(files, list):
               raise SystemExit("/files não retornou um objeto JSON com a chave 'files'.")
-          print(f"API pública OK: /health e /files funcionando; {len(files)} arquivos encontrados.")
+          print(f"API pública OK: /health, namespaces e /files funcionando; {len(files)} arquivos encontrados.")
           PY
