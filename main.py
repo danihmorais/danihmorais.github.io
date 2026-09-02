@@ -86,10 +86,11 @@ if app_tjsp is not None:
 
 
 def _documents_root() -> Path:
-    """Resolve, de forma segura, a pasta de modelos disponibilizada pelo servidor.
+    """Resolve a pasta dos Documentos Modelo sem expor outras pastas do servidor.
 
-    Em produção, a forma recomendada é definir DOCUMENTOS_MODELO_DIR no serviço
-    systemd. Os caminhos abaixo servem como fallback para instalações já existentes.
+    A variável DOCUMENTOS_MODELO_DIR é a configuração recomendada em produção.
+    O fallback para LICITA.AI/modelos mantém a instalação atual funcionando sem
+    exigir alteração manual no systemd.
     """
     configured = os.getenv("DOCUMENTOS_MODELO_DIR", "").strip()
     candidates = []
@@ -99,6 +100,7 @@ def _documents_root() -> Path:
 
     candidates.extend(
         [
+            site_root / "LICITA.AI" / "modelos",
             site_root / "documentos-modelo",
             site_root / "documentos_modelo",
             site_root / "DOCUMENTOS-MODELO",
