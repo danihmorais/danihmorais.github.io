@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentos Modelo | Universo da Licitação</title>
+    <link rel="icon" href="./assets/logo.png" type="image/png">
+
+    <style>
+        :root {
+            --bg: #f4f5f7;
+            --card: #fff;
+            --text: #1f2430;
+            --muted: #6b7280;
+            --pri: #2f6f4f;
+            --b: #e5e7eb;
+        }
+
+        [data-theme="dark"] {
+            --bg: #0b1220;
+            --card: #111827;
+            --text: #f3f4f6;
+            --muted: #94a3b8;
+            --pri: #34a06f;
+            --b: #243041;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            font-family: "Segoe UI", sans-serif;
+            background: linear-gradient(180deg, var(--bg), #dfe8e3);
+            color: var(--text);
+        }
+
+        [data-theme="dark"] body { background: var(--bg); }
+
+        .top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+        }
+
+        .back {
+            text-decoration: none;
+            color: var(--muted);
+            font-size: 0.95rem;
+        }
+
+        .back:hover { color: var(--pri); }
+
+        button {
+            cursor: pointer;
+            border: 2px solid var(--b);
+            background: var(--card);
+            border-radius: 999px;
+            padding: 10px 14px;
+            color: var(--text);
+        }
+
+        .wrap {
+            flex: 1;
+            width: 100%;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 0 20px 30px;
+        }
+
+        .hero {
+            text-align: center;
+            padding: 8px 0 24px;
+        }
+
+        .hero-logo {
+            width: 70px;
+            height: 70px;
+            margin-bottom: 8px;
+        }
+
+        .hero h1 { margin: 0 0 6px; font-size: 1.8rem; }
+        .hero p { margin: 0; color: var(--muted); }
+
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+
+        .toolbar input {
+            flex: 1;
+            padding: 10px 14px;
+            border-radius: 999px;
+            border: 2px solid var(--b);
+            background: var(--card);
+            color: var(--text);
+            font-size: 0.95rem;
+        }
+
+        .panel {
+            background: var(--card);
+            border: 2px solid var(--b);
+            border-radius: 18px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+        }
+
+        .row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--b);
+        }
+
+        .row:last-child { border-bottom: none; }
+
+        .row .icon {
+            font-size: 22px;
+            width: 26px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .row .name {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .row .meta {
+            color: var(--muted);
+            font-size: 0.85rem;
+            flex-shrink: 0;
+        }
+
+        .row .dl {
+            text-decoration: none;
+            color: var(--pri);
+            font-weight: 600;
+            font-size: 0.9rem;
+            padding: 6px 12px;
+            border: 2px solid var(--pri);
+            border-radius: 999px;
+            flex-shrink: 0;
+        }
+
+        .row .dl:hover {
+            background: var(--pri);
+            color: #fff;
+        }
+
+        .state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--muted);
+        }
+
+        .state .spin {
+            font-size: 30px;
+            animation: rot 1s linear infinite;
+            display: inline-block;
+        }
+
+        .error {
+            color: #b91c1c;
+        }
+
+        @keyframes rot { to { transform: rotate(360deg); } }
+
+        footer {
+            text-align: center;
+            padding: 20px 0 10px;
+            color: var(--muted);
+            font-size: 0.85rem;
+        }
+
+        @media (max-width: 640px) {
+            .row { padding: 12px 14px; }
+            .row .meta { display: none; }
+            .row .name { white-space: normal; }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="top">
+        <a class="back" href="./">← Voltar</a>
+        <button id="t" onclick="sw()"></button>
+    </div>
+
+    <div class="wrap">
+        <div class="hero">
+            <img src="./assets/logo.png" alt="Logo" class="hero-logo">
+            <h1>Documentos Modelo</h1>
+            <p>Arquivos disponibilizados diretamente pelo servidor.</p>
+        </div>
+
+        <div class="toolbar">
+            <input id="search" type="text" placeholder="Buscar arquivo..." oninput="render()">
+        </div>
+
+        <div class="panel" id="panel">
+            <div class="state"><span class="spin">⏳</span><br>Carregando arquivos...</div>
+        </div>
+
+        <footer>© 2026 danih.morais</footer>
+    </div>
+
+    <script>
+        // Substituído pelo GitHub Actions durante o deploy com o secret API_URL.
+        const API_URL = "__API_URL__".replace(/\/+$/, "");
+        const FILES_URL = `${API_URL}/files`;
+
+        (function () {
+            const theme = localStorage.getItem("app_theme") || "light";
+            document.documentElement.dataset.theme = theme;
+            updateThemeBtn();
+        })();
+
+        function sw() {
+            const theme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+            document.documentElement.dataset.theme = theme;
+            localStorage.setItem("app_theme", theme);
+            updateThemeBtn();
+        }
+
+        function updateThemeBtn() {
+            document.getElementById("t").textContent =
+                document.documentElement.dataset.theme === "dark" ? "☀️" : "🌙";
+        }
+
+        let entries = [];
+
+        function normalizeEntry(item) {
+            if (typeof item === "string") {
+                return {
+                    name: item.split("/").filter(Boolean).pop() || item,
+                    path: item,
+                    type: "file",
+                    size: undefined,
+                    url: null
+                };
+            }
+
+            const path = item.path || item.relative_path || item.filepath || item.filename || item.name || "";
+            const name = item.name || item.filename || (path.split("/").filter(Boolean).pop() || path);
+            const type = item.type || item.kind || (item.is_dir || item.directory ? "tree" : "file");
+            const url = item.url || item.download_url || item.href || null;
+
+            return {
+                name,
+                path,
+                type: type === "directory" || type === "folder" || type === "tree" ? "tree" : "file",
+                size: item.size,
+                url
+            };
+        }
+
+        function extractEntries(data) {
+            if (Array.isArray(data)) return data.map(normalizeEntry).filter(e => e.path || e.name);
+
+            if (data && typeof data === "object") {
+                const candidate = data.files || data.items || data.entries || data.results;
+                if (Array.isArray(candidate)) return candidate.map(normalizeEntry).filter(e => e.path || e.name);
+            }
+
+            return [];
+        }
+
+        async function loadFiles() {
+            if (!API_URL || API_URL === "__API_URL__") {
+                throw new Error("API_URL não foi configurada no deploy.");
+            }
+
+            const res = await fetch(FILES_URL, { cache: "no-store" });
+            if (!res.ok) throw new Error(`Falha ao consultar o servidor (HTTP ${res.status}).`);
+
+            const data = await res.json();
+            entries = extractEntries(data);
+            render();
+        }
+
+        function formatSize(bytes) {
+            if (bytes === undefined || bytes === null || bytes === "") return "";
+            const n = Number(bytes);
+            if (!Number.isFinite(n)) return "";
+            if (n < 1024) return `${n} B`;
+            if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+            return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+        }
+
+        function fileUrl(entry) {
+            if (entry.url) {
+                if (/^https?:\/\//i.test(entry.url)) return entry.url;
+                return `${API_URL}/${String(entry.url).replace(/^\/+/, "")}`;
+            }
+
+            const path = String(entry.path || entry.name).split("/").map(encodeURIComponent).join("/");
+            return `${FILES_URL}/${path}`;
+        }
+
+        function render() {
+            const panel = document.getElementById("panel");
+            const query = document.getElementById("search").value.toLowerCase().trim();
+            const filtered = entries
+                .filter(entry => !query || entry.name.toLowerCase().includes(query) || entry.path.toLowerCase().includes(query))
+                .sort((a, b) => {
+                    if (a.type !== b.type) return a.type === "tree" ? -1 : 1;
+                    return a.path.localeCompare(b.path, "pt-BR");
+                });
+
+            if (!filtered.length) {
+                panel.innerHTML = '<div class="state">Nenhum arquivo encontrado.</div>';
+                return;
+            }
+
+            panel.innerHTML = filtered.map(entry => {
+                if (entry.type === "tree") {
+                    return `
+                        <div class="row">
+                            <div class="icon">📁</div>
+                            <div class="name">${escapeHtml(entry.path || entry.name)}</div>
+                            <div class="meta">pasta</div>
+                        </div>`;
+                }
+
+                const url = fileUrl(entry);
+                return `
+                    <div class="row">
+                        <div class="icon">📄</div>
+                        <div class="name" title="${escapeAttr(entry.path || entry.name)}">${escapeHtml(entry.name)}</div>
+                        <div class="meta">${formatSize(entry.size)}</div>
+                        <a class="dl" href="${escapeAttr(url)}" download="${escapeAttr(entry.name)}">Baixar</a>
+                    </div>`;
+            }).join("");
+        }
+
+        function escapeHtml(value) {
+            return String(value).replace(/[&<>"']/g, c => ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+                "'": "&#39;"
+            }[c]));
+        }
+
+        function escapeAttr(value) {
+            return escapeHtml(value);
+        }
+
+        loadFiles().catch(err => {
+            document.getElementById("panel").innerHTML = `
+                <div class="state error">
+                    ⚠️ Não foi possível carregar os arquivos.<br>
+                    <small>${escapeHtml(err.message)}</small>
+                </div>`;
+        });
+    </script>
+</body>
+</html>
