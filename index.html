@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Universo da Licitação</title>
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7602585014371569"
-     crossorigin="anonymous"></script>
+    <script async src="https://pagead2.googlesyndication.com/pagead/js?client=ca-pub-7602585014371569" crossorigin="anonymous"></script>
     <link rel="icon" href="assets/logo.png" type="image/png">
 
     <style>
@@ -17,7 +16,6 @@
             --pri: #2f6f4f;
             --b: #e5e7eb;
         }
-
         [data-theme="dark"] {
             --bg: #0b1220;
             --card: #111827;
@@ -26,11 +24,7 @@
             --pri: #34a06f;
             --b: #243041;
         }
-
-        * {
-            box-sizing: border-box;
-        }
-
+        * { box-sizing: border-box; }
         body {
             margin: 0;
             min-height: 100vh;
@@ -40,34 +34,8 @@
             background: linear-gradient(180deg, var(--bg), #dfe8e3);
             color: var(--text);
         }
-
-        [data-theme="dark"] body {
-            background: var(--bg);
-        }
-
-        .top {
-            display: flex;
-            justify-content: flex-end;
-            align-items: center;
-            padding: 10px 20px;
-        }
-
-        .brand {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-        }
-
-        .brand img {
-            width: 56px;
-            height: 56px;
-        }
-
-        .brand h1 {
-            margin: 0;
-            font-size: 1.4rem;
-        }
-
+        [data-theme="dark"] body { background: var(--bg); }
+        .top { display: flex; justify-content: flex-end; align-items: center; padding: 10px 20px; }
         button {
             cursor: pointer;
             border: 2px solid var(--b);
@@ -76,42 +44,12 @@
             padding: 10px 14px;
             color: var(--text);
         }
-
-        .wrap {
-            flex: 1;
-            width: 100%;
-            max-width: 1100px;
-            margin: 0 auto;
-            padding: 0 20px 20px;
-        }
-
-        .hero {
-            text-align: center;
-            padding: 8px 0 20px;
-        }
-
-        .hero-logo {
-            width: 80px;
-            height: 80px;
-            margin-bottom: 8px;
-        }
-
-        .hero h1 {
-            margin: 0 0 6px;
-            font-size: 2rem;
-        }
-
-        .hero p {
-            margin: 0;
-            color: var(--muted);
-        }
-
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 20px;
-        }
-
+        .wrap { flex: 1; width: 100%; max-width: 1100px; margin: 0 auto; padding: 0 20px 20px; }
+        .hero { text-align: center; padding: 8px 0 20px; }
+        .hero-logo { width: 80px; height: 80px; margin-bottom: 8px; }
+        .hero h1 { margin: 0 0 6px; font-size: 2rem; }
+        .hero p { margin: 0; color: var(--muted); }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
         .card {
             background: var(--card);
             border: 2px solid var(--b);
@@ -121,12 +59,7 @@
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
             cursor: pointer;
         }
-
-        .card:hover {
-            transform: translateY(-6px);
-            border-color: var(--pri);
-        }
-
+        .card:hover { transform: translateY(-6px); border-color: var(--pri); }
         .icon {
             width: 70px;
             height: 70px;
@@ -137,31 +70,14 @@
             background: rgba(47, 111, 79, 0.12);
             font-size: 34px;
         }
-
-        h2 {
-            margin: 18px 0 10px;
-        }
-
-        p {
-            color: var(--muted);
-            line-height: 1.5;
-        }
-
-        .main {
-            border-color: var(--pri);
-        }
-
-        footer {
-            text-align: center;
-            padding: 20px 0 10px;
-            color: var(--muted);
-        }
+        h2 { margin: 18px 0 10px; }
+        p { color: var(--muted); line-height: 1.5; }
+        footer { text-align: center; padding: 20px 0 10px; color: var(--muted); }
     </style>
 </head>
 
 <body>
     <div class="top">
-        <div></div>
         <button id="t" onclick="sw()"></button>
     </div>
 
@@ -178,35 +94,30 @@
                 <h2>MontaEdital</h2>
                 <p>Sistema para elaboração da fase preparatória e montagem de editais.</p>
             </div>
-
             <div class="card" onclick="location='LICITA.AI/'">
                 <div class="icon">🤖</div>
                 <h2>Licita.AI</h2>
                 <p>Automatize a criação de DFD, ETP e TR com Inteligência Artificial.</p>
             </div>
-
             <div class="card" onclick="location='FIORIILICSVTOWORD/'">
                 <div class="icon">📄</div>
                 <h2>Conversor de Relatórios Fiorilli</h2>
                 <p>Converte relatórios TXT/CSV da Fiorilli em documentos Word (.docx).</p>
             </div>
-
             <div class="card" onclick="location='EMAIL-ATAS-CONTRATOS/'">
                 <div class="icon">✉️</div>
                 <h2>Enviador de Atas e Contratos</h2>
                 <p>Localize destinatários nos PDFs e envie instrumentos contratuais por e-mail.</p>
             </div>
-
             <div class="card" onclick="location='GERADOREXTRATO/'">
                 <div class="icon">📋</div>
                 <h2>Gerador de Extrato de Atas e Contratos</h2>
                 <p>Gere extratos de atas e contratos a partir de PDFs.</p>
             </div>
-
-            <div class="card" onclick="location='DOCUMENTOS MODELO/'">
+            <div class="card" onclick="location='documentos-modelo.html'">
                 <div class="icon">📁</div>
                 <h2>Documentos Modelo</h2>
-                <p>Navegue e baixe os modelos, pastas e arquivos disponíveis.</p>
+                <p>Consulte e baixe os modelos disponibilizados diretamente pelo servidor.</p>
             </div>
         </div>
 
@@ -215,20 +126,19 @@
 
     <script>
         (function () {
-            let theme = localStorage.getItem("app_theme") || "light";
+            const theme = localStorage.getItem("app_theme") || "light";
             document.documentElement.dataset.theme = theme;
             u();
         })();
-
         function sw() {
-            let theme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+            const theme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
             document.documentElement.dataset.theme = theme;
             localStorage.setItem("app_theme", theme);
             u();
         }
-
         function u() {
-            t.textContent = document.documentElement.dataset.theme === "dark" ? "☀️" : "🌙";
+            document.getElementById("t").textContent =
+                document.documentElement.dataset.theme === "dark" ? "☀️" : "🌙";
         }
     </script>
 </body>
