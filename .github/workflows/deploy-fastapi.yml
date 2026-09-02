@@ -27,6 +27,7 @@ jobs:
           PROJECT: DANIHMORAIS-GITHUB-PAGES
         run: |
           set -euo pipefail
+          # API_URL é somente configuração de CI; não há endereço fixo no repositório.
           test -n "$WEBHOOK_SECRET" || { echo 'Secret DEPLOY_WEBHOOK_SECRET não configurado.'; exit 1; }
           test -n "$API_URL" || { echo 'Secret API_URL não configurado.'; exit 1; }
 
