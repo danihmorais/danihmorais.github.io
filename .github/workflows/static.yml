@@ -82,8 +82,14 @@ jobs:
           import json
           import os
 
-          api_url = os.environ.get("API_URL", "").strip().rstrip("/")
+          api_url = os.environ.get("API_URL", "").strip()
           version = os.environ.get("PAGES_VERSION", "").strip()
+
+          # Aceita tanto https://servidor... quanto "https://servidor..."
+          # caso o secret tenha sido salvo acidentalmente com aspas externas.
+          if len(api_url) >= 2 and api_url[0] == api_url[-1] and api_url[0] in "\"'":
+              api_url = api_url[1:-1].strip()
+          api_url = api_url.rstrip("/")
 
           if not api_url:
               raise SystemExit("O secret API_URL não foi configurado.")
@@ -94,11 +100,14 @@ jobs:
 
           doc_path = Path("site/documentos-modelo.html")
           doc_content = doc_path.read_text(encoding="utf-8")
-          if "__API_URL__" not in doc_content:
-              raise SystemExit("Placeholder __API_URL__ não encontrado em documentos-modelo.html")
-          doc_content = doc_content.replace("__API_URL__", json.dumps(api_url, ensure_ascii=False))
-          if "__API_URL__" in doc_content:
-              raise SystemExit("O placeholder __API_URL__ permaneceu no HTML após a substituição.")
+          placeholder = "__API_URL_JSON__"
+          if placeholder not in doc_content:
+              raise SystemExit(f"Placeholder {placeholder} não encontrado em documentos-modelo.html")
+
+          doc_content = doc_content.replace(placeholder, json.dumps(api_url, ensure_ascii=False))
+          if placeholder in doc_content:
+              raise SystemExit("O placeholder da API_URL permaneceu no HTML após a substituição.")
+
           doc_path.write_text(doc_content, encoding="utf-8")
 
           index_path = Path("site/index.html")
@@ -109,8 +118,16 @@ jobs:
           if "__PAGES_VERSION__" in index_content:
               raise SystemExit("O cache-buster __PAGES_VERSION__ permaneceu no index.html")
 
+          # Validação sintática mínima: a página publicada não pode conter
+          # placeholders nem uma declaração de API_URL quebrada.
+          published = doc_path.read_text(encoding="utf-8")
+          if "__API_URL_JSON__" in published:
+              raise SystemExit("Placeholder __API_URL_JSON__ ainda está presente no HTML publicado.")
+          if 'const API_URL = ""' in published or "const API_URL = ''" in published:
+              raise SystemExit("A declaração da API_URL ficou com aspas duplicadas.")
+
           print("API_URL aplicada ao site com sucesso.")
-          print("Placeholder __API_URL__: removido")
+          print("Placeholder __API_URL_JSON__: removido")
           print("Cache-buster do index.html: aplicado")
           PY
       - name: Setup Pages
