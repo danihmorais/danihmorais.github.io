@@ -11,7 +11,7 @@ Hub de ferramentas web para automação de processos de **licitação pública m
 | 🗂️ **[MontaEdital](./MONTAEDITAL)** | Elaboração da fase preparatória e montagem de editais a partir de modelos `.docx`. |
 | 🤖 **[Licita.AI](./LICITA.AI)** | Geração assistida por IA de DFD, ETP e TR a partir dos dados do processo. |
 | 📄 **[Conversor Fiorilli](./FIORIILICSVTOWORD)** | Conversão de relatórios `.txt`/`.csv` do Fiorilli para Word. |
-| 📁 **[Documentos Modelo](./documentos-modelo.html)** | Consulta e download dos modelos disponibilizados diretamente pelo servidor, via API. |
+| 📁 **[Documentos Modelo](./documentos-modelo.html)** | Consulta e download dos modelos disponibilizados pelo backend. |
 | ✉️ **[Email ARPs/Contratos](./EMAIL-ATAS-CONTRATOS)** | Envio em lote de atas e contratos em PDF por e-mail. |
 | 📑 **[Gerador de Extrato](./GERADOREXTRATO)** | Leitura de PDFs de atas/contratos e geração de extratos padronizados em DOCX. |
 
@@ -34,13 +34,13 @@ O backend agregador da raiz monta as aplicações FastAPI sob estes prefixos:
 /estudos
 ```
 
-A página de **Documentos Modelo** consulta o endpoint `API_URL/files` do servidor. O agregador raiz também expõe `/files/{caminho}` para download individual e `/health` para verificação básica do serviço.
+A página de **Documentos Modelo** usa a API de arquivos fornecida pelo backend. A configuração do endereço efetivo da API é aplicada somente durante a publicação por meio de segredo do GitHub; ela não é gravada como valor literal no código-fonte.
 
 ### Documentos Modelo
 
 A pasta dos arquivos é determinada pela variável de ambiente `DOCUMENTOS_MODELO_DIR`. Em produção, ela deve apontar para a pasta que contém os modelos que devem ser publicados. Como fallback, o backend utiliza `LICITA.AI/modelos` no checkout do servidor e alguns caminhos legados conhecidos.
 
-O endpoint `/files` retorna uma lista JSON com nome, caminho relativo, tamanho e URL de download. O endpoint `/files/{caminho}` valida o caminho antes de servir o arquivo e rejeita tentativas de `path traversal`.
+A API de arquivos retorna uma lista JSON com nome, caminho relativo, tamanho e URL de download. O download individual valida o caminho antes de servir o arquivo e rejeita tentativas de `path traversal`.
 
 O agregador possui CORS explícito para `https://danihmorais.github.io`, além de permitir origens adicionais configuradas em `CORS_ORIGINS`.
 
@@ -84,7 +84,7 @@ GET /files
 GET /files/<caminho-do-arquivo>
 ```
 
-As páginas estáticas podem ser abertas diretamente no navegador. No GitHub Pages, `documentos-modelo.html` recebe o valor do secret `API_URL` durante o deploy.
+No GitHub Pages, a configuração da API é injetada automaticamente durante a publicação.
 
 ## 📄 Licença
 
