@@ -55,7 +55,6 @@
         .viewer-actions { display:flex; gap:8px; flex-shrink:0; }
         .viewer-actions a { display:inline-flex; align-items:center; gap:5px; }
         .viewer-body { flex:1; min-height:0; background:var(--viewer-bg); position:relative; overflow:auto; }
-        .viewer-body iframe { width:100%; height:100%; border:0; display:block; }
         .viewer-body video { width:100%; height:100%; border:0; display:block; object-fit:contain; background:#000; }
         .pdf-viewer { width:100%; min-height:100%; padding:18px; display:flex; flex-direction:column; align-items:center; gap:18px; overflow:auto; }
         .pdf-toolbar { position:sticky; top:0; z-index:2; width:min(1100px,100%); display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap; padding:8px; background:rgba(17,24,39,.96); border:1px solid rgba(255,255,255,.12); border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,.25); }
@@ -84,16 +83,9 @@
     </style>
 </head>
 <body>
-    <div class="top">
-        <a class="back" href="./">← Voltar</a>
-        <button id="t" type="button" aria-label="Alternar tema"></button>
-    </div>
+    <div class="top"><a class="back" href="./">← Voltar</a><button id="t" type="button" aria-label="Alternar tema"></button></div>
     <div class="wrap">
-        <div class="hero">
-            <img src="./assets/logo.png" alt="Logo" class="hero-logo">
-            <h1>Documentos da Licitação</h1>
-            <p>Consulte, visualize, imprima e baixe os documentos disponibilizados pelo servidor.</p>
-        </div>
+        <div class="hero"><img src="./assets/logo.png" alt="Logo" class="hero-logo"><h1>Documentos da Licitação</h1><p>Consulte, visualize, imprima e baixe os documentos disponibilizados pelo servidor.</p></div>
         <div class="toolbar"><input id="search" type="text" placeholder="Buscar documento ou pasta..." autocomplete="off"></div>
         <div class="panel" id="panel"><div class="state"><span class="spin">⏳</span><br>Carregando documentos...</div></div>
         <footer>© 2026 danih.morais</footer>
@@ -101,163 +93,88 @@
 
     <div class="viewer" id="viewer" aria-hidden="true">
         <div class="viewer-card" role="dialog" aria-modal="true" aria-labelledby="viewerTitle">
-            <div class="viewer-head">
-                <div class="viewer-title" id="viewerTitle">Documento</div>
-                <div class="viewer-actions" id="viewerActions"></div>
-                <button id="viewerClose" type="button" aria-label="Fechar visualizador">✕</button>
-            </div>
-            <div class="viewer-body" id="viewerBody"></div>
-            <div class="viewer-note" id="viewerNote"></div>
+            <div class="viewer-head"><div class="viewer-title" id="viewerTitle">Documento</div><div class="viewer-actions" id="viewerActions"></div><button id="viewerClose" type="button" aria-label="Fechar visualizador">✕</button></div>
+            <div class="viewer-body" id="viewerBody"></div><div class="viewer-note" id="viewerNote"></div>
         </div>
     </div>
 
     <script type="module">
         import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.3.289/pdf.min.mjs";
+        const API_URL=__API_URL_JSON__.replace(/\/+$/,"");
+        const FILES_URL=`${API_URL}/files`;
+        const PDFJS_WORKER="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.3.289/pdf.worker.min.mjs";
+        pdfjsLib.GlobalWorkerOptions.workerSrc=PDFJS_WORKER;
+        const collator=new Intl.Collator("pt-BR",{sensitivity:"base",numeric:true,ignorePunctuation:false});
+        let entries=[],currentEntry=null,currentPdf=null,currentPdfUrl=null,currentPdfRender=null;
+        const openFolders=new Set();
+        const panel=document.getElementById("panel"),search=document.getElementById("search"),viewer=document.getElementById("viewer"),viewerBody=document.getElementById("viewerBody"),viewerActions=document.getElementById("viewerActions"),viewerTitle=document.getElementById("viewerTitle"),viewerNote=document.getElementById("viewerNote");
+        document.getElementById("t").addEventListener("click",sw); document.getElementById("viewerClose").addEventListener("click",()=>closeViewer()); viewer.addEventListener("click",event=>{if(event.target===viewer) closeViewer();}); document.addEventListener("keydown",event=>{if(event.key==="Escape"&&viewer.classList.contains("open")) closeViewer();}); search.addEventListener("input",render);
+        (function(){const theme=localStorage.getItem("app_theme")||"light";document.documentElement.dataset.theme=theme;updateThemeBtn();})();
+        function sw(){const theme=document.documentElement.dataset.theme==="dark"?"light":"dark";document.documentElement.dataset.theme=theme;localStorage.setItem("app_theme",theme);updateThemeBtn();}
+        function updateThemeBtn(){document.getElementById("t").textContent=document.documentElement.dataset.theme==="dark"?"☀️":"🌙";}
+        function escapeHtml(value){return String(value).replace(/[&<>\"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"})[char]);}
+        function escapeAttr(value){return escapeHtml(value);}
+        function normalizeEntry(item){if(typeof item==="string") return {name:item.split("/").filter(Boolean).pop()||item,path:item,type:"file",size:undefined,content_type:"application/octet-stream",url:null}; const path=item.path||item.relative_path||item.filepath||item.filename||item.name||""; const name=item.name||item.filename||(path.split("/").filter(Boolean).pop()||path); const type=item.type||item.kind||(item.is_dir||item.directory?"tree":"file"); const url=item.url||item.download_url||item.href||null; return {name,path,type:type==="directory"||type==="folder"||type==="tree"?"tree":"file",size:item.size,content_type:item.content_type||item.mime_type||"application/octet-stream",url};}
+        function extractEntries(data){if(Array.isArray(data)) return data.map(normalizeEntry).filter(e=>e.path||e.name); const candidate=data&&typeof data==="object"?(data.files||data.items||data.entries||data.results):null; return Array.isArray(candidate)?candidate.map(normalizeEntry).filter(e=>e.path||e.name):[];}
+        async function loadFiles(){if(!API_URL) throw new Error("API_URL não foi configurada no deploy."); const res=await fetch(FILES_URL,{cache:"no-store"}); if(!res.ok) throw new Error(`Falha ao consultar o servidor (HTTP ${res.status}).`); entries=extractEntries(await res.json()); render();}
+        function formatSize(bytes){if(bytes===undefined||bytes===null||bytes==="") return ""; const n=Number(bytes); if(!Number.isFinite(n)) return ""; if(n<1024) return `${n} B`; if(n<1024*1024) return `${(n/1024).toFixed(1)} KB`; if(n<1024*1024*1024) return `${(n/(1024*1024)).toFixed(1)} MB`; return `${(n/(1024*1024*1024)).toFixed(1)} GB`;}
+        function fileUrl(entry){if(entry.url){if(/^https?:\/\//i.test(entry.url)) return entry.url; return `${API_URL}/${String(entry.url).replace(/^\/+/,"")}`;} return `${FILES_URL}/${String(entry.path||entry.name).split("/").map(encodeURIComponent).join("/")}`;}
+        function withQuery(url,key,value){const separator=url.includes("?")?"&":"?"; return `${url}${separator}${encodeURIComponent(key)}=${encodeURIComponent(value)}`;}
+        function isPdf(entry){return String(entry.path||entry.name).toLowerCase().endsWith(".pdf")||entry.content_type==="application/pdf";}
+        function isVideo(entry){return String(entry.content_type||"").toLowerCase().startsWith("video/")||/\.(mp4|webm|ogg|m4v)$/i.test(String(entry.path||entry.name));}
+        function isPreviewable(entry){return isPdf(entry)||isVideo(entry);}
+        function fileIcon(entry){if(isPdf(entry)) return "📕"; if(isVideo(entry)) return "🎬"; return "📄";}
+        function fileKindLabel(entry){if(isPdf(entry)) return "PDF"; if(isVideo(entry)) return "vídeo"; return "arquivo";}
+        function createTreeNodes(){const root={name:"",path:"",folders:new Map(),files:new Map()}; const ensureFolder=(parent,name,path)=>{if(!parent.folders.has(name)) parent.folders.set(name,{name,path,folders:new Map(),files:new Map()}); return parent.folders.get(name);}; entries.forEach(entry=>{const normalizedPath=String(entry.path||entry.name||"").replace(/^\/+|\/+$/g,""); if(!normalizedPath) return; const parts=normalizedPath.split("/").filter(Boolean); if(!parts.length) return; let parent=root; const last=parts.length-1; for(let i=0;i<last;i++) parent=ensureFolder(parent,parts[i],parts.slice(0,i+1).join("/")); if(entry.type==="tree") ensureFolder(parent,parts[last],normalizedPath); else parent.files.set(parts[last],{...entry,name:parts[last],path:normalizedPath});}); return root;}
+        function nodeMatches(node,query){if(!query) return true; if(node.name.toLowerCase().includes(query)||node.path.toLowerCase().includes(query)) return true; for(const file of node.files.values()) if(file.name.toLowerCase().includes(query)||file.path.toLowerCase().includes(query)) return true; for(const folder of node.folders.values()) if(nodeMatches(folder,query)) return true; return false;}
+        function shouldShowFile(file,query){return !query||file.name.toLowerCase().includes(query)||file.path.toLowerCase().includes(query);}
+        function compareEntries(a,b){const nameCompare=collator.compare(a.name,b.name); if(nameCompare!==0) return nameCompare; if(a.kind!==b.kind) return a.kind==="folder"?-1:1; return collator.compare(a.path||"",b.path||"");}
+        function renderFolder(folder,depth,query){if(query&&!nodeMatches(folder,query)) return ""; const children=[]; for(const child of folder.folders.values()) children.push({kind:"folder",name:child.name,path:child.path,value:child}); for(const file of folder.files.values()) if(shouldShowFile(file,query)) children.push({kind:"file",name:file.name,path:file.path,value:file}); children.sort(compareEntries); const childrenHtml=children.map(child=>child.kind==="folder"?renderFolder(child.value,depth+1,query):renderFile(child.value,depth+1)).filter(Boolean).join(""); if(!childrenHtml) return ""; const open=Boolean(query)||openFolders.has(folder.path); const folderId=`folder-${folder.path.replace(/[^a-zA-Z0-9_-]/g,"-")}`; return `<div class="tree-node"><div class="tree-row folder" data-action="folder" data-path="${escapeAttr(folder.path)}" style="padding-left:${14+depth*22}px"><div class="expander">${open?"▾":"▸"}</div><div class="icon">📁</div><div class="name" title="${escapeAttr(folder.path)}">${escapeHtml(folder.name)}</div><div class="meta">pasta</div></div><div class="children${open?" open":""}" id="${escapeAttr(folderId)}">${childrenHtml}</div></div>`;}
+        function renderFile(entry,depth){const url=fileUrl(entry),downloadUrl=withQuery(url,"download","1"); const viewButton=isPreviewable(entry)?`<button class="action-link primary" type="button" data-action="view" data-path="${escapeAttr(entry.path)}">Visualizar</button>`:""; return `<div class="tree-node"><div class="tree-row" style="padding-left:${14+depth*22}px"><div class="expander"></div><div class="icon">${fileIcon(entry)}</div><div class="name" title="${escapeAttr(entry.path)}">${escapeHtml(entry.name)}</div><div class="meta">${escapeHtml(fileKindLabel(entry))}${entry.size?` · ${escapeHtml(formatSize(entry.size))}`:""}</div><div class="actions">${viewButton}<a class="action-link" href="${escapeAttr(downloadUrl)}" download>Baixar</a></div></div></div>`;}
+        function render(){const query=search.value.trim().toLowerCase(),root=createTreeNodes(),items=[]; for(const folder of root.folders.values()) items.push({kind:"folder",name:folder.name,path:folder.path,value:folder}); for(const file of root.files.values()) if(shouldShowFile(file,query)) items.push({kind:"file",name:file.name,path:file.path,value:file}); items.sort(compareEntries); const html=items.map(item=>item.kind==="folder"?renderFolder(item.value,0,query):renderFile(item.value,0)).filter(Boolean).join(""); panel.innerHTML=html?`<div class="tree">${html}</div>`:`<div class="state">Nenhum documento encontrado.</div>`;}
+        panel.addEventListener("click",event=>{const target=event.target.closest("[data-action]"); if(!target) return; const action=target.dataset.action,path=target.dataset.path,entry=entries.find(item=>item.path===path); if(action==="folder"){if(openFolders.has(path)) openFolders.delete(path); else openFolders.add(path); render(); return;} if(action==="view"&&entry) openViewer(entry);});
 
-        const API_URL = __API_URL_JSON__.replace(/\/+$/, "");
-        const FILES_URL = `${API_URL}/files`;
-        const PDFJS_WORKER = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.3.289/pdf.worker.min.mjs";
-        pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+        function clearPdfState(){currentPdf=null; currentPdfRender=null; currentPdfUrl=null;}
 
-        const collator = new Intl.Collator("pt-BR", { sensitivity:"base", numeric:true, ignorePunctuation:false });
-        let entries = [];
-        let currentEntry = null;
-        let currentPdf = null;
-        let currentPdfUrl = null;
-        const openFolders = new Set();
-
-        const panel = document.getElementById("panel");
-        const search = document.getElementById("search");
-        const viewer = document.getElementById("viewer");
-        const viewerBody = document.getElementById("viewerBody");
-        const viewerActions = document.getElementById("viewerActions");
-        const viewerTitle = document.getElementById("viewerTitle");
-        const viewerNote = document.getElementById("viewerNote");
-
-        document.getElementById("t").addEventListener("click", sw);
-        document.getElementById("viewerClose").addEventListener("click", () => closeViewer());
-        viewer.addEventListener("click", event => { if (event.target === viewer) closeViewer(); });
-        document.addEventListener("keydown", event => { if (event.key === "Escape" && viewer.classList.contains("open")) closeViewer(); });
-        search.addEventListener("input", render);
-
-        (function(){ const theme=localStorage.getItem("app_theme")||"light"; document.documentElement.dataset.theme=theme; updateThemeBtn(); })();
-        function sw(){ const theme=document.documentElement.dataset.theme==="dark"?"light":"dark"; document.documentElement.dataset.theme=theme; localStorage.setItem("app_theme",theme); updateThemeBtn(); }
-        function updateThemeBtn(){ document.getElementById("t").textContent=document.documentElement.dataset.theme==="dark"?"☀️":"🌙"; }
-        function escapeHtml(value){ return String(value).replace(/[&<>\"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"})[char]); }
-        function escapeAttr(value){ return escapeHtml(value); }
-
-        function normalizeEntry(item){
-            if(typeof item==="string") return {name:item.split("/").filter(Boolean).pop()||item,path:item,type:"file",size:undefined,content_type:"application/octet-stream",url:null};
-            const path=item.path||item.relative_path||item.filepath||item.filename||item.name||"";
-            const name=item.name||item.filename||(path.split("/").filter(Boolean).pop()||path);
-            const type=item.type||item.kind||(item.is_dir||item.directory?"tree":"file");
-            const url=item.url||item.download_url||item.href||null;
-            return {name,path,type:type==="directory"||type==="folder"||type==="tree"?"tree":"file",size:item.size,content_type:item.content_type||item.mime_type||"application/octet-stream",url};
-        }
-        function extractEntries(data){ if(Array.isArray(data)) return data.map(normalizeEntry).filter(e=>e.path||e.name); const candidate=data&&typeof data==="object"?(data.files||data.items||data.entries||data.results):null; return Array.isArray(candidate)?candidate.map(normalizeEntry).filter(e=>e.path||e.name):[]; }
-        async function loadFiles(){ if(!API_URL) throw new Error("API_URL não foi configurada no deploy."); const res=await fetch(FILES_URL,{cache:"no-store"}); if(!res.ok) throw new Error(`Falha ao consultar o servidor (HTTP ${res.status}).`); entries=extractEntries(await res.json()); render(); }
-        function formatSize(bytes){ if(bytes===undefined||bytes===null||bytes==="") return ""; const n=Number(bytes); if(!Number.isFinite(n)) return ""; if(n<1024) return `${n} B`; if(n<1024*1024) return `${(n/1024).toFixed(1)} KB`; if(n<1024*1024*1024) return `${(n/(1024*1024)).toFixed(1)} MB`; return `${(n/(1024*1024*1024)).toFixed(1)} GB`; }
-        function fileUrl(entry){ if(entry.url){ if(/^https?:\/\//i.test(entry.url)) return entry.url; return `${API_URL}/${String(entry.url).replace(/^\/+/,"")}`; } return `${FILES_URL}/${String(entry.path||entry.name).split("/").map(encodeURIComponent).join("/")}`; }
-        function withQuery(url,key,value){ const separator=url.includes("?")?"&":"?"; return `${url}${separator}${encodeURIComponent(key)}=${encodeURIComponent(value)}`; }
-        function isPdf(entry){ return String(entry.path||entry.name).toLowerCase().endsWith(".pdf")||entry.content_type==="application/pdf"; }
-        function isVideo(entry){ return String(entry.content_type||"").toLowerCase().startsWith("video/")||/\.(mp4|webm|ogg|m4v)$/i.test(String(entry.path||entry.name)); }
-        function isPreviewable(entry){ return isPdf(entry)||isVideo(entry); }
-        function fileIcon(entry){ if(isPdf(entry)) return "📕"; if(isVideo(entry)) return "🎬"; return "📄"; }
-        function fileKindLabel(entry){ if(isPdf(entry)) return "PDF"; if(isVideo(entry)) return "vídeo"; return "arquivo"; }
-
-        function createTreeNodes(){
-            const root={name:"",path:"",folders:new Map(),files:new Map()};
-            const ensureFolder=(parent,name,path)=>{ if(!parent.folders.has(name)) parent.folders.set(name,{name,path,folders:new Map(),files:new Map()}); return parent.folders.get(name); };
-            entries.forEach(entry=>{ const normalizedPath=String(entry.path||entry.name||"").replace(/^\/+|\/+$/g,""); if(!normalizedPath) return; const parts=normalizedPath.split("/").filter(Boolean); if(!parts.length) return; let parent=root; const last=parts.length-1; for(let i=0;i<last;i++) parent=ensureFolder(parent,parts[i],parts.slice(0,i+1).join("/")); if(entry.type==="tree") ensureFolder(parent,parts[last],normalizedPath); else parent.files.set(parts[last],{...entry,name:parts[last],path:normalizedPath}); });
-            return root;
-        }
-        function nodeMatches(node,query){ if(!query) return true; if(node.name.toLowerCase().includes(query)||node.path.toLowerCase().includes(query)) return true; for(const file of node.files.values()) if(file.name.toLowerCase().includes(query)||file.path.toLowerCase().includes(query)) return true; for(const folder of node.folders.values()) if(nodeMatches(folder,query)) return true; return false; }
-        function shouldShowFile(file,query){ return !query||file.name.toLowerCase().includes(query)||file.path.toLowerCase().includes(query); }
-        function compareEntries(a,b){ const nameCompare=collator.compare(a.name,b.name); if(nameCompare!==0) return nameCompare; if(a.kind!==b.kind) return a.kind==="folder"?-1:1; return collator.compare(a.path||"",b.path||""); }
-
-        function renderFolder(folder,depth,query){
-            if(query&&!nodeMatches(folder,query)) return "";
-            const children=[];
-            for(const child of folder.folders.values()) children.push({kind:"folder",name:child.name,path:child.path,value:child});
-            for(const file of folder.files.values()) if(shouldShowFile(file,query)) children.push({kind:"file",name:file.name,path:file.path,value:file});
-            children.sort(compareEntries);
-            const childrenHtml=children.map(child=>child.kind==="folder"?renderFolder(child.value,depth+1,query):renderFile(child.value,depth+1)).filter(Boolean).join("");
-            if(!childrenHtml) return "";
-            const open=Boolean(query)||openFolders.has(folder.path);
-            const folderId=`folder-${folder.path.replace(/[^a-zA-Z0-9_-]/g,"-")}`;
-            return `<div class="tree-node"><div class="tree-row folder" data-action="folder" data-path="${escapeAttr(folder.path)}" style="padding-left:${14+depth*22}px"><div class="expander">${open?"▾":"▸"}</div><div class="icon">📁</div><div class="name" title="${escapeAttr(folder.path)}">${escapeHtml(folder.name)}</div><div class="meta">pasta</div></div><div class="children${open?" open":""}" id="${escapeAttr(folderId)}">${childrenHtml}</div></div>`;
-        }
-        function renderFile(entry,depth){
-            const url=fileUrl(entry), downloadUrl=withQuery(url,"download","1");
-            const viewButton=isPreviewable(entry)?`<button class="action-link primary" type="button" data-action="view" data-path="${escapeAttr(entry.path)}">Visualizar</button>`:"";
-            return `<div class="tree-node"><div class="tree-row" style="padding-left:${14+depth*22}px"><div class="expander"></div><div class="icon">${fileIcon(entry)}</div><div class="name" title="${escapeAttr(entry.path)}">${escapeHtml(entry.name)}</div><div class="meta">${escapeHtml(fileKindLabel(entry))}${entry.size?` · ${escapeHtml(formatSize(entry.size))}`:""}</div><div class="actions">${viewButton}<a class="action-link" href="${escapeAttr(downloadUrl)}" download>Baixar</a></div></div></div>`;
-        }
-        function render(){
-            const query=search.value.trim().toLowerCase(), root=createTreeNodes(), items=[];
-            for(const folder of root.folders.values()) items.push({kind:"folder",name:folder.name,path:folder.path,value:folder});
-            for(const file of root.files.values()) if(shouldShowFile(file,query)) items.push({kind:"file",name:file.name,path:file.path,value:file});
-            items.sort(compareEntries);
-            const html=items.map(item=>item.kind==="folder"?renderFolder(item.value,0,query):renderFile(item.value,0)).filter(Boolean).join("");
-            panel.innerHTML=html?`<div class="tree">${html}</div>`:`<div class="state">Nenhum documento encontrado.</div>`;
-        }
-
-        panel.addEventListener("click",event=>{
-            const target=event.target.closest("[data-action]"); if(!target) return;
-            const action=target.dataset.action, path=target.dataset.path, entry=entries.find(item=>item.path===path);
-            if(action==="folder"){ if(openFolders.has(path)) openFolders.delete(path); else openFolders.add(path); render(); return; }
-            if(action==="view"&&entry) openViewer(entry);
-        });
-
-        function clearPdfState(){ currentPdf=null; if(currentPdfUrl){ URL.revokeObjectURL(currentPdfUrl); currentPdfUrl=null; } }
-
-        async function openPdfViewer(entry, container){
+        async function openPdfViewer(entry,container){
             clearPdfState();
-            const url=fileUrl(entry);
-            currentPdfUrl=url;
+            const url=fileUrl(entry); currentPdfUrl=url;
             container.innerHTML=`<div class="pdf-viewer"><div class="pdf-toolbar"><button type="button" data-pdf-action="prev">← Anterior</button><span class="pdf-page-count" id="pdfPageCount">Carregando…</span><button type="button" data-pdf-action="next">Próxima →</button><button type="button" data-pdf-action="zoom-out">− Zoom</button><button type="button" data-pdf-action="zoom-in">+ Zoom</button><button type="button" data-pdf-action="fit">Ajustar</button></div><div class="pdf-loading" id="pdfLoading">Carregando PDF…</div><div id="pdfPages" style="width:100%;display:flex;flex-direction:column;align-items:center;gap:18px"></div></div>`;
-            const loading=document.getElementById("pdfLoading"), pages=document.getElementById("pdfPages"), pageCount=document.getElementById("pdfPageCount");
+            const loading=document.getElementById("pdfLoading"),pages=document.getElementById("pdfPages"),pageCount=document.getElementById("pdfPageCount");
             let pdf;
+            try{pdf=await pdfjsLib.getDocument({url,disableAutoFetch:false,disableStream:false}).promise;}catch(error){loading.textContent="Não foi possível abrir este PDF. Verifique se o servidor permite CORS e entrega os dados do PDF.";viewerNote.textContent=error?.message||"Falha ao carregar o PDF.";return;}
+            currentPdf=pdf; loading.remove(); let scale=1.25,currentPage=1; pageCount.textContent=`Página 1 de ${pdf.numPages}`;
+            async function renderPage(pageNumber,renderScale=scale){const page=await pdf.getPage(pageNumber); const baseViewport=page.getViewport({scale:1}); const maxWidth=Math.max(320,pages.clientWidth-20); const fitScale=Math.min(1.6,maxWidth/baseViewport.width); const finalScale=Math.min(Math.max(renderScale,.65),2.5); const viewport=page.getViewport({scale:Math.max(finalScale,fitScale*.72)}); const wrap=document.createElement("div"); wrap.className="pdf-page"; wrap.dataset.page=String(pageNumber); const canvas=document.createElement("canvas"); const dpr=Math.min(window.devicePixelRatio||1,2); canvas.width=Math.floor(viewport.width*dpr); canvas.height=Math.floor(viewport.height*dpr); canvas.style.width=`${viewport.width}px`; canvas.style.height=`${viewport.height}px`; const ctx=canvas.getContext("2d",{alpha:false}); ctx.setTransform(dpr,0,0,dpr,0,0); wrap.appendChild(canvas); pages.appendChild(wrap); await page.render({canvasContext:ctx,viewport}).promise; return canvas;}
+            const renderAll=async(renderScale=scale)=>{pages.innerHTML=""; for(let i=1;i<=pdf.numPages;i++) await renderPage(i,renderScale);};
+            await renderAll(); currentPdfRender={pdf,pages,renderAll};
+            const update=()=>{pageCount.textContent=`Página ${currentPage} de ${pdf.numPages}`; const el=pages.querySelector(`[data-page="${currentPage}"]`); if(el) el.scrollIntoView({behavior:"smooth",block:"start"});};
+            container.addEventListener("click",async event=>{const btn=event.target.closest("[data-pdf-action]"); if(!btn) return; const action=btn.dataset.pdfAction; if(action==="prev") currentPage=Math.max(1,currentPage-1); else if(action==="next") currentPage=Math.min(pdf.numPages,currentPage+1); else if(action==="zoom-in"){scale=Math.min(2.5,scale+.15); await renderAll();} else if(action==="zoom-out"){scale=Math.max(.65,scale-.15); await renderAll();} else if(action==="fit"){scale=1.25; await renderAll();} update();}); update(); viewerNote.textContent=`PDF carregado com PDF.js. ${pdf.numPages} página${pdf.numPages===1?"":"s"}. O conteúdo é renderizado no próprio site.`;
+        }
+
+        function openViewer(entry){closeViewer(false); currentEntry=entry; viewerTitle.textContent=entry.name; viewerActions.innerHTML=""; viewerBody.innerHTML=""; viewerNote.textContent=""; const url=fileUrl(entry),downloadUrl=withQuery(url,"download","1"); const downloadLink=document.createElement("a"); downloadLink.className="action-link"; downloadLink.href=downloadUrl; downloadLink.setAttribute("download",""); downloadLink.textContent="⬇️ Baixar"; viewerActions.appendChild(downloadLink); if(isPdf(entry)){const printButton=document.createElement("button"); printButton.type="button"; printButton.className="action-link"; printButton.textContent="🖨️ Imprimir"; printButton.addEventListener("click",()=>printPdf()); viewerActions.appendChild(printButton); openPdfViewer(entry,viewerBody);} else if(isVideo(entry)){const fullscreenButton=document.createElement("button"); fullscreenButton.type="button"; fullscreenButton.className="action-link"; fullscreenButton.textContent="⛶ Tela cheia"; fullscreenButton.addEventListener("click",toggleVideoFullscreen); viewerActions.appendChild(fullscreenButton); const video=document.createElement("video"); video.controls=true; video.playsInline=true; video.preload="metadata"; video.crossOrigin="anonymous"; video.src=url; video.addEventListener("error",()=>{viewerNote.textContent="Não foi possível reproduzir este vídeo. Verifique se o servidor está aceitando requisições HTTP Range e se o MP4 usa H.264/AAC compatível com o navegador.";}); viewerBody.appendChild(video); viewerNote.textContent="Reprodução por streaming HTTP: o navegador solicita somente os trechos necessários do MP4.";} viewer.classList.add("open"); viewer.setAttribute("aria-hidden","false"); document.body.classList.add("modal-open");}
+
+        async function printPdf(){
+            if(!currentEntry||!currentPdfRender) return;
+            const {pdf}=currentPdfRender;
+            viewerNote.textContent="Preparando as páginas para impressão…";
             try{
-                pdf=await pdfjsLib.getDocument({url,disableAutoFetch:false,disableStream:false}).promise;
-            }catch(error){ loading.textContent="Não foi possível abrir este PDF. Verifique se o servidor permite CORS e entrega application/pdf."; viewerNote.textContent=error?.message||"Falha ao carregar o PDF."; return; }
-            currentPdf=pdf; loading.remove();
-            let scale=1.25, currentPage=1;
-            pageCount.textContent=`Página 1 de ${pdf.numPages}`;
-
-            async function renderPage(pageNumber){
-                const page=await pdf.getPage(pageNumber); const baseViewport=page.getViewport({scale:1});
-                const maxWidth=Math.max(320,pages.clientWidth-20); const fitScale=Math.min(1.6,maxWidth/baseViewport.width); const finalScale=Math.min(Math.max(scale,.65),2.5);
-                const viewport=page.getViewport({scale: Math.max(finalScale,fitScale*.72)});
-                const wrap=document.createElement("div"); wrap.className="pdf-page"; wrap.dataset.page=String(pageNumber);
-                const canvas=document.createElement("canvas"); const dpr=Math.min(window.devicePixelRatio||1,2); canvas.width=Math.floor(viewport.width*dpr); canvas.height=Math.floor(viewport.height*dpr); canvas.style.width=`${viewport.width}px`; canvas.style.height=`${viewport.height}px`;
-                const ctx=canvas.getContext("2d",{alpha:false}); ctx.setTransform(dpr,0,0,dpr,0,0); wrap.appendChild(canvas); pages.appendChild(wrap); await page.render({canvasContext:ctx,viewport}).promise;
-            }
-            const renderAll=async()=>{ pages.innerHTML=""; for(let i=1;i<=pdf.numPages;i++) await renderPage(i); };
-            await renderAll();
-            const update=()=>{ pageCount.textContent=`Página ${currentPage} de ${pdf.numPages}`; const el=pages.querySelector(`[data-page="${currentPage}"]`); if(el) el.scrollIntoView({behavior:"smooth",block:"start"}); };
-            container.addEventListener("click",async event=>{ const btn=event.target.closest("[data-pdf-action]"); if(!btn) return; const action=btn.dataset.pdfAction; if(action==="prev") currentPage=Math.max(1,currentPage-1); else if(action==="next") currentPage=Math.min(pdf.numPages,currentPage+1); else if(action==="zoom-in"){ scale=Math.min(2.5,scale+.15); await renderAll(); } else if(action==="zoom-out"){ scale=Math.max(.65,scale-.15); await renderAll(); } else if(action==="fit"){ scale=1.25; await renderAll(); } update(); },{once:false});
-            viewerNote.textContent=`PDF carregado com PDF.js. ${pdf.numPages} página${pdf.numPages===1?"":"s"}. O conteúdo é renderizado no próprio site.`;
+                const printWindow=window.open("","_blank");
+                if(!printWindow){viewerNote.textContent="O navegador bloqueou a janela de impressão. Permita pop-ups para este site e tente novamente.";return;}
+                const images=[];
+                for(let i=1;i<=pdf.numPages;i++){
+                    const page=await pdf.getPage(i); const viewport=page.getViewport({scale:2.0}); const canvas=document.createElement("canvas"); const dpr=2; canvas.width=Math.floor(viewport.width*dpr); canvas.height=Math.floor(viewport.height*dpr); const ctx=canvas.getContext("2d",{alpha:false}); ctx.setTransform(dpr,0,0,dpr,0,0); await page.render({canvasContext:ctx,viewport}).promise; images.push(canvas.toDataURL("image/png"));
+                }
+                printWindow.document.open();
+                printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(currentEntry.name)}</title><style>@page{margin:0}html,body{margin:0;padding:0;background:#fff}img{display:block;width:100%;height:auto;break-after:page;page-break-after:always}img:last-child{break-after:auto;page-break-after:auto}</style></head><body>${images.map(src=>`<img src="${src}" alt="">`).join("")}</body></html>`);
+                printWindow.document.close();
+                printWindow.addEventListener("load",()=>{printWindow.focus(); printWindow.print();}, {once:true});
+                viewerNote.textContent="A janela de impressão foi preparada com as páginas renderizadas do PDF.";
+            }catch(error){viewerNote.textContent=error?.message||"Não foi possível preparar o PDF para impressão.";}
         }
 
-        function openViewer(entry){
-            closeViewer(false); currentEntry=entry; viewerTitle.textContent=entry.name; viewerActions.innerHTML=""; viewerBody.innerHTML=""; viewerNote.textContent="";
-            const url=fileUrl(entry), downloadUrl=withQuery(url,"download","1");
-            const downloadLink=document.createElement("a"); downloadLink.className="action-link"; downloadLink.href=downloadUrl; downloadLink.setAttribute("download",""); downloadLink.textContent="⬇️ Baixar"; viewerActions.appendChild(downloadLink);
-            if(isPdf(entry)){
-                const printButton=document.createElement("button"); printButton.type="button"; printButton.className="action-link"; printButton.textContent="🖨️ Imprimir"; printButton.addEventListener("click",()=>printPdf()); viewerActions.appendChild(printButton); openPdfViewer(entry,viewerBody);
-            } else if(isVideo(entry)){
-                const fullscreenButton=document.createElement("button"); fullscreenButton.type="button"; fullscreenButton.className="action-link"; fullscreenButton.textContent="⛶ Tela cheia"; fullscreenButton.addEventListener("click",toggleVideoFullscreen); viewerActions.appendChild(fullscreenButton);
-                const video=document.createElement("video"); video.controls=true; video.playsInline=true; video.preload="metadata"; video.crossOrigin="anonymous"; video.src=url; video.addEventListener("error",()=>{ viewerNote.textContent="Não foi possível reproduzir este vídeo. Verifique se o servidor está aceitando requisições HTTP Range e se o MP4 usa H.264/AAC compatível com o navegador."; }); viewerBody.appendChild(video); viewerNote.textContent="Reprodução por streaming HTTP: o navegador solicita somente os trechos necessários do MP4.";
-            }
-            viewer.classList.add("open"); viewer.setAttribute("aria-hidden","false"); document.body.classList.add("modal-open");
-        }
-        function printPdf(){
-            if(!currentEntry) return; const url=fileUrl(currentEntry); const printWindow=window.open(url,"_blank","noopener,noreferrer"); if(!printWindow){ viewerNote.textContent="O navegador bloqueou a nova aba. Permita pop-ups para este site e tente novamente."; return; } viewerNote.textContent="O PDF foi aberto em uma nova aba para impressão.";
-        }
-        async function toggleVideoFullscreen(){ const video=viewerBody.querySelector("video"); if(!video) return; try{ if(document.fullscreenElement) await document.exitFullscreen(); else await video.requestFullscreen(); }catch(error){ viewerNote.textContent="Não foi possível ativar a tela cheia neste navegador."; } }
-        function closeViewer(force=true){ if(force===false&&!viewer.classList.contains("open")) return; viewer.classList.remove("open"); viewer.setAttribute("aria-hidden","true"); viewerBody.innerHTML=""; viewerActions.innerHTML=""; currentEntry=null; clearPdfState(); document.body.classList.remove("modal-open"); }
-
-        loadFiles().catch(err=>{ panel.innerHTML=`<div class="state error">${escapeHtml(err?.message||"Falha ao carregar os documentos.")}</div>`; });
+        async function toggleVideoFullscreen(){const video=viewerBody.querySelector("video"); if(!video) return; try{if(document.fullscreenElement) await document.exitFullscreen(); else await video.requestFullscreen();}catch(error){viewerNote.textContent="Não foi possível ativar a tela cheia neste navegador.";}}
+        function closeViewer(force=true){if(force===false&&!viewer.classList.contains("open")) return; viewer.classList.remove("open"); viewer.setAttribute("aria-hidden","true"); viewerBody.innerHTML=""; viewerActions.innerHTML=""; currentEntry=null; clearPdfState(); document.body.classList.remove("modal-open");}
+        loadFiles().catch(err=>{panel.innerHTML=`<div class="state error">${escapeHtml(err?.message||"Falha ao carregar os documentos.")}</div>`;});
     </script>
 </body>
 </html>
