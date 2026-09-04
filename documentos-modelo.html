@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Documentos Modelo | Universo da Licitação</title>
+    <title>Documentos da Licitação | Universo da Licitação</title>
     <link rel="icon" href="./assets/logo.png" type="image/png">
 
     <style>
@@ -15,6 +15,8 @@
             --pri: #2f6f4f;
             --b: #e5e7eb;
             --hover: #f7faf8;
+            --danger: #b91c1c;
+            --viewer-bg: #0b1220;
         }
 
         [data-theme="dark"] {
@@ -25,6 +27,8 @@
             --pri: #34a06f;
             --b: #243041;
             --hover: #172131;
+            --danger: #f87171;
+            --viewer-bg: #050a12;
         }
 
         * { box-sizing: border-box; }
@@ -39,6 +43,7 @@
             color: var(--text);
         }
 
+        body.modal-open { overflow: hidden; }
         [data-theme="dark"] body { background: var(--bg); }
 
         .top {
@@ -56,19 +61,24 @@
 
         .back:hover { color: var(--pri); }
 
-        button {
+        button,
+        .action-link {
             cursor: pointer;
             border: 2px solid var(--b);
             background: var(--card);
             border-radius: 999px;
-            padding: 10px 14px;
+            padding: 9px 13px;
             color: var(--text);
+            font: inherit;
         }
+
+        button:hover,
+        .action-link:hover { border-color: var(--pri); }
 
         .wrap {
             flex: 1;
             width: 100%;
-            max-width: 1000px;
+            max-width: 1120px;
             margin: 0 auto;
             padding: 0 20px 30px;
         }
@@ -96,13 +106,16 @@
 
         .toolbar input {
             flex: 1;
-            padding: 10px 14px;
+            padding: 11px 14px;
             border-radius: 999px;
             border: 2px solid var(--b);
             background: var(--card);
             color: var(--text);
             font-size: 0.95rem;
+            outline: none;
         }
+
+        .toolbar input:focus { border-color: var(--pri); }
 
         .panel {
             background: var(--card);
@@ -114,30 +127,20 @@
 
         .tree { padding: 8px 0; }
 
-        .tree-node + .tree-node {
-            border-top: 1px solid rgba(229, 231, 235, 0.55);
-        }
-
-        [data-theme="dark"] .tree-node + .tree-node {
-            border-top-color: rgba(36, 48, 65, 0.6);
-        }
+        .tree-node + .tree-node { border-top: 1px solid rgba(229, 231, 235, 0.55); }
+        [data-theme="dark"] .tree-node + .tree-node { border-top-color: rgba(36, 48, 65, 0.6); }
 
         .tree-row {
             display: flex;
             align-items: center;
             gap: 10px;
-            min-height: 48px;
+            min-height: 50px;
             padding: 8px 14px;
             transition: background 0.15s ease;
         }
 
         .tree-row:hover { background: var(--hover); }
-
-        .tree-row.folder {
-            cursor: pointer;
-            user-select: none;
-            font-weight: 600;
-        }
+        .tree-row.folder { cursor: pointer; user-select: none; font-weight: 600; }
 
         .tree-row .expander {
             width: 22px;
@@ -166,23 +169,27 @@
             color: var(--muted);
             font-size: 0.82rem;
             flex-shrink: 0;
+            text-align: right;
         }
 
-        .tree-row .dl {
-            text-decoration: none;
-            color: var(--pri);
-            font-weight: 600;
-            font-size: 0.88rem;
-            padding: 6px 12px;
-            border: 2px solid var(--pri);
-            border-radius: 999px;
+        .actions {
+            display: flex;
+            align-items: center;
+            gap: 7px;
             flex-shrink: 0;
         }
 
-        .tree-row .dl:hover {
-            background: var(--pri);
-            color: #fff;
+        .action-link {
+            text-decoration: none;
+            color: var(--pri);
+            border-color: var(--pri);
+            font-weight: 600;
+            font-size: 0.85rem;
+            padding: 6px 11px;
         }
+
+        .action-link.primary { background: var(--pri); color: #fff; }
+        .action-link.primary:hover { filter: brightness(0.95); }
 
         .children { display: none; }
         .children.open { display: block; }
@@ -199,7 +206,7 @@
             display: inline-block;
         }
 
-        .error { color: #b91c1c; }
+        .error { color: var(--danger); }
 
         @keyframes rot { to { transform: rotate(360deg); } }
 
@@ -210,11 +217,89 @@
             font-size: 0.85rem;
         }
 
-        @media (max-width: 640px) {
-            .tree-row { padding: 8px 10px; gap: 8px; }
+        .viewer {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            display: none;
+            background: rgba(3, 7, 18, 0.82);
+            backdrop-filter: blur(4px);
+        }
+
+        .viewer.open { display: flex; align-items: center; justify-content: center; padding: 20px; }
+
+        .viewer-card {
+            width: min(1400px, 100%);
+            height: min(94vh, 980px);
+            display: flex;
+            flex-direction: column;
+            background: var(--card);
+            border: 2px solid var(--b);
+            border-radius: 18px;
+            overflow: hidden;
+            box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+        }
+
+        .viewer-head {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--b);
+            background: var(--card);
+        }
+
+        .viewer-title {
+            flex: 1;
+            min-width: 0;
+            font-weight: 700;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+
+        .viewer-actions { display: flex; gap: 8px; flex-shrink: 0; }
+        .viewer-actions a { display: inline-flex; align-items: center; gap: 5px; }
+
+        .viewer-body {
+            flex: 1;
+            min-height: 0;
+            background: var(--viewer-bg);
+            position: relative;
+        }
+
+        .viewer-body iframe,
+        .viewer-body video {
+            width: 100%;
+            height: 100%;
+            border: 0;
+            display: block;
+        }
+
+        .viewer-body video {
+            object-fit: contain;
+            background: #000;
+        }
+
+        .viewer-note {
+            padding: 7px 14px;
+            border-top: 1px solid var(--b);
+            color: var(--muted);
+            font-size: 0.78rem;
+        }
+
+        @media (max-width: 760px) {
+            .wrap { padding-left: 10px; padding-right: 10px; }
+            .tree-row { padding: 8px 10px; gap: 7px; }
             .tree-row .meta { display: none; }
             .tree-row .name { white-space: normal; }
-            .tree-row .dl { padding: 5px 9px; }
+            .action-link { padding: 6px 9px; }
+            .viewer.open { padding: 0; }
+            .viewer-card { height: 100vh; border-radius: 0; border-left: 0; border-right: 0; }
+            .viewer-head { flex-wrap: wrap; }
+            .viewer-title { order: 1; flex-basis: calc(100% - 50px); }
+            .viewer-actions { order: 3; width: 100%; overflow-x: auto; }
+            .viewer-head > button { order: 2; margin-left: auto; }
         }
     </style>
 </head>
@@ -222,25 +307,37 @@
 <body>
     <div class="top">
         <a class="back" href="./">← Voltar</a>
-        <button id="t" onclick="sw()"></button>
+        <button id="t" type="button" aria-label="Alternar tema"></button>
     </div>
 
     <div class="wrap">
         <div class="hero">
             <img src="./assets/logo.png" alt="Logo" class="hero-logo">
-            <h1>Documentos Modelo</h1>
-            <p>Arquivos disponibilizados diretamente pelo servidor.</p>
+            <h1>Documentos da Licitação</h1>
+            <p>Consulte, visualize, imprima e baixe os documentos disponibilizados pelo servidor.</p>
         </div>
 
         <div class="toolbar">
-            <input id="search" type="text" placeholder="Buscar arquivo ou pasta..." oninput="render()">
+            <input id="search" type="text" placeholder="Buscar documento ou pasta..." autocomplete="off">
         </div>
 
         <div class="panel" id="panel">
-            <div class="state"><span class="spin">⏳</span><br>Carregando arquivos...</div>
+            <div class="state"><span class="spin">⏳</span><br>Carregando documentos...</div>
         </div>
 
         <footer>© 2026 danih.morais</footer>
+    </div>
+
+    <div class="viewer" id="viewer" aria-hidden="true">
+        <div class="viewer-card" role="dialog" aria-modal="true" aria-labelledby="viewerTitle">
+            <div class="viewer-head">
+                <div class="viewer-title" id="viewerTitle">Documento</div>
+                <div class="viewer-actions" id="viewerActions"></div>
+                <button id="viewerClose" type="button" aria-label="Fechar visualizador">✕</button>
+            </div>
+            <div class="viewer-body" id="viewerBody"></div>
+            <div class="viewer-note" id="viewerNote"></div>
+        </div>
     </div>
 
     <script>
@@ -253,6 +350,28 @@
             numeric: true,
             ignorePunctuation: false
         });
+
+        let entries = [];
+        let currentEntry = null;
+        const openFolders = new Set();
+
+        const panel = document.getElementById("panel");
+        const search = document.getElementById("search");
+        const viewer = document.getElementById("viewer");
+        const viewerBody = document.getElementById("viewerBody");
+        const viewerActions = document.getElementById("viewerActions");
+        const viewerTitle = document.getElementById("viewerTitle");
+        const viewerNote = document.getElementById("viewerNote");
+
+        document.getElementById("t").addEventListener("click", sw);
+        document.getElementById("viewerClose").addEventListener("click", closeViewer);
+        viewer.addEventListener("click", event => {
+            if (event.target === viewer) closeViewer();
+        });
+        document.addEventListener("keydown", event => {
+            if (event.key === "Escape" && viewer.classList.contains("open")) closeViewer();
+        });
+        search.addEventListener("input", render);
 
         (function () {
             const theme = localStorage.getItem("app_theme") || "light";
@@ -272,7 +391,19 @@
                 document.documentElement.dataset.theme === "dark" ? "☀️" : "🌙";
         }
 
-        let entries = [];
+        function escapeHtml(value) {
+            return String(value).replace(/[&<>\"']/g, char => ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                "\"": "&quot;",
+                "'": "&#039;"
+            })[char]);
+        }
+
+        function escapeAttr(value) {
+            return escapeHtml(value);
+        }
 
         function normalizeEntry(item) {
             if (typeof item === "string") {
@@ -281,6 +412,7 @@
                     path: item,
                     type: "file",
                     size: undefined,
+                    content_type: "application/octet-stream",
                     url: null
                 };
             }
@@ -295,14 +427,13 @@
                 path,
                 type: type === "directory" || type === "folder" || type === "tree" ? "tree" : "file",
                 size: item.size,
+                content_type: item.content_type || item.mime_type || "application/octet-stream",
                 url
             };
         }
 
         function extractEntries(data) {
-            if (Array.isArray(data)) {
-                return data.map(normalizeEntry).filter(e => e.path || e.name);
-            }
+            if (Array.isArray(data)) return data.map(normalizeEntry).filter(e => e.path || e.name);
 
             if (data && typeof data === "object") {
                 const candidate = data.files || data.items || data.entries || data.results;
@@ -315,9 +446,7 @@
         }
 
         async function loadFiles() {
-            if (!API_URL) {
-                throw new Error("API_URL não foi configurada no deploy.");
-            }
+            if (!API_URL) throw new Error("API_URL não foi configurada no deploy.");
 
             const res = await fetch(FILES_URL, { cache: "no-store" });
             if (!res.ok) throw new Error(`Falha ao consultar o servidor (HTTP ${res.status}).`);
@@ -351,6 +480,36 @@
             return `${FILES_URL}/${path}`;
         }
 
+        function withQuery(url, key, value) {
+            const separator = url.includes("?") ? "&" : "?";
+            return `${url}${separator}${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
+        }
+
+        function isPdf(entry) {
+            return String(entry.path || entry.name).toLowerCase().endsWith(".pdf") || entry.content_type === "application/pdf";
+        }
+
+        function isVideo(entry) {
+            return String(entry.content_type || "").toLowerCase().startsWith("video/") ||
+                /\.(mp4|webm|ogg|m4v)$/i.test(String(entry.path || entry.name));
+        }
+
+        function isPreviewable(entry) {
+            return isPdf(entry) || isVideo(entry);
+        }
+
+        function fileIcon(entry) {
+            if (isPdf(entry)) return "📕";
+            if (isVideo(entry)) return "🎬";
+            return "📄";
+        }
+
+        function fileKindLabel(entry) {
+            if (isPdf(entry)) return "PDF";
+            if (isVideo(entry)) return "vídeo";
+            return "arquivo";
+        }
+
         function createTreeNodes() {
             const root = {
                 name: "",
@@ -372,9 +531,7 @@
             };
 
             entries.forEach(entry => {
-                const normalizedPath = String(entry.path || entry.name || "")
-                    .replace(/^\/+|\/+$/g, "");
-
+                const normalizedPath = String(entry.path || entry.name || "").replace(/^\/+|\/+$/g, "");
                 if (!normalizedPath) return;
 
                 const parts = normalizedPath.split("/").filter(Boolean);
@@ -384,18 +541,13 @@
                 const last = parts.length - 1;
 
                 for (let i = 0; i < last; i++) {
-                    const currentPath = parts.slice(0, i + 1).join("/");
-                    parent = ensureFolder(parent, parts[i], currentPath);
+                    parent = ensureFolder(parent, parts[i], parts.slice(0, i + 1).join("/"));
                 }
 
                 if (entry.type === "tree") {
                     ensureFolder(parent, parts[last], normalizedPath);
                 } else {
-                    parent.files.set(parts[last], {
-                        ...entry,
-                        name: parts[last],
-                        path: normalizedPath
-                    });
+                    parent.files.set(parts[last], { ...entry, name: parts[last], path: normalizedPath });
                 }
             });
 
@@ -404,14 +556,10 @@
 
         function nodeMatches(node, query) {
             if (!query) return true;
-            if (node.name.toLowerCase().includes(query) || node.path.toLowerCase().includes(query)) {
-                return true;
-            }
+            if (node.name.toLowerCase().includes(query) || node.path.toLowerCase().includes(query)) return true;
 
             for (const file of node.files.values()) {
-                if (file.name.toLowerCase().includes(query) || file.path.toLowerCase().includes(query)) {
-                    return true;
-                }
+                if (file.name.toLowerCase().includes(query) || file.path.toLowerCase().includes(query)) return true;
             }
 
             for (const folder of node.folders.values()) {
@@ -422,169 +570,215 @@
         }
 
         function shouldShowFile(file, query) {
-            return !query ||
-                file.name.toLowerCase().includes(query) ||
-                file.path.toLowerCase().includes(query);
+            return !query || file.name.toLowerCase().includes(query) || file.path.toLowerCase().includes(query);
         }
 
         function compareEntries(a, b) {
             const nameCompare = collator.compare(a.name, b.name);
             if (nameCompare !== 0) return nameCompare;
-
-            // Apenas em caso de nomes idênticos, mantém a pasta antes do arquivo.
             if (a.kind !== b.kind) return a.kind === "folder" ? -1 : 1;
             return collator.compare(a.path || "", b.path || "");
         }
 
-        function renderFolder(folder, depth, query, forceOpen) {
+        function renderFolder(folder, depth, query) {
             if (query && !nodeMatches(folder, query)) return "";
 
-            const folderId = `folder-${folder.path.replace(/[^a-zA-Z0-9_-]/g, "-") || "root"}`;
             const children = [];
-
             for (const child of folder.folders.values()) {
-                children.push({
-                    kind: "folder",
-                    name: child.name,
-                    path: child.path,
-                    value: child
-                });
+                children.push({ kind: "folder", name: child.name, path: child.path, value: child });
             }
-
             for (const file of folder.files.values()) {
-                if (shouldShowFile(file, query)) {
-                    children.push({
-                        kind: "file",
-                        name: file.name,
-                        path: file.path,
-                        value: file
-                    });
-                }
+                if (shouldShowFile(file, query)) children.push({ kind: "file", name: file.name, path: file.path, value: file });
             }
 
             children.sort(compareEntries);
 
-            const visibleChildren = [];
-            for (const child of children) {
-                const childHtml = child.kind === "folder"
-                    ? renderFolder(child.value, depth + 1, query, forceOpen)
-                    : renderFile(child.value, depth + 1);
+            const childrenHtml = children
+                .map(child => child.kind === "folder"
+                    ? renderFolder(child.value, depth + 1, query)
+                    : renderFile(child.value, depth + 1))
+                .filter(Boolean)
+                .join("");
 
-                if (childHtml) visibleChildren.push(childHtml);
-            }
+            if (!childrenHtml) return "";
 
-            if (!visibleChildren.length) return "";
-
-            const open = forceOpen || Boolean(query);
+            const open = Boolean(query) || openFolders.has(folder.path);
+            const folderId = `folder-${folder.path.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
 
             return `
                 <div class="tree-node">
-                    <div class="tree-row folder"
-                         data-folder="${escapeAttr(folderId)}"
-                         style="padding-left:${14 + depth * 22}px"
-                         onclick="toggleFolder(this, '${escapeAttr(folderId)}')">
-                        <div class="expander" id="expander-${escapeAttr(folderId)}">${open ? "▾" : "▸"}</div>
+                    <div class="tree-row folder" data-action="folder" data-path="${escapeAttr(folder.path)}" style="padding-left:${14 + depth * 22}px">
+                        <div class="expander">${open ? "▾" : "▸"}</div>
                         <div class="icon">📁</div>
                         <div class="name" title="${escapeAttr(folder.path)}">${escapeHtml(folder.name)}</div>
                         <div class="meta">pasta</div>
                     </div>
-                    <div class="children${open ? " open" : ""}" id="${escapeAttr(folderId)}">
-                        ${visibleChildren.join("")}
-                    </div>
+                    <div class="children${open ? " open" : ""}" id="${escapeAttr(folderId)}">${childrenHtml}</div>
                 </div>`;
         }
 
         function renderFile(entry, depth) {
             const url = fileUrl(entry);
+            const downloadUrl = withQuery(url, "download", "1");
+            const viewButton = isPreviewable(entry)
+                ? `<button class="action-link primary" type="button" data-action="view" data-path="${escapeAttr(entry.path)}">Visualizar</button>`
+                : "";
 
             return `
                 <div class="tree-node">
-                    <div class="tree-row file" style="padding-left:${14 + depth * 22}px">
+                    <div class="tree-row" style="padding-left:${14 + depth * 22}px">
                         <div class="expander"></div>
-                        <div class="icon">📄</div>
-                        <div class="name" title="${escapeAttr(entry.path || entry.name)}">${escapeHtml(entry.name)}</div>
-                        <div class="meta">${formatSize(entry.size)}</div>
-                        <a class="dl" href="${escapeAttr(url)}" download="${escapeAttr(entry.name)}" onclick="event.stopPropagation()">Baixar</a>
+                        <div class="icon">${fileIcon(entry)}</div>
+                        <div class="name" title="${escapeAttr(entry.path)}">${escapeHtml(entry.name)}</div>
+                        <div class="meta">${escapeHtml(fileKindLabel(entry))}${entry.size ? ` · ${escapeHtml(formatSize(entry.size))}` : ""}</div>
+                        <div class="actions">
+                            ${viewButton}
+                            <a class="action-link" href="${escapeAttr(downloadUrl)}" download>Baixar</a>
+                        </div>
                     </div>
                 </div>`;
         }
 
         function render() {
-            const panel = document.getElementById("panel");
-            const query = document.getElementById("search").value.toLowerCase().trim();
+            const query = search.value.trim().toLowerCase();
             const root = createTreeNodes();
             const items = [];
 
             for (const folder of root.folders.values()) {
-                if (!query || nodeMatches(folder, query)) {
-                    items.push({
-                        kind: "folder",
-                        name: folder.name,
-                        path: folder.path,
-                        value: folder
-                    });
-                }
+                items.push({ kind: "folder", name: folder.name, path: folder.path, value: folder });
             }
-
             for (const file of root.files.values()) {
-                if (shouldShowFile(file, query)) {
-                    items.push({
-                        kind: "file",
-                        name: file.name,
-                        path: file.path,
-                        value: file
-                    });
-                }
+                if (shouldShowFile(file, query)) items.push({ kind: "file", name: file.name, path: file.path, value: file });
             }
 
-            // Ordenação única: pastas e arquivos ficam juntos em ordem alfabética.
             items.sort(compareEntries);
 
-            const html = items.map(item =>
-                item.kind === "folder"
-                    ? renderFolder(item.value, 0, query, Boolean(query))
-                    : renderFile(item.value, 0)
-            ).filter(Boolean);
+            const html = items
+                .map(item => item.kind === "folder"
+                    ? renderFolder(item.value, 0, query)
+                    : renderFile(item.value, 0))
+                .filter(Boolean)
+                .join("");
 
-            const result = html.join("");
+            panel.innerHTML = html
+                ? `<div class="tree">${html}</div>`
+                : `<div class="state">Nenhum documento encontrado.</div>`;
+        }
 
-            if (!result) {
-                panel.innerHTML = '<div class="state">Nenhum arquivo ou pasta encontrado.</div>';
+        panel.addEventListener("click", event => {
+            const target = event.target.closest("[data-action]");
+            if (!target) return;
+
+            const action = target.dataset.action;
+            const path = target.dataset.path;
+            const entry = entries.find(item => item.path === path);
+
+            if (action === "folder") {
+                if (openFolders.has(path)) openFolders.delete(path);
+                else openFolders.add(path);
+                render();
                 return;
             }
 
-            panel.innerHTML = `<div class="tree">${result}</div>`;
+            if (action === "view" && entry) openViewer(entry);
+        });
+
+        function openViewer(entry) {
+            currentEntry = entry;
+            viewerTitle.textContent = entry.name;
+            viewerActions.innerHTML = "";
+            viewerBody.innerHTML = "";
+            viewerNote.textContent = "";
+
+            const url = fileUrl(entry);
+            const downloadUrl = withQuery(url, "download", "1");
+
+            const downloadLink = document.createElement("a");
+            downloadLink.className = "action-link";
+            downloadLink.href = downloadUrl;
+            downloadLink.setAttribute("download", "");
+            downloadLink.textContent = "⬇️ Baixar";
+            viewerActions.appendChild(downloadLink);
+
+            if (isPdf(entry)) {
+                const printButton = document.createElement("button");
+                printButton.type = "button";
+                printButton.className = "action-link";
+                printButton.textContent = "🖨️ Imprimir";
+                printButton.addEventListener("click", printPdf);
+                viewerActions.appendChild(printButton);
+
+                const iframe = document.createElement("iframe");
+                iframe.title = `Visualização de ${entry.name}`;
+                iframe.src = `${url}#toolbar=1&navpanes=0&view=FitH`;
+                iframe.allow = "fullscreen";
+                viewerBody.appendChild(iframe);
+                viewerNote.textContent = "O PDF abre no visualizador nativo do navegador. O botão Imprimir abre o PDF em uma nova aba para uso da impressão nativa.";
+            } else if (isVideo(entry)) {
+                const fullscreenButton = document.createElement("button");
+                fullscreenButton.type = "button";
+                fullscreenButton.className = "action-link";
+                fullscreenButton.textContent = "⛶ Tela cheia";
+                fullscreenButton.addEventListener("click", toggleVideoFullscreen);
+                viewerActions.appendChild(fullscreenButton);
+
+                const video = document.createElement("video");
+                video.controls = true;
+                video.playsInline = true;
+                video.preload = "metadata";
+                video.crossOrigin = "anonymous";
+                video.src = url;
+                video.addEventListener("error", () => {
+                    viewerNote.textContent = "Não foi possível reproduzir este vídeo. Verifique se o servidor está aceitando requisições HTTP Range e se o MP4 usa H.264/AAC compatível com o navegador.";
+                });
+                viewerBody.appendChild(video);
+                viewerNote.textContent = "Reprodução por streaming HTTP: o navegador solicita somente os trechos necessários do MP4."
+            }
+
+            viewer.classList.add("open");
+            viewer.setAttribute("aria-hidden", "false");
+            document.body.classList.add("modal-open");
         }
 
-        function toggleFolder(row, folderId) {
-            const children = document.getElementById(folderId);
-            const expander = document.getElementById(`expander-${folderId}`);
-            if (!children || !expander) return;
-
-            const open = children.classList.toggle("open");
-            expander.textContent = open ? "▾" : "▸";
+        function printPdf() {
+            if (!currentEntry) return;
+            const printUrl = fileUrl(currentEntry);
+            const popup = window.open(printUrl, "_blank", "noopener,noreferrer");
+            if (!popup) {
+                viewerNote.textContent = "O navegador bloqueou a nova aba. Permita pop-ups para este site e tente novamente.";
+                return;
+            }
+            viewerNote.textContent = "O PDF foi aberto em uma nova aba; use o botão de impressão do visualizador do navegador.";
         }
 
-        function escapeHtml(value) {
-            return String(value).replace(/[&<>"']/g, c => ({
-                "&": "&amp;",
-                "<": "&lt;",
-                ">": "&gt;",
-                '"': "&quot;",
-                "'": "&#39;"
-            }[c]));
+        async function toggleVideoFullscreen() {
+            const video = viewerBody.querySelector("video");
+            if (!video) return;
+            try {
+                if (document.fullscreenElement) await document.exitFullscreen();
+                else await video.requestFullscreen();
+            } catch (error) {
+                viewerNote.textContent = "O navegador não permitiu o modo de tela cheia.";
+            }
         }
 
-        function escapeAttr(value) {
-            return escapeHtml(value);
+        function closeViewer() {
+            const video = viewerBody.querySelector("video");
+            if (video) {
+                video.pause();
+                video.removeAttribute("src");
+                video.load();
+            }
+            viewerBody.innerHTML = "";
+            viewerActions.innerHTML = "";
+            currentEntry = null;
+            viewer.classList.remove("open");
+            viewer.setAttribute("aria-hidden", "true");
+            document.body.classList.remove("modal-open");
         }
 
         loadFiles().catch(err => {
-            document.getElementById("panel").innerHTML = `
-                <div class="state error">
-                    ⚠️ Não foi possível carregar os arquivos.<br>
-                    <small>${escapeHtml(err.message)}</small>
-                </div>`;
+            panel.innerHTML = `<div class="state error"><strong>Não foi possível carregar os documentos.</strong><br>${escapeHtml(err.message || err)}</div>`;
         });
     </script>
 </body>
