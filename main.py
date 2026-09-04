@@ -1,11 +1,13 @@
 import importlib.util
+import mimetypes
 import os
 import sys
 from pathlib import Path
+from urllib.parse import quote
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import Response, StreamingResponse
 
 
 def load_app_from_path(module_name, file_path, dir_name):
@@ -72,6 +74,7 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["GET", "HEAD", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["Accept-Ranges", "Content-Length", "Content-Range", "Content-Disposition"],
 )
 
 app.mount("/licita", app_licita)
@@ -83,22 +86,27 @@ if app_tjsp is not None:
     app.mount("/estudos", app_tjsp)
 
 
-# Pasta física usada pelos Documentos Modelo.
-# Pode ser sobrescrita por DOCUMENTOS_MODELO_DIR sem alterar o código.
+# Pasta física usada pelos Documentos da Licitação.
+# Mantemos DOCUMENTOS_MODELO_DIR como alias para compatibilidade com a configuração atual.
 DEFAULT_DOCUMENTS_DIR = "/run/media/daniel/c1eb5cb7-675f-4e8c-9564-4dabc66d9164"
 
 
 def _documents_root() -> Path:
-    configured = os.getenv("DOCUMENTOS_MODELO_DIR", "").strip()
+    configured = (
+        os.getenv("DOCUMENTOS_LICITACAO_DIR", "").strip()
+        or os.getenv("DOCUMENTOS_MODELO_DIR", "").strip()
+    )
     candidates = [Path(configured).expanduser()] if configured else []
     candidates.extend(
         [
             Path(DEFAULT_DOCUMENTS_DIR),
+            site_root / "documentos-licitacao",
             site_root / "documentos-modelo",
             site_root / "documentos_modelo",
             site_root / "DOCUMENTOS-MODELO",
             site_root / "modelos",
             site_root / "modelos_documentos",
+            Path.home() / "Documentos Licitação",
             Path.home() / "Documentos Modelo",
             Path.home() / "Documentos_Modelo",
             Path.home() / "documentos-modelo",
@@ -122,7 +130,7 @@ def _documents_root() -> Path:
     raise HTTPException(
         status_code=503,
         detail=(
-            "A pasta de Documentos Modelo não está disponível. "
+            "A pasta de Documentos da Licitação não está disponível. "
             f"Caminho configurado/fallback: {configured_text}."
         ),
     )
@@ -145,6 +153,62 @@ def _safe_file(root: Path, relative_path: str) -> Path:
     return requested
 
 
+def _media_type(path: Path) -> str:
+    guessed, _ = mimetypes.guess_type(path.name)
+    if path.suffix.lower() == ".pdf":
+        return "application/pdf"
+    if path.suffix.lower() == ".mp4":
+        return "video/mp4"
+    return guessed or "application/octet-stream"
+
+
+def _content_disposition(path: Path, download: bool) -> str:
+    disposition = "attachment" if download else "inline"
+    safe_name = path.name.replace('"', "")
+    encoded_name = quote(path.name, safe="")
+    return f'{disposition}; filename="{safe_name}"; filename*=UTF-8\'\'{encoded_name}'
+
+
+def _parse_range(range_header: str | None, size: int) -> tuple[int, int] | None:
+    if not range_header or not range_header.lower().startswith("bytes="):
+        return None
+
+    value = range_header[6:].split(",", 1)[0].strip()
+    if not value or "-" not in value:
+        return None
+
+    start_text, end_text = value.split("-", 1)
+    try:
+        if start_text == "":
+            suffix_length = int(end_text)
+            if suffix_length <= 0:
+                return None
+            start = max(size - suffix_length, 0)
+            end = size - 1
+        else:
+            start = int(start_text)
+            end = int(end_text) if end_text else size - 1
+    except ValueError:
+        return None
+
+    if start < 0 or start >= size or end < start:
+        raise HTTPException(status_code=416, detail="Intervalo de bytes inválido.")
+
+    return start, min(end, size - 1)
+
+
+def _iter_file(path: Path, start: int, end: int, chunk_size: int = 1024 * 1024):
+    with path.open("rb") as file:
+        file.seek(start)
+        remaining = end - start + 1
+        while remaining > 0:
+            chunk = file.read(min(chunk_size, remaining))
+            if not chunk:
+                break
+            remaining -= len(chunk)
+            yield chunk
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": "danihmorais-github-pages"}
@@ -152,7 +216,7 @@ async def health():
 
 @app.get("/files")
 async def list_model_files():
-    """Lista exclusivamente os Documentos Modelo disponibilizados pelo backend."""
+    """Lista os documentos disponibilizados pelo backend."""
     root = _documents_root()
     entries = []
     for path in root.rglob("*"):
@@ -169,6 +233,7 @@ async def list_model_files():
                 "path": relative,
                 "type": "file",
                 "size": size,
+                "content_type": _media_type(path),
                 "url": f"/files/{relative}",
             }
         )
@@ -177,8 +242,65 @@ async def list_model_files():
     return {"files": entries}
 
 
-@app.get("/files/{file_path:path}")
-async def download_model_file(file_path: str):
+@app.head("/files/{file_path:path}")
+async def head_model_file(file_path: str):
     root = _documents_root()
     requested = _safe_file(root, file_path)
-    return FileResponse(path=requested, filename=requested.name)
+    size = requested.stat().st_size
+    return Response(
+        status_code=200,
+        headers={
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(size),
+            "Content-Type": _media_type(requested),
+            "Content-Disposition": _content_disposition(requested, download=False),
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@app.get("/files/{file_path:path}")
+async def serve_model_file(file_path: str, request: Request):
+    root = _documents_root()
+    requested = _safe_file(root, file_path)
+    size = requested.stat().st_size
+    media_type = _media_type(requested)
+    download = request.query_params.get("download", "").lower() in {"1", "true", "yes"}
+
+    common_headers = {
+        "Accept-Ranges": "bytes",
+        "Content-Type": media_type,
+        "Content-Disposition": _content_disposition(requested, download=download),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-cache",
+    }
+
+    try:
+        byte_range = _parse_range(request.headers.get("range"), size)
+    except HTTPException as exc:
+        return Response(
+            status_code=exc.status_code,
+            headers={**common_headers, "Content-Range": f"bytes */{size}"},
+            content=exc.detail if isinstance(exc.detail, str) else "Range Not Satisfiable",
+        )
+
+    if byte_range is None:
+        return StreamingResponse(
+            _iter_file(requested, 0, max(size - 1, 0)),
+            status_code=200,
+            headers={**common_headers, "Content-Length": str(size)},
+            media_type=media_type,
+        )
+
+    start, end = byte_range
+    content_length = end - start + 1
+    return StreamingResponse(
+        _iter_file(requested, start, end),
+        status_code=206,
+        headers={
+            **common_headers,
+            "Content-Length": str(content_length),
+            "Content-Range": f"bytes {start}-{end}/{size}",
+        },
+        media_type=media_type,
+    )
