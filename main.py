@@ -38,20 +38,7 @@ app_monta = load_app_from_path("monta_main", "MONTAEDITAL/main.py", "MONTAEDITAL
 app_email = load_app_from_path("email_main", "EMAIL-ATAS-CONTRATOS/main.py", "EMAIL-ATAS-CONTRATOS")
 app_extrato = load_app_from_path("extrato_main", "GERADOREXTRATO/main.py", "GERADOREXTRATO")
 
-# O módulo TJSP fica separado do agregador para evitar importação circular.
 site_root = Path(__file__).resolve().parent
-tjsp_root = Path(
-    os.environ.get(
-        "PROJETO_TJSP_ROOT",
-        str(site_root.parent / "PROJETO-TJSP"),
-    )
-).expanduser().resolve()
-tjsp_api = tjsp_root / "app" / "tjsp_api.py"
-
-if tjsp_api.is_file():
-    app_tjsp = load_app_from_path("tjsp_api_standalone", str(tjsp_api), str(tjsp_root))
-else:
-    app_tjsp = None
 
 app = FastAPI(title="Universo da Licitação API")
 
@@ -72,7 +59,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=sorted(cors_origins),
     allow_credentials=False,
-    allow_methods=["GET", "HEAD", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["Accept-Ranges", "Content-Length", "Content-Range", "Content-Disposition"],
 )
@@ -81,9 +68,6 @@ app.mount("/licita", app_licita)
 app.mount("/monta", app_monta)
 app.mount("/email", app_email)
 app.mount("/geradorextrato", app_extrato)
-
-if app_tjsp is not None:
-    app.mount("/estudos", app_tjsp)
 
 
 # Pasta física usada pelos Documentos da Licitação.
