@@ -31,7 +31,6 @@ O backend agregador da raiz monta as aplicações FastAPI sob estes prefixos:
 /monta
 /email
 /geradorextrato
-/estudos
 ```
 
 A página de **Documentos da Licitação** usa a API de arquivos fornecida pelo backend. A configuração do endereço efetivo da API é aplicada somente durante a publicação por meio de segredo do GitHub; ela não é gravada como valor literal no código-fonte.
