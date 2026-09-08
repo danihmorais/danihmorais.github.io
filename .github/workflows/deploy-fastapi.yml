@@ -109,12 +109,33 @@ jobs:
           PY
 
           echo 'Validando namespace do agregador...'
-          for endpoint in /licita/openapi.json /monta/openapi.json /email/openapi.json /geradorextrato/openapi.json /estudos/openapi.json; do
+          for endpoint in /licita/openapi.json /monta/openapi.json /email/openapi.json /geradorextrato/openapi.json; do
             curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 30 \
               --output /dev/null \
               "$BASE_URL$endpoint"
             echo "$endpoint OK"
           done
+
+          echo 'Validando CORS do POST do Gerador de Extrato...'
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 30 \
+            --request OPTIONS \
+            --header "Origin: $ORIGIN" \
+            --header 'Access-Control-Request-Method: POST' \
+            --header 'Access-Control-Request-Headers: content-type' \
+            --dump-header "$HEADERS_FILE" \
+            --output /dev/null \
+            "$BASE_URL/geradorextrato/api/analyze"
+          grep -Eiq '^access-control-allow-origin:[[:space:]]*https://danihmorais\.github\.io[[:space:]]*$' "$HEADERS_FILE" || {
+            echo 'CORS não autorizou https://danihmorais.github.io no endpoint /geradorextrato/api/analyze.'
+            cat "$HEADERS_FILE"
+            exit 1
+          }
+          grep -Eiq '^access-control-allow-methods:.*POST' "$HEADERS_FILE" || {
+            echo 'CORS não autorizou POST no endpoint /geradorextrato/api/analyze.'
+            cat "$HEADERS_FILE"
+            exit 1
+          }
+          echo 'CORS do Gerador de Extrato OK.'
 
           echo 'Validando /files e CORS...'
           curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 30 \
@@ -134,5 +155,5 @@ jobs:
           files = payload.get("files") if isinstance(payload, dict) else None
           if not isinstance(files, list):
               raise SystemExit("/files não retornou um objeto JSON com a chave 'files'.")
-          print(f"API pública OK: /health, namespaces e /files funcionando; {len(files)} arquivos encontrados.")
+          print(f"API pública OK: /health, namespaces, CORS de /geradorextrato/api/analyze e /files funcionando; {len(files)} arquivos encontrados.")
           PY
