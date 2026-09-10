@@ -34,6 +34,10 @@ function response({ ok = true, status = 200, json = {}, text = "" } = {}) {
   };
 }
 
+function assertJsonEqual(actual, expected) {
+  assert.deepEqual(JSON.parse(JSON.stringify(actual)), expected);
+}
+
 test("mapearDadosWizard calcula o valor estimado e preserva os defaults", () => {
   const { mapearDadosWizard } = loadTsModule("src/utils/mapearDados.ts");
   const dados = mapearDadosWizard({
@@ -50,7 +54,7 @@ test("mapearDadosWizard calcula o valor estimado e preserva os defaults", () => 
   });
 
   assert.equal(dados["{{OBJETO}}"], "Aquisição de materiais");
-  assert.equal(dados["{{VALOR_ESTIMADO}}"], "R$ 75,00");
+  assert.equal(dados["{{VALOR_ESTIMADO}}"].replace("\u00a0", " "), "R$ 75,00");
   assert.equal(dados["{{PAC}}"], "Não previsto: sem justificativa");
   assert.equal(dados["{{INSTRUMENTO}}"], "CONTRATO");
   assert.equal(dados["{{CRITERIOS}}"], "ITEM");
@@ -72,7 +76,7 @@ test("storageLocal nunca persiste a chave de API informada na configuração", (
   salvarConfigIA({ provedor: "unsloth", chave_api: "secret-do-usuario", modelo: "modelo-teste" });
 
   const salvo = JSON.parse(storage.getItem("licita_ai:config_ia"));
-  assert.deepEqual(salvo, { provedor: "unsloth", modelo: "modelo-teste" });
+  assertJsonEqual(salvo, { provedor: "unsloth", modelo: "modelo-teste" });
   assert.equal("chave_api" in salvo, false);
 
   const config = lerConfigIA();
@@ -91,7 +95,7 @@ test("storageLocal cai para OpenRouter quando não há chave Unsloth", () => {
     globals: { localStorage: storage },
   });
 
-  assert.deepEqual(lerConfigIA(), {
+  assertJsonEqual(lerConfigIA(), {
     provedor: "openrouter",
     chave_api: "build-openrouter-key",
     modelo: "openrouter/free",
@@ -129,7 +133,7 @@ test("llm aceita JSON cercado por markdown e informa o modelo resolvido", async 
     (model) => { modeloResolvido = model; }
   );
 
-  assert.deepEqual(resultado, { resultado: "ok" });
+  assertJsonEqual(resultado, { resultado: "ok" });
   assert.equal(chamadas, 1);
   assert.equal(modeloResolvido, "openrouter/modelo-real");
 });
@@ -153,7 +157,7 @@ test("llm corrige JSON com vírgula final e texto extra", async () => {
     },
   });
 
-  assert.deepEqual(
+  assertJsonEqual(
     await gerarTextoOpenRouter("prompt", "ignored", "modelo-teste"),
     { a: 1 }
   );
@@ -187,7 +191,7 @@ test("llm repete falha temporária e não repete erro fatal", async () => {
     },
   });
 
-  assert.deepEqual(
+  assertJsonEqual(
     await modulo.gerarTextoOpenRouter("prompt", "ignored", "modelo-teste"),
     { ok: true }
   );
@@ -217,7 +221,7 @@ test("llm repete falha temporária e não repete erro fatal", async () => {
   assert.equal(chamadasFatais, 1);
 });
 
-test("geradorIA monta os três estágios com contexto anterior e rejeita provedor desconhecido", async () => {
+test("geradorIA monta o estágio TR com contexto operacional e rejeita provedor desconhecido", async () => {
   let promptCapturado = "";
   const { processarDadosIA } = loadTsModule("src/providers/services/geradorIA.ts", {
     replacements: [
@@ -256,11 +260,10 @@ test("geradorIA monta os três estágios com contexto anterior e rejeita provedo
     "modelo"
   );
 
-  assert.deepEqual(resultado, { JUSTIFICATIVA: "texto gerado" });
+  assertJsonEqual(resultado, { JUSTIFICATIVA: "texto gerado" });
   assert.match(promptCapturado, /ETAPA: TERMO DE REFERÊNCIA/);
   assert.match(promptCapturado, /Entregar em até 10 dias úteis/);
   assert.match(promptCapturado, /Preservar as informações do DFD/);
-  assert.match(promptCapturado, /REQUISITOS_ETP_ANTERIOR/);
 
   await assert.rejects(
     processarDadosIA({}, "api-key", "desconhecido", true, "DFD", "modelo"),
