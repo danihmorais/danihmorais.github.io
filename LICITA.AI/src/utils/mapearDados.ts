@@ -1,8 +1,6 @@
-import { calcularValorEstimadoItens } from "./regrasContratacao";
-
 export const mapearDadosWizard = (dados: any) => {
   const itens = dados.itens || [];
-  const totalItens = calcularValorEstimadoItens(itens);
+  const totalItens = itens.reduce((acc: number, i: any) => acc + (Number(i.qtd || 0) * Number(i.valor || 0)), 0);
   const valorEstimadoFormatado = totalItens.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   
   let contatosStr = "";
