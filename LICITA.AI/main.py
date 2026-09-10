@@ -35,6 +35,8 @@ async def agendar_fase_preparatoria(req: FasePreparatoriaRequest):
             dados_ia=req.dados_ia,
             instrucoes=req.instrucoes,
         )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Não foi possível agendar a solicitação: {exc}") from exc
 
