@@ -12,6 +12,7 @@ import PromptModal from "../components/promptModal";
 import { ThemeContext } from "../context/ThemeContext";
 import { lerConfigIA } from "../utils/storageLocal";
 import { gerarFasePreparatoria } from "../api";
+import { criarDadosTeste, TipoTesteContratacao } from "../utils/dadosTeste";
 
 export default function Wizard() {
   const [etapaAtual, setEtapaAtual] = useState(0);
@@ -47,12 +48,26 @@ export default function Wizard() {
   const [jobAgendado, setJobAgendado] = useState<{ job_id: string; status: string; email: string; message: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [mostrarConfig, setMostrarConfig] = useState(false);
+  const [mostrarTestes, setMostrarTestes] = useState(false);
   const { theme, toggleTheme } = useContext(ThemeContext);
   const isDark = theme === "dark";
   const [mostrarPromptModal, setMostrarPromptModal] = useState(false);
 
   const atualizarDados = (novosDados: Partial<typeof dados>) => {
     setDados((prev) => ({ ...prev, ...novosDados }));
+  };
+
+  const carregarTeste = (tipo: TipoTesteContratacao) => {
+    setDados(criarDadosTeste(tipo) as any);
+    setEtapaAtual(0);
+    setMostrarTestes(false);
+    setMostrarConfig(false);
+    setMostrarPromptModal(false);
+    setCarregando(false);
+    setErroMsg(null);
+    setGeracaoSucesso(false);
+    setJobAgendado(null);
+    setStatusTexto("Teste carregado. Revise as cinco etapas antes de confeccionar.");
   };
 
   useEffect(() => {
@@ -406,6 +421,73 @@ export default function Wizard() {
           <span style={{ color: "var(--text-muted)", fontWeight: "bold", fontSize: "14px" }}>
             Passo {etapaAtual + 1} de 5
           </span>
+          <div style={{ position: "relative" }}>
+            <button
+              onClick={() => setMostrarTestes((aberto) => !aberto)}
+              style={{
+                height: "44px",
+                padding: "0 14px",
+                borderRadius: "8px",
+                border: "1px solid var(--border)",
+                cursor: "pointer",
+                background: "var(--bg-panel)",
+                color: "var(--text-main)",
+                fontWeight: 600,
+                boxShadow: "var(--shadow-sm)"
+              }}
+              title="Carregar dados de teste"
+              aria-expanded={mostrarTestes}
+            >
+              🧪 Testes
+            </button>
+            {mostrarTestes && (
+              <div style={{
+                position: "absolute",
+                top: "52px",
+                right: 0,
+                minWidth: "240px",
+                padding: "8px",
+                background: "var(--bg-panel)",
+                border: "1px solid var(--border)",
+                borderRadius: "12px",
+                boxShadow: "var(--shadow-lg)",
+                zIndex: 1100
+              }}>
+                <button
+                  onClick={() => carregarTeste("normal")}
+                  style={{
+                    width: "100%",
+                    padding: "11px 12px",
+                    textAlign: "left",
+                    border: "none",
+                    borderRadius: "8px",
+                    background: "transparent",
+                    color: "var(--text-main)",
+                    cursor: "pointer",
+                    fontSize: "13px"
+                  }}
+                >
+                  📋 Contratação normal
+                </button>
+                <button
+                  onClick={() => carregarTeste("direta")}
+                  style={{
+                    width: "100%",
+                    padding: "11px 12px",
+                    textAlign: "left",
+                    border: "none",
+                    borderRadius: "8px",
+                    background: "transparent",
+                    color: "var(--text-main)",
+                    cursor: "pointer",
+                    fontSize: "13px"
+                  }}
+                >
+                  ⚡ Contratação direta
+                </button>
+              </div>
+            )}
+          </div>
           <button
             onClick={() => setMostrarConfig(true)}
             style={{
