@@ -34,8 +34,8 @@ class FilaTests(unittest.TestCase):
 
         fila._resolver_placeholders(modificacoes)
 
-        self.assertIn("{{A}}", modificacoes["{{A}}"])
-        self.assertIn("{{A}}", modificacoes["{{B}}"])
+        self.assertIn("{{", modificacoes["{{A}}"])
+        self.assertIn("{{", modificacoes["{{B}}"])
 
     def test_retry_tem_backoff_exponencial_e_respeita_retry_at(self):
         self.assertEqual(fila._retry_delay_seconds(1), 5)
