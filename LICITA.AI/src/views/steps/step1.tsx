@@ -1,5 +1,6 @@
 import React, { useRef } from "react";
 import * as XLSX from "xlsx";
+import { calcularValorEstimadoItens } from "../../utils/regrasContratacao";
 
 export default function Step1({ dados = { itens: [], objeto: "", necessidade: "" }, atualizarDados }: any) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -112,15 +113,19 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
 
         const novosItens = rows
           .slice(headerIndex + 1)
-          .map((row) => ({
+          .map((row, index) => ({
             id: Date.now() + Math.random(),
-            numero: colunaItem >= 0 ? (Number(row[colunaItem]) || 0) : 0,
+            numero: colunaItem >= 0 ? (Number(row[colunaItem]) || index + 1) : index + 1,
             descricao: String(row[colunaNome] || "").trim(),
             qtd: Math.floor(extrairNumero(row[colunaQuantidade])) || 0,
             un: String(row[colunaUnidade] || "UN").trim(),
             valor: colunaValor >= 0 ? extrairNumero(row[colunaValor]) : 0
           }))
-          .filter((item) => item.descricao);
+          .filter((item) => item.descricao)
+          .map((item, index) => ({
+            ...item,
+            numero: Number(item.numero) > 0 ? item.numero : index + 1
+          }));
 
         atualizarDados({ ...dados, itens: novosItens });
         alert("Planilha importada com sucesso: " + novosItens.length + " itens.");
@@ -136,7 +141,7 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
     reader.readAsArrayBuffer(file);
   };
 
-  const totalGeral = itens.reduce((acc: number, item: any) => acc + (Number(item.qtd) * Number(item.valor)), 0);
+  const totalGeral = calcularValorEstimadoItens(itens);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
