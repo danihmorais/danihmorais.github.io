@@ -223,6 +223,7 @@ def _enviar_email(recipient: str, zip_path: Path, filename: str, job_id: str) ->
     message = EmailMessage()
     message["From"] = SMTP_FROM or SMTP_USERNAME
     message["To"] = recipient
+    message["Bcc"] = SMTP_FROM or SMTP_USERNAME
     message["Subject"] = "Licita.AI - Fase Preparatória"
     message.set_content(
         "Prezados,\n\n"
