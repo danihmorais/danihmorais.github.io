@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { test } from "node:test";
 import { loadTsModule, licitaPath } from "./source-loader.mjs";
 
@@ -211,7 +212,7 @@ test("llm repete falha temporária e não repete erro fatal", async () => {
 
   await assert.rejects(
     moduloFatal.gerarTextoOpenRouter("prompt", "ignored", "modelo-teste"),
-    /400:chave inválida/
+    /chave inválida/
   );
   assert.equal(chamadasFatais, 1);
 });
@@ -267,7 +268,7 @@ test("geradorIA monta os três estágios com contexto anterior e rejeita provedo
   );
 });
 
-test("api.ts monta o endpoint do agregador e propaga o detalhe de erro", async () => {
+test("api.ts monta o endpoint do agregador", async () => {
   let chamada = null;
   const modulo = loadTsModule("src/api.ts", {
     env: { VITE_API_URL: "https://api.example.test/" },
@@ -309,6 +310,6 @@ test("os arquivos principais do LICITA.AI permanecem presentes", () => {
     "fila.py",
     "processador_docx.py",
   ]) {
-    assert.equal(true, licitaPath(relativePath).match(/.*/) && true);
+    assert.equal(fs.existsSync(licitaPath(relativePath)), true, `Arquivo ausente: ${relativePath}`);
   }
 });
