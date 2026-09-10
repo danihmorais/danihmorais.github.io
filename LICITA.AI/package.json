@@ -2,6 +2,7 @@
   "name": "licita.ai",
   "private": true,
   "version": "1.0.0",
+  "description": "Gerador da fase preparatória de contratações públicas",
   "type": "module",
   "scripts": {
     "dev": "vite",
