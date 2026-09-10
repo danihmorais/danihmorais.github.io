@@ -2,6 +2,13 @@ export const mapearDadosWizard = (dados: any) => {
   const itens = dados.itens || [];
   const totalItens = itens.reduce((acc: number, i: any) => acc + (Number(i.qtd || 0) * Number(i.valor || 0)), 0);
   const valorEstimadoFormatado = totalItens.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  const itensNomes = itens
+    .map((item: any, index: number) => ({
+      numero: item?.numero ?? index + 1,
+      nome: String(item?.descricao || '').trim(),
+    }))
+    .filter((item: any) => item.nome);
   
   let contatosStr = "";
   if (dados.contatosSecretarias && typeof dados.contatosSecretarias === 'object') {
@@ -19,6 +26,7 @@ export const mapearDadosWizard = (dados: any) => {
     "{{OBJETO}}": dados.objeto || "",
     "{{NECESSIDADE}}": dados.necessidade || "",
     "{{ITENS}}": JSON.stringify(itens),
+    "ITENS_NOMES": JSON.stringify(itensNomes),
     "{{VALOR_ESTIMADO}}": valorEstimadoFormatado,
     "{{EXECUCAO}}": dados.execucao || "",
     "{{PAC}}": dados.pac === "SIM" ? "Previsto no PAC" : `Não previsto: ${dados.motivoPac || 'sem justificativa'}`,

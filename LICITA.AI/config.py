@@ -23,6 +23,10 @@ BASE_FILES = [
     "TR - BASE.docx",
 ]
 
+BASE_FILES_CONTRATACAO_DIRETA = [
+    "Contratação Direta - BASE.docx",
+]
+
 PASTA_MODELOS = os.path.join(BASE_DIR, "modelos")
 
 DEFAULT_OUTPUT_FOLDER_NAME = "Documentos_Gerados"
