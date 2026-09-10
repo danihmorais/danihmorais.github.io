@@ -11,18 +11,21 @@ import threading
 import time
 import uuid
 import zipfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from pathlib import Path
 
 import config
-from montador_variaveis import montar_variaveis_fixas, filtrar_chaves_docx
+from montador_variaveis import filtrar_chaves_docx, montar_variaveis_fixas, validar_consistencia_dados
 from processador_docx import modificar_documento
 
 EMAIL_RE = re.compile(r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}", re.IGNORECASE)
+PLACEHOLDER_RE = re.compile(r"\{\{\s*([^{}]+?)\s*\}\}")
 QUEUE_DIR = Path(os.getenv("LICITA_QUEUE_DIR", str(Path.home() / ".local" / "share" / "licita-ai" / "fila"))).expanduser()
 POLL_INTERVAL_SECONDS = max(1, int(os.getenv("LICITA_QUEUE_POLL_SECONDS", "3")))
 MAX_ATTEMPTS = max(1, int(os.getenv("LICITA_QUEUE_MAX_ATTEMPTS", "3")))
+RETRY_BASE_SECONDS = max(1, int(os.getenv("LICITA_QUEUE_RETRY_BASE", "5")))
+RETRY_MAX_SECONDS = max(RETRY_BASE_SECONDS, int(os.getenv("LICITA_QUEUE_RETRY_MAX", "300")))
 SMTP_TIMEOUT_SECONDS = max(5, int(os.getenv("LICITA_SMTP_TIMEOUT", "30")))
 SMTP_HOST = os.getenv("LICITA_SMTP_HOST", os.getenv("SMTP_HOST", "mail01.webnets.com.br")).strip()
 SMTP_PORT = int(os.getenv("LICITA_SMTP_PORT", os.getenv("SMTP_PORT", "587")))
@@ -69,6 +72,10 @@ def _job_path(job_id: str, suffix: str = "") -> Path:
     return QUEUE_DIR / f"{job_id}{suffix}.json"
 
 
+def _artifact_path(job_id: str) -> Path:
+    return QUEUE_DIR / f"{job_id}.artifact.zip"
+
+
 def _find_job_path(job_id: str) -> Path | None:
     for suffix in ("", ".processing", ".done", ".failed"):
         path = _job_path(job_id, suffix)
@@ -91,6 +98,54 @@ def _formata_moeda(v) -> str:
     s = f"{v:,.2f}"
     s = s.replace(",", "X").replace(".", ",").replace("X", ".")
     return f"R$ {s}"
+
+
+def _canonical_placeholder(chave: str) -> str:
+    nome = chave.strip().strip("{}").strip()
+    return f"{{{{{nome}}}}}"
+
+
+def _resolver_placeholders(modificacoes: dict) -> None:
+    valores = {
+        _canonical_placeholder(chave): valor
+        for chave, valor in modificacoes.items()
+        if isinstance(chave, str)
+    }
+
+    def resolver_texto(texto: str, pilha: frozenset[str]) -> str:
+        def substituir(match: re.Match[str]) -> str:
+            chave = _canonical_placeholder(match.group(1))
+            if chave not in valores or chave in pilha:
+                return match.group(0)
+            valor = valores[chave]
+            if not isinstance(valor, str):
+                return match.group(0)
+            return resolver_texto(valor, pilha | {chave})
+
+        return PLACEHOLDER_RE.sub(substituir, texto)
+
+    for chave, valor in list(valores.items()):
+        if isinstance(valor, str):
+            valores[chave] = resolver_texto(valor, frozenset({chave}))
+
+    for chave, valor in valores.items():
+        modificacoes[chave] = valor
+
+
+def _retry_delay_seconds(attempts: int) -> int:
+    tentativa = max(1, int(attempts))
+    return min(RETRY_MAX_SECONDS, RETRY_BASE_SECONDS * (2 ** (tentativa - 1)))
+
+
+def _retry_is_ready(job: dict) -> bool:
+    retry_at = job.get("retry_at")
+    if not retry_at:
+        return True
+    try:
+        texto = str(retry_at).strip().replace("Z", "+00:00")
+        return datetime.fromisoformat(texto).astimezone(timezone.utc) <= datetime.now(timezone.utc)
+    except (TypeError, ValueError):
+        return True
 
 
 def gerar_zip(dados_usuario: dict, dados_ia: dict, session_id: str) -> tuple[Path, str]:
@@ -117,25 +172,13 @@ def gerar_zip(dados_usuario: dict, dados_ia: dict, session_id: str) -> tuple[Pat
                 "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"
             ][datetime.now().month - 1]
 
-        for _ in range(3):
-            mudou = False
-            for k, v in list(modificacoes.items()):
-                if isinstance(v, str) and "{{" in v:
-                    novo_v = v
-                    for sub_k, sub_v in modificacoes.items():
-                        if sub_k != k and sub_k in novo_v and isinstance(sub_v, str):
-                            novo_v = novo_v.replace(sub_k, sub_v)
-                    if novo_v != v:
-                        modificacoes[k] = novo_v
-                        mudou = True
-            if not mudou:
-                break
+        _resolver_placeholders(modificacoes)
 
         itens_json = modificacoes.get("{{ITENS}}")
         if not _valor_vazio(itens_json):
             itens_str = str(itens_json)
             if itens_str.startswith("__TABLE__"):
-                itens_str = itens_str.replace("__TABLE__", "")
+                itens_str = itens_str.replace("__TABLE__", "", 1)
 
             try:
                 itens = json.loads(itens_str) if isinstance(itens_str, str) else itens_json
@@ -250,6 +293,7 @@ def enqueue_job(email: str, dados_usuario: dict, dados_ia: dict, instrucoes: str
     if not EMAIL_RE.fullmatch(email):
         raise ValueError("Informe um e-mail válido para receber os documentos.")
 
+    validar_consistencia_dados(dados_usuario)
     _ensure_queue_dir()
     job_id = uuid.uuid4().hex
     job = {
@@ -292,6 +336,8 @@ def _claim_next_job() -> tuple[Path, dict] | None:
             continue
         try:
             job = json.loads(path.read_text(encoding="utf-8"))
+            if not _retry_is_ready(job):
+                continue
             job_id = job.get("job_id")
             if not isinstance(job_id, str) or not re.fullmatch(r"[0-9a-f]{32}", job_id, re.IGNORECASE):
                 continue
@@ -303,6 +349,7 @@ def _claim_next_job() -> tuple[Path, dict] | None:
             job["status"] = "processing"
             job["started_at"] = _utc_now()
             job["attempts"] = int(job.get("attempts", 0)) + 1
+            job.pop("retry_at", None)
             _write_json(processing_path, job)
             return processing_path, job
         except (OSError, json.JSONDecodeError, ValueError):
@@ -317,10 +364,18 @@ def _process_one_job() -> None:
 
     processing_path, job = claimed
     job_id = job["job_id"]
+    artifact_path = _artifact_path(job_id)
     temp_root = None
+    zip_filename = f"FasePreparatoria_{job_id[:6]}.zip"
     try:
-        zip_path, zip_filename = gerar_zip(job.get("dados_usuario", {}), job.get("dados_ia", {}), job_id)
-        temp_root = zip_path.parent
+        if artifact_path.is_file():
+            zip_path = artifact_path
+        else:
+            generated_path, zip_filename = gerar_zip(job.get("dados_usuario", {}), job.get("dados_ia", {}), job_id)
+            temp_root = generated_path.parent
+            os.replace(generated_path, artifact_path)
+            zip_path = artifact_path
+
         _enviar_email(job["email"], zip_path, zip_filename, job_id)
 
         done_path = _job_path(job_id, ".done")
@@ -333,6 +388,7 @@ def _process_one_job() -> None:
             },
         })
         _write_json(done_path, job)
+        artifact_path.unlink(missing_ok=True)
         processing_path.unlink(missing_ok=True)
     except Exception as exc:
         attempts = int(job.get("attempts", 1))
@@ -341,14 +397,18 @@ def _process_one_job() -> None:
 
         if attempts < MAX_ATTEMPTS:
             job["status"] = "queued"
+            retry_at = datetime.now(timezone.utc) + timedelta(seconds=_retry_delay_seconds(attempts))
+            job["retry_at"] = retry_at.isoformat()
             pending_path = _job_path(job_id)
             _write_json(pending_path, job)
             processing_path.unlink(missing_ok=True)
         else:
             job["status"] = "failed"
+            job.pop("retry_at", None)
             failed_path = _job_path(job_id, ".failed")
             _write_json(failed_path, job)
             processing_path.unlink(missing_ok=True)
+            artifact_path.unlink(missing_ok=True)
     finally:
         if temp_root is not None:
             shutil.rmtree(temp_root, ignore_errors=True)

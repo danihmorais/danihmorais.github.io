@@ -44,6 +44,25 @@ class LicitaBackendTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("e-mail válido", response.json()["detail"])
 
+    def test_endpoint_rejeita_exclusividade_meepp_acima_do_limite(self):
+        payload = {
+            "email": "teste@example.com",
+            "dados_ia": {},
+            "dados_usuario": {
+                "{{ME_EPP}}": "SIM",
+                "{{ITENS}}": json.dumps([
+                    {"numero": 1, "qtd": 1, "valor": 80000.01}
+                ]),
+            },
+        }
+
+        with TestClient(app) as client:
+            response = client.post("/api/gerar-fase-preparatoria", json=payload)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("supera R$ 80.000,00", response.json()["detail"])
+        self.assertEqual(list(QUEUE_DIR.glob("*.json")), [])
+
     def test_endpoint_agenda_e_consulta_job(self):
         payload = {
             "email": "teste@example.com",

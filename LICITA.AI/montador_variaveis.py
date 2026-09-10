@@ -1,3 +1,5 @@
+import json
+
 import config
 
 INSTRUMENTO_TEXTO = {
@@ -69,6 +71,7 @@ CHAVES_RAW = {
     "REQUISITOS_ETP_ANTERIOR",
 }
 
+LIMITE_EXCLUSIVIDADE_MEEPP = 80000
 SIM_VALORES = {"sim", "s", "x", "true", "1"}
 NAO_VALORES = {"não", "nao", "n", "", "false", "0"}
 
@@ -91,7 +94,45 @@ def _formatar_lista_assinaturas(nomes_str: str, cargos_str: str):
     return resultado
 
 
+def _extrair_itens(dados_usuario: dict) -> list[dict]:
+    itens = dados_usuario.get("{{ITENS}}", [])
+    if isinstance(itens, str):
+        if itens.startswith("__TABLE__"):
+            itens = itens.replace("__TABLE__", "", 1)
+        try:
+            itens = json.loads(itens)
+        except json.JSONDecodeError:
+            return []
+    if not isinstance(itens, list):
+        return []
+    return [item for item in itens if isinstance(item, dict)]
+
+
+def calcular_valor_estimado(dados_usuario: dict) -> float:
+    total = 0.0
+    for item in _extrair_itens(dados_usuario):
+        try:
+            quantidade = float(item.get("qtd", 0))
+        except (TypeError, ValueError):
+            quantidade = 0.0
+        try:
+            valor = float(item.get("valor", 0))
+        except (TypeError, ValueError):
+            valor = 0.0
+        total += quantidade * valor
+    return total
+
+
+def validar_consistencia_dados(dados_usuario: dict) -> None:
+    meepp = dados_usuario.get("{{ME_EPP}}", "NAO")
+    if _converter_para_sim(meepp) and calcular_valor_estimado(dados_usuario) > LIMITE_EXCLUSIVIDADE_MEEPP:
+        raise ValueError(
+            "A exclusividade para ME/EPP não pode ser utilizada quando o valor estimado da contratação supera R$ 80.000,00."
+        )
+
+
 def montar_variaveis_fixas(dados_usuario: dict) -> dict:
+    validar_consistencia_dados(dados_usuario)
     resultado = {}
 
     for chave, valor in dados_usuario.items():
@@ -126,9 +167,7 @@ def montar_variaveis_fixas(dados_usuario: dict) -> dict:
     if instrumento_raw == "ATA":
         if _converter_para_sim(prorroga):
             clausula_prorroga = config.TEXTOS.get("clausula_ata", "")
-            if not clausula_prorroga:
-                clausula_prorroga = config.TEXTOS.get("clausula_padrao", "")
-            texto_prorroga = "podendo ser prorrogado por igual período, nos termos do art. 84 da Lei Federal nº 14.133/2021"
+            texto_prorroga = "podendo ser prorrogada por igual período, nos termos do art. 84 da Lei Federal nº 14.133/2021"
             texto_prorroga_sn = "Sim"
         else:
             clausula_prorroga = ""
@@ -198,4 +237,12 @@ def montar_variaveis_fixas(dados_usuario: dict) -> dict:
 
 
 def filtrar_chaves_docx(dados: dict) -> dict:
-    return {k: v for k, v in dados.items() if k.startswith("{{") and k.endswith("}}")}
+    resultado = {}
+    for chave, valor in dados.items():
+        if not isinstance(chave, str):
+            continue
+        nome = chave.strip().strip("{}").strip()
+        if not nome:
+            continue
+        resultado[f"{{{{{nome}}}}}"] = valor
+    return resultado
