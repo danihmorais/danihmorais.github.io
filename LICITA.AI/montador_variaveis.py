@@ -167,7 +167,7 @@ def montar_variaveis_fixas(dados_usuario: dict) -> dict:
     if instrumento_raw == "ATA":
         if _converter_para_sim(prorroga):
             clausula_prorroga = config.TEXTOS.get("clausula_ata", "")
-            texto_prorroga = "podendo ser prorrogado por igual período, nos termos do art. 84 da Lei Federal nº 14.133/2021"
+            texto_prorroga = "podendo ser prorrogada por igual período, nos termos do art. 84 da Lei Federal nº 14.133/2021"
             texto_prorroga_sn = "Sim"
         else:
             clausula_prorroga = ""
