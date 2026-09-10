@@ -81,18 +81,29 @@ def _split_linear_content_for_paragraphs(linear_content):
 def _inserir_tabela(paragraph, json_str):
     try:
         dados = json.loads(json_str)
-        if not dados:
+        if not isinstance(dados, list) or not dados:
             return
+        itens_validos = [item for item in dados if isinstance(item, dict)]
+        if not itens_validos:
+            return
+        colunas = list(dict.fromkeys(
+            key
+            for item in itens_validos
+            for key in item.keys()
+        ))
+        if not colunas:
+            return
+
         parent = paragraph._parent
-        table = parent.add_table(rows=1, cols=len(dados[0]), width=Inches(6.0))
+        table = parent.add_table(rows=1, cols=len(colunas), width=Inches(6.0))
         table.style = "Table Grid"
         hdr_cells = table.rows[0].cells
-        for i, key in enumerate(dados[0].keys()):
+        for i, key in enumerate(colunas):
             hdr_cells[i].text = str(key)
-        for item in dados:
+        for item in itens_validos:
             row_cells = table.add_row().cells
-            for i, key in enumerate(item.keys()):
-                row_cells[i].text = str(item[key])
+            for i, key in enumerate(colunas):
+                row_cells[i].text = str(item.get(key, ""))
         paragraph._p.addnext(table._tbl)
     except Exception as e:
         new_run = paragraph.add_run(f"[ERRO AO GERAR TABELA: {e}]")
@@ -136,7 +147,7 @@ def _apply_segments_to_paragraph(paragraph, segments, extracted_runs_data):
                         new_run.font.color.rgb = RGBColor(255, 0, 0)
                         new_run.bold = True
                 elif part.startswith("__TABLE__"):
-                    json_str = part.replace("__TABLE__", "")
+                    json_str = part.replace("__TABLE__", "", 1)
                     _inserir_tabela(paragraph, json_str)
                 else:
                     new_run = paragraph.add_run(part)
