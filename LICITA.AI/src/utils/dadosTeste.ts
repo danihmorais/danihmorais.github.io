@@ -14,9 +14,7 @@ export const criarDadosTeste = (tipo: TipoTesteContratacao) => {
   const secretaria = "Secretaria de Administração";
 
   return {
-    objeto: direta
-      ? "Aquisição de materiais de expediente para atendimento das unidades administrativas"
-      : "Registro de preços para aquisição de materiais de expediente para atendimento das unidades administrativas",
+    objeto: "Aquisição de materiais de expediente para atendimento das unidades administrativas",
     necessidade: direta
       ? "A contratação é necessária para reposição do estoque de materiais de expediente e continuidade das atividades administrativas, considerando a necessidade imediata de atendimento das unidades municipais."
       : "A contratação é necessária para assegurar o abastecimento regular de materiais de expediente das unidades municipais, evitando descontinuidade das atividades administrativas e permitindo planejamento de consumo ao longo da vigência.",
