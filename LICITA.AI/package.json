@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "test": "node --test tests/unit/*.test.mjs",
+    "test:dist": "npm run build && node tests/dist-smoke.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
