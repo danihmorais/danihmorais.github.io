@@ -63,6 +63,8 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
     return Number(str) || 0;
   };
 
+  const normalizarCabecalho = (valor: any) => String(valor || "").trim().toLowerCase();
+
   const processarArquivo = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -82,9 +84,10 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
         }) as any[][];
 
         const headerIndex = rows.findIndex(
-          (row: any[]) =>
-            row.some((c) => String(c).trim() === "Item") &&
-            row.some((c) => String(c).trim() === "Nome")
+          (row: any[]) => {
+            const headers = row.map(normalizarCabecalho);
+            return headers.includes("item") && headers.includes("nome");
+          }
         );
 
         if (headerIndex === -1) {
@@ -92,9 +95,17 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
           return;
         }
 
-        const header = rows[headerIndex].map(c => String(c).trim());
+        const header = rows[headerIndex].map(normalizarCabecalho);
+        const colunaItem = header.indexOf("item");
+        const colunaNome = header.indexOf("nome");
+        const colunaQuantidade = header.indexOf("quantidade");
+        const colunaUnidade = header.indexOf("unidade");
+        const colunaValor = ["valor unitário", "valor unitario", "valor", "preço unitário", "preco unitario"]
+          .map(normalizarCabecalho)
+          .map((nome) => header.indexOf(nome))
+          .find((index) => index >= 0) ?? -1;
 
-        if (!header.includes("Nome") || !header.includes("Quantidade") || !header.includes("Unidade")) {
+        if (colunaNome < 0 || colunaQuantidade < 0 || colunaUnidade < 0) {
           alert("A planilha não possui as colunas obrigatórias (Nome, Quantidade, Unidade).");
           return;
         }
@@ -103,11 +114,11 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
           .slice(headerIndex + 1)
           .map((row) => ({
             id: Date.now() + Math.random(),
-            numero: Number(row[0]) || 0,
-            descricao: String(row[1] || "").trim(),
-            qtd: Math.floor(extrairNumero(row[7])) || 0,
-            un: String(row[8] || "UN").trim(),
-            valor: extrairNumero(row[6])
+            numero: colunaItem >= 0 ? (Number(row[colunaItem]) || 0) : 0,
+            descricao: String(row[colunaNome] || "").trim(),
+            qtd: Math.floor(extrairNumero(row[colunaQuantidade])) || 0,
+            un: String(row[colunaUnidade] || "UN").trim(),
+            valor: colunaValor >= 0 ? extrairNumero(row[colunaValor]) : 0
           }))
           .filter((item) => item.descricao);
 

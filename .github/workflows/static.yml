@@ -44,15 +44,29 @@ jobs:
           npm install
           npm run build
 
-      - name: Build Licita.AI
+      - name: Setup Python for Licita.AI tests
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Test backend do Licita.AI
+        working-directory: ./LICITA.AI
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m unittest discover -s tests/backend -p 'test_*.py' -v
+
+      - name: Build and test Licita.AI
         working-directory: ./LICITA.AI
         env:
           VITE_API_URL: ${{ secrets.API_URL }}
           VITE_API_UNSLOTH_KEY: ${{ secrets.API_UNSLOTH }}
           VITE_API_OPENROUTER_KEY: ${{ secrets.API_OPENROUTER }}
         run: |
-          npm install
+          npm ci
+          npm test
           npm run build
+          node tests/dist-smoke.mjs
 
       - name: Build Enviador de Atas e Contratos
         working-directory: ./EMAIL-ATAS-CONTRATOS
