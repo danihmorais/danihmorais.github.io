@@ -3,6 +3,7 @@ import {
   calcularValorEstimadoItens,
   exclusividadeMeeppPermitida,
   formatarLimiteMeepp,
+  LIMITE_EXCLUSIVIDADE_MEEPP,
 } from "../../utils/regrasContratacao";
 
 const styles = {
@@ -97,7 +98,8 @@ export default function Step5({ dados, atualizarDados }: any) {
   const faltaDotacao = dados.dotacao.trim() === "" && !dados.caminhoImagemDotacao;
   const totalGeral = calcularValorEstimadoItens(dados.itens || []);
   const meeppExclusivoPermitido = exclusividadeMeeppPermitida(dados.itens || []);
-  const totalAcimaDoLimite = totalGeral > 80000;
+  const totalAcimaDoLimite = totalGeral > LIMITE_EXCLUSIVIDADE_MEEPP;
+  const valorEstimadoFormatado = totalGeral.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
   React.useEffect(() => {
     if (!meeppExclusivoPermitido && dados.meepp === "SIM") {
@@ -159,7 +161,7 @@ export default function Step5({ dados, atualizarDados }: any) {
           />
           {totalAcimaDoLimite && (
             <span style={styles.warningText}>
-              A exclusividade integral para ME/EPP foi bloqueada porque o valor estimado desta contratação é {formatarLimiteMeepp()} ou superior. Valor estimado atual: {formatarLimiteMeepp().replace("80.000,00", "")} {totalGeral.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.
+              A exclusividade integral para ME/EPP foi bloqueada porque o valor estimado desta contratação ({valorEstimadoFormatado}) supera o limite de {formatarLimiteMeepp()}.
             </span>
           )}
         </div>
