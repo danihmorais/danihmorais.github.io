@@ -7,6 +7,22 @@ import * as ts from "typescript";
 const TESTS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const LICITA_DIR = path.resolve(TESTS_DIR, "../..");
 
+function testRequire(request) {
+  if (request === "./providers/llm") {
+    return { MODELO_PADRAO_POR_PROVEDOR: { openrouter: "openrouter/free", unsloth: "unsloth-auto" } };
+  }
+  if (request === "./providers/services/contratacaoDiretaIA") {
+    return {
+      revisarMarcasItens: async (itens) => ({ itens, auditoria: [] }),
+      gerarDadosContratacaoDireta: async () => ({}),
+    };
+  }
+  if (request === "./utils/storageLocal") {
+    return { lerConfigIA: () => ({}) };
+  }
+  throw new Error(`Unsupported test require: ${request}`);
+}
+
 export function loadTsModule(relativePath, { env = {}, globals = {}, replacements = [] } = {}) {
   const filename = path.resolve(LICITA_DIR, relativePath);
   let source = fs.readFileSync(filename, "utf8");
@@ -33,6 +49,7 @@ export function loadTsModule(relativePath, { env = {}, globals = {}, replacement
     module,
     exports: module.exports,
     console,
+    require: testRequire,
     ...globals,
   };
 

@@ -148,6 +148,11 @@ def _retry_is_ready(job: dict) -> bool:
         return True
 
 
+def _eh_contratacao_direta(dados_usuario: dict) -> bool:
+    modalidade = str(dados_usuario.get("{{MODALIDADE}}", "")).strip().upper()
+    return modalidade in {"DISPENSA_EMAIL", "DISPENSA_BLL"}
+
+
 def gerar_zip(dados_usuario: dict, dados_ia: dict, session_id: str) -> tuple[Path, str]:
     temp_dir = Path(tempfile.mkdtemp(prefix=f"fase_prep_{session_id}_"))
 
@@ -218,8 +223,12 @@ def gerar_zip(dados_usuario: dict, dados_ia: dict, session_id: str) -> tuple[Pat
                 if not str(itens_json).startswith("__TABLE__"):
                     modificacoes["{{ITENS}}"] = f"__TABLE__{str(itens_json)}"
 
+        arquivos_base = list(config.BASE_FILES)
+        if _eh_contratacao_direta(dados_usuario):
+            arquivos_base.extend(getattr(config, "BASE_FILES_CONTRATACAO_DIRETA", []))
+
         arquivos_gerados = []
-        for arq in config.BASE_FILES:
+        for arq in arquivos_base:
             cam_origem = os.path.join(config.PASTA_MODELOS, arq)
             cam_destino = temp_dir / f"Pronto_{arq}"
             if os.path.exists(cam_origem):
