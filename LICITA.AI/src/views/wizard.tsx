@@ -44,7 +44,7 @@ export default function Wizard() {
   const [statusTexto, setStatusTexto] = useState("Iniciando...");
   const [erroMsg, setErroMsg] = useState<string | null>(null);
   const [geracaoSucesso, setGeracaoSucesso] = useState(false);
-  const [arquivoGerado, setArquivoGerado] = useState<{ blob: Blob; filename: string } | null>(null);
+  const [jobAgendado, setJobAgendado] = useState<{ job_id: string; status: string; email: string; message: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [mostrarConfig, setMostrarConfig] = useState(false);
   const { theme, toggleTheme } = useContext(ThemeContext);
@@ -108,11 +108,12 @@ export default function Wizard() {
     }
   };
 
-  const confeccionarDocumentos = async (instrucoes: string) => {
+  const confeccionarDocumentos = async ({ instrucoes, email }: { instrucoes: string; email: string }) => {
     setMostrarPromptModal(false);
     setCarregando(true);
     setErroMsg(null);
     setGeracaoSucesso(false);
+    setJobAgendado(null);
     setStatusTexto("A ler configurações da IA...");
 
     try {
@@ -126,8 +127,6 @@ export default function Wizard() {
         return;
       }
 
-      // O contexto-base é congelado no início da geração. O mesmo modelo e provedor
-      // permanecem sendo utilizados nas três etapas; apenas o contexto acumulado muda.
       const dadosMapeados = mapearDadosWizard(dados);
       const instrucoesBase = instrucoes.trim();
       const meeppExclusivo = dados.meepp === "SIM";
@@ -144,7 +143,7 @@ export default function Wizard() {
           ))
           .join("\n\n");
 
-        const contexto = [
+        return [
           instrucoesBase,
           `CONTEXTO DE GERAÇÃO ENCADEADA - ETAPA ATUAL: ${etapaAtualNome}`,
           "As três etapas DFD → ETP → TR pertencem à mesma contratação e devem ser tratadas como uma única linha de raciocínio.",
@@ -152,11 +151,8 @@ export default function Wizard() {
           "Quando houver conflito entre uma inferência genérica e um documento anterior, preserve a informação já estabelecida no documento anterior, salvo instrução expressa em contrário.",
           blocosAnteriores,
         ].filter(Boolean).join("\n\n");
-
-        return contexto;
       };
 
-      // 1) DFD: primeiro documento, usando apenas o contexto-base da contratação.
       const dadosDfdInput = {
         ...dadosMapeados,
         INSTRUCOES_EXTRAS: criarContextoEtapa("DFD"),
@@ -172,7 +168,6 @@ export default function Wizard() {
         modeloEscolhido
       );
 
-      // 2) ETP: recebe o contexto-base + DFD completo já gerado pelo mesmo modelo.
       const dadosEtpInput = {
         ...dadosMapeados,
         INSTRUCOES_EXTRAS: criarContextoEtapa("ETP", { DFD: dadosIaDfd }),
@@ -188,8 +183,6 @@ export default function Wizard() {
         modeloEscolhido
       );
 
-      // 3) TR: recebe o contexto-base + DFD + ETP completos. Além disso,
-      // alimenta explicitamente o campo que o gerador utiliza para REQUISITOS_TR.
       const dadosTrInput = {
         ...dadosMapeados,
         INSTRUCOES_EXTRAS: criarContextoEtapa("TR", {
@@ -211,25 +204,17 @@ export default function Wizard() {
 
       const dadosIaFinais = { ...dadosIaDfd, ...dadosIaEtp, ...dadosIaTr };
 
-      setStatusTexto("A preencher os ficheiros DOCX finais...");
+      setStatusTexto("A criar o pedido JSON e colocá-lo na fila do backend...");
       const resultado = await gerarFasePreparatoria({
+        email,
+        instrucoes: instrucoesBase,
         dados_usuario: dadosMapeados,
         dados_ia: dadosIaFinais,
       });
 
-      // Dispara o download do .zip automaticamente no navegador
-      const urlBlob = URL.createObjectURL(resultado.blob);
-      const link = document.createElement("a");
-      link.href = urlBlob;
-      link.download = resultado.filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(urlBlob);
-
-      setArquivoGerado(resultado);
+      setJobAgendado(resultado);
+      setStatusTexto("Solicitação registrada na fila do backend.");
       setGeracaoSucesso(true);
-
     } catch (erro: any) {
       console.error("Erro completo:", erro);
 
@@ -329,36 +314,28 @@ export default function Wizard() {
             <>
               <div style={{ fontSize: "44px", marginBottom: "12px" }}>✅</div>
               <h2 style={{ margin: "0 0 16px 0", color: "var(--btn-success)", fontSize: "22px" }}>
-                Documentos Gerados com Sucesso!
+                Solicitação agendada com sucesso!
               </h2>
-              <p style={{ color: "var(--text-muted)", margin: "0 0 24px 0", fontSize: "14px" }}>
-                O download do arquivo .zip com os documentos foi iniciado automaticamente.
-                {" "}
-                {arquivoGerado && (
-                  <span
-                    onClick={() => {
-                      const urlBlob = URL.createObjectURL(arquivoGerado.blob);
-                      const link = document.createElement("a");
-                      link.href = urlBlob;
-                      link.download = arquivoGerado.filename;
-                      document.body.appendChild(link);
-                      link.click();
-                      document.body.removeChild(link);
-                      URL.revokeObjectURL(urlBlob);
-                    }}
-                    style={{
-                      color: "var(--btn-primary)",
-                      fontWeight: "bold",
-                      cursor: "pointer",
-                      textDecoration: "underline",
-                    }}
-                  >
-                    Baixar novamente
-                  </span>
-                )}
+              <p style={{ color: "var(--text-muted)", margin: "0 0 18px 0", fontSize: "14px" }}>
+                O pedido foi salvo como JSON na fila do backend. O servidor vai gerar os documentos e enviar o arquivo .zip para o e-mail informado.
               </p>
+              {jobAgendado && (
+                <div style={{
+                  background: "var(--bg-subtle)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "12px",
+                  padding: "14px 16px",
+                  marginBottom: "24px",
+                  textAlign: "left",
+                  color: "var(--text-main)",
+                  fontSize: "13px"
+                }}>
+                  <div><strong>E-mail:</strong> {jobAgendado.email}</div>
+                  <div style={{ marginTop: "6px", wordBreak: "break-all" }}><strong>ID da solicitação:</strong> {jobAgendado.job_id}</div>
+                </div>
+              )}
               <button
-                onClick={() => { setCarregando(false); setGeracaoSucesso(false); setArquivoGerado(null); }}
+                onClick={() => { setCarregando(false); setGeracaoSucesso(false); setJobAgendado(null); }}
                 style={{
                   padding: "12px 32px",
                   background: "var(--btn-success)",
@@ -401,7 +378,6 @@ export default function Wizard() {
               </p>
             </>
           )}
-
         </div>
       </div>
     );
@@ -430,7 +406,6 @@ export default function Wizard() {
           <span style={{ color: "var(--text-muted)", fontWeight: "bold", fontSize: "14px" }}>
             Passo {etapaAtual + 1} de 5
           </span>
-
           <button
             onClick={() => setMostrarConfig(true)}
             style={{
@@ -450,12 +425,12 @@ export default function Wizard() {
           >
             ⚙️
           </button>
-                <button 
-        onClick={toggleTheme} 
-        style={{ width: "44px", height: "44px", borderRadius: "8px", border: "none", cursor: "pointer", background: "var(--bg-subtle)", color: "var(--text-main)" }}
-      >
-        {isDark ? "☀️" : "🌙"}
-      </button>
+          <button
+            onClick={toggleTheme}
+            style={{ width: "44px", height: "44px", borderRadius: "8px", border: "none", cursor: "pointer", background: "var(--bg-subtle)", color: "var(--text-main)" }}
+          >
+            {isDark ? "☀️" : "🌙"}
+          </button>
         </div>
       </div>
 
@@ -508,14 +483,12 @@ export default function Wizard() {
           {etapaAtual === 4 ? "Confeccionar" : "Avançar"}
         </button>
       </div>
-      
+
       {mostrarConfig && (
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
           <div style={{ background: "var(--bg-panel)", padding: "32px", borderRadius: "24px", width: "100%", maxWidth: "500px", position: "relative", boxShadow: "var(--shadow-lg)" }}>
-            <button 
-              onClick={() => {
-                setMostrarConfig(false);
-              }} 
+            <button
+              onClick={() => setMostrarConfig(false)}
               style={{ position: "absolute", top: "20px", right: "20px", background: "var(--bg-subtle)", border: "none", borderRadius: "50%", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--text-muted)", fontWeight: "bold" }}
             >
               ✕
@@ -523,17 +496,17 @@ export default function Wizard() {
             <h2 style={{ marginTop: 0, marginBottom: "24px", color: "var(--text-main)", textAlign: "center", fontSize: "20px" }}>
               ⚙️ Configurações de IA
             </h2>
-            <ConfigIA 
-              onSuccess={() => setMostrarConfig(false)} 
-              textoBotao="Salvar Alterações" 
+            <ConfigIA
+              onSuccess={() => setMostrarConfig(false)}
+              textoBotao="Salvar Alterações"
             />
           </div>
         </div>
       )}
-      <PromptModal 
-        isOpen={mostrarPromptModal} 
-        onClose={() => setMostrarPromptModal(false)} 
-        onConfirm={confeccionarDocumentos} 
+      <PromptModal
+        isOpen={mostrarPromptModal}
+        onClose={() => setMostrarPromptModal(false)}
+        onConfirm={confeccionarDocumentos}
       />
     </div>
   );
