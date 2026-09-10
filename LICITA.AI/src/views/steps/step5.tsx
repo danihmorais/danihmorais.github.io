@@ -1,4 +1,9 @@
 import React from "react";
+import {
+  calcularValorEstimadoItens,
+  exclusividadeMeeppPermitida,
+  formatarLimiteMeepp,
+} from "../../utils/regrasContratacao";
 
 const styles = {
   container: { display: "flex", flexDirection: "column" as const, gap: "28px" },
@@ -9,7 +14,7 @@ const styles = {
   titleCompact: { fontSize: "16px", margin: "0 0 4px 0", color: "var(--text-main)", fontWeight: "600" as const },
   subtitle: { color: "var(--text-muted)", margin: "0 0 16px 0", fontSize: "13px", fontStyle: "italic" },
   subtitleMargin: { color: "var(--text-muted)", margin: "0 0 8px 0", fontSize: "13px" },
-  label: { display: "flex", flexDirection: "row" as const, alignItems: "center", justifyContent: "flex-start", gap: "8px", cursor: "pointer", fontSize: "14px", color: "var(--text-main)", width: "max-content", margin: 0, padding: 0 },
+  label: (disabled: boolean) => ({ display: "flex", flexDirection: "row" as const, alignItems: "center", justifyContent: "flex-start", gap: "8px", cursor: disabled ? "not-allowed" : "pointer", fontSize: "14px", color: "var(--text-main)", width: "max-content", margin: 0, padding: 0, opacity: disabled ? 0.5 : 1 }),
   checkboxLabel: (disabled: boolean) => ({ display: "flex", flexDirection: "row" as const, alignItems: "center", justifyContent: "flex-start", gap: "8px", cursor: disabled ? "not-allowed" : "pointer", fontSize: "14px", color: "var(--text-main)", opacity: disabled ? 0.5 : 1, width: "max-content", margin: 0, padding: 0 }),
   radioInput: { margin: 0, padding: 0, width: "16px", height: "16px", cursor: "pointer", flexShrink: 0 },
   labelText: { margin: 0, padding: 0, flexShrink: 0 },
@@ -18,6 +23,7 @@ const styles = {
   textarea: (error: boolean) => ({ padding: "12px", borderRadius: "var(--radius)", borderColor: error ? "var(--btn-danger)" : "var(--input-border)", fontSize: "13px", minHeight: "60px", resize: "vertical" as const }),
   textareaLarge: (error: boolean) => ({ flex: 1, padding: "12px", borderRadius: "var(--radius-lg)", borderColor: error ? "var(--btn-danger)" : "var(--input-border)", minHeight: "80px", fontSize: "14px", resize: "vertical" as const }),
   errorText: { color: "var(--btn-danger)", fontSize: "12px", display: "block", marginTop: "4px" },
+  warningText: { color: "var(--btn-danger)", fontSize: "12px", display: "block", marginTop: "4px" },
   asterisk: { color: "var(--btn-danger)" },
   counterWrapper: { display: "flex", alignItems: "center", gap: "8px" },
   btn: { width: "40px", height: "40px", borderRadius: "var(--radius)", background: "var(--bg-subtle)", border: "1px solid var(--border)", fontSize: "18px", color: "var(--text-main)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" },
@@ -27,9 +33,9 @@ const styles = {
   attachBtn: (hasImg: boolean) => ({ padding: "0 24px", height: "44px", background: hasImg ? "var(--btn-success)" : "var(--btn-primary)", color: "var(--bg-panel)", border: "none", borderRadius: "var(--radius-lg)", fontSize: "14px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" })
 };
 
-const RadioOption = ({ label, value, checked, onChange }: any) => (
-  <label style={styles.label}>
-    <input type="radio" value={value} checked={checked} onChange={onChange} style={styles.radioInput} />
+const RadioOption = ({ label, value, checked, onChange, disabled = false }: any) => (
+  <label style={styles.label(disabled)}>
+    <input type="radio" value={value} checked={checked} onChange={onChange} disabled={disabled} style={styles.radioInput} />
     <span style={styles.labelText}>{label}</span>
   </label>
 );
@@ -54,10 +60,6 @@ const JustificationBox = ({ label, value, onChange, errorMsg }: any) => {
 export default function Step5({ dados, atualizarDados }: any) {
   const inputImagemRef = React.useRef<HTMLInputElement>(null);
 
-  // Antes usava o dialog nativo do Tauri (open(), com caminho de arquivo no
-  // disco local). No navegador não existe acesso a caminho de arquivo: o
-  // usuário escolhe o arquivo via <input type="file"> e lemos o conteúdo
-  // como base64, que é o que de fato viaja para o backend FastAPI.
   const handleAnexarImagem = (e: React.MouseEvent) => {
     e.preventDefault();
     inputImagemRef.current?.click();
@@ -76,7 +78,6 @@ export default function Step5({ dados, atualizarDados }: any) {
     };
     leitor.readAsDataURL(arquivo);
 
-    // Permite selecionar o mesmo arquivo novamente depois, se necessário
     e.target.value = "";
   };
 
@@ -94,6 +95,15 @@ export default function Step5({ dados, atualizarDados }: any) {
 
   const temLote = dados.itens && dados.itens.some((item: any) => item.lote && item.lote.toString().trim() !== "");
   const faltaDotacao = dados.dotacao.trim() === "" && !dados.caminhoImagemDotacao;
+  const totalGeral = calcularValorEstimadoItens(dados.itens || []);
+  const meeppExclusivoPermitido = exclusividadeMeeppPermitida(dados.itens || []);
+  const totalAcimaDoLimite = totalGeral > 80000;
+
+  React.useEffect(() => {
+    if (!meeppExclusivoPermitido && dados.meepp === "SIM") {
+      atualizarDados({ meepp: "NAO" });
+    }
+  }, [meeppExclusivoPermitido, dados.meepp, atualizarDados]);
 
   return (
     <div style={styles.container}>
@@ -135,9 +145,10 @@ export default function Step5({ dados, atualizarDados }: any) {
         <h2 style={styles.title}>Participação ME/EPP</h2>
         <div style={styles.section}>
           <RadioOption 
-            label="Exclusiva para ME/EPP (Até R$ 80.000,00)" 
+            label={`Exclusiva para ME/EPP (Até ${formatarLimiteMeepp()})`} 
             value="SIM" 
             checked={dados.meepp === "SIM"} 
+            disabled={!meeppExclusivoPermitido}
             onChange={(e: any) => atualizarDados({ meepp: e.target.value })} 
           />
           <RadioOption 
@@ -146,6 +157,11 @@ export default function Step5({ dados, atualizarDados }: any) {
             checked={dados.meepp === "NAO"} 
             onChange={(e: any) => atualizarDados({ meepp: e.target.value })} 
           />
+          {totalAcimaDoLimite && (
+            <span style={styles.warningText}>
+              A exclusividade integral para ME/EPP foi bloqueada porque o valor estimado desta contratação é {formatarLimiteMeepp()} ou superior. Valor estimado atual: {formatarLimiteMeepp().replace("80.000,00", "")} {totalGeral.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.
+            </span>
+          )}
         </div>
       </div>
 
@@ -210,7 +226,7 @@ export default function Step5({ dados, atualizarDados }: any) {
           />
           <button type="button" onClick={incrementarVigencia} style={styles.btn}>+</button>
           <select 
-            value={dados.vigenciaUnidade} 
+            value={dados.vigenciaUnidade}
             onChange={(e) => atualizarDados({ vigenciaUnidade: e.target.value })}
             style={styles.select}
           >
