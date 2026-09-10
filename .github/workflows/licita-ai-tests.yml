@@ -1,6 +1,12 @@
 name: Test Licita.AI
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - "LICITA.AI/**"
+      - ".github/workflows/licita-ai-tests.yml"
   pull_request:
     paths:
       - "LICITA.AI/**"
