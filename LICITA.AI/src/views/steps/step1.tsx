@@ -70,24 +70,32 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
         const wb = XLSX.read(ev.target?.result, { type: "array" });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const linhas = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" }) as any[][];
+        const aliasesNome = ["nome", "descrição", "descricao", "item", "produto", "objeto"];
+        const aliasesQtd = ["quantidade", "qtd", "qtde", "quant.", "quant"];
+        const aliasesUn = ["unidade", "un", "und", "u.m.", "um", "unid", "unidade de medida"];
+        const aliasesItem = ["item", "nº", "no", "numero", "número", "código", "codigo"];
+        const aliasesValor = ["valor unitário", "valor unitario", "valor", "preço unitário", "preco unitario", "preço", "preco", "vlr", "vlr unitário", "vlr unitario"];
+        const colunaTem = (cabecalhos: string[], aliases: string[]) => aliases.some((alias) => cabecalhos.includes(normalizar(alias)));
         const indiceCabecalho = linhas.findIndex((linha) => {
           const cabecalhos = linha.map(normalizar);
-          return cabecalhos.includes("item") && cabecalhos.includes("nome");
+          return colunaTem(cabecalhos, aliasesNome) && colunaTem(cabecalhos, aliasesQtd) && colunaTem(cabecalhos, aliasesUn);
         });
-        if (indiceCabecalho < 0) throw new Error("Cabeçalho não encontrado. A planilha deve possuir as colunas Item e Nome.");
+        if (indiceCabecalho < 0) {
+          throw new Error("Cabeçalho não encontrado. A planilha deve possuir colunas de descrição/nome, quantidade e unidade.");
+        }
         const cabecalhos = linhas[indiceCabecalho].map(normalizar);
         const coluna = (nomes: string[]) => nomes.map(normalizar).map((nome) => cabecalhos.indexOf(nome)).find((i) => i >= 0) ?? -1;
-        const cItem = coluna(["item"]);
-        const cNome = coluna(["nome"]);
-        const cQtd = coluna(["quantidade"]);
-        const cUn = coluna(["unidade"]);
-        const cValor = coluna(["valor unitário", "valor unitario", "valor", "preço unitário", "preco unitario"]);
-        if (cNome < 0 || cQtd < 0 || cUn < 0) throw new Error("A planilha precisa possuir Nome, Quantidade e Unidade.");
+        const cItem = coluna(aliasesItem);
+        const cNome = coluna(aliasesNome);
+        const cQtd = coluna(aliasesQtd);
+        const cUn = coluna(aliasesUn);
+        const cValor = coluna(aliasesValor);
+        if (cNome < 0 || cQtd < 0 || cUn < 0) throw new Error("A planilha precisa possuir descrição/nome, quantidade e unidade.");
         const importados = linhas.slice(indiceCabecalho + 1).map((linha, index) => ({
           id: Date.now() + Math.random(),
           numero: cItem >= 0 ? Number(linha[cItem]) || index + 1 : index + 1,
           descricao: String(linha[cNome] || "").trim(),
-          qtd: Math.floor(extrairNumero(linha[cQtd])) || 0,
+          qtd: extrairNumero(linha[cQtd]) || 0,
           un: String(linha[cUn] || "UN").trim(),
           valor: cValor >= 0 ? extrairNumero(linha[cValor]) : 0,
         })).filter((item) => item.descricao);
@@ -137,7 +145,7 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
                   <button type="button" onClick={() => melhorarItem(item)} disabled={carregando || !descricao.trim()} title="Melhorar descrição deste item com IA" aria-label={`Melhorar descrição do item ${item.numero || index + 1} com IA`} style={{ height: 34, padding: "0 10px", border: "1px solid var(--border)", borderRadius: "var(--radius)", background: "var(--bg-panel)", color: "var(--text-main)", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }}>{carregando ? "..." : "✨ IA"}</button>
                 </div>
                 <input type="text" required value={item.un} onChange={(e) => atualizarItem(item.id, "un", e.target.value)} style={{ width: 60, padding: 8, textAlign: "center" }} />
-                <input type="number" required min="1" step="1" value={item.qtd} onChange={(e) => atualizarItem(item.id, "qtd", parseInt(e.target.value, 10) || "")} style={{ width: 80, padding: 8, textAlign: "right" }} />
+                <input type="number" required min="0.0001" step="any" value={item.qtd} onChange={(e) => atualizarItem(item.id, "qtd", parseFloat(e.target.value) || "")} style={{ width: 80, padding: 8, textAlign: "right" }} />
                 <input type="text" required value={formatarMoeda(Number(item.valor || 0))} onChange={(e) => atualizarItem(item.id, "valor", parseMoeda(e.target.value))} style={{ width: 130, padding: 8, textAlign: "right", fontFamily: "monospace" }} />
                 <div style={{ width: 130, textAlign: "right", fontWeight: 600 }}>{formatarMoeda(Number(item.qtd || 0) * Number(item.valor || 0))}</div>
                 <div style={{ width: 120, display: "flex", gap: 4, justifyContent: "flex-end" }}>
