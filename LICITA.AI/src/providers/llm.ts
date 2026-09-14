@@ -6,10 +6,8 @@ export interface OpcaoModelo {
 }
 
 const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
-const API_UNSLOTH_KEY = import.meta.env.VITE_API_UNSLOTH_KEY || "";
-const API_OPENROUTER_KEY = import.meta.env.VITE_API_OPENROUTER_KEY || "";
-const UNSLOTH_URL = `${API_URL}/unsloth/v1`;
-const OPENROUTER_URL = "https://openrouter.ai/api/v1";
+const IA_CHAT_URL = `${API_URL}/licita/api/ia/chat`;
+const IA_STATUS_URL = `${API_URL}/licita/api/ia/status`;
 
 export const MODELOS_DISPONIVEIS: Record<string, OpcaoModelo[]> = {
   unsloth: [{ value: "unsloth-auto", label: "Modelo local Unsloth (automático)" }],
@@ -31,7 +29,6 @@ export const MODELO_PADRAO_POR_PROVEDOR: Record<string, string> = {
 const CHAVE_LOGS_ERRO = "licita_ai:logs_erro";
 const MAX_LOGS_GUARDADOS = 20;
 let modeloLivreFixado: string | null = null;
-let modeloUnsloth: string | null = null;
 
 async function salvarLogErro(prefixo: string, erro: any, dadosCrus: any = null) {
   try {
@@ -89,7 +86,6 @@ function sanitizarJSON(texto: string): string {
     } else if (char === "\n") {
       result += "\\n";
     } else if (char === "\r") {
-      // remove carriage returns inside JSON strings
     } else if (char === "\t") {
       result += "\\t";
     } else if (char.charCodeAt(0) >= 32) {
@@ -105,9 +101,7 @@ function extrairEConverterJSON(rawText: string): any {
   const inicio = texto.indexOf("{");
   const fim = texto.lastIndexOf("}");
 
-  if (inicio !== -1 && fim !== -1) {
-    texto = texto.substring(inicio, fim + 1);
-  }
+  if (inicio !== -1 && fim !== -1) texto = texto.substring(inicio, fim + 1);
 
   try {
     return JSON.parse(texto);
@@ -118,133 +112,87 @@ function extrairEConverterJSON(rawText: string): any {
       try {
         return JSON.parse(sanitizarJSON(texto).replace(/,\s*([\}\]])/g, "$1"));
       } catch (e) {
-        throw new Error(
-          `O texto gerado pela IA foi interrompido abruptamente ou está corrompido.\nErro técnico: ${e instanceof Error ? e.message : e}`
-        );
+        throw new Error(`O texto gerado pela IA está corrompido.\nErro técnico: ${e instanceof Error ? e.message : e}`);
       }
     }
   }
 }
 
-async function obterModeloUnsloth(): Promise<string> {
-  if (modeloUnsloth) return modeloUnsloth;
+async function chamarBackend(payload: Record<string, any>): Promise<any> {
+  if (!API_URL) throw new Error("API do Licita.AI não configurada.");
 
-  const response = await fetch(`${UNSLOTH_URL}/models`, {
-    headers: { Authorization: `Bearer ${API_UNSLOTH_KEY}` },
+  const response = await fetch(IA_CHAT_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
   });
 
+  const raw = await response.text().catch(() => "");
   if (!response.ok) {
-    throw new Error(`Unsloth indisponível (HTTP ${response.status})`);
+    let detalhe = `HTTP ${response.status}`;
+    try {
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (parsed?.detail) detalhe = String(parsed.detail);
+    } catch {}
+    const temporario = [429, 500, 502, 503, 504].includes(response.status);
+    throw new Error(`${temporario ? "TEMP:" : "FATAL:"}${response.status}:${detalhe}`);
   }
 
-  const data = await response.json();
-  const modelo = data?.data?.[0]?.id;
-
-  if (!modelo) {
-    throw new Error("A API Unsloth não informou nenhum modelo disponível.");
+  let data: any;
+  try {
+    data = raw ? JSON.parse(raw) : null;
+  } catch {
+    throw new Error("A API do backend retornou uma resposta inválida.");
   }
 
-  modeloUnsloth = modelo;
-  return modelo;
+  if (!data?.content) throw new Error("A API do backend retornou uma resposta vazia.");
+
+  return {
+    json: extrairEConverterJSON(String(data.content)),
+    model: typeof data.model === "string" ? data.model : payload.model,
+    provider: typeof data.provider === "string" ? data.provider : "backend",
+  };
+}
+
+async function validarBackendIA(): Promise<any> {
+  if (!API_URL) return { ok: false };
+  const response = await fetch(IA_STATUS_URL, { method: "GET" });
+  let data: any = null;
+  try { data = await response.json(); } catch {}
+  if (!response.ok) return { ok: false, ...data };
+  return data || { ok: true };
 }
 
 export async function validarChaveUnsloth(): Promise<boolean> {
-  if (!API_UNSLOTH_KEY || !API_URL) return false;
-
   try {
-    const response = await fetch(`${UNSLOTH_URL}/models`, {
-      headers: { Authorization: `Bearer ${API_UNSLOTH_KEY}` },
-    });
-
-    if (!response.ok) {
-      await salvarLogErro("validacao-unsloth", `HTTP ${response.status}`, await response.text());
-    }
-
-    return response.ok;
+    const data = await validarBackendIA();
+    return Boolean(data?.ok && data?.unsloth);
   } catch (error) {
-    await salvarLogErro("excecao-validacao-unsloth", error);
+    await salvarLogErro("validacao-unsloth", error);
     return false;
   }
 }
 
 export async function validarChaveOpenRouter(
-  apiKey: string = API_OPENROUTER_KEY,
-  model: string = MODELO_PADRAO_POR_PROVEDOR.openrouter
+  _apiKey?: string,
+  _model: string = MODELO_PADRAO_POR_PROVEDOR.openrouter,
 ): Promise<boolean> {
-  if (!apiKey) return false;
-
   try {
-    const response = await fetch(`${OPENROUTER_URL}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 1,
-        messages: [{ role: "user", content: "teste" }],
-      }),
-    });
-
-    if (!response.ok) {
-      await salvarLogErro("validacao-openrouter", `HTTP ${response.status}`, await response.text());
-    }
-
-    return response.ok;
+    const data = await validarBackendIA();
+    return Boolean(data?.ok && data?.openrouter);
   } catch (error) {
-    await salvarLogErro("excecao-validacao-openrouter", error);
+    await salvarLogErro("validacao-openrouter", error);
     return false;
   }
 }
 
-async function gerarNaAPI(
-  baseUrl: string,
-  apiKey: string,
-  model: string,
-  prompt: string
-): Promise<any> {
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.3,
-      response_format: { type: "json_object" },
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
-
-  if (!response.ok) {
-    const errorData = await response.text().catch(() => "Sem detalhes");
-    const temporario = [429, 500, 502, 503, 504].includes(response.status);
-    throw new Error(`${temporario ? "TEMP:" : "FATAL:"}${response.status}:${errorData}`);
-  }
-
-  const data = await response.json();
-  if (!data.choices?.[0]?.message) {
-    throw new Error("A API retornou uma resposta vazia.");
-  }
-
-  return {
-    json: extrairEConverterJSON(data.choices[0].message.content),
-    model: typeof data.model === "string" ? data.model : model,
-  };
-}
-
 export async function gerarTextoOpenRouter(
   prompt: string,
-  _apiKey: string,
+  _legacyApiKey: string,
   model: string,
-  onModelResolved?: (modelUsed: string) => void
+  onModelResolved?: (modelUsed: string) => void,
 ): Promise<any> {
-  if (
-    model === "openrouter/free" &&
-    prompt.includes("ETAPA: DOCUMENTO DE FORMALIZAÇÃO DE DEMANDA.")
-  ) {
+  if (model === "openrouter/free" && prompt.includes("ETAPA: DOCUMENTO DE FORMALIZAÇÃO DE DEMANDA.")) {
     modeloLivreFixado = null;
   }
 
@@ -253,42 +201,21 @@ export async function gerarTextoOpenRouter(
 
   while (tentativaAtual < MAX_TENTATIVAS) {
     try {
-      // Unsloth é sempre o provedor principal. O OpenRouter é fallback automático.
-      if (API_UNSLOTH_KEY && API_URL) {
-        try {
-          // O modelo local é descoberto pela API; nunca enviamos um modelo OpenRouter ao Unsloth.
-          const modelo = await obterModeloUnsloth();
-          const resultado = await gerarNaAPI(UNSLOTH_URL, API_UNSLOTH_KEY, modelo, prompt);
-          onModelResolved?.(resultado.model);
-          return resultado.json;
-        } catch (error) {
-          await salvarLogErro("unsloth-fallback", error);
-          if (!API_OPENROUTER_KEY) throw error;
-        }
-      }
-
-      if (!API_OPENROUTER_KEY) {
-        throw new Error("FATAL: Nenhuma API de IA está configurada.");
-      }
-
       const modeloDaRequisicao =
         model === "unsloth-auto" || !model
-          ? "openrouter/free"
+          ? "unsloth-auto"
           : model === "openrouter/free" && modeloLivreFixado
             ? modeloLivreFixado
             : model;
 
-      const resultado = await gerarNaAPI(
-        OPENROUTER_URL,
-        API_OPENROUTER_KEY,
-        modeloDaRequisicao,
-        prompt
-      );
+      const resultado = await chamarBackend({
+        model: modeloDaRequisicao,
+        prompt,
+        temperature: 0.3,
+        response_format: { type: "json_object" },
+      });
 
-      if (modeloDaRequisicao === "openrouter/free" && !modeloLivreFixado) {
-        modeloLivreFixado = resultado.model;
-      }
-
+      if (model === "openrouter/free" && !modeloLivreFixado && resultado.model) modeloLivreFixado = resultado.model;
       onModelResolved?.(resultado.model);
       return resultado.json;
     } catch (erro: any) {
@@ -297,16 +224,12 @@ export async function gerarTextoOpenRouter(
 
       if (ultimoErro.startsWith("FATAL:")) {
         await salvarLogErro("llm-erro-fatal", erro);
-        throw new Error(
-          ultimoErro.replace(/^FATAL:/, "").replace(/^\d+:/, "").trim()
-        );
+        throw new Error(ultimoErro.replace(/^FATAL:/, "").replace(/^\d+:/, "").trim());
       }
 
       if (tentativaAtual >= MAX_TENTATIVAS) {
         await salvarLogErro("llm-falha-limite", erro);
-        throw new Error(
-          `O sistema tentou ${MAX_TENTATIVAS} vezes, mas a inteligência artificial não conseguiu concluir o texto corretamente.\nÚltimo erro: ${ultimoErro}`
-        );
+        throw new Error(`O sistema tentou ${MAX_TENTATIVAS} vezes, mas a inteligência artificial não conseguiu concluir o texto corretamente.\nÚltimo erro: ${ultimoErro}`);
       }
 
       await new Promise((resolve) => setTimeout(resolve, tentativaAtual * 2000));

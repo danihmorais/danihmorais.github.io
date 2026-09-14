@@ -60,8 +60,6 @@ jobs:
         working-directory: ./LICITA.AI
         env:
           VITE_API_URL: ${{ secrets.API_URL }}
-          VITE_API_UNSLOTH_KEY: ${{ secrets.API_UNSLOTH }}
-          VITE_API_OPENROUTER_KEY: ${{ secrets.API_OPENROUTER }}
         run: |
           npm ci
           npm test
