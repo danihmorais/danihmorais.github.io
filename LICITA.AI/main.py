@@ -9,7 +9,7 @@ from pathlib import Path
 import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 from fila import EMAIL_RE, enqueue_job, get_job, iniciar_worker
 
@@ -32,28 +32,10 @@ class FasePreparatoriaRequest(BaseModel):
 
 
 class IAChatRequest(BaseModel):
-    model: str = "unsloth-auto"
-    prompt: str
-    temperature: float = 0.3
+    model: str = Field(default="unsloth-auto", min_length=1, max_length=200)
+    prompt: str = Field(min_length=1, max_length=120_000)
+    temperature: float = Field(default=0.3, ge=0, le=1.5)
     response_format: dict | None = None
-
-    @field_validator("model")
-    @classmethod
-    def validar_modelo(cls, value: str) -> str:
-        value = value.strip()
-        if not value or len(value) > 200 or any(ord(ch) < 32 for ch in value):
-            raise ValueError("Modelo inválido.")
-        return value
-
-    @field_validator("prompt")
-    @classmethod
-    def validar_prompt(cls, value: str) -> str:
-        value = value.strip()
-        if not value:
-            raise ValueError("O prompt da IA não pode ser vazio.")
-        if len(value) > 120_000:
-            raise ValueError("O prompt da IA excede o limite permitido de 120.000 caracteres.")
-        return value
 
 
 API_UNSLOTH_URL = os.getenv(
@@ -122,8 +104,8 @@ async def _upstream_chat(base_url: str, api_key: str, payload: dict) -> tuple[di
 async def _gerar_ia(req: IAChatRequest) -> dict:
     payload = {
         "model": req.model if req.model != "openrouter/free" else "openrouter/free",
-        "temperature": max(0, min(float(req.temperature), 1.5)),
-        "messages": [{"role": "user", "content": req.prompt}],
+        "temperature": float(req.temperature),
+        "messages": [{"role": "user", "content": req.prompt.strip()}],
     }
     if req.response_format is not None:
         payload["response_format"] = req.response_format
@@ -138,9 +120,6 @@ async def _gerar_ia(req: IAChatRequest) -> dict:
 
     if tentativas[0][0] == "unsloth" and API_OPENROUTER_KEY:
         tentativas.append(("openrouter", API_OPENROUTER_URL, API_OPENROUTER_KEY))
-
-    if not tentativas:
-        raise HTTPException(status_code=503, detail="Nenhum provedor de IA está configurado no backend.")
 
     ultimo_status = 503
     for provider, base_url, api_key in tentativas:
