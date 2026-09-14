@@ -4,7 +4,6 @@ import os
 import threading
 import time
 from collections import deque
-from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
@@ -55,31 +54,75 @@ IA_RATE_LIMIT = max(1, int(os.getenv("LICITA_IA_RATE_LIMIT", "20")))
 _ia_rate_lock = threading.Lock()
 _ia_rate_buckets: dict[str, deque[float]] = {}
 
+QUEUE_RATE_WINDOW_SECONDS = max(60, int(os.getenv("LICITA_QUEUE_RATE_WINDOW", "600")))
+QUEUE_RATE_LIMIT = max(1, int(os.getenv("LICITA_QUEUE_RATE_LIMIT", "5")))
+QUEUE_EMAIL_RATE_WINDOW_SECONDS = max(300, int(os.getenv("LICITA_QUEUE_EMAIL_RATE_WINDOW", "3600")))
+QUEUE_EMAIL_RATE_LIMIT = max(1, int(os.getenv("LICITA_QUEUE_EMAIL_RATE_LIMIT", "3")))
+_queue_rate_lock = threading.Lock()
+_queue_ip_rate_buckets: dict[str, deque[float]] = {}
+_queue_email_rate_buckets: dict[str, deque[float]] = {}
+
 
 def _client_identity(request: Request) -> str:
     client = request.client
     return client.host if client and client.host else "unknown"
 
 
-def _check_ia_rate_limit(request: Request) -> None:
+def _check_rate_limit(
+    buckets: dict[str, deque[float]],
+    lock: threading.Lock,
+    identity: str,
+    limit: int,
+    window_seconds: int,
+    detail: str,
+) -> None:
     now = time.monotonic()
-    identity = _client_identity(request)
-    with _ia_rate_lock:
-        bucket = _ia_rate_buckets.setdefault(identity, deque())
-        cutoff = now - IA_RATE_WINDOW_SECONDS
+    with lock:
+        bucket = buckets.setdefault(identity, deque())
+        cutoff = now - window_seconds
         while bucket and bucket[0] <= cutoff:
             bucket.popleft()
-        if len(bucket) >= IA_RATE_LIMIT:
+        if len(bucket) >= limit:
             raise HTTPException(
                 status_code=429,
-                detail="Limite de requisições de IA excedido. Tente novamente em instantes.",
-                headers={"Retry-After": str(IA_RATE_WINDOW_SECONDS)},
+                detail=detail,
+                headers={"Retry-After": str(window_seconds)},
             )
         bucket.append(now)
-        if len(_ia_rate_buckets) > 10_000:
-            for key in list(_ia_rate_buckets)[:1_000]:
-                if not _ia_rate_buckets[key]:
-                    _ia_rate_buckets.pop(key, None)
+        if len(buckets) > 10_000:
+            for key in list(buckets)[:1_000]:
+                if not buckets[key]:
+                    buckets.pop(key, None)
+
+
+def _check_ia_rate_limit(request: Request) -> None:
+    _check_rate_limit(
+        _ia_rate_buckets,
+        _ia_rate_lock,
+        _client_identity(request),
+        IA_RATE_LIMIT,
+        IA_RATE_WINDOW_SECONDS,
+        "Limite de requisições de IA excedido. Tente novamente em instantes.",
+    )
+
+
+def _check_queue_rate_limit(request: Request, email: str) -> None:
+    _check_rate_limit(
+        _queue_ip_rate_buckets,
+        _queue_rate_lock,
+        _client_identity(request),
+        QUEUE_RATE_LIMIT,
+        QUEUE_RATE_WINDOW_SECONDS,
+        "Limite de solicitações de geração excedido. Tente novamente mais tarde.",
+    )
+    _check_rate_limit(
+        _queue_email_rate_buckets,
+        _queue_rate_lock,
+        email.casefold(),
+        QUEUE_EMAIL_RATE_LIMIT,
+        QUEUE_EMAIL_RATE_WINDOW_SECONDS,
+        "Este e-mail atingiu o limite de solicitações. Tente novamente mais tarde.",
+    )
 
 
 async def _upstream_chat(base_url: str, api_key: str, payload: dict) -> tuple[dict, int]:
@@ -190,10 +233,12 @@ def _queue_position(job_id: str) -> tuple[int | None, int | None]:
 
 
 @app.post("/api/gerar-fase-preparatoria")
-async def agendar_fase_preparatoria(req: FasePreparatoriaRequest):
+async def agendar_fase_preparatoria(request: Request, req: FasePreparatoriaRequest):
     email = req.email.strip()
     if not EMAIL_RE.fullmatch(email):
         raise HTTPException(status_code=400, detail="Informe um e-mail válido para receber os documentos.")
+
+    _check_queue_rate_limit(request, email)
 
     try:
         job = enqueue_job(
@@ -219,10 +264,18 @@ async def agendar_fase_preparatoria(req: FasePreparatoriaRequest):
 
 
 @app.get("/api/fila/{job_id}")
-async def consultar_fila(job_id: str):
+async def consultar_fila(job_id: str, token: str | None = None):
     job = get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Solicitação não encontrada.")
+
+    stored_token = str(job.get("status_token", ""))
+    if not stored_token or not token:
+        raise HTTPException(status_code=401, detail="Token de consulta não informado.")
+
+    import hmac
+    if not hmac.compare_digest(stored_token, token):
+        raise HTTPException(status_code=403, detail="Token de consulta inválido.")
 
     return {
         "job_id": job.get("job_id", job_id),
