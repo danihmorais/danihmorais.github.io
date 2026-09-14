@@ -155,6 +155,8 @@ async def status_ia():
 
 @app.post("/api/ia/chat")
 async def chat_ia(request: Request, req: IAChatRequest):
+    if not req.prompt.strip():
+        raise HTTPException(status_code=422, detail="O campo prompt não pode ficar vazio.")
     _check_ia_rate_limit(request)
     return await _gerar_ia(req)
 
