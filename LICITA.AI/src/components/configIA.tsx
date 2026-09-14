@@ -5,45 +5,42 @@ import { validarChaveUnsloth, validarChaveOpenRouter, MODELO_PADRAO_POR_PROVEDOR
 interface ConfigIAProps { onSuccess?: () => void; textoBotao?: string; }
 
 export default function ConfigIA({ onSuccess, textoBotao = "Acessar Sistema" }: ConfigIAProps) {
-  const [provedor, setProvedor] = useState("unsloth");
-  const [modelo, setModelo] = useState(MODELO_PADRAO_POR_PROVEDOR.unsloth);
+  const [modelo, setModelo] = useState(MODELO_PADRAO_POR_PROVEDOR.openrouter);
   const [carregando, setCarregando] = useState(true);
-  const [mensagem, setMensagem] = useState("Inicializando IA local...");
+  const [mensagem, setMensagem] = useState("Validando o backend do Licita.AI...");
 
   useEffect(() => {
     const config = lerConfigIA();
-    setProvedor(config.provedor || "unsloth");
-    setModelo(config.modelo || MODELO_PADRAO_POR_PROVEDOR[config.provedor || "unsloth"]);
+    setModelo(config.modelo || MODELO_PADRAO_POR_PROVEDOR.openrouter);
     validar();
   }, []);
 
   const validar = async () => {
     setCarregando(true);
-    setMensagem("Validando conexão com a IA local...");
+    setMensagem("Validando os provedores configurados no backend...");
     try {
       const unslothOk = await validarChaveUnsloth();
       if (unslothOk) {
-        setProvedor("unsloth");
-        salvarConfigIA({ provedor: "unsloth", modelo: "unsloth-auto" });
-        setMensagem("IA local Unsloth conectada. OpenRouter será usado automaticamente se necessário.");
+        salvarConfigIA({ provedor: "openrouter", modelo: "unsloth-auto" });
+        setModelo("unsloth-auto");
+        setMensagem("Backend conectado. Unsloth disponível como provedor primário; OpenRouter é fallback automático.");
         onSuccess?.();
         return;
       }
 
       const openRouterOk = await validarChaveOpenRouter();
       if (openRouterOk) {
-        setProvedor("openrouter");
         setModelo(MODELO_PADRAO_POR_PROVEDOR.openrouter);
         salvarConfigIA({ provedor: "openrouter", modelo: MODELO_PADRAO_POR_PROVEDOR.openrouter });
-        setMensagem("Unsloth indisponível. OpenRouter conectado como fallback.");
+        setMensagem("Backend conectado. OpenRouter disponível como provedor ativo.");
         onSuccess?.();
         return;
       }
 
-      setMensagem("Não foi possível conectar à IA local nem ao OpenRouter.");
+      setMensagem("O backend respondeu, mas nenhum provedor de IA está disponível.");
     } catch (error) {
-      console.error("Erro ao validar APIs de IA:", error);
-      setMensagem("Erro ao conectar às APIs de IA.");
+      console.error("Erro ao validar backend de IA:", error);
+      setMensagem("Não foi possível conectar ao backend de IA.");
     } finally {
       setCarregando(false);
     }
@@ -55,9 +52,10 @@ export default function ConfigIA({ onSuccess, textoBotao = "Acessar Sistema" }: 
         Motor de Inteligência Artificial
       </h3>
       <div style={{ padding: "18px", borderRadius: "14px", border: "1px solid var(--input-border)", backgroundColor: "var(--input-bg)", color: "var(--text-main)", textAlign: "left" }}>
-        <strong>Provedor principal:</strong> Unsloth (IA local)<br />
+        <strong>Provedor:</strong> Backend do Licita.AI<br />
+        <strong>Primário:</strong> Unsloth<br />
         <strong>Fallback:</strong> OpenRouter<br />
-        <strong>Modelo:</strong> {provedor === "unsloth" ? "Modelo local automático" : modelo}
+        <strong>Modelo:</strong> {modelo}
         <div style={{ marginTop: "10px", color: "var(--text-muted)", fontSize: "13px" }}>{mensagem}</div>
       </div>
       <button type="button" onClick={validar} disabled={carregando} style={{ width: "100%", marginTop: "24px", padding: "16px", backgroundColor: "var(--btn-primary)", color: "#ffffff", border: "none", borderRadius: "14px", fontSize: "16px", fontWeight: "bold", cursor: carregando ? "not-allowed" : "pointer" }}>

@@ -16,7 +16,6 @@ assert.doesNotMatch(html, /__PAGES_VERSION__|__API_URL_JSON__/);
 
 const refs = [...html.matchAll(/(?:src|href)=["']([^"']+)["']/g)].map((match) => match[1]);
 const localRefs = refs.filter((ref) => !/^(?:[a-z]+:)?\/\//i.test(ref) && !ref.startsWith("data:") && !ref.startsWith("#"));
-
 assert.ok(localRefs.length > 0, "Nenhum asset local encontrado no index.html publicado");
 for (const ref of localRefs) {
   assert.equal(ref.startsWith("/"), false, `Asset absoluto encontrado no build: ${ref}`);
@@ -34,3 +33,5 @@ assert.ok(jsFiles.length > 0, "Nenhum bundle JavaScript foi gerado");
 const bundles = jsFiles.map((file) => fs.readFileSync(file, "utf8")).join("\n");
 assert.match(bundles, /Licita\.AI/);
 assert.doesNotMatch(bundles, /\/src\/main\.tsx/);
+assert.doesNotMatch(bundles, /VITE_API_UNSLOTH_KEY|VITE_API_OPENROUTER_KEY|sk-[A-Za-z0-9_-]{20,}/);
+assert.doesNotMatch(bundles, /api\.openrouter\.ai\/api\/v1|unsloth\/v1\/chat\/completions/);

@@ -18,22 +18,18 @@ function testRequire(request) {
     };
   }
   if (request === "./utils/storageLocal") {
-    return { lerConfigIA: () => ({}) };
+    return { lerConfigIA: () => ({ provedor: "openrouter", chave_api: "backend", modelo: "openrouter/free" }) };
   }
   throw new Error(`Unsupported test require: ${request}`);
 }
 
-export function loadTsModule(relativePath, { env = {}, globals = {}, replacements = [] } = {}) {
+export function loadTsModule(relativePath, { globals = {}, replacements = [] } = {}) {
   const filename = path.resolve(LICITA_DIR, relativePath);
   let source = fs.readFileSync(filename, "utf8");
 
-  for (const [search, replacement] of replacements) {
-    source = source.replace(search, replacement);
-  }
+  for (const [search, replacement] of replacements) source = source.replace(search, replacement);
 
-  source = source.replace(/import\.meta\.env\.VITE_API_URL/g, JSON.stringify(env.VITE_API_URL ?? ""));
-  source = source.replace(/import\.meta\.env\.VITE_API_UNSLOTH_KEY/g, JSON.stringify(env.VITE_API_UNSLOTH_KEY ?? ""));
-  source = source.replace(/import\.meta\.env\.VITE_API_OPENROUTER_KEY/g, JSON.stringify(env.VITE_API_OPENROUTER_KEY ?? ""));
+  source = source.replace(/import\.meta\.env\.VITE_API_URL/g, JSON.stringify(process.env.TEST_API_URL || "https://api.example.test"));
 
   const transpiled = ts.transpileModule(source, {
     compilerOptions: {
@@ -45,14 +41,7 @@ export function loadTsModule(relativePath, { env = {}, globals = {}, replacement
   }).outputText;
 
   const module = { exports: {} };
-  const sandbox = {
-    module,
-    exports: module.exports,
-    console,
-    require: testRequire,
-    ...globals,
-  };
-
+  const sandbox = { module, exports: module.exports, console, require: testRequire, ...globals };
   vm.runInNewContext(transpiled, sandbox, { filename });
   return module.exports;
 }

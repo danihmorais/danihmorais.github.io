@@ -1,3 +1,11 @@
+from __future__ import annotations
+
+import os
+import threading
+import time
+from pathlib import Path
+
+import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -10,8 +18,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://danihmorais.github.io"],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
 
 
@@ -20,6 +28,107 @@ class FasePreparatoriaRequest(BaseModel):
     instrucoes: str = ""
     dados_ia: dict = Field(default_factory=dict)
     dados_usuario: dict = Field(default_factory=dict)
+
+
+class IAChatRequest(BaseModel):
+    model: str = "unsloth-auto"
+    prompt: str
+    temperature: float = 0.3
+    response_format: dict | None = None
+
+
+API_UNSLOTH_URL = os.getenv(
+    "LICITA_UNSLOTH_URL",
+    os.getenv("UNSLOTH_URL", "http://127.0.0.1:8888/v1"),
+).rstrip("/")
+API_UNSLOTH_KEY = os.getenv("LICITA_UNSLOTH_KEY", os.getenv("API_UNSLOTH", "")).strip()
+API_OPENROUTER_URL = os.getenv(
+    "LICITA_OPENROUTER_URL", "https://openrouter.ai/api/v1"
+).rstrip("/")
+API_OPENROUTER_KEY = os.getenv(
+    "LICITA_OPENROUTER_KEY", os.getenv("API_OPENROUTER", "")
+).strip()
+
+
+async def _upstream_chat(base_url: str, api_key: str, payload: dict) -> tuple[dict, int]:
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    async with httpx.AsyncClient(timeout=180) as client:
+        response = await client.post(f"{base_url}/chat/completions", headers=headers, json=payload)
+
+    if response.status_code >= 400:
+        return {}, response.status_code
+
+    try:
+        data = response.json()
+    except ValueError:
+        return {}, 502
+
+    return data, response.status_code
+
+
+async def _gerar_ia(req: IAChatRequest) -> dict:
+    payload = {
+        "model": req.model if req.model != "openrouter/free" else "openrouter/free",
+        "temperature": max(0, min(float(req.temperature), 1.5)),
+        "messages": [{"role": "user", "content": req.prompt}],
+    }
+    if req.response_format is not None:
+        payload["response_format"] = req.response_format
+
+    tentativas: list[tuple[str, str, str]] = []
+    if req.model in {"unsloth-auto", ""}:
+        tentativas.append(("unsloth", API_UNSLOTH_URL, API_UNSLOTH_KEY))
+    elif req.model.startswith("unsloth"):
+        tentativas.append(("unsloth", API_UNSLOTH_URL, API_UNSLOTH_KEY))
+    else:
+        tentativas.append(("openrouter", API_OPENROUTER_URL, API_OPENROUTER_KEY))
+
+    if tentativas[0][0] == "unsloth" and API_OPENROUTER_KEY:
+        tentativas.append(("openrouter", API_OPENROUTER_URL, API_OPENROUTER_KEY))
+
+    if not tentativas:
+        raise HTTPException(status_code=503, detail="Nenhum provedor de IA está configurado no backend.")
+
+    ultimo_status = 503
+    for provider, base_url, api_key in tentativas:
+        if not base_url or (provider == "unsloth" and not API_UNSLOTH_URL) or (provider == "openrouter" and not api_key):
+            continue
+
+        data, status = await _upstream_chat(base_url, api_key, payload)
+        ultimo_status = status
+        if status < 400:
+            choice = (data.get("choices") or [None])[0]
+            content = ((choice or {}).get("message") or {}).get("content")
+            model = data.get("model") or req.model
+            if not content:
+                raise HTTPException(status_code=502, detail="O provedor de IA retornou uma resposta vazia.")
+            return {"content": content, "model": model, "provider": provider}
+
+        if status not in {408, 409, 425, 429, 500, 502, 503, 504}:
+            break
+
+    if ultimo_status == 429:
+        raise HTTPException(status_code=429, detail="Os provedores de IA estão limitando as requisições no momento.")
+    raise HTTPException(status_code=502, detail="Os provedores de IA configurados estão indisponíveis.")
+
+
+@app.get("/api/ia/status")
+async def status_ia():
+    return {
+        "ok": bool(API_UNSLOTH_KEY or API_OPENROUTER_KEY),
+        "unsloth": bool(API_UNSLOTH_URL and API_UNSLOTH_KEY),
+        "openrouter": bool(API_OPENROUTER_KEY),
+    }
+
+
+@app.post("/api/ia/chat")
+async def chat_ia(req: IAChatRequest):
+    if not req.prompt.strip():
+        raise HTTPException(status_code=400, detail="O prompt da IA não pode ser vazio.")
+    return await _gerar_ia(req)
 
 
 @app.post("/api/gerar-fase-preparatoria")
@@ -54,10 +163,34 @@ async def consultar_fila(job_id: str):
         "started_at": job.get("started_at"),
         "completed_at": job.get("completed_at"),
         "attempts": job.get("attempts", 0),
-        "email": job.get("email"),
         "last_error": job.get("last_error"),
         "result": job.get("result"),
     }
 
 
+QUEUE_DIR = Path(os.getenv("LICITA_QUEUE_DIR", str(Path.home() / ".local" / "share" / "licita-ai" / "fila"))).expanduser()
+RETENTION_DAYS = max(1, int(os.getenv("LICITA_QUEUE_RETENTION_DAYS", "7")))
+
+
+def _limpar_fila_antiga() -> None:
+    cutoff = time.time() - RETENTION_DAYS * 86400
+    while True:
+        try:
+            if QUEUE_DIR.exists():
+                for path in QUEUE_DIR.iterdir():
+                    if path.suffix not in {".json", ".zip"}:
+                        continue
+                    if path.name.endswith(".processing.json"):
+                        continue
+                    try:
+                        if path.stat().st_mtime < cutoff:
+                            path.unlink()
+                    except OSError:
+                        pass
+        except OSError:
+            pass
+        time.sleep(86400)
+
+
 iniciar_worker()
+threading.Thread(target=_limpar_fila_antiga, name="licita-retencao", daemon=True).start()
