@@ -11,7 +11,7 @@ export interface FasePreparatoriaJob {
   email: string;
   fila_posicao?: number;
   solicitacoes_a_frente?: number;
-  message?: string;
+  message: string;
 }
 
 const MODALIDADES_CONTRATACAO_DIRETA = new Set(["DISPENSA_EMAIL", "DISPENSA_BLL"]);
