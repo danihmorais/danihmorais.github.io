@@ -29,7 +29,7 @@ export function loadTsModule(relativePath, { globals = {}, replacements = [] } =
 
   for (const [search, replacement] of replacements) source = source.replace(search, replacement);
 
-  source = source.replace(/import\.meta\.env\.VITE_API_URL/g, JSON.stringify(process.env.TEST_API_URL || ""));
+  source = source.replace(/import\.meta\.env\.VITE_API_URL/g, JSON.stringify(process.env.TEST_API_URL || "https://api.example.test"));
 
   const transpiled = ts.transpileModule(source, {
     compilerOptions: {

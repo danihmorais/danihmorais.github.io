@@ -16,6 +16,8 @@ QUEUE_DIR = Path(tempfile.mkdtemp(prefix="licita_ai_tests_"))
 os.environ["LICITA_QUEUE_DIR"] = str(QUEUE_DIR)
 os.environ["LICITA_QUEUE_POLL_SECONDS"] = "3600"
 os.environ["LICITA_QUEUE_MAX_ATTEMPTS"] = "1"
+os.environ["LICITA_UNSLOTH_KEY"] = "test-unsloth"
+os.environ["LICITA_OPENROUTER_KEY"] = "test-openrouter"
 
 import fila
 
@@ -50,9 +52,7 @@ class LicitaBackendTests(unittest.TestCase):
             "dados_ia": {},
             "dados_usuario": {
                 "{{ME_EPP}}": "SIM",
-                "{{ITENS}}": json.dumps([
-                    {"numero": 1, "qtd": 1, "valor": 80000.01}
-                ]),
+                "{{ITENS}}": json.dumps([{"numero": 1, "qtd": 1, "valor": 80000.01}]),
             },
         }
 
@@ -81,7 +81,7 @@ class LicitaBackendTests(unittest.TestCase):
             self.assertEqual(consulted.status_code, 200)
             self.assertEqual(consulted.json()["job_id"], job_id)
             self.assertEqual(consulted.json()["status"], "queued")
-            self.assertEqual(consulted.json()["email"], payload["email"])
+            self.assertNotIn("email", consulted.json())
 
     def test_endpoint_rejeita_job_id_invalido(self):
         with TestClient(app) as client:
@@ -89,19 +89,29 @@ class LicitaBackendTests(unittest.TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertIn("Solicitação não encontrada", response.json()["detail"])
 
+    def test_status_ia_nao_expoe_segredos(self):
+        with TestClient(app) as client:
+            response = client.get("/api/ia/status")
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertTrue(body["ok"])
+        self.assertTrue(body["unsloth"])
+        self.assertTrue(body["openrouter"])
+        self.assertNotIn("key", json.dumps(body).lower())
+        self.assertNotIn("test-unsloth", json.dumps(body))
+        self.assertNotIn("test-openrouter", json.dumps(body))
+
+    def test_chat_ia_rejeita_prompt_vazio(self):
+        with TestClient(app) as client:
+            response = client.post("/api/ia/chat", json={"prompt": "   ", "model": "unsloth-auto"})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("prompt", response.json()["detail"])
+
     def test_gerar_zip_produz_os_tres_documentos_base(self):
         dados_usuario = {
             "{{OBJETO}}": "Aquisição de materiais de expediente",
             "{{NECESSIDADE}}": "Reposição de estoque da Administração Municipal",
-            "{{ITENS}}": json.dumps([
-                {
-                    "numero": 1,
-                    "descricao": "Caneta esferográfica azul",
-                    "un": "UN",
-                    "qtd": 10,
-                    "valor": 2.50,
-                }
-            ]),
+            "{{ITENS}}": json.dumps([{"numero": 1, "descricao": "Caneta esferográfica azul", "un": "UN", "qtd": 10, "valor": 2.50}]),
             "{{AMOST}}": "nao",
             "{{VIST}}": "nao",
             "{{PRORROGA}}": "nao",

@@ -29,7 +29,7 @@ export const consultarFilaFasePreparatoria = async (jobId: string) => {
   return response.json();
 };
 
-async function aguardarConclusao(jobId: string) {
+async function aguardarConclusao(jobId: string): Promise<any> {
   const inicio = Date.now();
   while (Date.now() - inicio < POLLING_TIMEOUT_MS) {
     const job = await consultarFilaFasePreparatoria(jobId);
@@ -102,5 +102,6 @@ export const gerarFasePreparatoria = async (dados: any): Promise<FasePreparatori
   }
 
   const job = await response.json();
-  return await aguardarConclusao(job.job_id);
+  const finalJob = await aguardarConclusao(job.job_id);
+  return { ...job, ...finalJob };
 };
