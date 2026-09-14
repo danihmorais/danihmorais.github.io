@@ -8,6 +8,7 @@ export interface FasePreparatoriaJob {
   job_id: string;
   status: "queued" | "processing" | "sent" | "failed" | string;
   email: string;
+  status_token: string;
   fila_posicao?: number;
   solicitacoes_a_frente?: number;
   message: string;
