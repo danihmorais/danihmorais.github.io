@@ -3,18 +3,18 @@ import { revisarMarcasItens, gerarDadosContratacaoDireta } from "./providers/ser
 import { lerConfigIA } from "./utils/storageLocal";
 
 const BASE_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
-const POLLING_INTERVAL_MS = 2000;
-const POLLING_TIMEOUT_MS = 20 * 60 * 1000;
+const REDIRECT_AFTER_QUEUE_MS = 6000;
 
 export interface FasePreparatoriaJob {
   job_id: string;
   status: "queued" | "processing" | "sent" | "failed" | string;
   email: string;
-  message?: string;
+  fila_posicao?: number;
+  solicitacoes_a_frente?: number;
+  message: string;
 }
 
 const MODALIDADES_CONTRATACAO_DIRETA = new Set(["DISPENSA_EMAIL", "DISPENSA_BLL"]);
-const esperar = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const consultarFilaFasePreparatoria = async (jobId: string) => {
   const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}`);
@@ -28,19 +28,6 @@ export const consultarFilaFasePreparatoria = async (jobId: string) => {
   }
   return response.json();
 };
-
-async function aguardarConclusao(jobId: string): Promise<any> {
-  const inicio = Date.now();
-  while (Date.now() - inicio < POLLING_TIMEOUT_MS) {
-    const job = await consultarFilaFasePreparatoria(jobId);
-    if (job.status === "sent") return job;
-    if (job.status === "failed") {
-      throw new Error(job.last_error || "O backend não conseguiu concluir a geração dos documentos.");
-    }
-    await esperar(POLLING_INTERVAL_MS);
-  }
-  throw new Error("A geração permaneceu na fila por mais de 20 minutos. Consulte a fila novamente antes de reenviar a solicitação.");
-}
 
 export const gerarFasePreparatoria = async (dados: any): Promise<FasePreparatoriaJob> => {
   const payload = {
@@ -102,6 +89,10 @@ export const gerarFasePreparatoria = async (dados: any): Promise<FasePreparatori
   }
 
   const job = await response.json();
-  const finalJob = await aguardarConclusao(job.job_id);
-  return { ...job, ...finalJob };
+  if (typeof window !== "undefined") {
+    window.setTimeout(() => {
+      window.location.href = "/";
+    }, REDIRECT_AFTER_QUEUE_MS);
+  }
+  return job;
 };

@@ -76,8 +76,17 @@ class LicitaBackendTests(unittest.TestCase):
         with TestClient(app) as client:
             created = client.post("/api/gerar-fase-preparatoria", json=payload)
             self.assertEqual(created.status_code, 200)
-            job_id = created.json()["job_id"]
-            self.assertEqual(created.json()["status"], "queued")
+            first = created.json()
+            job_id = first["job_id"]
+            self.assertEqual(first["status"], "queued")
+            self.assertEqual(first["fila_posicao"], 1)
+            self.assertEqual(first["solicitacoes_a_frente"], 0)
+            self.assertIn("Posição aproximada: 1º", first["message"])
+
+            second = client.post("/api/gerar-fase-preparatoria", json=payload)
+            self.assertEqual(second.status_code, 200)
+            self.assertEqual(second.json()["fila_posicao"], 2)
+            self.assertEqual(second.json()["solicitacoes_a_frente"], 1)
 
             consulted = client.get(f"/api/fila/{job_id}")
             self.assertEqual(consulted.status_code, 200)
@@ -111,7 +120,11 @@ class LicitaBackendTests(unittest.TestCase):
 
     def test_chat_ia_aplica_rate_limit(self):
         original = main._gerar_ia
-        main._gerar_ia = lambda req: {"content": "{}", "model": req.model, "provider": "test"}
+
+        async def mock_gerar_ia(req):
+            return {"content": "{}", "model": req.model, "provider": "test"}
+
+        main._gerar_ia = mock_gerar_ia
         try:
             with TestClient(app) as client:
                 for _ in range(main.IA_RATE_LIMIT):
