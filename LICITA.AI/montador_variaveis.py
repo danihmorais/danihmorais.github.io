@@ -232,6 +232,11 @@ def montar_variaveis_fixas(dados_usuario: dict) -> dict:
         if gestores_str and gestores_str != "[Não informado]"
         else "[Não informado]"
     )
+    resultado["{{FISCAIS}}"] = (
+        "; ".join(_formatar_lista_assinaturas(fiscais_str, cargos_fiscais_str))
+        if fiscais_str and fiscais_str != "[Não informado]"
+        else "[Não informado]"
+    )
 
     return resultado
 
