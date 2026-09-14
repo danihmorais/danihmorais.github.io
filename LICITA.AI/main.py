@@ -3,10 +3,11 @@ from __future__ import annotations
 import os
 import threading
 import time
+from collections import deque
 from pathlib import Path
 
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -31,9 +32,9 @@ class FasePreparatoriaRequest(BaseModel):
 
 
 class IAChatRequest(BaseModel):
-    model: str = "unsloth-auto"
-    prompt: str
-    temperature: float = 0.3
+    model: str = Field(default="unsloth-auto", min_length=1, max_length=200)
+    prompt: str = Field(min_length=1, max_length=120_000)
+    temperature: float = Field(default=0.3, ge=0, le=1.5)
     response_format: dict | None = None
 
 
@@ -48,6 +49,37 @@ API_OPENROUTER_URL = os.getenv(
 API_OPENROUTER_KEY = os.getenv(
     "LICITA_OPENROUTER_KEY", os.getenv("API_OPENROUTER", "")
 ).strip()
+
+IA_RATE_WINDOW_SECONDS = max(10, int(os.getenv("LICITA_IA_RATE_WINDOW", "60")))
+IA_RATE_LIMIT = max(1, int(os.getenv("LICITA_IA_RATE_LIMIT", "20")))
+_ia_rate_lock = threading.Lock()
+_ia_rate_buckets: dict[str, deque[float]] = {}
+
+
+def _client_identity(request: Request) -> str:
+    client = request.client
+    return client.host if client and client.host else "unknown"
+
+
+def _check_ia_rate_limit(request: Request) -> None:
+    now = time.monotonic()
+    identity = _client_identity(request)
+    with _ia_rate_lock:
+        bucket = _ia_rate_buckets.setdefault(identity, deque())
+        cutoff = now - IA_RATE_WINDOW_SECONDS
+        while bucket and bucket[0] <= cutoff:
+            bucket.popleft()
+        if len(bucket) >= IA_RATE_LIMIT:
+            raise HTTPException(
+                status_code=429,
+                detail="Limite de requisições de IA excedido. Tente novamente em instantes.",
+                headers={"Retry-After": str(IA_RATE_WINDOW_SECONDS)},
+            )
+        bucket.append(now)
+        if len(_ia_rate_buckets) > 10_000:
+            for key in list(_ia_rate_buckets)[:1_000]:
+                if not _ia_rate_buckets[key]:
+                    _ia_rate_buckets.pop(key, None)
 
 
 async def _upstream_chat(base_url: str, api_key: str, payload: dict) -> tuple[dict, int]:
@@ -72,8 +104,8 @@ async def _upstream_chat(base_url: str, api_key: str, payload: dict) -> tuple[di
 async def _gerar_ia(req: IAChatRequest) -> dict:
     payload = {
         "model": req.model if req.model != "openrouter/free" else "openrouter/free",
-        "temperature": max(0, min(float(req.temperature), 1.5)),
-        "messages": [{"role": "user", "content": req.prompt}],
+        "temperature": float(req.temperature),
+        "messages": [{"role": "user", "content": req.prompt.strip()}],
     }
     if req.response_format is not None:
         payload["response_format"] = req.response_format
@@ -88,9 +120,6 @@ async def _gerar_ia(req: IAChatRequest) -> dict:
 
     if tentativas[0][0] == "unsloth" and API_OPENROUTER_KEY:
         tentativas.append(("openrouter", API_OPENROUTER_URL, API_OPENROUTER_KEY))
-
-    if not tentativas:
-        raise HTTPException(status_code=503, detail="Nenhum provedor de IA está configurado no backend.")
 
     ultimo_status = 503
     for provider, base_url, api_key in tentativas:
@@ -125,9 +154,8 @@ async def status_ia():
 
 
 @app.post("/api/ia/chat")
-async def chat_ia(req: IAChatRequest):
-    if not req.prompt.strip():
-        raise HTTPException(status_code=400, detail="O prompt da IA não pode ser vazio.")
+async def chat_ia(request: Request, req: IAChatRequest):
+    _check_ia_rate_limit(request)
     return await _gerar_ia(req)
 
 

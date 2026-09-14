@@ -24,6 +24,7 @@ import fila
 fila._process_one_job = lambda: None
 
 from fastapi.testclient import TestClient
+import main
 from main import app
 
 
@@ -36,6 +37,7 @@ class LicitaBackendTests(unittest.TestCase):
         for path in QUEUE_DIR.glob("*"):
             if path.is_file():
                 path.unlink()
+        main._ia_rate_buckets.clear()
 
     def test_endpoint_rejeita_email_invalido(self):
         with TestClient(app) as client:
@@ -104,8 +106,24 @@ class LicitaBackendTests(unittest.TestCase):
     def test_chat_ia_rejeita_prompt_vazio(self):
         with TestClient(app) as client:
             response = client.post("/api/ia/chat", json={"prompt": "   ", "model": "unsloth-auto"})
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("prompt", response.json()["detail"])
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("prompt", json.dumps(response.json()).lower())
+
+    def test_chat_ia_aplica_rate_limit(self):
+        original = main._gerar_ia
+        main._gerar_ia = lambda req: {"content": "{}", "model": req.model, "provider": "test"}
+        try:
+            with TestClient(app) as client:
+                for _ in range(main.IA_RATE_LIMIT):
+                    response = client.post("/api/ia/chat", json={"prompt": "teste", "model": "unsloth-auto"})
+                    self.assertEqual(response.status_code, 200)
+                bloqueado = client.post("/api/ia/chat", json={"prompt": "teste", "model": "unsloth-auto"})
+        finally:
+            main._gerar_ia = original
+            main._ia_rate_buckets.clear()
+
+        self.assertEqual(bloqueado.status_code, 429)
+        self.assertIn("Retry-After", bloqueado.headers)
 
     def test_gerar_zip_produz_os_tres_documentos_base(self):
         dados_usuario = {
