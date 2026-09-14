@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from fila import EMAIL_RE, enqueue_job, get_job, iniciar_worker
+from fila import EMAIL_RE, QUEUE_DIR, enqueue_job, get_job, iniciar_worker
 
 app = FastAPI(title="Licita.AI API")
 
@@ -159,6 +159,34 @@ async def chat_ia(request: Request, req: IAChatRequest):
     return await _gerar_ia(req)
 
 
+def _queue_items() -> list[dict]:
+    if not QUEUE_DIR.exists():
+        return []
+    items: list[dict] = []
+    for path in QUEUE_DIR.glob("[0-9a-f]*.json"):
+        if path.name.endswith((".done.json", ".failed.json")):
+            continue
+        try:
+            job = __import__("json").loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(job, dict):
+            continue
+        job_id = job.get("job_id")
+        created_at = job.get("created_at")
+        if isinstance(job_id, str) and created_at:
+            items.append({"job_id": job_id, "created_at": str(created_at), "status": job.get("status", "queued")})
+    return sorted(items, key=lambda item: item["created_at"])
+
+
+def _queue_position(job_id: str) -> tuple[int | None, int | None]:
+    items = _queue_items()
+    for index, item in enumerate(items):
+        if item["job_id"].lower() == job_id.lower():
+            return index + 1, index
+    return None, None
+
+
 @app.post("/api/gerar-fase-preparatoria")
 async def agendar_fase_preparatoria(req: FasePreparatoriaRequest):
     email = req.email.strip()
@@ -166,12 +194,22 @@ async def agendar_fase_preparatoria(req: FasePreparatoriaRequest):
         raise HTTPException(status_code=400, detail="Informe um e-mail válido para receber os documentos.")
 
     try:
-        return enqueue_job(
+        job = enqueue_job(
             email=email,
             dados_usuario=req.dados_usuario,
             dados_ia=req.dados_ia,
             instrucoes=req.instrucoes,
         )
+        position, ahead = _queue_position(job["job_id"])
+        job["fila_posicao"] = position
+        job["solicitacoes_a_frente"] = ahead
+        job["message"] = (
+            f"Solicitação registrada na fila. Posição aproximada: {position}º. "
+            f"Os documentos serão enviados para {email} após o processamento."
+            if position is not None
+            else "Solicitação registrada na fila. Os documentos serão enviados por e-mail após o processamento."
+        )
+        return job
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
@@ -196,7 +234,6 @@ async def consultar_fila(job_id: str):
     }
 
 
-QUEUE_DIR = Path(os.getenv("LICITA_QUEUE_DIR", str(Path.home() / ".local" / "share" / "licita-ai" / "fila"))).expanduser()
 RETENTION_DAYS = max(1, int(os.getenv("LICITA_QUEUE_RETENTION_DAYS", "7")))
 
 
