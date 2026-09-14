@@ -103,17 +103,20 @@ class LicitaBackendTests(unittest.TestCase):
             self.assertNotIn("status_token", consulted.json())
 
     def test_endpoint_aplica_rate_limit_por_ip(self):
-        payload = {
-            "email": "teste@example.com",
+        payload_base = {
             "dados_ia": {},
             "dados_usuario": {"{{OBJETO}}": "Objeto de teste"},
         }
 
         with TestClient(app) as client:
-            for _ in range(main.QUEUE_RATE_LIMIT):
+            for indice in range(main.QUEUE_RATE_LIMIT):
+                payload = {**payload_base, "email": f"teste-ip-{indice}@example.com"}
                 response = client.post("/api/gerar-fase-preparatoria", json=payload)
                 self.assertEqual(response.status_code, 200)
-            bloqueado = client.post("/api/gerar-fase-preparatoria", json=payload)
+            bloqueado = client.post(
+                "/api/gerar-fase-preparatoria",
+                json={**payload_base, "email": "teste-ip-bloqueado@example.com"},
+            )
 
         self.assertEqual(bloqueado.status_code, 429)
         self.assertIn("Retry-After", bloqueado.headers)
