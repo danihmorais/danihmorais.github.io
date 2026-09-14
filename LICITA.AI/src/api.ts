@@ -3,7 +3,6 @@ import { revisarMarcasItens, gerarDadosContratacaoDireta } from "./providers/ser
 import { lerConfigIA } from "./utils/storageLocal";
 
 const BASE_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
-const REDIRECT_AFTER_QUEUE_MS = 6000;
 
 export interface FasePreparatoriaJob {
   job_id: string;
@@ -16,8 +15,9 @@ export interface FasePreparatoriaJob {
 
 const MODALIDADES_CONTRATACAO_DIRETA = new Set(["DISPENSA_EMAIL", "DISPENSA_BLL"]);
 
-export const consultarFilaFasePreparatoria = async (jobId: string) => {
-  const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}`);
+export const consultarFilaFasePreparatoria = async (jobId: string, statusToken?: string) => {
+  const query = statusToken ? `?token=${encodeURIComponent(statusToken)}` : "";
+  const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}${query}`);
   if (!response.ok) {
     let detalhe = "Não foi possível consultar a fila.";
     try {
@@ -88,11 +88,5 @@ export const gerarFasePreparatoria = async (dados: any): Promise<FasePreparatori
     throw new Error(detalhe);
   }
 
-  const job = await response.json();
-  if (typeof window !== "undefined") {
-    window.setTimeout(() => {
-      window.location.href = "/";
-    }, REDIRECT_AFTER_QUEUE_MS);
-  }
-  return job;
+  return response.json();
 };
