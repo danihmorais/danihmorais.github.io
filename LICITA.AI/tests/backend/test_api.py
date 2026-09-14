@@ -38,6 +38,8 @@ class LicitaBackendTests(unittest.TestCase):
             if path.is_file():
                 path.unlink()
         main._ia_rate_buckets.clear()
+        main._queue_ip_rate_buckets.clear()
+        main._queue_email_rate_buckets.clear()
 
     def test_endpoint_rejeita_email_invalido(self):
         with TestClient(app) as client:
@@ -78,21 +80,63 @@ class LicitaBackendTests(unittest.TestCase):
             self.assertEqual(created.status_code, 200)
             first = created.json()
             job_id = first["job_id"]
+            status_token = first["status_token"]
             self.assertEqual(first["status"], "queued")
             self.assertEqual(first["fila_posicao"], 1)
             self.assertEqual(first["solicitacoes_a_frente"], 0)
             self.assertIn("Posição aproximada: 1º", first["message"])
+            self.assertTrue(status_token)
 
             second = client.post("/api/gerar-fase-preparatoria", json=payload)
             self.assertEqual(second.status_code, 200)
             self.assertEqual(second.json()["fila_posicao"], 2)
             self.assertEqual(second.json()["solicitacoes_a_frente"], 1)
 
-            consulted = client.get(f"/api/fila/{job_id}")
+            unauthorized = client.get(f"/api/fila/{job_id}")
+            self.assertEqual(unauthorized.status_code, 401)
+
+            consulted = client.get(f"/api/fila/{job_id}?token={status_token}")
             self.assertEqual(consulted.status_code, 200)
             self.assertEqual(consulted.json()["job_id"], job_id)
             self.assertEqual(consulted.json()["status"], "queued")
             self.assertNotIn("email", consulted.json())
+            self.assertNotIn("status_token", consulted.json())
+
+    def test_endpoint_aplica_rate_limit_por_ip(self):
+        payload = {
+            "email": "teste@example.com",
+            "dados_ia": {},
+            "dados_usuario": {"{{OBJETO}}": "Objeto de teste"},
+        }
+
+        with TestClient(app) as client:
+            for _ in range(main.QUEUE_RATE_LIMIT):
+                response = client.post("/api/gerar-fase-preparatoria", json=payload)
+                self.assertEqual(response.status_code, 200)
+            bloqueado = client.post("/api/gerar-fase-preparatoria", json=payload)
+
+        self.assertEqual(bloqueado.status_code, 429)
+        self.assertIn("Retry-After", bloqueado.headers)
+
+    def test_endpoint_aplica_rate_limit_por_email(self):
+        payload_base = {
+            "dados_ia": {},
+            "dados_usuario": {"{{OBJETO}}": "Objeto de teste"},
+        }
+
+        with TestClient(app) as client:
+            for indice in range(main.QUEUE_EMAIL_RATE_LIMIT):
+                payload = {**payload_base, "email": "teste-email@example.com"}
+                response = client.post("/api/gerar-fase-preparatoria", json=payload)
+                self.assertEqual(response.status_code, 200)
+                main._queue_ip_rate_buckets.clear()
+            bloqueado = client.post(
+                "/api/gerar-fase-preparatoria",
+                json={**payload_base, "email": "teste-email@example.com"},
+            )
+
+        self.assertEqual(bloqueado.status_code, 429)
+        self.assertIn("limite de solicitações", bloqueado.json()["detail"].lower())
 
     def test_endpoint_rejeita_job_id_invalido(self):
         with TestClient(app) as client:
