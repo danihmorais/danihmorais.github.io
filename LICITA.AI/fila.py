@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import secrets
 import shutil
 import smtplib
 import ssl
@@ -305,13 +306,15 @@ def enqueue_job(email: str, dados_usuario: dict, dados_ia: dict, instrucoes: str
     validar_consistencia_dados(dados_usuario)
     _ensure_queue_dir()
     job_id = uuid.uuid4().hex
+    status_token = secrets.token_urlsafe(32)
     job = {
-        "version": 1,
+        "version": 2,
         "job_id": job_id,
         "status": "queued",
         "created_at": _utc_now(),
         "attempts": 0,
         "email": email,
+        "status_token": status_token,
         "instrucoes": instrucoes.strip(),
         "dados_usuario": dados_usuario,
         "dados_ia": dados_ia,
@@ -321,6 +324,7 @@ def enqueue_job(email: str, dados_usuario: dict, dados_ia: dict, instrucoes: str
         "job_id": job_id,
         "status": "queued",
         "email": email,
+        "status_token": status_token,
         "message": "Solicitação registrada na fila. Os documentos serão gerados no backend e enviados por e-mail.",
     }
 
