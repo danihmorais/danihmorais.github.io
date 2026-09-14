@@ -120,7 +120,11 @@ class LicitaBackendTests(unittest.TestCase):
 
     def test_chat_ia_aplica_rate_limit(self):
         original = main._gerar_ia
-        main._gerar_ia = lambda req: {"content": "{}", "model": req.model, "provider": "test"}
+
+        async def mock_gerar_ia(req):
+            return {"content": "{}", "model": req.model, "provider": "test"}
+
+        main._gerar_ia = mock_gerar_ia
         try:
             with TestClient(app) as client:
                 for _ in range(main.IA_RATE_LIMIT):
