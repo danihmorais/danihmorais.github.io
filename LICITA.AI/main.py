@@ -138,6 +138,8 @@ async def status_ia():
 
 @app.post("/api/ia/chat")
 async def chat_ia(request: Request, req: IAChatRequest):
+    if not req.prompt.strip():
+        raise HTTPException(status_code=422, detail="O campo prompt não pode ficar vazio.")
     _check_ia_rate_limit(request)
     return await _gerar_ia(req)
 
@@ -170,13 +172,24 @@ async def agendar_fase_preparatoria(request: Request, req: FasePreparatoriaReque
     email = req.email.strip()
     if not EMAIL_RE.fullmatch(email):
         raise HTTPException(status_code=400, detail="Informe um e-mail válido para receber os documentos.")
+
     _check_queue_rate_limit(request, email)
+
     try:
-        job = enqueue_job(email=email, dados_usuario=req.dados_usuario, dados_ia=req.dados_ia, instrucoes=req.instrucoes)
+        job = enqueue_job(
+            email=email,
+            dados_usuario=req.dados_usuario,
+            dados_ia=req.dados_ia,
+            instrucoes=req.instrucoes,
+        )
         position, ahead = _queue_position(job["job_id"])
         job["fila_posicao"] = position
         job["solicitacoes_a_frente"] = ahead
-        job["message"] = f"Solicitação registrada na fila. Posição aproximada: {position}º. Os documentos serão enviados para {email} após o processamento." if position is not None else "Solicitação registrada na fila. Os documentos serão enviados por e-mail após o processamento."
+        job["message"] = (
+            f"Solicitação registrada na fila. Posição aproximada: {position}º. Os documentos serão enviados para {email} após o processamento."
+            if position is not None
+            else "Solicitação registrada na fila. Os documentos serão enviados por e-mail após o processamento."
+        )
         return job
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -189,13 +202,27 @@ async def consultar_fila(job_id: str, token: str | None = None):
     job = get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Solicitação não encontrada.")
+
     stored_token = str(job.get("status_token", ""))
     if not stored_token or not token:
         raise HTTPException(status_code=401, detail="Token de consulta não informado.")
+
     import hmac
     if not hmac.compare_digest(stored_token, token):
         raise HTTPException(status_code=403, detail="Token de consulta inválido.")
-    return {"job_id": job.get("job_id", job_id), "status": job.get("status", "unknown"), "created_at": job.get("created_at"), "started_at": job.get("started_at"), "completed_at": job.get("completed_at"), "attempts": job.get("attempts", 0), "current_stage": job.get("current_stage"), "completed_stages": job.get("completed_stages", []), "last_error": job.get("last_error"), "result": job.get("result")}
+
+    return {
+        "job_id": job.get("job_id", job_id),
+        "status": job.get("status", "unknown"),
+        "created_at": job.get("created_at"),
+        "started_at": job.get("started_at"),
+        "completed_at": job.get("completed_at"),
+        "attempts": job.get("attempts", 0),
+        "current_stage": job.get("current_stage"),
+        "completed_stages": job.get("completed_stages", []),
+        "last_error": job.get("last_error"),
+        "result": job.get("result"),
+    }
 
 
 RETENTION_DAYS = max(1, int(os.getenv("LICITA_QUEUE_RETENTION_DAYS", "7")))
@@ -207,7 +234,9 @@ def _limpar_fila_antiga() -> None:
         try:
             if QUEUE_DIR.exists():
                 for path in QUEUE_DIR.iterdir():
-                    if path.suffix not in {".json", ".zip"} or path.name.endswith(".processing.json"):
+                    if path.suffix not in {".json", ".zip"}:
+                        continue
+                    if path.name.endswith(".processing.json"):
                         continue
                     try:
                         if path.stat().st_mtime < cutoff:
