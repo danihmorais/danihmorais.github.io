@@ -44,7 +44,7 @@ jobs:
           npm install
           npm run build
 
-      - name: Setup Python for Licita.AI tests
+      - name: Setup Python for backend tests
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -55,6 +55,12 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
           python -m unittest discover -s tests/backend -p 'test_*.py' -v
+
+      - name: Test backend da Biblioteca Municipal
+        working-directory: ./BIBLIOTECA-MUNICIPAL/backend
+        run: |
+          python -m pip install -r requirements.txt
+          pytest -q
 
       - name: Build and test Licita.AI
         working-directory: ./LICITA.AI
