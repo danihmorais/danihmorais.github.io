@@ -9,25 +9,19 @@ function isObject(value: unknown): value is JsonObject {
 function normalizeResponse(path: string, body: unknown): unknown {
   if (body !== null) {
     if (path === '/api/dashboard' && isObject(body)) {
-      const recentLoans = Array.isArray(body.emprestimos_recentes) ? body.emprestimos_recentes : []
-      const recentLogs = Array.isArray(body.logs_recentes) ? body.logs_recentes : []
+      const recentLoans = (Array.isArray(body.emprestimos_recentes) ? body.emprestimos_recentes : []).filter(isObject)
+      const recentLogs = (Array.isArray(body.logs_recentes) ? body.logs_recentes : []).filter(isObject)
       return {
         ...body,
-        emprestimos_recentes: recentLoans.map((item, index) => {
-          if (!isObject(item)) return item
-          return {
-            ...item,
-            id: item.id ?? `${String(item.codigo ?? 'emprestimo')}-${index}`,
-            pessoa_nome: item.pessoa_nome ?? item.pessoa ?? ''
-          }
-        }),
-        logs_recentes: recentLogs.map((item, index) => {
-          if (!isObject(item)) return item
-          return {
-            ...item,
-            id: item.id ?? `${String(item.acao ?? 'log')}-${index}`
-          }
-        })
+        emprestimos_recentes: recentLoans.map((item, index) => ({
+          ...item,
+          id: item.id ?? `${String(item.codigo ?? 'emprestimo')}-${index}`,
+          pessoa_nome: item.pessoa_nome ?? item.pessoa ?? ''
+        })),
+        logs_recentes: recentLogs.map((item, index) => ({
+          ...item,
+          id: item.id ?? `${String(item.acao ?? 'log')}-${index}`
+        }))
       }
     }
     return body
