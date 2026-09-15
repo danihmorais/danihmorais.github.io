@@ -46,7 +46,7 @@ export const gerarFasePreparatoria = async (dados: any): Promise<FasePreparatori
 
   const config = lerConfigIA();
   const apiKey = config.chave_api || "backend";
-  const modelo = config.modelo || MODELO_PADRAO_POR_PROVEDOR.openrouter;
+  const modelo = config.modelo || MODELO_PADRAO_POR_PROVEDOR.backend;
 
   const nomesJson = payload.dados_usuario?.ITENS_NOMES;
   if (itens.length > 0 && nomesJson) {
