@@ -5,7 +5,7 @@ export function limparNumeracao(texto: string): string {
     .split(/\r?\n/)
     .map((linha) =>
       linha.replace(
-        /^\s*(?:(?:\(?\d+(?:\.\d+)*\)?|[IVXLCDM]+|[A-Za-z])(?:[.)\-:º°]+)?|[•◦▪‣])\s+/i,
+        /^\s*(?:(?:\(?\d+(?:\.\d+)*\)?(?:[.)\-:º°]+)?|[IVXLCDM]+[.)\-:]+|[A-Za-z][.)\-:]+)|[•◦▪‣])\s+/,
         ""
       )
     )
