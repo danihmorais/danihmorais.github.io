@@ -11,6 +11,11 @@ function testRequire(request) {
   if (request === "./providers/llm") {
     return { MODELO_PADRAO_POR_PROVEDOR: { openrouter: "openrouter/free", unsloth: "unsloth-auto" } };
   }
+  if (request === "./providers/services/geradorIA") {
+    return {
+      construirPrompt: (_dados, _meepp, etapa) => `PROMPT_TESTE_${etapa}`,
+    };
+  }
   if (request === "./providers/services/contratacaoDiretaIA") {
     return {
       revisarMarcasItens: async (itens) => ({ itens, auditoria: [] }),
