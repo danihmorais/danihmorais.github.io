@@ -31,13 +31,22 @@ def setup():
     """)
     books = conn.execute("SELECT id,codigo,quantidade FROM livros WHERE ativo=1 ORDER BY id").fetchall()
     for b in books:
-        count = conn.execute("SELECT COUNT(*) v FROM exemplares WHERE livro_id=? AND ativo=1", (b["id"],)).fetchone()["v"]
-        for n in range(count + 1, b["quantidade"] + 1):
-            code = f"{b['codigo']}-{n:02d}"
-            try:
-                conn.execute("INSERT INTO exemplares(livro_id,codigo,criado_em) VALUES(?,?,?)", (b["id"], code, now()))
-            except sqlite3.IntegrityError:
-                pass
+        active = conn.execute("SELECT id,codigo FROM exemplares WHERE livro_id=? AND ativo=1 ORDER BY id", (b["id"],)).fetchall()
+        if len(active) < b["quantidade"]:
+            for n in range(len(active) + 1, b["quantidade"] + 1):
+                code = f"{b['codigo']}-{n:02d}"
+                try:
+                    conn.execute("INSERT INTO exemplares(livro_id,codigo,criado_em) VALUES(?,?,?)", (b["id"], code, now()))
+                except sqlite3.IntegrityError:
+                    pass
+        elif len(active) > b["quantidade"]:
+            excess = len(active) - b["quantidade"]
+            candidates = conn.execute("""SELECT x.id FROM exemplares x
+                WHERE x.livro_id=? AND x.ativo=1 AND NOT EXISTS (
+                  SELECT 1 FROM emprestimo_exemplares ee WHERE ee.exemplar_id=x.id AND ee.devolvida_em IS NULL)
+                ORDER BY x.id DESC LIMIT ?""", (b["id"], excess)).fetchall()
+            for x in candidates:
+                conn.execute("UPDATE exemplares SET ativo=0 WHERE id=?", (x["id"],))
     active = conn.execute("""SELECT e.id,e.livro_id,e.quantidade FROM emprestimos e
         WHERE e.devolvida_em IS NULL AND NOT EXISTS (SELECT 1 FROM emprestimo_exemplares x WHERE x.emprestimo_id=e.id)""").fetchall()
     for loan in active:
@@ -50,6 +59,7 @@ def setup():
     conn.commit()
     conn.close()
 
+
 class LoanExemplaresIn(BaseModel):
     livro_id: int
     pessoa_id: int
@@ -57,12 +67,23 @@ class LoanExemplaresIn(BaseModel):
     prevista_devolucao: str
     observacoes: str = ""
 
+
 class ReturnExemplaresIn(BaseModel):
     exemplar_ids: list[int] = Field(min_length=1)
 
 
+def validate_due_date(value: str):
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(422, "Data de devolução prevista inválida.")
+    if parsed.date() < datetime.now().date():
+        raise HTTPException(422, "A data de devolução prevista não pode ser anterior a hoje.")
+
+
 def exemplar_dict(row):
     return dict(row)
+
 
 @main.app.get("/api/livros/{livro_id}/exemplares")
 def list_exemplares(livro_id: int, user=Depends(main.current_user)):
@@ -77,6 +98,7 @@ def list_exemplares(livro_id: int, user=Depends(main.current_user)):
     conn.close()
     return [exemplar_dict(x) for x in rows]
 
+
 @main.app.get("/api/acervo-exemplares")
 def acervo(user=Depends(main.current_user)):
     setup()
@@ -88,14 +110,17 @@ def acervo(user=Depends(main.current_user)):
     conn.close()
     return [exemplar_dict(x) for x in rows]
 
+
 @main.app.post("/api/emprestimos-com-exemplares")
 def create_loan(data: LoanExemplaresIn, user=Depends(main.current_user)):
+    validate_due_date(data.prevista_devolucao)
     setup()
     ids = list(dict.fromkeys(data.exemplar_ids))
     if not ids:
         raise HTTPException(400, "Selecione pelo menos um exemplar.")
     conn = main.db()
     try:
+        conn.execute("BEGIN IMMEDIATE")
         book = conn.execute("SELECT * FROM livros WHERE id=? AND ativo=1", (data.livro_id,)).fetchone()
         person = conn.execute("SELECT * FROM pessoas WHERE id=? AND ativo=1", (data.pessoa_id,)).fetchone()
         if not book or not person:
@@ -119,6 +144,7 @@ def create_loan(data: LoanExemplaresIn, user=Depends(main.current_user)):
     finally:
         conn.close()
 
+
 @main.app.get("/api/emprestimos-detalhados")
 def detailed_loans(status: str="ativos", user=Depends(main.current_user)):
     setup()
@@ -136,12 +162,14 @@ def detailed_loans(status: str="ativos", user=Depends(main.current_user)):
     conn.close()
     return result
 
+
 @main.app.post("/api/emprestimos/{emprestimo_id}/devolver-exemplares")
 def return_exemplares(emprestimo_id:int, data:ReturnExemplaresIn, user=Depends(main.current_user)):
     setup()
     ids = list(dict.fromkeys(data.exemplar_ids))
     conn = main.db()
     try:
+        conn.execute("BEGIN IMMEDIATE")
         loan = conn.execute("SELECT * FROM emprestimos WHERE id=?", (emprestimo_id,)).fetchone()
         if not loan or loan["devolvida_em"] is not None:
             raise HTTPException(409, "Empréstimo já encerrado.")
