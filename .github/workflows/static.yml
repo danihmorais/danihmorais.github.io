@@ -20,89 +20,71 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
-          cache: 'npm'
-          cache-dependency-path: |
-            MONTAEDITAL/package-lock.json
-            LICITA.AI/package-lock.json
-            EMAIL-ATAS-CONTRATOS/package-lock.json
-            GERADOREXTRATO/package-lock.json
-
+          node-version: 20
       - name: Build MontaEdital
         working-directory: ./MONTAEDITAL
         env:
           VITE_API_URL: ${{ secrets.API_URL }}
         run: |
-          npm install
+          npm install --no-audit --no-fund
           npm run build
-
       - name: Setup Python for backend tests
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
       - name: Test backend do Licita.AI
         working-directory: ./LICITA.AI
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
           python -m unittest discover -s tests/backend -p 'test_*.py' -v
-
       - name: Test backend da Biblioteca Municipal
         working-directory: ./BIBLIOTECA-MUNICIPAL/backend
         run: |
           python -m pip install -r requirements.txt
           PYTHONPATH="$PWD" pytest -q
-
       - name: Build and test Licita.AI
         working-directory: ./LICITA.AI
         env:
           VITE_API_URL: ${{ secrets.API_URL }}
         run: |
-          npm ci
+          npm install --no-audit --no-fund
           npm test
           npm run build
           node tests/dist-smoke.mjs
-
       - name: Build Enviador de Atas e Contratos
         working-directory: ./EMAIL-ATAS-CONTRATOS
         env:
           VITE_API_URL: ${{ secrets.API_URL }}
         run: |
-          npm install
+          npm install --no-audit --no-fund
           npm run build
-
       - name: Build Gerador de Extrato de Atas e Contratos
         working-directory: ./GERADOREXTRATO
         env:
           VITE_API_URL: ${{ secrets.API_URL }}
         run: |
-          npm install
+          npm install --no-audit --no-fund
           npm run build
-
       - name: Build Biblioteca Municipal
         working-directory: ./BIBLIOTECA-MUNICIPAL
         env:
           VITE_BIBLIOTECA_API_URL: ${{ secrets.BIBLIOTECA_API_URL }}
         run: |
-          npm install
+          npm install --no-audit --no-fund
           npm run build
-
       - name: Assemble final site
         env:
           API_URL: ${{ secrets.API_URL }}
           PAGES_VERSION: ${{ github.sha }}
         run: |
           set -euo pipefail
-
           mkdir -p site
           cp index.html site/
           cp ads.txt site/
@@ -114,64 +96,32 @@ jobs:
           cp -r BIBLIOTECA-MUNICIPAL/dist site/BIBLIOTECA-MUNICIPAL
           cp -r FIORIILICSVTOWORD/. site/FIORIILICSVTOWORD/
           cp documentos-modelo.html site/documentos-modelo.html
-
           python - <<'PY'
           from pathlib import Path
-          import json
-          import os
-
-          api_url = os.environ.get("API_URL", "").strip()
-          version = os.environ.get("PAGES_VERSION", "").strip()
-
-          if len(api_url) >= 2 and api_url[0] == api_url[-1] and api_url[0] in "\"'":
-              api_url = api_url[1:-1].strip()
-          api_url = api_url.rstrip("/")
-
-          if not api_url:
-              raise SystemExit("O secret API_URL não foi configurado.")
-          if not api_url.startswith(("http://", "https://")):
-              raise SystemExit("O secret API_URL deve começar com http:// ou https://")
-          if not version:
-              raise SystemExit("PAGES_VERSION não foi configurado.")
-
-          doc_path = Path("site/documentos-modelo.html")
-          doc_content = doc_path.read_text(encoding="utf-8")
-          placeholder = "__API_URL_JSON__"
-          if placeholder not in doc_content:
-              raise SystemExit(f"Placeholder {placeholder} não encontrado em documentos-modelo.html")
-          doc_content = doc_content.replace(placeholder, json.dumps(api_url, ensure_ascii=False))
-          if placeholder in doc_content:
-              raise SystemExit("O placeholder da API_URL permaneceu no HTML após a substituição.")
-          doc_path.write_text(doc_content, encoding="utf-8")
-
-          index_path = Path("site/index.html")
-          index_content = index_path.read_text(encoding="utf-8")
-          if "__PAGES_VERSION__" in index_content:
-              index_content = index_content.replace("__PAGES_VERSION__", version)
-              index_path.write_text(index_content, encoding="utf-8")
-          if "__PAGES_VERSION__" in index_content:
-              raise SystemExit("O cache-buster __PAGES_VERSION__ permaneceu no index.html")
-
-          published = doc_path.read_text(encoding="utf-8")
-          if "__API_URL_JSON__" in published:
-              raise SystemExit("Placeholder __API_URL_JSON__ ainda está presente no HTML publicado.")
-          if 'const API_URL = ""' in published or "const API_URL = ''" in published:
-              raise SystemExit("A declaração da API_URL ficou com aspas duplicadas.")
-
-          print("API_URL aplicada ao site com sucesso.")
-          print("Placeholder __API_URL_JSON__: removido")
-          print("Cache-buster do index.html: aplicado")
+          import json, os
+          api_url=os.environ.get("API_URL","").strip()
+          version=os.environ.get("PAGES_VERSION","").strip()
+          if len(api_url)>=2 and api_url[0]==api_url[-1] and api_url[0] in "\"'": api_url=api_url[1:-1].strip()
+          api_url=api_url.rstrip("/")
+          if not api_url or not api_url.startswith(("http://","https://")): raise SystemExit("Secret API_URL inválido.")
+          if not version: raise SystemExit("PAGES_VERSION não configurado.")
+          doc=Path("site/documentos-modelo.html")
+          text=doc.read_text(encoding="utf-8")
+          if "__API_URL_JSON__" not in text: raise SystemExit("Placeholder __API_URL_JSON__ não encontrado.")
+          text=text.replace("__API_URL_JSON__",json.dumps(api_url,ensure_ascii=False))
+          doc.write_text(text,encoding="utf-8")
+          index=Path("site/index.html")
+          text=index.read_text(encoding="utf-8").replace("__PAGES_VERSION__",version)
+          index.write_text(text,encoding="utf-8")
+          if "__API_URL_JSON__" in doc.read_text(encoding="utf-8") or "__PAGES_VERSION__" in text: raise SystemExit("Placeholder não substituído.")
           PY
-
       - name: Setup Pages
-        uses: actions/configure-pages@v4
-
+        uses: actions/configure-pages@v5
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           name: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
           path: './site'
-
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
