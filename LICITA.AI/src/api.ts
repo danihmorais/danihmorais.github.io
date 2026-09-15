@@ -1,6 +1,7 @@
 import { MODELO_PADRAO_POR_PROVEDOR } from "./providers/llm";
 import { construirPrompt } from "./providers/services/geradorIA";
 import { lerConfigIA } from "./utils/storageLocal";
+import { mapearDadosWizard } from "./utils/mapearDados";
 
 const BASE_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
@@ -62,7 +63,8 @@ function construirPromptUnificado(dadosUsuario: Record<string, string>, meeppExc
 export const gerarFasePreparatoria = async (dados: any): Promise<FasePreparatoriaJob> => {
   if (!BASE_URL) throw new Error("API do Licita.AI não configurada.");
 
-  const dadosUsuario = { ...(dados?.dados_usuario || {}) } as Record<string, string>;
+  const dadosOriginais = { ...(dados?.dados_usuario || {}) } as Record<string, any>;
+  const dadosUsuario = mapearDadosWizard(dadosOriginais) as Record<string, string>;
   const instrucoes = String(dados?.instrucoes || "").trim();
   const meeppExclusivo = dadosUsuario["{{ME_EPP}}"] === "SIM";
   const config = lerConfigIA();
