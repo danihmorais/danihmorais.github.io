@@ -32,7 +32,7 @@ def test_edit_inactivate_and_renew(tmp_path,monkeypatch):
     loan=client.post('/api/emprestimos',headers=headers,json={'livro_id':book['id'],'pessoa_id':person['id'],'quantidade':3,'prevista_devolucao':'2099-12-31'}).json()
     partial=client.post(f"/api/emprestimos/{loan['id']}/devolver-parcial",headers=headers,json={'quantidade':1})
     assert partial.status_code==200
-    renewed=client.post(f"/api/emprestimos/{loan['id']}/renovar",headers=headers,json={'prevista_devolucao':'2099-12-31'})
+    renewed=client.post(f"/api/emprestimos/{loan['id']}/renovar",headers=headers,json={'prevista_devolucao':'2100-12-31'})
     assert renewed.status_code==200
     blocked=client.post(f"/api/livros/{book['id']}/inativar",headers=headers)
     assert blocked.status_code==409
