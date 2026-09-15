@@ -5,12 +5,27 @@ export interface OpcaoModelo {
   label: string;
 }
 
+export interface StatusBackendIA {
+  ok: boolean;
+  unsloth: boolean;
+  openrouter: boolean;
+}
+
 const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 const IA_CHAT_URL = `${API_URL}/licita/api/ia/chat`;
 const IA_STATUS_URL = `${API_URL}/licita/api/ia/status`;
 
 export const MODELOS_DISPONIVEIS: Record<string, OpcaoModelo[]> = {
-  unsloth: [{ value: "unsloth-auto", label: "Modelo local Unsloth (automático)" }],
+  backend: [
+    { value: "unsloth-auto", label: "Unsloth local (primário; OpenRouter como fallback)" },
+    { value: "openrouter/free", label: "OpenRouter Free (usa fallback remoto)" },
+    { value: "anthropic/claude-sonnet-4.5", label: "Claude Sonnet 4.5 (via OpenRouter)" },
+    { value: "openai/gpt-5", label: "GPT-5 (via OpenRouter)" },
+    { value: "google/gemini-3.1-pro", label: "Gemini 3.1 Pro (via OpenRouter)" },
+    { value: "meta-llama/llama-3.3-70b-instruct", label: "Llama 3.3 70B Instruct (via OpenRouter)" },
+    { value: "deepseek/deepseek-r1", label: "DeepSeek R1 (via OpenRouter)" },
+  ],
+  unsloth: [{ value: "unsloth-auto", label: "Unsloth local (automático)" }],
   openrouter: [
     { value: "openrouter/free", label: "OpenRouter Free (modelo automático gratuito)" },
     { value: "anthropic/claude-sonnet-4.5", label: "Claude Sonnet 4.5 (Anthropic)" },
@@ -22,6 +37,7 @@ export const MODELOS_DISPONIVEIS: Record<string, OpcaoModelo[]> = {
 };
 
 export const MODELO_PADRAO_POR_PROVEDOR: Record<string, string> = {
+  backend: "unsloth-auto",
   unsloth: "unsloth-auto",
   openrouter: "openrouter/free",
 };
@@ -134,7 +150,7 @@ async function chamarBackend(payload: Record<string, any>): Promise<any> {
       const parsed = raw ? JSON.parse(raw) : null;
       if (parsed?.detail) detalhe = String(parsed.detail);
     } catch {}
-    const temporario = [429, 500, 502, 503, 504].includes(response.status);
+    const temporario = [408, 409, 425, 429, 500, 502, 503, 504].includes(response.status);
     throw new Error(`${temporario ? "TEMP:" : "FATAL:"}${response.status}:${detalhe}`);
   }
 
@@ -154,36 +170,34 @@ async function chamarBackend(payload: Record<string, any>): Promise<any> {
   };
 }
 
-async function validarBackendIA(): Promise<any> {
-  if (!API_URL) return { ok: false };
-  const response = await fetch(IA_STATUS_URL, { method: "GET" });
-  let data: any = null;
-  try { data = await response.json(); } catch {}
-  if (!response.ok) return { ok: false, ...data };
-  return data || { ok: true };
+export async function obterStatusBackendIA(): Promise<StatusBackendIA> {
+  if (!API_URL) return { ok: false, unsloth: false, openrouter: false };
+  try {
+    const response = await fetch(IA_STATUS_URL, { method: "GET" });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) return { ok: false, unsloth: false, openrouter: false };
+    return {
+      ok: Boolean(data?.ok),
+      unsloth: Boolean(data?.unsloth),
+      openrouter: Boolean(data?.openrouter),
+    };
+  } catch (error) {
+    await salvarLogErro("validacao-backend", error);
+    return { ok: false, unsloth: false, openrouter: false };
+  }
 }
 
 export async function validarChaveUnsloth(): Promise<boolean> {
-  try {
-    const data = await validarBackendIA();
-    return Boolean(data?.ok && data?.unsloth);
-  } catch (error) {
-    await salvarLogErro("validacao-unsloth", error);
-    return false;
-  }
+  const data = await obterStatusBackendIA();
+  return Boolean(data.ok && data.unsloth);
 }
 
 export async function validarChaveOpenRouter(
   _apiKey?: string,
   _model: string = MODELO_PADRAO_POR_PROVEDOR.openrouter,
 ): Promise<boolean> {
-  try {
-    const data = await validarBackendIA();
-    return Boolean(data?.ok && data?.openrouter);
-  } catch (error) {
-    await salvarLogErro("validacao-openrouter", error);
-    return false;
-  }
+  const data = await obterStatusBackendIA();
+  return Boolean(data.ok && data.openrouter);
 }
 
 export async function gerarTextoOpenRouter(
@@ -202,7 +216,7 @@ export async function gerarTextoOpenRouter(
   while (tentativaAtual < MAX_TENTATIVAS) {
     try {
       const modeloDaRequisicao =
-        model === "unsloth-auto" || !model
+        !model || model === "unsloth-auto"
           ? "unsloth-auto"
           : model === "openrouter/free" && modeloLivreFixado
             ? modeloLivreFixado
