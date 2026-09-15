@@ -122,13 +122,11 @@ def _resolver_placeholders(modificacoes: dict) -> None:
             if not isinstance(valor, str):
                 return match.group(0)
             return resolver_texto(valor, pilha | {chave})
-
         return PLACEHOLDER_RE.sub(substituir, texto)
 
     for chave, valor in list(valores.items()):
         if isinstance(valor, str):
             valores[chave] = resolver_texto(valor, frozenset({chave}))
-
     for chave, valor in valores.items():
         modificacoes[chave] = valor
 
@@ -154,12 +152,16 @@ def _eh_contratacao_direta(dados_usuario: dict) -> bool:
     return modalidade in {"DISPENSA_EMAIL", "DISPENSA_BLL"}
 
 
+def _arquivos_base_por_fluxo(dados_usuario: dict) -> list[str]:
+    if _eh_contratacao_direta(dados_usuario):
+        return list(getattr(config, "BASE_FILES_CONTRATACAO_DIRETA", []))
+    return list(config.BASE_FILES)
+
+
 def gerar_zip(dados_usuario: dict, dados_ia: dict, session_id: str) -> tuple[Path, str]:
     temp_dir = Path(tempfile.mkdtemp(prefix=f"fase_prep_{session_id}_"))
-
     try:
         modificacoes = filtrar_chaves_docx(montar_variaveis_fixas(dados_usuario))
-
         for chave, valor in dados_ia.items():
             chave_docx = chave if chave.startswith("{{") and chave.endswith("}}") else f"{{{{{chave}}}}}"
             modificacoes[chave_docx] = valor
@@ -185,12 +187,10 @@ def gerar_zip(dados_usuario: dict, dados_ia: dict, session_id: str) -> tuple[Pat
             itens_str = str(itens_json)
             if itens_str.startswith("__TABLE__"):
                 itens_str = itens_str.replace("__TABLE__", "", 1)
-
             try:
                 itens = json.loads(itens_str) if isinstance(itens_str, str) else itens_json
                 itens_formatados = []
                 itens_sem_valor = []
-
                 for item in itens:
                     try:
                         valor_unit = float(item.get("valor", 0))
@@ -201,33 +201,15 @@ def gerar_zip(dados_usuario: dict, dados_ia: dict, session_id: str) -> tuple[Pat
                     except (ValueError, TypeError):
                         qtd = 0.0
                     total = valor_unit * qtd
-
-                    itens_formatados.append({
-                        "Item": item.get("numero", ""),
-                        "Descrição": item.get("descricao", ""),
-                        "UN": item.get("un", ""),
-                        "Qtd": item.get("qtd", ""),
-                        "Vlr Unit.": _formata_moeda(valor_unit),
-                        "Total": _formata_moeda(total)
-                    })
-
-                    itens_sem_valor.append({
-                        "Item": item.get("numero", ""),
-                        "Descrição": item.get("descricao", ""),
-                        "UN": item.get("un", ""),
-                        "Qtd": item.get("qtd", "")
-                    })
-
+                    itens_formatados.append({"Item": item.get("numero", ""), "Descrição": item.get("descricao", ""), "UN": item.get("un", ""), "Qtd": item.get("qtd", ""), "Vlr Unit.": _formata_moeda(valor_unit), "Total": _formata_moeda(total)})
+                    itens_sem_valor.append({"Item": item.get("numero", ""), "Descrição": item.get("descricao", ""), "UN": item.get("un", ""), "Qtd": item.get("qtd", "")})
                 modificacoes["{{ITENS}}"] = f"__TABLE__{json.dumps(itens_formatados, ensure_ascii=False)}"
                 modificacoes["{{ITENS_SEMVALOR}}"] = f"__TABLE__{json.dumps(itens_sem_valor, ensure_ascii=False)}"
             except Exception:
                 if not str(itens_json).startswith("__TABLE__"):
                     modificacoes["{{ITENS}}"] = f"__TABLE__{str(itens_json)}"
 
-        arquivos_base = list(config.BASE_FILES)
-        if _eh_contratacao_direta(dados_usuario):
-            arquivos_base.extend(getattr(config, "BASE_FILES_CONTRATACAO_DIRETA", []))
-
+        arquivos_base = _arquivos_base_por_fluxo(dados_usuario)
         arquivos_gerados = []
         for arq in arquivos_base:
             cam_origem = os.path.join(config.PASTA_MODELOS, arq)
@@ -237,14 +219,14 @@ def gerar_zip(dados_usuario: dict, dados_ia: dict, session_id: str) -> tuple[Pat
                 arquivos_gerados.append(cam_destino)
 
         if not arquivos_gerados:
-            raise RuntimeError("Nenhum documento base encontrado.")
+            raise RuntimeError("Nenhum documento base encontrado para o fluxo selecionado.")
 
-        zip_filename = f"FasePreparatoria_{session_id[:6]}.zip"
+        nome_fluxo = "ContratacaoDireta" if _eh_contratacao_direta(dados_usuario) else "FasePreparatoria"
+        zip_filename = f"{nome_fluxo}_{session_id[:6]}.zip"
         caminho_zip = temp_dir / zip_filename
         with zipfile.ZipFile(caminho_zip, "w", zipfile.ZIP_DEFLATED) as zipf:
             for arq in arquivos_gerados:
                 zipf.write(arq, arq.name)
-
         return caminho_zip, zip_filename
     except Exception:
         shutil.rmtree(temp_dir, ignore_errors=True)
@@ -255,12 +237,7 @@ def _smtp_client():
     if not SMTP_HOST or not SMTP_USERNAME or not SMTP_PASSWORD:
         raise RuntimeError("SMTP do Licita.AI não está configurado. Defina LICITA_SMTP_HOST, LICITA_SMTP_USERNAME e LICITA_SMTP_PASSWORD.")
     if SMTP_SECURITY == "ssl":
-        return smtplib.SMTP_SSL(
-            SMTP_HOST,
-            SMTP_PORT,
-            timeout=SMTP_TIMEOUT_SECONDS,
-            context=ssl.create_default_context(),
-        )
+        return smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT_SECONDS, context=ssl.create_default_context())
     client = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT_SECONDS)
     client.ehlo()
     if SMTP_SECURITY == "starttls":
@@ -278,21 +255,9 @@ def _enviar_email(recipient: str, zip_path: Path, filename: str, job_id: str) ->
     message["To"] = recipient
     message["Bcc"] = SMTP_FROM or SMTP_USERNAME
     message["Subject"] = "Licita.AI - Fase Preparatória"
-    message.set_content(
-        "Prezados,\n\n"
-        "A solicitação realizada pelo Licita.AI foi processada com sucesso.\n\n"
-        f"Identificador da solicitação: {job_id}\n"
-        "Os documentos da fase preparatória seguem anexados neste e-mail.\n\n"
-        "Atenciosamente,\n"
-        "Licita.AI"
-    )
+    message.set_content("Prezados,\n\nA solicitação realizada pelo Licita.AI foi processada com sucesso.\n\n" + f"Identificador da solicitação: {job_id}\n" + "Os documentos da fase preparatória seguem anexados neste e-mail.\n\nAtenciosamente,\nLicita.AI")
     with zip_path.open("rb") as handle:
-        message.add_attachment(
-            handle.read(),
-            maintype="application",
-            subtype="zip",
-            filename=filename,
-        )
+        message.add_attachment(handle.read(), maintype="application", subtype="zip", filename=filename)
     with _smtp_client() as client:
         client.login(SMTP_USERNAME, SMTP_PASSWORD)
         client.send_message(message)
@@ -302,31 +267,13 @@ def enqueue_job(email: str, dados_usuario: dict, dados_ia: dict, instrucoes: str
     email = email.strip()
     if not EMAIL_RE.fullmatch(email):
         raise ValueError("Informe um e-mail válido para receber os documentos.")
-
     validar_consistencia_dados(dados_usuario)
     _ensure_queue_dir()
     job_id = uuid.uuid4().hex
     status_token = secrets.token_urlsafe(32)
-    job = {
-        "version": 2,
-        "job_id": job_id,
-        "status": "queued",
-        "created_at": _utc_now(),
-        "attempts": 0,
-        "email": email,
-        "status_token": status_token,
-        "instrucoes": instrucoes.strip(),
-        "dados_usuario": dados_usuario,
-        "dados_ia": dados_ia,
-    }
+    job = {"version": 3, "job_id": job_id, "status": "queued", "created_at": _utc_now(), "attempts": 0, "email": email, "status_token": status_token, "instrucoes": instrucoes.strip(), "dados_usuario": dados_usuario, "dados_ia": dados_ia}
     _write_json(_job_path(job_id), job)
-    return {
-        "job_id": job_id,
-        "status": "queued",
-        "email": email,
-        "status_token": status_token,
-        "message": "Solicitação registrada na fila. Os documentos serão gerados no backend e enviados por e-mail.",
-    }
+    return {"job_id": job_id, "status": "queued", "email": email, "status_token": status_token, "message": "Solicitação registrada na fila. O processamento da IA e o envio por e-mail ocorrerão em segundo plano."}
 
 
 def get_job(job_id: str) -> dict | None:
@@ -374,32 +321,19 @@ def _process_one_job() -> None:
     claimed = _claim_next_job()
     if claimed is None:
         return
-
     processing_path, job = claimed
     job_id = job["job_id"]
     artifact_path = _artifact_path(job_id)
     temp_root = None
     zip_filename = f"FasePreparatoria_{job_id[:6]}.zip"
     try:
-        if artifact_path.is_file():
-            zip_path = artifact_path
-        else:
-            generated_path, zip_filename = gerar_zip(job.get("dados_usuario", {}), job.get("dados_ia", {}), job_id)
-            temp_root = generated_path.parent
-            os.replace(generated_path, artifact_path)
-            zip_path = artifact_path
-
-        _enviar_email(job["email"], zip_path, zip_filename, job_id)
-
+        from fila_pipeline import process_pipeline
+        generated_path, zip_filename = process_pipeline(job)
+        temp_root = generated_path.parent
+        os.replace(generated_path, artifact_path)
+        _enviar_email(job["email"], artifact_path, zip_filename, job_id)
         done_path = _job_path(job_id, ".done")
-        job.update({
-            "status": "sent",
-            "completed_at": _utc_now(),
-            "result": {
-                "filename": zip_filename,
-                "recipient": job["email"],
-            },
-        })
+        job.update({"status": "sent", "completed_at": _utc_now(), "current_stage": "CONCLUIDO", "result": {"filename": zip_filename, "recipient": job["email"]}})
         _write_json(done_path, job)
         artifact_path.unlink(missing_ok=True)
         processing_path.unlink(missing_ok=True)
@@ -407,19 +341,15 @@ def _process_one_job() -> None:
         attempts = int(job.get("attempts", 1))
         job["last_error"] = str(exc)
         job["last_error_at"] = _utc_now()
-
         if attempts < MAX_ATTEMPTS:
             job["status"] = "queued"
-            retry_at = datetime.now(timezone.utc) + timedelta(seconds=_retry_delay_seconds(attempts))
-            job["retry_at"] = retry_at.isoformat()
-            pending_path = _job_path(job_id)
-            _write_json(pending_path, job)
+            job["retry_at"] = (datetime.now(timezone.utc) + timedelta(seconds=_retry_delay_seconds(attempts))).isoformat()
+            _write_json(_job_path(job_id), job)
             processing_path.unlink(missing_ok=True)
         else:
             job["status"] = "failed"
             job.pop("retry_at", None)
-            failed_path = _job_path(job_id, ".failed")
-            _write_json(failed_path, job)
+            _write_json(_job_path(job_id, ".failed"), job)
             processing_path.unlink(missing_ok=True)
             artifact_path.unlink(missing_ok=True)
     finally:
