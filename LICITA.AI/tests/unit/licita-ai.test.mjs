@@ -129,10 +129,12 @@ test("llm repete falha temporária e encerra em erro fatal", async () => {
 });
 
 test("configIA mantém a janela aberta quando usada nas configurações", () => {
-  const source = fs.readFileSync(licitaPath("src/components/configIA.tsx"), "utf8");
-  assert.match(source, /textoBotao === "Acessar Sistema"\) onSuccess/);
-  assert.match(source, /Atualizar status/);
-  assert.match(source, /Salvar Alterações/);
+  const configSource = fs.readFileSync(licitaPath("src/components/configIA.tsx"), "utf8");
+  const wizardSource = fs.readFileSync(licitaPath("src/views/wizard.tsx"), "utf8");
+  assert.match(configSource, /textoBotao === "Acessar Sistema"\) onSuccess/);
+  assert.match(configSource, /Atualizar status/);
+  assert.match(wizardSource, /textoBotao="Salvar Alterações"/);
+  assert.match(wizardSource, /onSuccess=\{\(\) => setMostrarConfig\(false\)\}/);
 });
 
 test("index.html usa caminho relativo compatível com GitHub Pages", () => {
