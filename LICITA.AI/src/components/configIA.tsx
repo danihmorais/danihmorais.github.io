@@ -52,8 +52,8 @@ export default function ConfigIA({ onSuccess, textoBotao = "Acessar Sistema" }: 
   };
 
   const salvar = () => {
-    salvarConfigIA({ provedor: "backend", modelo });
-    if (status.ok) onSuccess?.();
+    salvarConfigIA({ provedor: "openrouter", modelo });
+    if (status.ok && textoBotao === "Acessar Sistema") onSuccess?.();
   };
 
   const opcoesModelo = MODELOS_DISPONIVEIS.backend;
