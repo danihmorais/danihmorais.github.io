@@ -184,21 +184,13 @@ test("geração de contratação direta exige os sete campos específicos", asyn
   assert.match(prompt, /art\. 72/);
 });
 
-void MemoryStorage;
-
-test("api preflight audita nomes e gera conteúdo específico antes de enfileirar contratação direta", async () => {
+test("fila normal envia uma única etapa de IA para DFD, ETP e TR", async () => {
   let chamada = null;
-  const storage = new MemoryStorage();
   const modulo = loadTsModule("src/api.ts", {
-    env: { VITE_API_URL: "https://api.example.test/" },
     replacements: [
       [
-        'import { MODELO_PADRAO_POR_PROVEDOR } from "./providers/llm";',
-        'const { MODELO_PADRAO_POR_PROVEDOR } = __injected_llm;',
-      ],
-      [
-        'import { revisarMarcasItens, gerarDadosContratacaoDireta } from "./providers/services/contratacaoDiretaIA";',
-        'const { revisarMarcasItens, gerarDadosContratacaoDireta } = __injected_direta;',
+        'import { construirPrompt } from "./providers/services/geradorIA";',
+        'const { construirPrompt } = __injected_gerador;',
       ],
       [
         'import { lerConfigIA } from "./utils/storageLocal";',
@@ -206,17 +198,11 @@ test("api preflight audita nomes e gera conteúdo específico antes de enfileira
       ],
     ],
     globals: {
-      __injected_llm: { MODELO_PADRAO_POR_PROVEDOR: { openrouter: "modelo-padrao" } },
-      __injected_storage: { lerConfigIA: () => ({ provedor: "openrouter", chave_api: "chave", modelo: "modelo" }) },
-      __injected_direta: {
-        revisarMarcasItens: async (itens) => ({
-          itens: [{ ...itens[0], descricao: "Notebook ThinkPad E14" }],
-          auditoria: [{ numero: 1, alterado: true, nome_original: itens[0].descricao, nome_revisado: "Notebook ThinkPad E14" }],
-        }),
-        gerarDadosContratacaoDireta: async () => ({
-          FUNDAMENTO_CONTRATACAO_DIRETA: "Art. 75",
-          JUSTIFICATIVA_CONTRATACAO_DIRETA: "Justificativa",
-        }),
+      __injected_gerador: {
+        construirPrompt: (_dados, _meepp, etapa) => `PROMPT_${etapa}`,
+      },
+      __injected_storage: {
+        lerConfigIA: () => ({ provedor: "openrouter", modelo: "modelo-teste" }),
       },
       fetch: async (url, options) => {
         chamada = { url, options };
@@ -230,26 +216,73 @@ test("api preflight audita nomes e gera conteúdo específico antes de enfileira
     },
   });
 
-  const dados = {
+  await modulo.gerarFasePreparatoria({
     email: "teste@example.com",
-    instrucoes: "Sem justificativa de marca.",
+    instrucoes: "Gerar com coerência global.",
+    dados_usuario: {
+      "{{MODALIDADE}}": "PREGAO_ELETRONICO",
+      "{{ITENS}}": JSON.stringify([{ numero: 1, descricao: "Notebook", un: "UN", qtd: 1, valor: 1000 }]),
+    },
+  });
+
+  const body = JSON.parse(chamada.options.body);
+  const etapas = body.dados_ia.__LICITA_PIPELINE__.etapas;
+  assert.equal(chamada.url, "https://api.example.test/licita/api/gerar-fase-preparatoria");
+  assert.equal(etapas.filter((etapa) => etapa.tipo === "geracao_unificada").length, 1);
+  assert.deepEqual(etapas.filter((etapa) => etapa.tipo === "geracao_unificada").map((etapa) => etapa.id), ["FASE_PREPARATORIA"]);
+  assert.equal(etapas.filter((etapa) => etapa.id === "DFD").length, 0);
+  assert.equal(etapas.filter((etapa) => etapa.id === "ETP").length, 0);
+  assert.equal(etapas.filter((etapa) => etapa.id === "TR").length, 0);
+  assert.match(etapas.find((etapa) => etapa.id === "FASE_PREPARATORIA").prompt, /DFD/);
+  assert.match(etapas.find((etapa) => etapa.id === "FASE_PREPARATORIA").prompt, /ETP/);
+  assert.match(etapas.find((etapa) => etapa.id === "FASE_PREPARATORIA").prompt, /TR/);
+});
+
+test("fila de contratação direta não cria DFD, ETP ou TR", async () => {
+  let chamada = null;
+  const modulo = loadTsModule("src/api.ts", {
+    replacements: [
+      [
+        'import { construirPrompt } from "./providers/services/geradorIA";',
+        'const { construirPrompt } = __injected_gerador;',
+      ],
+      [
+        'import { lerConfigIA } from "./utils/storageLocal";',
+        'const { lerConfigIA } = __injected_storage;',
+      ],
+    ],
+    globals: {
+      __injected_gerador: {
+        construirPrompt: () => "PROMPT_TESTE",
+      },
+      __injected_storage: {
+        lerConfigIA: () => ({ provedor: "openrouter", modelo: "modelo-teste" }),
+      },
+      fetch: async (url, options) => {
+        chamada = { url, options };
+        return {
+          ok: true,
+          async json() {
+            return { job_id: "b".repeat(32), status: "queued", email: "teste@example.com", message: "ok" };
+          },
+        };
+      },
+    },
+  });
+
+  await modulo.gerarFasePreparatoria({
+    email: "teste@example.com",
+    instrucoes: "Contratação direta.",
     dados_usuario: {
       "{{MODALIDADE}}": "DISPENSA_BLL",
-      "{{ITENS}}": JSON.stringify([
-        { numero: 1, descricao: "Notebook Lenovo ThinkPad E14", un: "UN", qtd: 1, valor: 1000 },
-      ]),
-      ITENS_NOMES: JSON.stringify([{ numero: 1, nome: "Notebook Lenovo ThinkPad E14" }]),
+      "{{ITENS}}": JSON.stringify([{ numero: 1, descricao: "Notebook", un: "UN", qtd: 1, valor: 1000 }]),
     },
-    dados_ia: { JUSTIFICATIVA: "DFD" },
-  };
+  });
 
-  await modulo.gerarFasePreparatoria(dados);
   const body = JSON.parse(chamada.options.body);
-  const itens = JSON.parse(body.dados_usuario["{{ITENS}}"]);
-
-  assert.equal(chamada.url, "https://api.example.test/licita/api/gerar-fase-preparatoria");
-  assert.equal(itens[0].descricao, "Notebook ThinkPad E14");
-  assert.equal(JSON.parse(body.dados_usuario.ITENS_NOMES)[0].nome, "Notebook ThinkPad E14");
-  assert.match(body.dados_ia.ITENS_AUDITORIA_MARCAS, /Notebook Lenovo ThinkPad E14/);
-  assert.equal(body.dados_ia.FUNDAMENTO_CONTRATACAO_DIRETA, "Art. 75");
+  const etapas = body.dados_ia.__LICITA_PIPELINE__.etapas;
+  assert.equal(etapas.filter((etapa) => etapa.id === "CONTRATACAO_DIRETA").length, 1);
+  assert.equal(etapas.filter((etapa) => etapa.id === "DFD" || etapa.id === "ETP" || etapa.id === "TR" || etapa.id === "FASE_PREPARATORIA").length, 0);
 });
+
+void MemoryStorage;
