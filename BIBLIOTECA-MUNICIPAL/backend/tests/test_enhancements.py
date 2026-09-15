@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 def setup_client(tmp_path, monkeypatch):
     data_dir=tmp_path/'data'
+    data_dir.mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv('BIBLIOTECA_DATA_DIR',str(data_dir))
     import main
     main.DATA_DIR=data_dir
