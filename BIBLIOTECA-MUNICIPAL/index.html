@@ -1,1 +1,9 @@
-<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#174a36"><title>Biblioteca Municipal Carlos Eduardo Telles</title></head><body><div id="root"></div><script type="module" src="./src/bootstrap.tsx"></script></body></html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#174a36"><title>Biblioteca Municipal Carlos Eduardo Telles</title></head><body><div id="root"></div><script type="module">
+import React from 'react'
+import { createRoot } from 'react-dom/client'
+import * as Main from './src/main.tsx'
+
+const App = Main.App
+if (!App) throw new Error('Componente App não encontrado.')
+createRoot(document.getElementById('root')).render(React.createElement(App))
+</script></body></html>
