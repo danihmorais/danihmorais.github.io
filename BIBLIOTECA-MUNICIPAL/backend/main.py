@@ -7,14 +7,13 @@ import json
 import os
 import re
 import secrets
-import shutil
 import sqlite3
 import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
@@ -167,7 +166,7 @@ def public_user(row):
     return {"id": row["id"], "nome": row["nome"], "login": row["login"], "perfil": row["perfil"]}
 
 
-def current_user(authorization: str | None = None):
+def current_user(authorization: str | None = Header(default=None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(401, "Autenticação necessária.")
     token = authorization[7:].strip()
@@ -184,7 +183,7 @@ async def lifespan(_app):
     SESSIONS.clear()
 
 
-app = FastAPI(title="Biblioteca Municipal Carlos Eduardo Telles", version="1.1.0", lifespan=lifespan)
+app = FastAPI(title="Biblioteca Municipal Carlos Eduardo Telles", version="1.1.1", lifespan=lifespan)
 origins = {"https://danihmorais.github.io", "http://localhost", "http://localhost:5173", "http://127.0.0.1:5173"}
 origins.update(x.strip().rstrip("/") for x in os.getenv("CORS_ORIGINS", "").split(",") if x.strip())
 app.add_middleware(CORSMiddleware, allow_origins=sorted(origins), allow_credentials=False, allow_methods=["*"], allow_headers=["*"])
@@ -270,7 +269,7 @@ def login(data: LoginIn):
 
 
 @app.post("/api/auth/logout")
-def logout(authorization: str | None = None):
+def logout(authorization: str | None = Header(default=None)):
     if authorization and authorization.startswith("Bearer "):
         SESSIONS.pop(authorization[7:].strip(), None)
     return {"ok": True}
