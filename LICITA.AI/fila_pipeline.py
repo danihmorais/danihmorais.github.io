@@ -3,9 +3,10 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
+import threading
 import time
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 import httpx
 
@@ -59,7 +60,6 @@ def _extrair_json(texto: str) -> dict:
     fim = texto.rfind("}")
     if inicio != -1 and fim != -1:
         texto = texto[inicio:fim + 1]
-
     try:
         resultado = json.loads(texto)
     except json.JSONDecodeError:
@@ -98,7 +98,6 @@ def _extrair_json(texto: str) -> dict:
                 resultado = json.loads(texto)
             except json.JSONDecodeError as exc:
                 raise RuntimeError(f"O texto gerado pela IA está corrompido: {exc}") from exc
-
     if not isinstance(resultado, dict):
         raise RuntimeError("A IA não retornou um objeto JSON.")
     return resultado
@@ -107,17 +106,10 @@ def _extrair_json(texto: str) -> dict:
 def _validar_json_geracao(resultado: dict) -> dict:
     if not resultado:
         raise RuntimeError("A IA retornou um objeto JSON vazio.")
-    vazios = [
-        chave for chave, valor in resultado.items()
-        if value_is_empty(valor)
-    ]
+    vazios = [chave for chave, valor in resultado.items() if isinstance(valor, str) and not valor.strip()]
     if vazios:
         raise RuntimeError(f"A IA retornou campos vazios: {', '.join(vazios)}")
     return {str(chave): valor for chave, valor in resultado.items()}
-
-
-def value_is_empty(valor) -> bool:
-    return isinstance(valor, str) and not valor.strip()
 
 
 def _tokenizar(nome: str) -> list[str]:
@@ -156,13 +148,11 @@ def _aplicar_auditoria_marcas(dados_usuario: dict, resposta: dict) -> tuple[dict
     por_numero = {str(item.get("numero")): item for item in retorno if isinstance(item, dict) and item.get("numero") is not None}
     itens_revisados = []
     auditoria = []
-
     for index, item in enumerate(itens):
         numero = item.get("numero", index + 1) if isinstance(item, dict) else index + 1
         original = re.sub(r"\s+", " ", str((item or {}).get("descricao", "")).strip()) if isinstance(item, dict) else ""
         candidato = por_numero.get(str(numero)) or {}
         proposto = re.sub(r"\s+", " ", str(candidato.get("nome_revisado", original)).strip())
-
         alterado = False
         motivo = "Nenhuma marca sem justificativa identificada."
         if proposto and proposto != original:
@@ -172,7 +162,6 @@ def _aplicar_auditoria_marcas(dados_usuario: dict, resposta: dict) -> tuple[dict
             else:
                 proposto = original
                 motivo = "Alteração descartada porque ultrapassava a remoção isolada de marca."
-
         novo_item = dict(item) if isinstance(item, dict) else item
         if isinstance(novo_item, dict) and alterado:
             novo_item["descricao"] = proposto
@@ -188,10 +177,7 @@ def _aplicar_auditoria_marcas(dados_usuario: dict, resposta: dict) -> tuple[dict
     novos_dados = dict(dados_usuario)
     novos_dados["{{ITENS}}"] = json.dumps(itens_revisados, ensure_ascii=False)
     novos_dados["ITENS_NOMES"] = json.dumps([
-        {
-            "numero": item.get("numero", index + 1),
-            "nome": str(item.get("descricao", "")).strip(),
-        }
+        {"numero": item.get("numero", index + 1), "nome": str(item.get("descricao", "")).strip()}
         for index, item in enumerate(itens_revisados)
         if isinstance(item, dict) and str(item.get("descricao", "")).strip()
     ], ensure_ascii=False)
@@ -209,7 +195,6 @@ def _chamar_ia(prompt: str, model: str, temperature: float = 0.3) -> tuple[dict,
     base_url, api_key, modelo = _provider_config(model)
     if not base_url or not api_key:
         raise RuntimeError("O provedor de IA da fila não está configurado no backend.")
-
     payload = {
         "model": modelo,
         "temperature": float(temperature),
@@ -217,25 +202,20 @@ def _chamar_ia(prompt: str, model: str, temperature: float = 0.3) -> tuple[dict,
         "response_format": {"type": "json_object"},
     }
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
-
     with httpx.Client(timeout=AI_TIMEOUT_SECONDS) as client:
         response = client.post(f"{base_url}/chat/completions", headers=headers, json=payload)
-
     if response.status_code >= 400:
-        detalhe = response.text[:500]
-        raise RuntimeError(f"IA HTTP {response.status_code}: {detalhe}")
+        raise RuntimeError(f"IA HTTP {response.status_code}: {response.text[:500]}")
     try:
         data = response.json()
     except ValueError as exc:
         raise RuntimeError("O provedor de IA retornou JSON inválido.") from exc
-
     choice = (data.get("choices") or [None])[0]
     content = ((choice or {}).get("message") or {}).get("content")
     if isinstance(content, list):
         content = "".join(str(part.get("text", "")) if isinstance(part, dict) else str(part) for part in content)
     resultado = _extrair_json(str(content or ""))
-    modelo_resolvido = str(data.get("model") or modelo)
-    return resultado, modelo_resolvido
+    return resultado, str(data.get("model") or modelo)
 
 
 def _delay(attempts: int) -> int:
@@ -246,15 +226,16 @@ def _process_pipeline(job: dict) -> None:
     dados_ia_container = job.get("dados_ia") if isinstance(job.get("dados_ia"), dict) else {}
     pipeline = dados_ia_container.get("__LICITA_PIPELINE__")
     if not isinstance(pipeline, dict):
-        raise RuntimeError("Solicitação antiga sem pipeline assíncrono; recrie a solicitação.")
+        raise RuntimeError("Solicitação sem pipeline de IA assíncrona; recrie a solicitação.")
 
     etapas = pipeline.get("etapas")
     if not isinstance(etapas, list) or not etapas:
         raise RuntimeError("A solicitação não possui etapas de IA válidas.")
 
-    dados_usuario = dict(job.get("dados_usuario") or {})
-    resultados: dict[str, dict] = {}
-    modelo = str(pipeline.get("model") or "openrouter/free")
+    dados_usuario = dict(job.get("pipeline_dados_usuario") or job.get("dados_usuario") or {})
+    resultados = dict(job.get("pipeline_results") or {})
+    completed = {str(item).upper() for item in job.get("completed_stages", [])}
+    modelo = str(job.get("resolved_model") or pipeline.get("model") or "openrouter/free")
     temperatura = float(pipeline.get("temperature", 0.3))
 
     for etapa in etapas:
@@ -263,6 +244,8 @@ def _process_pipeline(job: dict) -> None:
         prompt = str(etapa.get("prompt", ""))
         if not etapa_id or not prompt:
             raise RuntimeError("Há uma etapa de IA incompleta na fila.")
+        if etapa_id in completed and etapa_id in resultados:
+            continue
 
         job["current_stage"] = etapa_id
         job["current_stage_started_at"] = _utc_now()
@@ -271,24 +254,28 @@ def _process_pipeline(job: dict) -> None:
 
         prompt_processado = _substituir_contextos(prompt, dados_usuario, resultados)
         resultado, modelo_resolvido = _chamar_ia(prompt_processado, modelo, temperatura)
-        if modelo == "openrouter/free" and modelo_resolvido:
+        if pipeline.get("model") == "openrouter/free" and modelo_resolvido:
             modelo = modelo_resolvido
             job["resolved_model"] = modelo_resolvido
 
         if etapa_tipo == "auditoria_marcas":
-            dados_usuario, auditoria = _aplicar_auditoria_marcas(dados_usuario, resultado)
-            resultados[etapa_id] = auditoria
+            dados_usuario, resultado_final = _aplicar_auditoria_marcas(dados_usuario, resultado)
+            resultados[etapa_id] = resultado_final
         else:
             resultados[etapa_id] = _validar_json_geracao(resultado)
 
-        job["completed_stages"] = [str(item.get("id", "")).upper() for item in etapas if str(item.get("id", "")).upper() in resultados]
+        completed.add(etapa_id)
+        job["pipeline_results"] = resultados
+        job["pipeline_dados_usuario"] = dados_usuario
+        job["completed_stages"] = sorted(completed)
         _write_json(_job_path(job["job_id"], ".processing"), job)
 
-    dados_ia_final = {
-        chave: valor
-        for chave, valor in resultados.items()
-        if chave not in {"AUDITORIA_MARCAS"}
-    }
+    dados_ia_final: dict = {}
+    for etapa_id, resultado in resultados.items():
+        if etapa_id == "AUDITORIA_MARCAS" or not isinstance(resultado, dict):
+            continue
+        dados_ia_final.update(resultado)
+
     generated_path, zip_filename = gerar_zip(dados_usuario, dados_ia_final, job["job_id"])
     temp_root = generated_path.parent
     artifact_path = _artifact_path(job["job_id"])
@@ -296,10 +283,7 @@ def _process_pipeline(job: dict) -> None:
         artifact_path.unlink(missing_ok=True)
         os.replace(generated_path, artifact_path)
     finally:
-        try:
-            __import__("shutil").rmtree(temp_root, ignore_errors=True)
-        except OSError:
-            pass
+        shutil.rmtree(temp_root, ignore_errors=True)
 
     job["dados_usuario_processados"] = dados_usuario
     job["dados_ia"] = dados_ia_final
@@ -325,14 +309,12 @@ def _process_one_job() -> None:
     claimed = _claim_next_job()
     if claimed is None:
         return
-
     processing_path, job = claimed
     try:
         pipeline = (job.get("dados_ia") or {}).get("__LICITA_PIPELINE__")
-        if isinstance(pipeline, dict):
-            _process_pipeline(job)
-            return
-        raise RuntimeError("Solicitação sem pipeline de IA assíncrona.")
+        if not isinstance(pipeline, dict):
+            raise RuntimeError("Solicitação sem pipeline de IA assíncrona; recrie a solicitação.")
+        _process_pipeline(job)
     except Exception as exc:
         attempts = int(job.get("attempts", 1))
         job["last_error"] = str(exc)
@@ -360,7 +342,7 @@ def _worker_loop() -> None:
         time.sleep(POLL_INTERVAL_SECONDS)
 
 
-_worker_thread = None
+_worker_thread: threading.Thread | None = None
 
 
 def iniciar_worker() -> None:
@@ -368,5 +350,5 @@ def iniciar_worker() -> None:
     if _worker_thread is not None and _worker_thread.is_alive():
         return
     QUEUE_DIR.mkdir(parents=True, exist_ok=True)
-    _worker_thread = __import__("threading").Thread(target=_worker_loop, name="licita-ai-pipeline", daemon=True)
+    _worker_thread = threading.Thread(target=_worker_loop, name="licita-ai-pipeline", daemon=True)
     _worker_thread.start()
