@@ -69,9 +69,17 @@ app.mount("/monta", app_monta)
 app.mount("/email", app_email)
 app.mount("/geradorextrato", app_extrato)
 
+biblioteca_data_dir = site_root / "BIBLIOTECA-MUNICIPAL" / "data"
+os.environ.setdefault("BIBLIOTECA_DATA_DIR", str(biblioteca_data_dir))
+app_biblioteca = load_app_from_path(
+    "biblioteca_main",
+    "BIBLIOTECA-MUNICIPAL/backend/main.py",
+    "BIBLIOTECA-MUNICIPAL/backend",
+)
+app_biblioteca.init_db()
+app.mount("/biblioteca-api", app_biblioteca)
 
-# Pasta física usada pelos Documentos da Licitação.
-# Mantemos DOCUMENTOS_MODELO_DIR como alias para compatibilidade com a configuração atual.
+
 DEFAULT_DOCUMENTS_DIR = "/run/media/daniel/c1eb5cb7-675f-4e8c-9564-4dabc66d9164"
 
 
@@ -200,7 +208,6 @@ async def health():
 
 @app.get("/files")
 async def list_model_files():
-    """Lista os documentos disponibilizados pelo backend."""
     root = _documents_root()
     entries = []
     for path in root.rglob("*"):
