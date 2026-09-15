@@ -1,6 +1,7 @@
 import main
 main.init_db()
 import bootstrap_admin
+import access_routes
 import route_fix
 import security
 import uvicorn
