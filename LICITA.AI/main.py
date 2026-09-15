@@ -10,7 +10,8 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from fila import EMAIL_RE, QUEUE_DIR, enqueue_job, get_job, iniciar_worker
+from fila import EMAIL_RE, QUEUE_DIR, enqueue_job, get_job
+from fila_pipeline import iniciar_worker
 
 app = FastAPI(title="Licita.AI API")
 
@@ -31,7 +32,7 @@ class FasePreparatoriaRequest(BaseModel):
 
 
 class IAChatRequest(BaseModel):
-    model: str = Field(default="unsloth-auto", min_length=1, max_length=200)
+    model: str = Field(default="openrouter/free", min_length=1, max_length=200)
     prompt: str = Field(min_length=1, max_length=120_000)
     temperature: float = Field(default=0.3, ge=0, le=1.5)
     response_format: dict | None = None
@@ -146,7 +147,7 @@ async def _upstream_chat(base_url: str, api_key: str, payload: dict) -> tuple[di
 
 async def _gerar_ia(req: IAChatRequest) -> dict:
     payload = {
-        "model": req.model if req.model != "openrouter/free" else "openrouter/free",
+        "model": req.model,
         "temperature": float(req.temperature),
         "messages": [{"role": "user", "content": req.prompt.strip()}],
     }
@@ -154,19 +155,16 @@ async def _gerar_ia(req: IAChatRequest) -> dict:
         payload["response_format"] = req.response_format
 
     tentativas: list[tuple[str, str, str]] = []
-    if req.model in {"unsloth-auto", ""}:
+    if req.model == "unsloth-auto" or req.model.startswith("unsloth"):
         tentativas.append(("unsloth", API_UNSLOTH_URL, API_UNSLOTH_KEY))
-    elif req.model.startswith("unsloth"):
-        tentativas.append(("unsloth", API_UNSLOTH_URL, API_UNSLOTH_KEY))
+        if API_OPENROUTER_KEY:
+            tentativas.append(("openrouter", API_OPENROUTER_URL, API_OPENROUTER_KEY))
     else:
-        tentativas.append(("openrouter", API_OPENROUTER_URL, API_OPENROUTER_KEY))
-
-    if tentativas[0][0] == "unsloth" and API_OPENROUTER_KEY:
         tentativas.append(("openrouter", API_OPENROUTER_URL, API_OPENROUTER_KEY))
 
     ultimo_status = 503
     for provider, base_url, api_key in tentativas:
-        if not base_url or (provider == "unsloth" and not API_UNSLOTH_URL) or (provider == "openrouter" and not api_key):
+        if not base_url or (provider == "unsloth" and not API_UNSLOTH_KEY) or (provider == "openrouter" and not api_key):
             continue
 
         data, status = await _upstream_chat(base_url, api_key, payload)
@@ -178,7 +176,6 @@ async def _gerar_ia(req: IAChatRequest) -> dict:
             if not content:
                 raise HTTPException(status_code=502, detail="O provedor de IA retornou uma resposta vazia.")
             return {"content": content, "model": model, "provider": provider}
-
         if status not in {408, 409, 425, 429, 500, 502, 503, 504}:
             break
 
@@ -284,6 +281,8 @@ async def consultar_fila(job_id: str, token: str | None = None):
         "started_at": job.get("started_at"),
         "completed_at": job.get("completed_at"),
         "attempts": job.get("attempts", 0),
+        "current_stage": job.get("current_stage"),
+        "completed_stages": job.get("completed_stages", []),
         "last_error": job.get("last_error"),
         "result": job.get("result"),
     }
