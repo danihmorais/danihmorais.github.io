@@ -4,7 +4,7 @@ import { ThemeContext } from "./context/ThemeContext";
 import Wizard from "./views/wizard";
 import ConfigIA from "./components/configIA";
 import { lerConfigIA } from "./utils/storageLocal";
-import { validarChaveOpenRouter, validarChaveUnsloth } from "./providers/llm";
+import { obterStatusBackendIA } from "./providers/llm";
 
 export default function App() {
   const [logado, setLogado] = useState(false);
@@ -13,30 +13,27 @@ export default function App() {
   const isDark = theme === "dark";
 
   useEffect(() => {
-    verificarApis();
-    verificarSessao();
-    const timer = setInterval(verificarApis, 60000);
+    void inicializar();
+    const timer = setInterval(() => void verificarApis(), 60000);
     return () => clearInterval(timer);
   }, []);
 
-  const verificarSessao = () => {
-    const config = lerConfigIA();
-    if (config?.chave_api) setLogado(true);
+  const verificarApis = async () => {
+    const status = await obterStatusBackendIA();
+    setStatusIA(status.ok);
+    return status;
   };
 
-  const verificarApis = async () => {
+  const inicializar = async () => {
     const config = lerConfigIA();
-    if (!config?.chave_api) { setStatusIA(null); return; }
-    try {
-      const ok = config.provedor === "unsloth" ? await validarChaveUnsloth() : await validarChaveOpenRouter(config.chave_api);
-      setStatusIA(ok);
-    } catch { setStatusIA(false); }
+    const status = await verificarApis();
+    if (config.configurada && status.ok) setLogado(true);
   };
 
   const obterStatus = () => {
-    if (statusIA === null) return { texto: "Configurando inteligência artificial...", cor: "var(--text-muted)" };
-    if (statusIA) return { texto: "IA local Unsloth conectada — OpenRouter disponível como fallback", cor: "var(--btn-success)" };
-    return { texto: "Falha na conexão com a IA configurada. O OpenRouter será usado quando disponível.", cor: "var(--btn-danger)" };
+    if (statusIA === null) return { texto: "Verificando o backend de inteligência artificial...", cor: "var(--text-muted)" };
+    if (statusIA) return { texto: "Backend conectado — Unsloth é o primário e OpenRouter é o fallback", cor: "var(--btn-success)" };
+    return { texto: "Backend conectado, mas nenhuma credencial de IA está disponível.", cor: "var(--btn-danger)" };
   };
 
   const status = obterStatus();
