@@ -8,21 +8,22 @@ export interface ConfigIA {
   configurada?: boolean;
 }
 
-const MODELO_PADRAO = "openrouter/free";
+const MODELO_PADRAO = "unsloth-auto";
 
 export function lerConfigIA(): ConfigIA {
   try {
     const raw = localStorage.getItem(CHAVE_CONFIG_IA);
     const salvo = raw ? JSON.parse(raw) : {};
+    const provedor = typeof salvo?.provedor === "string" && salvo.provedor.trim() ? salvo.provedor.trim() : "backend";
     return {
-      provedor: "openrouter",
+      provedor,
       chave_api: "backend",
       modelo: typeof salvo?.modelo === "string" && salvo.modelo.trim() ? salvo.modelo : MODELO_PADRAO,
       configurada: Boolean(salvo?.configurada),
     };
   } catch {
     return {
-      provedor: "openrouter",
+      provedor: "backend",
       chave_api: "backend",
       modelo: MODELO_PADRAO,
       configurada: false,
@@ -31,9 +32,10 @@ export function lerConfigIA(): ConfigIA {
 }
 
 export function salvarConfigIA(config: ConfigIA): void {
+  const provedor = typeof config.provedor === "string" && config.provedor.trim() ? config.provedor.trim() : "backend";
   const modelo = typeof config.modelo === "string" && config.modelo.trim() ? config.modelo.trim() : MODELO_PADRAO;
   localStorage.setItem(CHAVE_CONFIG_IA, JSON.stringify({
-    provedor: "openrouter",
+    provedor,
     modelo,
     configurada: true,
   }));
