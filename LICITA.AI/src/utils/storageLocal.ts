@@ -8,7 +8,7 @@ export interface ConfigIA {
   configurada?: boolean;
 }
 
-const MODELO_PADRAO = "unsloth-auto";
+const MODELO_PADRAO = "openrouter/free";
 
 export function lerConfigIA(): ConfigIA {
   try {
