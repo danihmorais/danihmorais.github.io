@@ -68,7 +68,7 @@ function montarRegrasMinimas(chavesEtapa: string[], dadosUsuario: Record<string,
         .join("\n");
 }
 
-function construirPrompt(dadosUsuario: Record<string, string>, meeppExclusivo: boolean, etapa: string): string {
+export function construirPrompt(dadosUsuario: Record<string, string>, meeppExclusivo: boolean, etapa: string): string {
     const objeto = dadosUsuario["{{OBJETO}}"] || "";
     const execucaoRaw = dadosUsuario["RAW_EXECUCAO"] || "";
     const instrucoesExtras = dadosUsuario["INSTRUCOES_EXTRAS"] || "";
@@ -82,20 +82,13 @@ function construirPrompt(dadosUsuario: Record<string, string>, meeppExclusivo: b
     const instrumento = dadosUsuario["{{INSTRUMENTO}}"] || "";
     const vigencia = dadosUsuario["{{VIGENCIA}}"] || "";
     const secretaria = dadosUsuario["{{SECRETARIAS}}"] || "";
-    
     const amostraOpt = (dadosUsuario["{{AMOST}}"] || "nao").toLowerCase();
     const vistoriaOpt = (dadosUsuario["{{VIST}}"] || "nao").toLowerCase();
     const amostraFormatada = ["sim", "s", "x"].includes(amostraOpt) ? "Sim" : "Não";
     const vistoriaFormatada = ["sim", "s", "x"].includes(vistoriaOpt) ? "Sim" : "Não";
-
     const camposExcluidos: string[] = [];
-    if (amostraFormatada === "Não") {
-        camposExcluidos.push("AMOSTRA_ETP", "AMOSTRA_TR");
-    }
-    if (vistoriaFormatada === "Não") {
-        camposExcluidos.push("VISTORIA_ETP");
-    }
-
+    if (amostraFormatada === "Não") camposExcluidos.push("AMOSTRA_ETP", "AMOSTRA_TR");
+    if (vistoriaFormatada === "Não") camposExcluidos.push("VISTORIA_ETP");
     const regrasGerais = `Você é um especialista sênior em licitações e contratos administrativos para a Prefeitura de São Francisco - SP.
 Atue conforme a Lei Federal nº 14.133/2021, jurisprudência consolidada do TCU, jurisprudência do TCE-SP, doutrina majoritária e boas práticas de governança pública.
 Os textos devem possuir linguagem técnica, formal, impessoal, jurídica e administrativa.
@@ -105,7 +98,6 @@ Priorize ampla competitividade, economicidade, eficiência, planejamento, motiva
 Observe especialmente: Lei 14.133/2021; LC 123/2006; Súmulas e jurisprudência do TCU; Jurisprudência do TCE-SP; Boas práticas de governança e planejamento das contratações públicas.
 Evite exigências restritivas ou cláusulas potencialmente limitadoras da competitividade.
 Os textos devem ser completos, extensos e aprofundados.`;
-
     let basePrompt = `OBJETO BASE DA CONTRATAÇÃO: ${objeto}
 NECESSIDADE ADMINISTRATIVA: ${necessidade}
 CONDIÇÕES DE EXECUÇÃO INFORMADAS: ${execucaoRaw}
@@ -116,16 +108,17 @@ SITUAÇÃO DO PAC: ${pacRaw}
 INSTRUMENTO: ${instrumento}
 VIGÊNCIA: ${vigencia}
 SECRETARIA/SETOR SOLICITANTE: ${secretaria}`;
-
-    if (instrucoesExtras) {
-        basePrompt += `\n\nINSTRUÇÕES COMPLEMENTARES OBRIGATÓRIAS:\n${instrucoesExtras}`;
-    }
-
+    if (instrucoesExtras) basePrompt += `\n\nINSTRUÇÕES COMPLEMENTARES OBRIGATÓRIAS:\n${instrucoesExtras}`;
     let chaves = "{}";
     let diretrizEtapa = "";
-
     if (etapa === "DFD") {
-        chaves = `{\n  "OBJETO": "",\n  "TIPO_OBJ": "",\n  "JUSTIFICATIVA": "",\n  "ESTIMATIVA_QUANTIDADES": "",\n  "RESULTADOS_ESPERADOS": ""\n}`;
+        chaves = `{
+  "OBJETO": "",
+  "TIPO_OBJ": "",
+  "JUSTIFICATIVA": "",
+  "ESTIMATIVA_QUANTIDADES": "",
+  "RESULTADOS_ESPERADOS": ""
+}`;
         diretrizEtapa = `ETAPA: DOCUMENTO DE FORMALIZAÇÃO DE DEMANDA.
 O OBJETO deve:
 1 - Se o instrumento for ARP, iniciar obrigatoriamente com 'Registro de preços para futura e eventual aquisição'.
@@ -136,35 +129,33 @@ O OBJETO deve:
 6 - Caso haja convênio, recurso vinculado ou programa governamental, mencionar expressamente.
 A JUSTIFICATIVA deve conter motivação administrativa detalhada, demonstração do interesse público, necessidade institucional, impactos da não contratação, alinhamento ao planejamento e continuidade administrativa.`;
     } else if (etapa === "ETP") {
-        chaves = `{\n  "REQUISITOS_ETP": "",\n  "SUBCONTRATACAO_ETP": "",\n  "ME_EPP_ETP": "",\n  "JUSTIFICATIVA_PAC": "",\n  "MERCADO": "",\n  "SOLUCAO": "",\n  "CRITERIOS_JUSTIFICATIVA_ETP": "",\n  "CRITERIOS_SUSTENTABILIDADE": "",\n  "MODALIDADE_JUSTIFICATIVA_ETP": "",\n  "PROVIDENCIAS_CONT": "",\n  "CORRELATAS_INTER": "",\n  "JUSTIFICATIVA_ESTIMATIVA": "",\n  "GARANTIAS_ETP": "",\n  "VISTORIA_ETP": "",\n  "AMOSTRA_ETP": "",\n  "VALOR_ESTIMADO_APROXIMADO": "",\n  "PARCELAMENTO": "",\n  "CONCLUSAO": ""\n}`;
-        
-        const diretrizCriterio = criterioTipo === "ITEM" 
-            ? "Na justificativa de parcelamento, priorize adjudicação por item como regra geral para ampliar competitividade, conforme jurisprudência do TCU." 
-            : motivoCriterioRaw 
-                ? `Utilize como motivação técnica do agrupamento/lote: ${motivoCriterioRaw}` 
-                : "Justifique tecnicamente a adoção de lote considerando compatibilidade técnica e economicidade.";
-        
+        chaves = `{
+  "REQUISITOS_ETP": "",
+  "SUBCONTRATACAO_ETP": "",
+  "ME_EPP_ETP": "",
+  "JUSTIFICATIVA_PAC": "",
+  "MERCADO": "",
+  "SOLUCAO": "",
+  "CRITERIOS_JUSTIFICATIVA_ETP": "",
+  "CRITERIOS_SUSTENTABILIDADE": "",
+  "MODALIDADE_JUSTIFICATIVA_ETP": "",
+  "PROVIDENCIAS_CONT": "",
+  "CORRELATAS_INTER": "",
+  "JUSTIFICATIVA_ESTIMATIVA": "",
+  "GARANTIAS_ETP": "",
+  "VISTORIA_ETP": "",
+  "AMOSTRA_ETP": "",
+  "VALOR_ESTIMADO_APROXIMADO": "",
+  "PARCELAMENTO": "",
+  "CONCLUSAO": ""
+}`;
+        const diretrizCriterio = criterioTipo === "ITEM" ? "Na justificativa de parcelamento, priorize adjudicação por item como regra geral para ampliar competitividade, conforme jurisprudência do TCU." : motivoCriterioRaw ? `Utilize como motivação técnica do agrupamento/lote: ${motivoCriterioRaw}` : "Justifique tecnicamente a adoção de lote considerando compatibilidade técnica e economicidade.";
         let diretrizModalidade = "";
-        if (modalidadeTipo === "PREGAO_ELETRONICO") {
-            diretrizModalidade = "Justifique a adoção do Pregão Eletrônico como modalidade preferencial para bens e serviços comuns, priorizando competitividade e transparência.";
-        } else if (["DISPENSA_EMAIL", "DISPENSA_BLL"].includes(modalidadeTipo)) {
-            diretrizModalidade = motivoModalidadeRaw 
-                ? `Justifique tecnicamente a contratação direta utilizando como base: ${motivoModalidadeRaw}`
-                : "Justifique tecnicamente a contratação direta excepcional.";
-        } else if (modalidadeTipo === "PREGAO_PRESENCIAL") {
-            diretrizModalidade = motivoModalidadeRaw
-                ? `Justifique a excepcionalidade do pregão presencial utilizando como base: ${motivoModalidadeRaw}`
-                : "Justifique a excepcionalidade da adoção do pregão presencial.";
-        }
-
-        const instrucaoAmostraEtp = amostraFormatada === "Não"
-            ? `AMOSTRA_ETP: Retorne exatamente e exclusivamente a frase "Não há necessidade de exigência de amostra para esta contratação, justificando tecnicamente a desnecessidade e ausência de risco relevante."`
-            : `AMOSTRA_ETP: Detalhe a exigência de amostra conforme as regras mínimas estabelecidas.`;
-
-        const instrucaoVistoriaEtp = vistoriaFormatada === "Não"
-            ? `VISTORIA_ETP: Retorne exatamente e exclusivamente a frase "Não há necessidade de exigência de vistoria prévia para esta contratação, justificando tecnicamente a desnecessidade."`
-            : `VISTORIA_ETP: Detalhe a exigência de vistoria prévia.`;
-
+        if (modalidadeTipo === "PREGAO_ELETRONICO") diretrizModalidade = "Justifique a adoção do Pregão Eletrônico como modalidade preferencial para bens e serviços comuns, priorizando competitividade e transparência.";
+        else if (["DISPENSA_EMAIL", "DISPENSA_BLL"].includes(modalidadeTipo)) diretrizModalidade = motivoModalidadeRaw ? `Justifique tecnicamente a contratação direta utilizando como base: ${motivoModalidadeRaw}` : "Justifique tecnicamente a contratação direta excepcional.";
+        else if (modalidadeTipo === "PREGAO_PRESENCIAL") diretrizModalidade = motivoModalidadeRaw ? `Justifique a excepcionalidade do pregão presencial utilizando como base: ${motivoModalidadeRaw}` : "Justifique a excepcionalidade da adoção do pregão presencial.";
+        const instrucaoAmostraEtp = amostraFormatada === "Não" ? `AMOSTRA_ETP: Retorne exatamente e exclusivamente a frase "Não há necessidade de exigência de amostra para esta contratação, justificando tecnicamente a desnecessidade e ausência de risco relevante."` : `AMOSTRA_ETP: Detalhe a exigência de amostra conforme as regras mínimas estabelecidas.`;
+        const instrucaoVistoriaEtp = vistoriaFormatada === "Não" ? `VISTORIA_ETP: Retorne exatamente e exclusivamente a frase "Não há necessidade de exigência de vistoria prévia para esta contratação, justificando tecnicamente a desnecessidade."` : `VISTORIA_ETP: Detalhe a exigência de vistoria prévia.`;
         diretrizEtapa = `ETAPA: ESTUDO TÉCNICO PRELIMINAR.
 Todos os textos devem possuir análise técnica aprofundada utilizando fundamentos legais, técnicos e administrativos.
 Para ME/EPP, observar LC 123/2006 e jurisprudência aplicável.
@@ -177,16 +168,19 @@ ${instrucaoVistoriaEtp}
 ${diretrizCriterio}
 ${diretrizModalidade}`;
     } else if (etapa === "TR") {
-        chaves = `{\n  "REQUISITOS_TR": "",\n  "OBRIGACOES_CONTRATADA": "",\n  "OBRIGACOES_CONTRANTE": "",\n  "QUALIFICACAO_TECNICA": "",\n  "GARANTIAS_TR": "",\n  "EXECUCAO": "",\n  "PRAZO_EXEC": "",\n  "LOCAL": "",\n  "AMOSTRA_TR": ""\n}`;
-        
-        const diretrizExecucao = (execucaoRaw && execucaoRaw !== "[Condições de execução não informadas]") 
-            ? `O campo EXECUCAO deve obrigatoriamente aprimorar o seguinte texto base: ${execucaoRaw}` 
-            : "Elabore condições completas de execução compatíveis com o objeto.";
-        
-        const instrucaoAmostraTr = amostraFormatada === "Não"
-            ? `AMOSTRA_TR: Retorne expressamente e exclusivamente a frase "Não há exigência de amostra para esta contratação."`
-            : `AMOSTRA_TR: Detalhe a parte prática da exigência de amostra conforme as regras mínimas.`;
-
+        chaves = `{
+  "REQUISITOS_TR": "",
+  "OBRIGACOES_CONTRATADA": "",
+  "OBRIGACOES_CONTRANTE": "",
+  "QUALIFICACAO_TECNICA": "",
+  "GARANTIAS_TR": "",
+  "EXECUCAO": "",
+  "PRAZO_EXEC": "",
+  "LOCAL": "",
+  "AMOSTRA_TR": ""
+}`;
+        const diretrizExecucao = execucaoRaw && execucaoRaw !== "[Condições de execução não informadas]" ? `O campo EXECUCAO deve obrigatoriamente aprimorar o seguinte texto base: ${execucaoRaw}` : "Elabore condições completas de execução compatíveis com o objeto.";
+        const instrucaoAmostraTr = amostraFormatada === "Não" ? `AMOSTRA_TR: Retorne expressamente e exclusivamente a frase "Não há exigência de amostra para esta contratação."` : `AMOSTRA_TR: Detalhe a parte prática da exigência de amostra conforme as regras mínimas.`;
         diretrizEtapa = `ETAPA: TERMO DE REFERÊNCIA.
 Os textos devem possuir caráter normativo e operacional.
 Os requisitos devem ser objetivos, proporcionais e compatíveis com o objeto. É vedada exigência excessiva de qualificação técnica.
@@ -196,32 +190,25 @@ INSTRUÇÕES CONDICIONAIS DIRETAS:
 ${instrucaoAmostraTr}
 ${diretrizExecucao}`;
     }
-
     const chavesEtapa = STAGE_CHAVES[etapa] || [];
     const regrasMinimas = montarRegrasMinimas(chavesEtapa, dadosUsuario, camposExcluidos);
-
     const restricoesJSON = `ATENÇÃO - REGRAS RÍGIDAS DE SAÍDA:
 1. Você deve retornar EXCLUSIVAMENTE um objeto JSON válido. Não adicione nenhum texto explicativo, saudações ou comentários antes ou depois do JSON.
 2. NÃO USE marcadores de bloco de código (como \`\`\`json ou \`\`\`). Retorne o JSON diretamente em formato de texto puro.
 3. ESCAPE DE QUEBRAS DE LINHA: O JSON não suporta quebras de linha literais dentro de strings. Para formatar quebras de linha dentro dos textos de cada chave, você DEVE utilizar obrigatoriamente os caracteres escapados \\n.
 4. Nenhuma chave do JSON pode estar vazia.`;
-
     return `${regrasGerais}\n\n${basePrompt}\n\n${diretrizEtapa}\n\nREGRAS MÍNIMAS OBRIGATÓRIAS DE TAMANHO E PROFUNDIDADE:\n${regrasMinimas}\n\nESTRUTURA JSON OBRIGATÓRIA:\n${chaves}\n\n${restricoesJSON}`;
 }
 
 export async function processarDadosIA(
-    dadosUsuario: Record<string, string>, 
-    apiKey: string, 
-    provider: string, 
-    meeppExclusivo: boolean, 
+    dadosUsuario: Record<string, string>,
+    apiKey: string,
+    provider: string,
+    meeppExclusivo: boolean,
     etapa: string,
     modelo: string
 ): Promise<Record<string, string>> {
     const prompt = construirPrompt(dadosUsuario, meeppExclusivo, etapa);
-
-    if (provider === "openrouter") {
-        return await gerarTextoOpenRouter(prompt, apiKey, modelo);
-    } else {
-        throw new Error(`Provedor IA não suportado: ${provider}`);
-    }
+    if (provider === "openrouter") return await gerarTextoOpenRouter(prompt, apiKey, modelo);
+    throw new Error(`Provedor IA não suportado: ${provider}`);
 }
