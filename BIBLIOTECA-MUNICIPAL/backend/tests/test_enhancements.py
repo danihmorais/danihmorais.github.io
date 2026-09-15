@@ -12,6 +12,9 @@ def setup_client(tmp_path, monkeypatch):
     main.SESSIONS.clear()
     main.init_db()
     import route_fix
+    import security
+    security.LOGIN_FAILURES.clear()
+    security.SESSION_TIMES.clear()
     client=TestClient(main.app)
     token=main.BOOTSTRAP_TOKEN_PATH.read_text(encoding='utf-8').strip()
     boot=client.post('/api/auth/bootstrap',json={'token':token,'nome':'Admin','login':'admin','senha':'SenhaSegura123!'})
@@ -37,3 +40,12 @@ def test_edit_inactivate_and_renew(tmp_path,monkeypatch):
     assert renewed.status_code==200
     blocked=client.post(f"/api/livros/{book['id']}/inativar",headers=headers)
     assert blocked.status_code==409
+
+
+def test_past_due_date_is_rejected(tmp_path,monkeypatch):
+    client,headers=setup_client(tmp_path,monkeypatch)
+    book=client.post('/api/livros',headers=headers,json={'titulo':'Livro Data','quantidade':1}).json()
+    person=client.post('/api/pessoas',headers=headers,json={'nome':'Pessoa Data'}).json()
+    response=client.post('/api/emprestimos',headers=headers,json={'livro_id':book['id'],'pessoa_id':person['id'],'quantidade':1,'prevista_devolucao':'2020-01-01'})
+    assert response.status_code==422
+    assert 'anterior a hoje' in response.json()['detail']
