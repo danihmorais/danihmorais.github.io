@@ -10,6 +10,10 @@ function token() {
   return localStorage.getItem('biblioteca_token') || ''
 }
 
+function requiresAuthentication(path: string) {
+  return path !== '/api/auth/status' && path !== '/api/auth/login' && path !== '/health'
+}
+
 function normalizeResponse(path: string, body: unknown): unknown {
   if (body !== null) {
     if (path === '/api/dashboard' && isObject(body)) {
@@ -41,9 +45,12 @@ function normalizeResponse(path: string, body: unknown): unknown {
 }
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const accessToken = token()
+  if (requiresAuthentication(path) && !accessToken) {
+    throw new Error('Autenticação necessária.')
+  }
   const headers = new Headers(init?.headers || {})
   if (init?.body && !(init.body instanceof FormData) && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
-  const accessToken = token()
   if (accessToken && !headers.has('Authorization')) headers.set('Authorization', `Bearer ${accessToken}`)
   const response = await fetch(`${API}${path}`, { ...init, headers })
   let body: unknown = null
