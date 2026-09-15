@@ -3,6 +3,8 @@ import { limparNumeracao } from "../../utils/limparNumeracao";
 
 export default function Step3({ dados, atualizarDados }: any) {
   const isLeilao = dados.modalidade === "LEILAO_ELETRONICO";
+  const obrigacoesPreenchidas = !!dados.contratante?.trim() && !!dados.contratada?.trim();
+
   const handleValorChange = (e: any) => {
     let v = e.target.value.replace(/\D/g, "");
     if (v === "") {
@@ -32,6 +34,11 @@ export default function Step3({ dados, atualizarDados }: any) {
     const file = event.target.files?.[0];
     if (!file) return;
     atualizarDados({ [chave]: file });
+  };
+
+  const handlePagamentoChange = (value: string) => {
+    if (!obrigacoesPreenchidas) return;
+    atualizarDados({ pagamento: limparNumeracao(value) });
   };
 
   return (
@@ -245,7 +252,7 @@ export default function Step3({ dados, atualizarDados }: any) {
             <div className="wiz-field" style={{ marginBottom: "16px" }}>
               <label className="wiz-label">Cláusulas da Contratante <span className="req-star">*</span></label>
               <div style={{ marginBottom: "8px", color: "var(--wiz-text-3)", fontSize: "13px", lineHeight: 1.5 }}>
-                Insira <strong>TODAS as cláusulas</strong> da Contratante. Ao colar o conteúdo, a numeração no início das cláusulas será removida automaticamente.
+                Insira <strong>TODAS as cláusulas da Contratante</strong>. Ao colar o conteúdo, a numeração no início das cláusulas será removida automaticamente.
               </div>
               <textarea
                 className="wiz-textarea"
@@ -258,7 +265,7 @@ export default function Step3({ dados, atualizarDados }: any) {
             <div className="wiz-field">
               <label className="wiz-label">Cláusulas da Contratada <span className="req-star">*</span></label>
               <div style={{ marginBottom: "8px", color: "var(--wiz-text-3)", fontSize: "13px", lineHeight: 1.5 }}>
-                Insira <strong>TODAS as cláusulas</strong> da Contratada. Ao colar o conteúdo, a numeração no início das cláusulas será removida automaticamente.
+                Insira <strong>TODAS as cláusulas da Contratada</strong>. Ao colar o conteúdo, a numeração no início das cláusulas será removida automaticamente.
               </div>
               <textarea
                 className="wiz-textarea"
@@ -283,11 +290,17 @@ export default function Step3({ dados, atualizarDados }: any) {
               <div style={{ marginBottom: "8px", color: "var(--wiz-text-3)", fontSize: "13px", lineHeight: 1.5 }}>
                 Insira <strong>TODAS as cláusulas de pagamento</strong> que constarem no Termo de Referência. Ao colar o conteúdo, a numeração no início das cláusulas será removida automaticamente.
               </div>
+              {!obrigacoesPreenchidas && (
+                <div style={{ marginBottom: "8px", padding: "10px 12px", borderRadius: "8px", background: "var(--wiz-error-soft)", border: "1px solid var(--wiz-error)", color: "var(--wiz-error)", fontSize: "13px", lineHeight: 1.45 }}>
+                  Preencha primeiro as cláusulas da Contratante e da Contratada. O preenchimento das cláusulas de pagamento será liberado depois.
+                </div>
+              )}
               <textarea
                 className="wiz-textarea"
                 value={dados.pagamento || ""}
-                onChange={(e) => atualizarDados({ pagamento: limparNumeracao(e.target.value) })}
-                placeholder="Cole TODAS as cláusulas de pagamento do TR..."
+                disabled={!obrigacoesPreenchidas}
+                onChange={(e) => handlePagamentoChange(e.target.value)}
+                placeholder={obrigacoesPreenchidas ? "Cole TODAS as cláusulas de pagamento do TR..." : "Preencha primeiro Contratante e Contratada..."}
               />
             </div>
           </div>
