@@ -7,3 +7,4 @@ for route in list(main.app.router.routes):
         main.app.router.routes.remove(route)
 
 import enhancements
+import exemplares
