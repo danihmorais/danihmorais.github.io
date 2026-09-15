@@ -5,9 +5,10 @@ Sistema de gestão da Biblioteca Municipal Carlos Eduardo Telles, R. Santa Catar
 ## Estrutura
 
 - `src/` — frontend React + TypeScript.
-- `backend/` — API FastAPI, banco SQLite e armazenamento das fotos.
+- `backend/` — módulo FastAPI da Biblioteca, banco SQLite e armazenamento das fotos.
 - `backend/tests/` — testes automatizados da API.
 - `index.html` — entrada do frontend publicada em `/BIBLIOTECA-MUNICIPAL/` no GitHub Pages.
+- `main.py` na raiz do repositório — backend compartilhado que publica a Biblioteca em `/biblioteca-api`.
 
 ## Funcionalidades
 
@@ -20,7 +21,7 @@ Sistema de gestão da Biblioteca Municipal Carlos Eduardo Telles, R. Santa Catar
 - Empréstimos, devoluções parciais/totais e renovação.
 - Fotos das obras armazenadas no computador do backend.
 - Logs das operações.
-- Banco SQLite mantido somente no servidor do backend.
+- Banco SQLite mantido no servidor do backend.
 - Interface responsiva para celular, tablet e desktop.
 
 ## Primeiro acesso
@@ -28,32 +29,30 @@ Sistema de gestão da Biblioteca Municipal Carlos Eduardo Telles, R. Santa Catar
 Na primeira inicialização, o backend prepara o acesso administrativo inicial e grava o token de configuração em:
 
 ```text
-BIBLIOTECA_DATA_DIR/bootstrap.token
+BIBLIOTECA-MUNICIPAL/data/bootstrap.token
 ```
 
-No servidor, consulte o token com:
-
-```bash
-cat /home/daniel/BIBLIOTECA-MUNICIPAL/data/bootstrap.token
-```
-
-Use a opção `Primeiro acesso / configurar usuário` na tela de login para criar o primeiro usuário administrador. O token é removido após a configuração inicial.
+No servidor, consulte o token no diretório do repositório e use a opção `Primeiro acesso / configurar usuário` na tela de login para criar o primeiro usuário administrador. O token é removido após a configuração inicial.
 
 ## Backend
 
-O serviço utilizado em produção é `backend/biblioteca-municipal.service`, que inicia `backend/server.py`. A API escuta localmente na porta `9100` e deve ser publicada externamente pelo Nginx/Tailscale.
+A Biblioteca não possui serviço systemd ou configuração Nginx próprios. O backend da Biblioteca é carregado pelo `main.py` compartilhado na raiz do repositório, que já é o serviço utilizado pelas demais aplicações.
 
-Para instalar as dependências e executar manualmente:
+A API pública da Biblioteca fica em:
 
-```bash
-cd BIBLIOTECA-MUNICIPAL/backend
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
-python server.py
+```text
+https://servidor.tail7d4aa4.ts.net/biblioteca-api
 ```
 
-O banco e as fotos são gravados no diretório definido por `BIBLIOTECA_DATA_DIR`.
+O endpoint de login é:
+
+```text
+POST /biblioteca-api/api/auth/login
+```
+
+O Nginx/Tailscale deve continuar encaminhando o tráfego do backend compartilhado para a porta já utilizada pela infraestrutura existente. Não é necessário criar uma nova porta, `.service` ou `location` exclusivo para a Biblioteca.
+
+Para testes locais, o backend compartilhado deve ser iniciado pela forma já utilizada no repositório. O módulo da Biblioteca permanece em `BIBLIOTECA-MUNICIPAL/backend/main.py` e não deve ser executado como um servidor independente em produção.
 
 ## Testes
 
