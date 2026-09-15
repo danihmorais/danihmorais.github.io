@@ -40,6 +40,66 @@ class ProcessadorDocxTests(unittest.TestCase):
         self.assertEqual(tabela.cell(1, 2).text, "")
         self.assertEqual(tabela.cell(2, 2).text, "Entrega imediata")
 
+    def test_placeholder_dividido_em_runs_preserva_formatacao_ao_redor(self):
+        doc = Document()
+        paragraph = doc.add_paragraph()
+
+        prefixo = paragraph.add_run("Introdução ")
+        inicio_chave = paragraph.add_run("{{CH")
+        inicio_chave.bold = True
+        fim_chave = paragraph.add_run("AVE}}")
+        fim_chave.italic = True
+        sufixo = paragraph.add_run(" final")
+        sufixo.underline = True
+
+        replace_text_in_paragraph(paragraph, {"{{CHAVE}}": "resultado"})
+
+        self.assertEqual(paragraph.text, "Introdução resultado final")
+        self.assertEqual(len(paragraph.runs), 3)
+        self.assertFalse(paragraph.runs[0].bold)
+        self.assertFalse(paragraph.runs[0].italic)
+        self.assertTrue(paragraph.runs[1].bold)
+        self.assertFalse(paragraph.runs[1].italic)
+        self.assertFalse(paragraph.runs[2].bold)
+        self.assertFalse(paragraph.runs[2].italic)
+        self.assertTrue(paragraph.runs[2].underline)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            caminho = Path(temp_dir) / "teste_formatacao.docx"
+            doc.save(caminho)
+            reaberto = Document(caminho)
+            runs = reaberto.paragraphs[0].runs
+
+        self.assertEqual(reaberto.paragraphs[0].text, "Introdução resultado final")
+        self.assertTrue(runs[1].bold)
+        self.assertTrue(runs[2].underline)
+
+    def test_placeholder_dividido_em_tres_runs_preserva_estilos_dos_trechos(self):
+        doc = Document()
+        paragraph = doc.add_paragraph()
+
+        primeira = paragraph.add_run("A ")
+        primeira.font.name = "Arial"
+        parte1 = paragraph.add_run("{{OB")
+        parte1.font.name = "Calibri"
+        parte1.bold = True
+        parte2 = paragraph.add_run("JET")
+        parte2.italic = True
+        parte3 = paragraph.add_run("O}}")
+        parte3.underline = True
+        ultima = paragraph.add_run(" B")
+        ultima.font.name = "Times New Roman"
+
+        replace_text_in_paragraph(paragraph, {"{{OBJETO}}": "MATERIAL"})
+
+        self.assertEqual(paragraph.text, "A MATERIAL B")
+        self.assertEqual(len(paragraph.runs), 3)
+        self.assertEqual(paragraph.runs[0].font.name, "Arial")
+        self.assertEqual(paragraph.runs[1].font.name, "Calibri")
+        self.assertTrue(paragraph.runs[1].bold)
+        self.assertFalse(paragraph.runs[1].italic)
+        self.assertEqual(paragraph.runs[2].font.name, "Times New Roman")
+
 
 if __name__ == "__main__":
     unittest.main()
