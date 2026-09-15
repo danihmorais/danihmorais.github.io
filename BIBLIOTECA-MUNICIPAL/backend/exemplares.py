@@ -50,8 +50,6 @@ def setup():
     conn.commit()
     conn.close()
 
-setup()
-
 class LoanExemplaresIn(BaseModel):
     livro_id: int
     pessoa_id: int
@@ -65,7 +63,6 @@ class ReturnExemplaresIn(BaseModel):
 
 def exemplar_dict(row):
     return dict(row)
-
 
 @main.app.get("/api/livros/{livro_id}/exemplares")
 def list_exemplares(livro_id: int, user=Depends(main.current_user)):
