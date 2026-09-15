@@ -78,7 +78,7 @@ jobs:
           VITE_BIBLIOTECA_API_URL: ${{ secrets.BIBLIOTECA_API_URL }}
         run: |
           npm install --no-audit --no-fund
-          npx vite build
+          npm run build
       - name: Assemble final site
         env:
           API_URL: ${{ secrets.API_URL }}
