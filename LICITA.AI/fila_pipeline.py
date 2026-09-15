@@ -191,11 +191,6 @@ def _provider_config(model: str) -> tuple[str, str, str]:
     return API_OPENROUTER_URL, API_OPENROUTER_KEY, modelo
 
 
-def _is_local_openai_compatible(base_url: str) -> bool:
-    texto = str(base_url or "").lower()
-    return any(host in texto for host in ("127.0.0.1", "localhost", "0.0.0.0"))
-
-
 def _chamar_ia(prompt: str, model: str, temperature: float = 0.3) -> tuple[dict, str]:
     base_url, api_key, modelo = _provider_config(model)
     if not base_url or not api_key:
@@ -206,11 +201,8 @@ def _chamar_ia(prompt: str, model: str, temperature: float = 0.3) -> tuple[dict,
         "messages": [{"role": "user", "content": prompt}],
         "response_format": {"type": "json_object"},
     }
-    if "gemma-4" in modelo.lower():
-        if _is_local_openai_compatible(base_url):
-            payload["reasoning_effort"] = "medium"
-        else:
-            payload["reasoning"] = {"effort": "medium"}
+    if "gemma-4" in modelo.lower() and (modelo == "unsloth-auto" or modelo.startswith("unsloth") or "127.0.0.1" in base_url or "localhost" in base_url):
+        payload["enable_thinking"] = True
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
     with httpx.Client(timeout=AI_TIMEOUT_SECONDS) as client:
         response = client.post(f"{base_url}/chat/completions", headers=headers, json=payload)
