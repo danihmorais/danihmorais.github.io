@@ -28,9 +28,9 @@ export default function PromptModal({ isOpen, onClose, onConfirm }: PromptModalP
   return (
     <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000, padding: "24px" }}>
       <div style={{ background: "var(--bg-panel)", width: "100%", maxWidth: "800px", borderRadius: "24px", padding: "32px", boxShadow: "var(--shadow-lg)" }}>
-        <h2 style={{ margin: "0 0 8px 0", fontSize: "20px", color: "var(--text-main)" }}>Agendar geração da Fase Preparatória</h2>
+        <h2 style={{ margin: "0 0 8px 0", fontSize: "20px", color: "var(--text-main)" }}>Enviar para a fila de geração</h2>
         <p style={{ margin: "0 0 24px 0", fontSize: "14px", color: "var(--text-muted)" }}>
-          O pedido será colocado na fila do backend. Os documentos serão gerados no servidor e enviados por e-mail quando o processamento terminar.
+          Informe o e-mail e, em seguida, a solicitação será colocada imediatamente na fila. A IA, a montagem dos documentos e o envio SMTP acontecerão em segundo plano.
         </p>
 
         <label style={{ display: "block", textAlign: "left", marginBottom: "18px", color: "var(--text-main)", fontSize: "14px", fontWeight: 600 }}>
@@ -59,19 +59,8 @@ export default function PromptModal({ isOpen, onClose, onConfirm }: PromptModalP
         </label>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
-          <button
-            onClick={handleCancelar}
-            style={{ width: "110px", height: "40px", borderRadius: "10px", border: "2px solid var(--border)", background: "transparent", color: "var(--text-main)", fontWeight: "bold", fontSize: "13px", cursor: "pointer" }}
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={handleConfirmar}
-            disabled={!emailValido}
-            style={{ width: "180px", height: "40px", borderRadius: "10px", border: "none", background: emailValido ? "var(--btn-primary)" : "var(--text-light)", color: "#ffffff", fontWeight: "bold", fontSize: "13px", cursor: emailValido ? "pointer" : "not-allowed" }}
-          >
-            Agendar e Gerar
-          </button>
+          <button onClick={handleCancelar} style={{ width: "110px", height: "40px", borderRadius: "10px", border: "2px solid var(--border)", background: "transparent", color: "var(--text-main)", fontWeight: "bold", fontSize: "13px", cursor: "pointer" }}>Cancelar</button>
+          <button onClick={handleConfirmar} disabled={!emailValido} style={{ width: "180px", height: "40px", borderRadius: "10px", border: "none", background: emailValido ? "var(--btn-primary)" : "var(--text-light)", color: "#ffffff", fontWeight: "bold", fontSize: "13px", cursor: emailValido ? "pointer" : "not-allowed" }}>Colocar na fila</button>
         </div>
       </div>
     </div>
