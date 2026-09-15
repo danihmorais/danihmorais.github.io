@@ -5,7 +5,7 @@ import base64
 import io
 from copy import deepcopy
 from docx import Document
-from docx.shared import RGBColor, Pt, Inches
+from docx.shared import RGBColor, Inches
 from docx.oxml.ns import qn
 
 PLACEHOLDER_RE = re.compile(r"\{\{\s*[^{}]+?\s*\}\}")
@@ -78,6 +78,58 @@ def _split_linear_content_for_paragraphs(linear_content):
     return paragraphs
 
 
+def _replace_in_linear_content(linear_content, old_text, new_text):
+    if not old_text:
+        return linear_content
+
+    texto_completo = "".join(segment["text"] for segment in linear_content)
+    inicio = texto_completo.find(old_text)
+    if inicio == -1:
+        return linear_content
+    fim = inicio + len(old_text)
+
+    acumulado = 0
+    inicio_segmento = None
+    inicio_offset = 0
+    fim_segmento = None
+    fim_offset = 0
+
+    for index, segment in enumerate(linear_content):
+        proximo = acumulado + len(segment["text"])
+        if inicio_segmento is None and inicio < proximo:
+            inicio_segmento = index
+            inicio_offset = inicio - acumulado
+        if fim <= proximo:
+            fim_segmento = index
+            fim_offset = fim - acumulado
+            break
+        acumulado = proximo
+
+    if inicio_segmento is None or fim_segmento is None:
+        return linear_content
+
+    novo = []
+    novo.extend(linear_content[:inicio_segmento])
+
+    segmento_inicio = linear_content[inicio_segmento]
+    segmento_fim = linear_content[fim_segmento]
+
+    prefixo = segmento_inicio["text"][:inicio_offset]
+    sufixo = segmento_fim["text"][fim_offset:]
+
+    if prefixo:
+        novo.append({**segmento_inicio, "text": prefixo})
+
+    if str(new_text):
+        novo.append({**segmento_inicio, "text": str(new_text)})
+
+    if sufixo:
+        novo.append({**segmento_fim, "text": sufixo})
+
+    novo.extend(linear_content[fim_segmento + 1:])
+    return novo
+
+
 def _inserir_tabela(paragraph, json_str):
     try:
         dados = json.loads(json_str)
@@ -111,33 +163,40 @@ def _inserir_tabela(paragraph, json_str):
         new_run.bold = True
 
 
+def _adicionar_run_preservando_formatacao(paragraph, text, original_run_data):
+    if not text:
+        return None
+    new_run = paragraph.add_run()
+    r_pr = original_run_data.get("rPr")
+    if r_pr is not None:
+        new_run._r.insert(0, deepcopy(r_pr))
+    new_run.text = text
+    return new_run
+
+
 def _apply_segments_to_paragraph(paragraph, segments, extracted_runs_data):
     alinhamento_original = paragraph.alignment
     paragraph.clear()
     paragraph.alignment = alinhamento_original
+
     for segment in segments:
         if not segment.get("text"):
             continue
 
         original_run_data = extracted_runs_data[segment["original_run_index"]]
-
         parts = segment["text"].split("\n")
+
         for i, part in enumerate(parts):
             if part:
                 if part.startswith("__IMG__"):
                     img_ref = part.replace("__IMG__", "")
                     try:
                         if img_ref.startswith("data:image"):
-                            # Vem do navegador como data URL (ex.: "data:image/png;base64,...")
-                            # já que o backend agora roda remoto e não tem acesso
-                            # ao sistema de arquivos do usuário.
                             _, b64_data = img_ref.split(",", 1)
                             imagem_bytes = base64.b64decode(b64_data)
                             new_run = paragraph.add_run()
                             new_run.add_picture(io.BytesIO(imagem_bytes), width=Inches(6.0))
                         elif os.path.exists(img_ref):
-                            # Compatibilidade com o fluxo antigo (Tauri desktop,
-                            # caminho de arquivo local no mesmo computador).
                             new_run = paragraph.add_run()
                             new_run.add_picture(img_ref, width=Inches(6.0))
                         else:
@@ -150,19 +209,14 @@ def _apply_segments_to_paragraph(paragraph, segments, extracted_runs_data):
                     json_str = part.replace("__TABLE__", "", 1)
                     _inserir_tabela(paragraph, json_str)
                 else:
-                    new_run = paragraph.add_run(part)
-                    new_run.style = original_run_data["style"]
-                    new_run.bold = original_run_data["bold"]
-                    new_run.italic = original_run_data["italic"]
-                    new_run.underline = original_run_data["underline"]
-                    if original_run_data["font_name"]:
-                        new_run.font.name = original_run_data["font_name"]
-                    if original_run_data["font_size"]:
-                        new_run.font.size = original_run_data["font_size"]
-                    if original_run_data["color_rgb"] is not None:
-                        new_run.font.color.rgb = original_run_data["color_rgb"]
+                    _adicionar_run_preservando_formatacao(paragraph, part, original_run_data)
+
             if i < len(parts) - 1:
-                paragraph.add_run().add_break()
+                quebra = paragraph.add_run()
+                r_pr = original_run_data.get("rPr")
+                if r_pr is not None:
+                    quebra._r.insert(0, deepcopy(r_pr))
+                quebra.add_break()
 
 
 def replace_text_in_paragraph(paragraph, replacements):
@@ -170,44 +224,19 @@ def replace_text_in_paragraph(paragraph, replacements):
     for run in paragraph.runs:
         extracted_runs_data.append({
             "text": run.text or "",
-            "style": run.style,
-            "bold": run.bold,
-            "italic": run.italic,
-            "underline": run.underline,
-            "font_name": run.font.name,
-            "font_size": run.font.size,
-            "color_rgb": _safe_color_rgb(run),
+            "rPr": deepcopy(run._r.rPr) if run._r.rPr is not None else None,
         })
 
-    linear_content = []
-    for i, run_data in enumerate(extracted_runs_data):
-        linear_content.append({"text": run_data["text"], "original_run_index": i})
+    if not extracted_runs_data:
+        return
 
-    texto_completo = "".join(rd["text"] for rd in extracted_runs_data)
-    precisa_reconstruir = any(
-        old_text in texto_completo
-        and not any(old_text in segment["text"] for segment in linear_content)
-        for old_text in replacements
-    )
+    linear_content = [
+        {"text": run_data["text"], "original_run_index": index}
+        for index, run_data in enumerate(extracted_runs_data)
+    ]
 
-    if precisa_reconstruir and extracted_runs_data:
-        for old_text, new_text in replacements.items():
-            texto_completo = texto_completo.replace(old_text, str(new_text))
-        linear_content = [{"text": texto_completo, "original_run_index": 0}]
-    else:
-        for old_text, new_text in replacements.items():
-            new_linear_content = []
-            for segment in linear_content:
-                if old_text in segment["text"]:
-                    parts = segment["text"].split(old_text)
-                    for i, part in enumerate(parts):
-                        if part:
-                            new_linear_content.append({**segment, "text": part})
-                        if i < len(parts) - 1:
-                            new_linear_content.append({**segment, "text": str(new_text)})
-                else:
-                    new_linear_content.append(segment)
-            linear_content = new_linear_content
+    for old_text, new_text in replacements.items():
+        linear_content = _replace_in_linear_content(linear_content, old_text, new_text)
 
     list_paragraph = paragraph._p.pPr is not None and paragraph._p.pPr.numPr is not None
     paragraph_groups = _split_linear_content_for_paragraphs(linear_content) if list_paragraph else [linear_content]
