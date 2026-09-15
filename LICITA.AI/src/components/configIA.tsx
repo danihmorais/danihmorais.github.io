@@ -27,8 +27,13 @@ export default function ConfigIA({ onSuccess, textoBotao = "Acessar Sistema" }: 
 
     if (!resultado.ok) {
       setMensagem("O backend respondeu, mas nenhuma credencial de IA está configurada.");
+      setModelo("unsloth-auto");
       setCarregando(false);
       return;
+    }
+
+    if (!resultado.openrouter && modelo !== "unsloth-auto") {
+      setModelo("unsloth-auto");
     }
 
     if (resultado.unsloth) {
@@ -42,12 +47,14 @@ export default function ConfigIA({ onSuccess, textoBotao = "Acessar Sistema" }: 
     }
 
     if (resultado.openrouter) {
+      setModelo((atual) => atual === "unsloth-auto" ? "openrouter/free" : atual);
       setMensagem("Backend conectado. Apenas o OpenRouter está disponível como provedor remoto.");
       setCarregando(false);
       return;
     }
 
     setMensagem("O backend respondeu, mas nenhum provedor de IA está disponível.");
+    setModelo("unsloth-auto");
     setCarregando(false);
   };
 
@@ -56,7 +63,10 @@ export default function ConfigIA({ onSuccess, textoBotao = "Acessar Sistema" }: 
     if (status.ok && textoBotao === "Acessar Sistema") onSuccess?.();
   };
 
-  const opcoesModelo = MODELOS_DISPONIVEIS.backend;
+  const opcoesModelo = MODELOS_DISPONIVEIS.backend.filter((opcao) => {
+    if (opcao.value === "unsloth-auto") return true;
+    return status.openrouter;
+  });
 
   return (
     <div>
