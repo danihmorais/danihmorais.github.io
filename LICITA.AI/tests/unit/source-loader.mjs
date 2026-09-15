@@ -25,6 +25,9 @@ function testRequire(request) {
   if (request === "./utils/storageLocal") {
     return { lerConfigIA: () => ({ provedor: "openrouter", chave_api: "backend", modelo: "openrouter/free" }) };
   }
+  if (request === "./utils/mapearDados") {
+    return { mapearDadosWizard: (dados) => ({ ...dados }) };
+  }
   throw new Error(`Unsupported test require: ${request}`);
 }
 
