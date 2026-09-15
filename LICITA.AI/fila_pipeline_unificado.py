@@ -7,11 +7,25 @@ import time
 from datetime import datetime, timedelta, timezone
 
 from fila import MAX_ATTEMPTS, POLL_INTERVAL_SECONDS, QUEUE_DIR, RETRY_BASE_SECONDS, RETRY_MAX_SECONDS, _artifact_path, _claim_next_job, _enviar_email, _job_path, _write_json, gerar_zip
-from fila_pipeline import _aplicar_auditoria_marcas, _chamar_ia, _substituir_contextos, _validar_json_geracao
+from fila_pipeline import _aplicar_auditoria_marcas, _chamar_ia as _chamar_ia_primaria, _substituir_contextos, _validar_json_geracao
 
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _chamar_ia(prompt: str, model: str, temperature: float = 0.3) -> tuple[dict, str]:
+    modelo = str(model or "unsloth-auto").strip()
+    usando_unsloth = modelo == "unsloth-auto" or modelo.startswith("unsloth")
+    try:
+        return _chamar_ia_primaria(prompt, modelo, temperature)
+    except Exception as erro_local:
+        if not usando_unsloth:
+            raise
+        try:
+            return _chamar_ia_primaria(prompt, "openrouter/free", temperature)
+        except Exception as erro_fallback:
+            raise RuntimeError(f"Unsloth local falhou: {erro_local}; OpenRouter fallback também falhou: {erro_fallback}") from erro_fallback
 
 
 def _delay(attempts: int) -> int:
@@ -31,7 +45,7 @@ def _process_pipeline(job: dict) -> None:
     dados_usuario = dict(job.get("pipeline_dados_usuario") or job.get("dados_usuario") or {})
     resultados = dict(job.get("pipeline_results") or {})
     completed = {str(item).upper() for item in job.get("completed_stages", [])}
-    modelo = str(job.get("resolved_model") or pipeline.get("model") or "openrouter/free")
+    modelo = str(job.get("resolved_model") or pipeline.get("model") or "unsloth-auto")
     temperatura = float(pipeline.get("temperature", 0.3))
 
     for etapa in etapas:
@@ -55,8 +69,10 @@ def _process_pipeline(job: dict) -> None:
                 prompt_processado += "\n\nRESULTADOS JÁ PRODUZIDOS NESTA SOLICITAÇÃO:\n" + json.dumps(resultados, ensure_ascii=False, indent=2)
 
         resultado, modelo_resolvido = _chamar_ia(prompt_processado, modelo, temperatura)
-        if pipeline.get("model") == "openrouter/free" and modelo_resolvido:
-            modelo = modelo_resolvido
+        if (modelo == "unsloth-auto" or modelo.startswith("unsloth")) and modelo_resolvido == "openrouter/free":
+            job["fallback_provider"] = "openrouter"
+            job["fallback_at"] = _utc_now()
+        if modelo_resolvido:
             job["resolved_model"] = modelo_resolvido
 
         if etapa_tipo == "auditoria_marcas":
