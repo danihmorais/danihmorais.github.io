@@ -39,7 +39,7 @@ export default function ConfigIA({ onSuccess, textoBotao = "Acessar Sistema" }: 
     if (resultado.unsloth) {
       setMensagem(
         resultado.openrouter
-          ? "Backend conectado. Unsloth local está disponível como provedor primário e OpenRouter como fallback."
+          ? "Backend conectado. Unsloth local será usado como primário e OpenRouter somente como fallback."
           : "Backend conectado. Unsloth local está disponível. O OpenRouter não está configurado."
       );
       setCarregando(false);
@@ -59,7 +59,7 @@ export default function ConfigIA({ onSuccess, textoBotao = "Acessar Sistema" }: 
   };
 
   const salvar = () => {
-    salvarConfigIA({ provedor: "openrouter", modelo });
+    salvarConfigIA({ provedor: "backend", modelo });
     if (status.ok && textoBotao === "Acessar Sistema") onSuccess?.();
   };
 
