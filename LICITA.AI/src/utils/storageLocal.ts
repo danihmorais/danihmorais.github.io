@@ -5,6 +5,7 @@ export interface ConfigIA {
   provedor?: "backend" | "openrouter" | string;
   chave_api?: string;
   modelo?: string;
+  configurada?: boolean;
 }
 
 const MODELO_PADRAO = "unsloth-auto";
@@ -17,12 +18,14 @@ export function lerConfigIA(): ConfigIA {
       provedor: "backend",
       chave_api: "backend",
       modelo: typeof salvo?.modelo === "string" && salvo.modelo.trim() ? salvo.modelo : MODELO_PADRAO,
+      configurada: Boolean(salvo?.configurada),
     };
   } catch {
     return {
       provedor: "backend",
       chave_api: "backend",
       modelo: MODELO_PADRAO,
+      configurada: false,
     };
   }
 }
@@ -32,6 +35,7 @@ export function salvarConfigIA(config: ConfigIA): void {
   localStorage.setItem(CHAVE_CONFIG_IA, JSON.stringify({
     provedor: "backend",
     modelo,
+    configurada: true,
   }));
 }
 
