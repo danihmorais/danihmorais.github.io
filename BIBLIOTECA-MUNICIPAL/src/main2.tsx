@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { BrowserMultiFormatReader } from '@zxing/browser'
+import * as ZXingBrowser from '@zxing/browser'
 import { api, API, photoUrl } from './api'
 import './styles.css'
 
@@ -29,7 +29,7 @@ export function App(){
  const [book,setBook]=useState<BookForm>({...emptyBook}),[person,setPerson]=useState<PersonForm>({...emptyPerson}),[userForm,setUserForm]=useState<UserForm>({...emptyUser})
  const [loanBook,setLoanBook]=useState(''),[loanPerson,setLoanPerson]=useState(''),[loanDate,setLoanDate]=useState(todayPlus(14)),[loanObs,setLoanObs]=useState(''),[exemplares,setExemplares]=useState<Exemplar[]>([]),[selected,setSelected]=useState<number[]>([])
  const [photoBookId,setPhotoBookId]=useState<number|null>(null),photoRef=useRef<HTMLInputElement>(null)
- const [scanner,setScanner]=useState(false),videoRef=useRef<HTMLVideoElement>(null),readerRef=useRef<BrowserMultiFormatReader|null>(null)
+ const [scanner,setScanner]=useState(false),videoRef=useRef<HTMLVideoElement>(null),readerRef=useRef<any>(null)
  const [theme,setTheme]=useState<'light'|'dark'>((localStorage.getItem('app_theme') as 'light'|'dark')||'light')
  const run=async(fn:()=>Promise<void>)=>{setLoading(true);setNotice('');try{await fn()}catch(e){setNotice(e instanceof Error?e.message:'Não foi possível concluir a operação.')}finally{setLoading(false)}}
  useEffect(()=>{document.documentElement.dataset.theme=theme;localStorage.setItem('app_theme',theme)},[theme])
@@ -58,7 +58,7 @@ export function App(){
  async function resetUser(u:User){const next=prompt(`Nova senha para ${u.login} (mínimo 8 caracteres):`);if(!next)return;await run(async()=>{await api(`/api/usuarios/${u.id}/reset-password`,{method:'POST',body:JSON.stringify({nova_senha:next})});setNotice(`Senha de ${u.login} redefinida.`)})}
  async function changePassword(){const current=prompt('Senha atual:');if(current===null)return;const next=prompt('Nova senha (mínimo 8 caracteres):');if(next===null)return;await run(async()=>{await api('/api/auth/change-password',{method:'POST',body:JSON.stringify({senha_atual:current,nova_senha:next})});setNotice('Senha alterada com sucesso.')})}
  async function lookupISBN(){if(!book.isbn.trim()){setNotice('Informe o ISBN primeiro.');return}await run(async()=>{const data:any=await api(`/api/livros/buscar-isbn?codigo=${encodeURIComponent(book.isbn.trim())}`);setBook(x=>({...x,titulo:data.titulo||x.titulo,autor:data.autor||x.autor,editora:data.editora||x.editora,ano:data.ano?String(data.ano):x.ano,isbn:data.isbn||x.isbn,categoria:data.categoria||x.categoria,idioma:data.idioma||x.idioma,descricao:data.descricao||x.descricao}));setNotice('Dados do ISBN preenchidos.')})}
- async function startScanner(){setScanner(true);setTimeout(async()=>{try{const reader=new BrowserMultiFormatReader();readerRef.current=reader;if(!videoRef.current)return;await reader.decodeFromVideoDevice(undefined,videoRef.current,(result)=>{if(result){setBook(x=>({...x,isbn:result.getText()}));reader.reset();setScanner(false)}})}catch(e){setScanner(false);setNotice(e instanceof Error?e.message:'Não foi possível acessar a câmera.')}},100)}
+ async function startScanner(){setScanner(true);setTimeout(async()=>{try{const Reader=(ZXingBrowser as any).BrowserMultiFormatReader;if(!Reader)throw new Error('Leitor de código de barras indisponível.');const reader=new Reader();readerRef.current=reader;if(!videoRef.current)return;await reader.decodeFromVideoDevice(undefined,videoRef.current,(result:any)=>{if(result){setBook(x=>({...x,isbn:result.getText()}));reader.reset();setScanner(false)}})}catch(e){setScanner(false);setNotice(e instanceof Error?e.message:'Não foi possível acessar a câmera.')}},100)}
  async function refresh(){if(section==='dashboard')await loadDashboard();else if(section==='livros')await loadBooks();else if(section==='pessoas')await loadPeople();else if(section==='usuarios')await loadUsers();else if(section==='emprestimos')await loadLoans();else await loadLogs()}
  const availableBooks=useMemo(()=>books.filter(b=>b.disponiveis>0),[books])
  const title=section==='dashboard'?'Dashboard':section==='livros'?'Acervo':section==='pessoas'?'Pessoas tomadoras':section==='emprestimos'?'Empréstimos':section==='usuarios'?'Usuários do sistema':'Logs'
