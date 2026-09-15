@@ -15,14 +15,14 @@ export function lerConfigIA(): ConfigIA {
     const raw = localStorage.getItem(CHAVE_CONFIG_IA);
     const salvo = raw ? JSON.parse(raw) : {};
     return {
-      provedor: "backend",
+      provedor: "openrouter",
       chave_api: "backend",
       modelo: typeof salvo?.modelo === "string" && salvo.modelo.trim() ? salvo.modelo : MODELO_PADRAO,
       configurada: Boolean(salvo?.configurada),
     };
   } catch {
     return {
-      provedor: "backend",
+      provedor: "openrouter",
       chave_api: "backend",
       modelo: MODELO_PADRAO,
       configurada: false,
@@ -33,7 +33,7 @@ export function lerConfigIA(): ConfigIA {
 export function salvarConfigIA(config: ConfigIA): void {
   const modelo = typeof config.modelo === "string" && config.modelo.trim() ? config.modelo.trim() : MODELO_PADRAO;
   localStorage.setItem(CHAVE_CONFIG_IA, JSON.stringify({
-    provedor: "backend",
+    provedor: "openrouter",
     modelo,
     configurada: true,
   }));
