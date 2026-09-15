@@ -37,9 +37,11 @@ def now_iso():
 
 
 def db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=15)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=15000")
     return conn
 
 
@@ -158,8 +160,7 @@ def next_code(conn, prefix, table):
 
 
 def log(conn, action, entity, entity_id, description, meta=None):
-    conn.execute("INSERT INTO logs(ocorrido_em, acao, entidade, entidade_id, descricao, meta_json) VALUES (?,?,?,?,?,?)",
-                 (now_iso(), action, entity, entity_id, description, json.dumps(meta or {}, ensure_ascii=False)))
+    conn.execute("INSERT INTO logs(ocorrido_em, acao, entidade, entidade_id, descricao, meta_json) VALUES (?,?,?,?,?,?)", (now_iso(), action, entity, entity_id, description, json.dumps(meta or {}, ensure_ascii=False)))
 
 
 def public_user(row):
@@ -183,7 +184,7 @@ async def lifespan(_app):
     SESSIONS.clear()
 
 
-app = FastAPI(title="Biblioteca Municipal Carlos Eduardo Telles", version="1.1.1", lifespan=lifespan)
+app = FastAPI(title="Biblioteca Municipal Carlos Eduardo Telles", version="1.1.2", lifespan=lifespan)
 origins = {"https://danihmorais.github.io", "http://localhost", "http://localhost:5173", "http://127.0.0.1:5173"}
 origins.update(x.strip().rstrip("/") for x in os.getenv("CORS_ORIGINS", "").split(",") if x.strip())
 app.add_middleware(CORSMiddleware, allow_origins=sorted(origins), allow_credentials=False, allow_methods=["*"], allow_headers=["*"])
@@ -205,8 +206,8 @@ class LivroIn(BaseModel):
     titulo: str = Field(min_length=1, max_length=300)
     autor: str = ""
     editora: str = ""
-    ano: int | None = None
-    isbn: str = ""
+    ano: int | None = Field(default=None, ge=1000, le=2100)
+    isbn: str = Field(default="", max_length=32)
     categoria: str = ""
     idioma: str = "Português"
     quantidade: int = Field(default=1, ge=1)
@@ -293,13 +294,11 @@ def bootstrap(data: BootstrapIn):
     salt, password_hash = hash_password(data.senha)
     try:
         if pending:
-            conn.execute("UPDATE usuarios SET nome=?, login=?, perfil='Administrador', senha_salt=?, senha_hash=?, atualizado_em=? WHERE id=?",
-                         (data.nome.strip(), data.login.strip(), salt, password_hash, now_iso(), pending["id"]))
+            conn.execute("UPDATE usuarios SET nome=?, login=?, perfil='Administrador', senha_salt=?, senha_hash=?, atualizado_em=? WHERE id=?", (data.nome.strip(), data.login.strip(), salt, password_hash, now_iso(), pending["id"]))
             user_id = pending["id"]
             action = "CONFIGURAR"
         else:
-            cur = conn.execute("INSERT INTO usuarios(nome,login,perfil,senha_salt,senha_hash,criado_em,atualizado_em) VALUES(?,?,?,?,?,?,?)",
-                               (data.nome.strip(), data.login.strip(), "Administrador", salt, password_hash, now_iso(), now_iso()))
+            cur = conn.execute("INSERT INTO usuarios(nome,login,perfil,senha_salt,senha_hash,criado_em,atualizado_em) VALUES(?,?,?,?,?,?,?)", (data.nome.strip(), data.login.strip(), "Administrador", salt, password_hash, now_iso(), now_iso()))
             user_id = cur.lastrowid
             action = "CRIAR"
     except sqlite3.IntegrityError:
@@ -324,8 +323,7 @@ def dashboard(user=Depends(current_user)):
     recentes = conn.execute("SELECT e.id,e.codigo,e.livro_id,e.pessoa_id,e.quantidade,e.retirada_em,e.prevista_devolucao,e.devolvida_em,e.observacoes,l.codigo livro_codigo,l.titulo,l.foto,p.codigo pessoa_codigo,p.nome pessoa_nome FROM emprestimos e JOIN livros l ON l.id=e.livro_id JOIN pessoas p ON p.id=e.pessoa_id WHERE e.devolvida_em IS NULL ORDER BY e.retirada_em DESC LIMIT 6").fetchall()
     logs = conn.execute("SELECT id,ocorrido_em,acao,entidade,entidade_id,descricao,meta_json FROM logs ORDER BY id DESC LIMIT 8").fetchall()
     conn.close()
-    return {"livros": total_livros, "titulos": titulos, "pessoas": pessoas, "emprestados": emprestados, "atrasados": atrasados,
-            "emprestimos_recentes": [row_dict(x) for x in recentes], "logs_recentes": [row_dict(x) for x in logs]}
+    return {"livros": total_livros, "titulos": titulos, "pessoas": pessoas, "emprestados": emprestados, "atrasados": atrasados, "emprestimos_recentes": [row_dict(x) for x in recentes], "logs_recentes": [row_dict(x) for x in logs]}
 
 
 @app.get("/api/livros")
@@ -346,10 +344,7 @@ def buscar_isbn(codigo: str = Query(..., min_length=8, max_length=32), user=Depe
         raise HTTPException(400, "Código não é um ISBN válido.")
     query_isbn = urllib.parse.quote(isbn)
     headers = {"User-Agent": "BibliotecaMunicipalCarlosEduardoTelles/1.1"}
-    sources = [
-        f"https://openlibrary.org/api/books?bibkeys=ISBN:{query_isbn}&jscmd=data&format=json",
-        f"https://www.googleapis.com/books/v1/volumes?q=isbn:{query_isbn}&maxResults=1"
-    ]
+    sources = [f"https://openlibrary.org/api/books?bibkeys=ISBN:{query_isbn}&jscmd=data&format=json", f"https://www.googleapis.com/books/v1/volumes?q=isbn:{query_isbn}&maxResults=1"]
     for url in sources:
         try:
             req = urllib.request.Request(url, headers=headers)
@@ -358,17 +353,12 @@ def buscar_isbn(codigo: str = Query(..., min_length=8, max_length=32), user=Depe
             if "openlibrary.org/api/books" in url:
                 item = payload.get(f"ISBN:{isbn}")
                 if item:
-                    authors = ", ".join(x.get("name", "") for x in item.get("authors", []) if x.get("name"))
-                    publishers = ", ".join(x.get("name", "") for x in item.get("publishers", []) if x.get("name"))
-                    date_value = str(item.get("publish_date", ""))
-                    year_match = re.search(r"\b(1[5-9]\d{2}|20\d{2})\b", date_value)
+                    authors = ", ".join(x.get("name", "") for x in item.get("authors", []) if x.get("name")); publishers = ", ".join(x.get("name", "") for x in item.get("publishers", []) if x.get("name")); date_value = str(item.get("publish_date", "")); year_match = re.search(r"\b(1[5-9]\d{2}|20\d{2})\b", date_value)
                     return {"isbn": isbn, "titulo": item.get("title", ""), "autor": authors, "editora": publishers, "ano": int(year_match.group(1)) if year_match else None, "idioma": "Português", "fonte": "Open Library"}
             else:
                 items = payload.get("items") or []
                 if items:
-                    info = items[0].get("volumeInfo") or {}
-                    date_value = str(info.get("publishedDate", ""))
-                    year_match = re.search(r"\b(1[5-9]\d{2}|20\d{2})\b", date_value)
+                    info = items[0].get("volumeInfo") or {}; date_value = str(info.get("publishedDate", "")); year_match = re.search(r"\b(1[5-9]\d{2}|20\d{2})\b", date_value)
                     return {"isbn": isbn, "titulo": info.get("title", ""), "autor": ", ".join(info.get("authors") or []), "editora": info.get("publisher", ""), "ano": int(year_match.group(1)) if year_match else None, "idioma": info.get("language", "") or "Português", "fonte": "Google Books"}
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
             continue
@@ -377,10 +367,18 @@ def buscar_isbn(codigo: str = Query(..., min_length=8, max_length=32), user=Depe
 
 @app.post("/api/livros")
 def create_livro(data: LivroIn, user=Depends(current_user)):
-    conn=db(); t=now_iso(); code=next_code(conn,'LIV','livros')
-    cur=conn.execute("INSERT INTO livros(codigo,titulo,autor,editora,ano,isbn,categoria,idioma,quantidade,localizacao,descricao,criado_em,atualizado_em) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        (code,data.titulo.strip(),data.autor.strip(),data.editora.strip(),data.ano,data.isbn.strip(),data.categoria.strip(),data.idioma.strip() or 'Português',data.quantidade,data.localizacao.strip(),data.descricao.strip(),t,t))
-    log(conn,'CRIAR','livro',cur.lastrowid,f"Livro {code} cadastrado: {data.titulo}", {'codigo':code}); conn.commit(); r=conn.execute("SELECT * FROM livros WHERE id=?",(cur.lastrowid,)).fetchone(); conn.close(); return row_dict(r)
+    conn=db()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        isbn=re.sub(r"[^0-9Xx]", "", data.isbn).upper()
+        if isbn and conn.execute("SELECT id FROM livros WHERE ativo=1 AND isbn=?",(isbn,)).fetchone():
+            conn.rollback(); conn.close(); raise HTTPException(409,"Já existe um livro ativo cadastrado com este ISBN.")
+        t=now_iso(); code=next_code(conn,'LIV','livros')
+        cur=conn.execute("INSERT INTO livros(codigo,titulo,autor,editora,ano,isbn,categoria,idioma,quantidade,localizacao,descricao,criado_em,atualizado_em) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",(code,data.titulo.strip(),data.autor.strip(),data.editora.strip(),data.ano,isbn,data.categoria.strip(),data.idioma.strip() or 'Português',data.quantidade,data.localizacao.strip(),data.descricao.strip(),t,t))
+        log(conn,'CRIAR','livro',cur.lastrowid,f"Livro {code} cadastrado: {data.titulo}", {'codigo':code}); conn.commit(); r=conn.execute("SELECT * FROM livros WHERE id=?",(cur.lastrowid,)).fetchone(); conn.close(); return row_dict(r)
+    except HTTPException: raise
+    except sqlite3.IntegrityError:
+        conn.rollback(); conn.close(); raise HTTPException(409,"Não foi possível gerar um código único para o livro. Tente novamente.")
 
 
 @app.post("/api/livros/{livro_id}/foto")
@@ -400,7 +398,7 @@ async def upload_foto(livro_id: int, foto: UploadFile = File(...), user=Depends(
 
 
 @app.get("/api/fotos/{nome}")
-def foto(nome: str, user=Depends(current_user)):
+def foto(nome: str):
     safe=Path(nome).name; path=PHOTO_DIR/safe
     if not path.exists(): raise HTTPException(404,'Foto não encontrada.')
     return FileResponse(path)
@@ -415,7 +413,11 @@ def list_pessoas(q: str = "", user=Depends(current_user)):
 
 @app.post("/api/pessoas")
 def create_pessoa(data: PessoaIn, user=Depends(current_user)):
-    conn=db(); t=now_iso(); code=next_code(conn,'MAT','pessoas'); cur=conn.execute("INSERT INTO pessoas(codigo,nome,documento,telefone,email,endereco,observacoes,criado_em,atualizado_em) VALUES(?,?,?,?,?,?,?,?,?)",(code,data.nome.strip(),data.documento.strip(),data.telefone.strip(),data.email.strip(),data.endereco.strip(),data.observacoes.strip(),t,t)); log(conn,'CRIAR','pessoa',cur.lastrowid,f"Pessoa {code} cadastrada: {data.nome}",{'codigo':code}); conn.commit(); r=conn.execute("SELECT * FROM pessoas WHERE id=?",(cur.lastrowid,)).fetchone(); conn.close(); return row_dict(r)
+    conn=db()
+    try:
+        conn.execute("BEGIN IMMEDIATE"); t=now_iso(); code=next_code(conn,'MAT','pessoas'); cur=conn.execute("INSERT INTO pessoas(codigo,nome,documento,telefone,email,endereco,observacoes,criado_em,atualizado_em) VALUES(?,?,?,?,?,?,?,?,?)",(code,data.nome.strip(),data.documento.strip(),data.telefone.strip(),data.email.strip(),data.endereco.strip(),data.observacoes.strip(),t,t)); log(conn,'CRIAR','pessoa',cur.lastrowid,f"Pessoa {code} cadastrada: {data.nome}",{'codigo':code}); conn.commit(); r=conn.execute("SELECT * FROM pessoas WHERE id=?",(cur.lastrowid,)).fetchone(); conn.close(); return row_dict(r)
+    except sqlite3.IntegrityError:
+        conn.rollback(); conn.close(); raise HTTPException(409,"Não foi possível gerar um código único para a pessoa. Tente novamente.")
 
 
 @app.get("/api/usuarios")
@@ -444,12 +446,20 @@ def list_emprestimos(status: str = "ativos", q: str = "", user=Depends(current_u
 
 @app.post("/api/emprestimos")
 def create_emprestimo(data: EmprestimoIn, user=Depends(current_user)):
-    conn=db(); livro=conn.execute("SELECT codigo,titulo,quantidade FROM livros WHERE id=? AND ativo=1",(data.livro_id,)).fetchone(); pessoa=conn.execute("SELECT codigo,nome FROM pessoas WHERE id=? AND ativo=1",(data.pessoa_id,)).fetchone()
-    if not livro or not pessoa: conn.close(); raise HTTPException(404,'Livro ou pessoa não encontrado.')
-    disponiveis=livro['quantidade']-(conn.execute("SELECT COALESCE(SUM(quantidade),0) v FROM emprestimos WHERE livro_id=? AND devolvida_em IS NULL",(data.livro_id,)).fetchone()['v'])
-    if data.quantidade>disponiveis: conn.close(); raise HTTPException(409,f"Há apenas {disponiveis} exemplar(es) disponível(is).")
-    code=next_code(conn,'EMP','emprestimos'); cur=conn.execute("INSERT INTO emprestimos(codigo,livro_id,pessoa_id,quantidade,retirada_em,prevista_devolucao,observacoes) VALUES(?,?,?,?,?,?,?)",(code,data.livro_id,data.pessoa_id,data.quantidade,now_iso(),data.prevista_devolucao,data.observacoes.strip()))
-    log(conn,'EMPRESTAR','emprestimo',cur.lastrowid,f"Empréstimo {code}: {livro['codigo']} para {pessoa['nome']}",{'livro':livro['codigo'],'pessoa':pessoa['codigo']}); conn.commit(); r=conn.execute("SELECT e.*,l.codigo livro_codigo,l.titulo,p.codigo pessoa_codigo,p.nome pessoa_nome FROM emprestimos e JOIN livros l ON l.id=e.livro_id JOIN pessoas p ON p.id=e.pessoa_id WHERE e.id=?",(cur.lastrowid,)).fetchone(); conn.close(); return row_dict(r)
+    try: datetime.strptime(data.prevista_devolucao,"%Y-%m-%d")
+    except ValueError: raise HTTPException(422,"A data de devolução prevista deve ser válida no formato AAAA-MM-DD.")
+    conn=db()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        livro=conn.execute("SELECT codigo,titulo,quantidade FROM livros WHERE id=? AND ativo=1",(data.livro_id,)).fetchone(); pessoa=conn.execute("SELECT codigo,nome FROM pessoas WHERE id=? AND ativo=1",(data.pessoa_id,)).fetchone()
+        if not livro or not pessoa: conn.rollback(); conn.close(); raise HTTPException(404,'Livro ou pessoa não encontrado.')
+        disponiveis=livro['quantidade']-(conn.execute("SELECT COALESCE(SUM(quantidade),0) v FROM emprestimos WHERE livro_id=? AND devolvida_em IS NULL",(data.livro_id,)).fetchone()['v'])
+        if data.quantidade>disponiveis: conn.rollback(); conn.close(); raise HTTPException(409,f"Há apenas {disponiveis} exemplar(es) disponível(is).")
+        code=next_code(conn,'EMP','emprestimos'); cur=conn.execute("INSERT INTO emprestimos(codigo,livro_id,pessoa_id,quantidade,retirada_em,prevista_devolucao,observacoes) VALUES(?,?,?,?,?,?,?)",(code,data.livro_id,data.pessoa_id,data.quantidade,now_iso(),data.prevista_devolucao,data.observacoes.strip()))
+        log(conn,'EMPRESTAR','emprestimo',cur.lastrowid,f"Empréstimo {code}: {livro['codigo']} para {pessoa['nome']}",{'livro':livro['codigo'],'pessoa':pessoa['codigo']}); conn.commit(); r=conn.execute("SELECT e.*,l.codigo livro_codigo,l.titulo,p.codigo pessoa_codigo,p.nome pessoa_nome FROM emprestimos e JOIN livros l ON l.id=e.livro_id JOIN pessoas p ON p.id=e.pessoa_id WHERE e.id=?",(cur.lastrowid,)).fetchone(); conn.close(); return row_dict(r)
+    except HTTPException: raise
+    except sqlite3.IntegrityError:
+        conn.rollback(); conn.close(); raise HTTPException(409,"Não foi possível registrar o empréstimo. Tente novamente.")
 
 
 @app.post("/api/emprestimos/{emprestimo_id}/devolver")
