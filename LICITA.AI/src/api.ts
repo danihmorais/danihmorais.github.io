@@ -56,71 +56,7 @@ function construirPromptUnificado(dadosUsuario: Record<string, string>, meeppExc
   const etp = prepararEspecificacao("ETP", dadosUsuario, meeppExclusivo);
   const tr = prepararEspecificacao("TR", dadosUsuario, meeppExclusivo);
 
-  return `Você é especialista sênior em licitações e contratos administrativos para a Prefeitura de São Francisco/SP.
-
-GERE DFD, ETP E TR EM UMA ÚNICA CHAMADA DE IA.
-Os três documentos pertencem à mesma contratação e devem ser escritos com um único raciocínio global. A resposta deve ser um único objeto JSON contendo exatamente três blocos: DFD, ETP e TR.
-
-DADOS DA CONTRATAÇÃO:
-${JSON.stringify(dadosUsuario, null, 2)}
-
-ESPECIFICAÇÕES OBRIGATÓRIAS DO DFD:
-${dfd}
-
-ESPECIFICAÇÕES OBRIGATÓRIAS DO ETP:
-${etp}
-
-ESPECIFICAÇÕES OBRIGATÓRIAS DO TR:
-${tr}
-
-ESTRUTURA JSON FINAL OBRIGATÓRIA:
-{
-  "DFD": {
-    "OBJETO": "",
-    "TIPO_OBJ": "",
-    "JUSTIFICATIVA": "",
-    "ESTIMATIVA_QUANTIDADES": "",
-    "RESULTADOS_ESPERADOS": ""
-  },
-  "ETP": {
-    "REQUISITOS_ETP": "",
-    "SUBCONTRATACAO_ETP": "",
-    "ME_EPP_ETP": "",
-    "JUSTIFICATIVA_PAC": "",
-    "MERCADO": "",
-    "SOLUCAO": "",
-    "CRITERIOS_JUSTIFICATIVA_ETP": "",
-    "CRITERIOS_SUSTENTABILIDADE": "",
-    "MODALIDADE_JUSTIFICATIVA_ETP": "",
-    "PROVIDENCIAS_CONT": "",
-    "CORRELATAS_INTER": "",
-    "JUSTIFICATIVA_ESTIMATIVA": "",
-    "GARANTIAS_ETP": "",
-    "VISTORIA_ETP": "",
-    "AMOSTRA_ETP": "",
-    "VALOR_ESTIMADO_APROXIMADO": "",
-    "PARCELAMENTO": "",
-    "CONCLUSAO": ""
-  },
-  "TR": {
-    "REQUISITOS_TR": "",
-    "OBRIGACOES_CONTRATADA": "",
-    "OBRIGACOES_CONTRANTE": "",
-    "QUALIFICACAO_TECNICA": "",
-    "GARANTIAS_TR": "",
-    "EXECUCAO": "",
-    "PRAZO_EXEC": "",
-    "LOCAL": "",
-    "AMOSTRA_TR": ""
-  }
-}
-
-REGRAS FINAIS:
-1. Retorne EXCLUSIVAMENTE JSON válido, sem markdown.
-2. Não deixe nenhuma chave obrigatória vazia.
-3. Não invente fatos.
-4. Mantenha absoluta coerência entre DFD, ETP e TR.
-5. O objeto deve conter somente os três blocos DFD, ETP e TR.`;
+  return `Você é especialista sênior em licitações e contratos administrativos para a Prefeitura de São Francisco/SP.\n\nGERE DFD, ETP E TR EM UMA ÚNICA CHAMADA DE IA.\nOs três documentos pertencem à mesma contratação e devem ser escritos com um único raciocínio global. A resposta deve ser um único objeto JSON contendo exatamente três blocos: DFD, ETP e TR.\n\nDADOS DA CONTRATAÇÃO:\n${JSON.stringify(dadosUsuario, null, 2)}\n\nESPECIFICAÇÕES OBRIGATÓRIAS DO DFD:\n${dfd}\n\nESPECIFICAÇÕES OBRIGATÓRIAS DO ETP:\n${etp}\n\nESPECIFICAÇÕES OBRIGATÓRIAS DO TR:\n${tr}\n\nESTRUTURA JSON FINAL OBRIGATÓRIA:\n{\n  "DFD": {\n    "OBJETO": "",\n    "TIPO_OBJ": "",\n    "JUSTIFICATIVA": "",\n    "ESTIMATIVA_QUANTIDADES": "",\n    "RESULTADOS_ESPERADOS": ""\n  },\n  "ETP": {\n    "REQUISITOS_ETP": "",\n    "SUBCONTRATACAO_ETP": "",\n    "ME_EPP_ETP": "",\n    "JUSTIFICATIVA_PAC": "",\n    "MERCADO": "",\n    "SOLUCAO": "",\n    "CRITERIOS_JUSTIFICATIVA_ETP": "",\n    "CRITERIOS_SUSTENTABILIDADE": "",\n    "MODALIDADE_JUSTIFICATIVA_ETP": "",\n    "PROVIDENCIAS_CONT": "",\n    "CORRELATAS_INTER": "",\n    "JUSTIFICATIVA_ESTIMATIVA": "",\n    "GARANTIAS_ETP": "",\n    "VISTORIA_ETP": "",\n    "AMOSTRA_ETP": "",\n    "VALOR_ESTIMADO_APROXIMADO": "",\n    "PARCELAMENTO": "",\n    "CONCLUSAO": ""\n  },\n  "TR": {\n    "REQUISITOS_TR": "",\n    "OBRIGACOES_CONTRATADA": "",\n    "OBRIGACOES_CONTRANTE": "",\n    "QUALIFICACAO_TECNICA": "",\n    "GARANTIAS_TR": "",\n    "EXECUCAO": "",\n    "PRAZO_EXEC": "",\n    "LOCAL": "",\n    "AMOSTRA_TR": ""\n  }\n}\n\nREGRAS FINAIS:\n1. Retorne EXCLUSIVAMENTE JSON válido, sem markdown.\n2. Não deixe nenhuma chave obrigatória vazia.\n3. Não invente fatos.\n4. Mantenha absoluta coerência entre DFD, ETP e TR.\n5. O objeto deve conter somente os três blocos DFD, ETP e TR.`;
 }
 
 export const gerarFasePreparatoria = async (dados: any): Promise<FasePreparatoriaJob> => {
@@ -130,11 +66,9 @@ export const gerarFasePreparatoria = async (dados: any): Promise<FasePreparatori
   const instrucoes = String(dados?.instrucoes || "").trim();
   const meeppExclusivo = dadosUsuario["{{ME_EPP}}"] === "SIM";
   const config = lerConfigIA();
-  const provedor = config.provedor || "openrouter";
-  const modeloSalvo = config.modelo || MODELO_PADRAO_POR_PROVEDOR[provedor] || MODELO_PADRAO_POR_PROVEDOR.openrouter;
-  const modelo = modeloSalvo === "unsloth-auto" || modeloSalvo.startsWith("unsloth") ? "openrouter/free" : modeloSalvo;
-
-  if (provedor !== "openrouter") throw new Error("Para a fila assíncrona, selecione o provedor OpenRouter nas configurações de IA.");
+  const provedor = config.provedor || "backend";
+  const modeloSalvo = config.modelo || MODELO_PADRAO_POR_PROVEDOR[provedor] || MODELO_PADRAO_POR_PROVEDOR.backend;
+  const modelo = modeloSalvo || "unsloth-auto";
 
   const modalidade = String(dadosUsuario["{{MODALIDADE}}"] || "").trim().toUpperCase();
   const ehContratacaoDireta = ["DISPENSA_EMAIL", "DISPENSA_BLL"].includes(modalidade);
