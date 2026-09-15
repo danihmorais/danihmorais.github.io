@@ -60,13 +60,13 @@ test("storageLocal mantém apenas a configuração de modelo e nunca persiste cr
   assert.equal(config.configurada, true);
 });
 
-test("storageLocal usa Unsloth como modelo padrão quando ainda não há configuração", () => {
+test("storageLocal usa OpenRouter Free como modelo padrão quando ainda não há configuração", () => {
   const storage = new MemoryStorage();
   const { lerConfigIA } = loadTsModule("src/utils/storageLocal.ts", { globals: { localStorage: storage } });
   assertJsonEqual(lerConfigIA(), {
     provedor: "openrouter",
     chave_api: "backend",
-    modelo: "unsloth-auto",
+    modelo: "openrouter/free",
     configurada: false,
   });
 });
