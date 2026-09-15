@@ -82,6 +82,14 @@ jobs:
           npm install
           npm run build
 
+      - name: Build Biblioteca Municipal
+        working-directory: ./BIBLIOTECA-MUNICIPAL
+        env:
+          VITE_BIBLIOTECA_API_URL: ${{ secrets.BIBLIOTECA_API_URL }}
+        run: |
+          npm install
+          npm run build
+
       - name: Assemble final site
         env:
           API_URL: ${{ secrets.API_URL }}
@@ -97,6 +105,7 @@ jobs:
           cp -r LICITA.AI/dist site/LICITA.AI
           cp -r EMAIL-ATAS-CONTRATOS/dist site/EMAIL-ATAS-CONTRATOS
           cp -r GERADOREXTRATO/dist site/GERADOREXTRATO
+          cp -r BIBLIOTECA-MUNICIPAL/dist site/BIBLIOTECA-MUNICIPAL
           cp -r FIORIILICSVTOWORD/. site/FIORIILICSVTOWORD/
           cp documentos-modelo.html site/documentos-modelo.html
 
