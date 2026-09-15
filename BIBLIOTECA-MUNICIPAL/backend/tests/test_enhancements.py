@@ -11,7 +11,7 @@ def setup_client(tmp_path, monkeypatch):
     main.BOOTSTRAP_TOKEN_PATH=data_dir/'bootstrap.token'
     main.SESSIONS.clear()
     main.init_db()
-    import enhancements
+    import route_fix
     client=TestClient(main.app)
     token=main.BOOTSTRAP_TOKEN_PATH.read_text(encoding='utf-8').strip()
     boot=client.post('/api/auth/bootstrap',json={'token':token,'nome':'Admin','login':'admin','senha':'SenhaSegura123!'})
