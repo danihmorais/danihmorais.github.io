@@ -14,14 +14,15 @@ Hub de ferramentas web para automação de processos de **licitação pública m
 | 📚 **[Documentos da Licitação](./documentos-modelo.html)** | Consulta, visualização, impressão e download dos documentos e vídeos disponibilizados pelo backend. |
 | ✉️ **[Email ARPs/Contratos](./EMAIL-ATAS-CONTRATOS)** | Envio em lote de atas e contratos em PDF por e-mail. |
 | 📑 **[Gerador de Extrato](./GERADOREXTRATO)** | Leitura de PDFs de atas/contratos e geração de extratos padronizados em DOCX. |
+| 🏫 **[Biblioteca Municipal Carlos Eduardo Telles](./BIBLIOTECA-MUNICIPAL)** | Gestão de acervo, pessoas tomadoras, empréstimos, devoluções, fotos e logs. |
 
 ## 🧱 Arquitetura
 
 O repositório reúne aplicações independentes em uma mesma publicação:
 
-- **React + TypeScript + Vite:** MontaEdital, Licita.AI, Email ARPs/Contratos e Gerador de Extrato.
+- **React + TypeScript + Vite:** MontaEdital, Licita.AI, Email ARPs/Contratos, Gerador de Extrato e Biblioteca Municipal.
 - **HTML/CSS/JS:** Conversor Fiorilli e página de Documentos da Licitação.
-- **FastAPI/Python:** backends para processamento, análise de PDFs, geração/manipulação de `.docx` e entrega dos arquivos.
+- **FastAPI/Python:** backends para processamento, análise de PDFs, geração/manipulação de `.docx`, biblioteca e entrega dos arquivos.
 - **GitHub Actions:** build e publicação automática no GitHub Pages.
 
 O backend agregador da raiz monta as aplicações FastAPI sob estes prefixos:
@@ -34,6 +35,20 @@ O backend agregador da raiz monta as aplicações FastAPI sob estes prefixos:
 ```
 
 A página de **Documentos da Licitação** usa a API de arquivos fornecida pelo backend. A configuração do endereço efetivo da API é aplicada somente durante a publicação por meio de segredo do GitHub; ela não é gravada como valor literal no código-fonte.
+
+### Biblioteca Municipal Carlos Eduardo Telles
+
+A biblioteca é um app separado em `BIBLIOTECA-MUNICIPAL/`. Seu frontend é publicado no GitHub Pages, enquanto o backend FastAPI mantém o banco SQLite e as fotos no PC servidor.
+
+IDs são gerados automaticamente para rastreabilidade:
+
+```text
+LIV-000001  Livro
+MAT-000001  Pessoa tomadora
+EMP-000001  Empréstimo
+```
+
+O sistema registra cadastro de livros, fotos, pessoas, usuários do sistema, empréstimos, devoluções e logs de operações.
 
 ### Documentos da Licitação
 
@@ -59,6 +74,7 @@ danihmorais.github.io/
 ├── EMAIL-ATAS-CONTRATOS/
 ├── GERADOREXTRATO/
 ├── FIORIILICSVTOWORD/
+├── BIBLIOTECA-MUNICIPAL/
 └── .github/workflows/
 ```
 
@@ -67,7 +83,7 @@ danihmorais.github.io/
 Cada aplicação React possui seu próprio `package.json`:
 
 ```powershell
-cd GERADOREXTRATO   # ou MONTAEDITAL, LICITA.AI ou EMAIL-ATAS-CONTRATOS
+cd GERADOREXTRATO   # ou MONTAEDITAL, LICITA.AI, EMAIL-ATAS-CONTRATOS ou BIBLIOTECA-MUNICIPAL
 npm install
 npm run dev
 ```
