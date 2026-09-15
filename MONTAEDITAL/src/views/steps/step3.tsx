@@ -1,4 +1,5 @@
 import React from "react";
+import { limparNumeracao } from "../../utils/limparNumeracao";
 
 export default function Step3({ dados, atualizarDados }: any) {
   const isLeilao = dados.modalidade === "LEILAO_ELETRONICO";
@@ -20,21 +21,17 @@ export default function Step3({ dados, atualizarDados }: any) {
   const numVigencia = vigenciaArr.length > 0 && !isNaN(Number(vigenciaArr[0])) ? vigenciaArr[0] : "";
   const unitVigencia = vigenciaArr.length > 1 ? vigenciaArr[1] : "meses";
 
-  const declAdicionaisArray = Array.isArray(dados.declAdicionais) 
-    ? dados.declAdicionais 
-    : (typeof dados.declAdicionais === 'string' && dados.declAdicionais.trim() !== '' ? [dados.declAdicionais] : []);
+  const declAdicionaisArray = Array.isArray(dados.declAdicionais)
+    ? dados.declAdicionais
+    : (typeof dados.declAdicionais === "string" && dados.declAdicionais.trim() !== "" ? [dados.declAdicionais] : []);
 
   const selecionarArquivo = (
     event: React.ChangeEvent<HTMLInputElement>,
     chave: string
   ) => {
     const file = event.target.files?.[0];
-
     if (!file) return;
-
-    atualizarDados({
-      [chave]: file,
-    });
+    atualizarDados({ [chave]: file });
   };
 
   return (
@@ -70,29 +67,19 @@ export default function Step3({ dados, atualizarDados }: any) {
               <label className="wiz-label">
                 Vigência <span className="req-star">*</span>
               </label>
-
               <div style={{ display: "flex", gap: "8px" }}>
                 <input
                   type="number"
                   className="wiz-input"
                   value={numVigencia}
-                  onChange={(e) =>
-                    atualizarDados({
-                      vigencia: `${e.target.value} ${unitVigencia}`.trim(),
-                    })
-                  }
+                  onChange={(e) => atualizarDados({ vigencia: `${e.target.value} ${unitVigencia}`.trim() })}
                   placeholder="Ex: 12"
                   style={{ width: "60%" }}
                 />
-
                 <select
                   className="wiz-select"
                   value={unitVigencia}
-                  onChange={(e) =>
-                    atualizarDados({
-                      vigencia: `${numVigencia} ${e.target.value}`.trim(),
-                    })
-                  }
+                  onChange={(e) => atualizarDados({ vigencia: `${numVigencia} ${e.target.value}`.trim() })}
                   style={{ width: "40%" }}
                 >
                   <option value="dias">Dias</option>
@@ -110,29 +97,16 @@ export default function Step3({ dados, atualizarDados }: any) {
               <label className="wiz-label">
                 Exclusivo para ME/EPP <span className="req-star">*</span>
               </label>
-              <select
-                className="wiz-select"
-                value={dados.exclusivo || "NAO"}
-                onChange={(e) =>
-                  atualizarDados({ exclusivo: e.target.value })
-                }
-              >
+              <select className="wiz-select" value={dados.exclusivo || "NAO"} onChange={(e) => atualizarDados({ exclusivo: e.target.value })}>
                 <option value="NAO">Não</option>
                 <option value="SIM">Sim</option>
               </select>
             </div>
-
             <div className="wiz-field">
               <label className="wiz-label">
                 Permitir Prorrogação? <span className="req-star">*</span>
               </label>
-              <select
-                className="wiz-select"
-                value={dados.prorrogacaoCheck || "NAO"}
-                onChange={(e) =>
-                  atualizarDados({ prorrogacaoCheck: e.target.value })
-                }
-              >
+              <select className="wiz-select" value={dados.prorrogacaoCheck || "NAO"} onChange={(e) => atualizarDados({ prorrogacaoCheck: e.target.value })}>
                 <option value="NAO">Não</option>
                 <option value="SIM">Sim</option>
               </select>
@@ -149,258 +123,176 @@ export default function Step3({ dados, atualizarDados }: any) {
             <div className="wiz-card-subtitle">Anexe os arquivos para compor o edital</div>
           </div>
         </div>
-        
+
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          <div>
-            <label className="wiz-label" style={{ marginBottom: "8px" }}>
-              Documento de Formalização da Demanda (DFD) <span className="req-star">*</span>
-            </label>
-            {!dados.arquivoDfd ? (
-              <label className="wiz-upload-area" style={{ cursor: "pointer" }}>
-                <input
-                  type="file"
-                  accept=".doc,.docx"
-                  style={{ display: "none" }}
-                  onChange={(e) => selecionarArquivo(e, "arquivoDfd")}
-                />
-                <div className="wiz-upload-icon">📄</div>
-                <div className="wiz-upload-text">
-                  <div className="wiz-upload-label">Selecionar Arquivo DFD</div>
-                  <div className="wiz-upload-file">Nenhum selecionado (.doc, .docx)</div>
-                </div>
-                <div className="wiz-upload-cta">Procurar</div>
-              </label>
-            ) : (
-              <div className="wiz-upload-area has-file" onClick={() => atualizarDados({ arquivoDfd: null })}>
-                <div className="wiz-upload-icon">✓</div>
-                <div className="wiz-upload-text">
-                  <div className="wiz-upload-label">DFD Selecionado</div>
-                  <div className="wiz-upload-file">{dados.arquivoDfd.name}</div>
-                </div>
-                <div className="wiz-upload-cta" style={{ color: "var(--wiz-error)" }}>Remover</div>
+          {(["arquivoDfd", "arquivoEtp", "arquivoTr"] as const).map((chave) => {
+            const nomes: Record<string, string> = {
+              arquivoDfd: "Documento de Formalização da Demanda (DFD)",
+              arquivoEtp: "Estudo Técnico Preliminar (ETP)",
+              arquivoTr: "Termo de Referência (TR)",
+            };
+            const siglas: Record<string, string> = { arquivoDfd: "DFD", arquivoEtp: "ETP", arquivoTr: "TR" };
+            return (
+              <div key={chave}>
+                <label className="wiz-label" style={{ marginBottom: "8px" }}>
+                  {nomes[chave]} <span className="req-star">*</span>
+                </label>
+                {!dados[chave] ? (
+                  <label className="wiz-upload-area" style={{ cursor: "pointer" }}>
+                    <input type="file" accept=".doc,.docx" style={{ display: "none" }} onChange={(e) => selecionarArquivo(e, chave)} />
+                    <div className="wiz-upload-icon">📄</div>
+                    <div className="wiz-upload-text">
+                      <div className="wiz-upload-label">Selecionar Arquivo {siglas[chave]}</div>
+                      <div className="wiz-upload-file">Nenhum selecionado (.doc, .docx)</div>
+                    </div>
+                    <div className="wiz-upload-cta">Procurar</div>
+                  </label>
+                ) : (
+                  <div className="wiz-upload-area has-file" onClick={() => atualizarDados({ [chave]: null })}>
+                    <div className="wiz-upload-icon">✓</div>
+                    <div className="wiz-upload-text">
+                      <div className="wiz-upload-label">{siglas[chave]} Selecionado</div>
+                      <div className="wiz-upload-file">{dados[chave].name}</div>
+                    </div>
+                    <div className="wiz-upload-cta" style={{ color: "var(--wiz-error)" }}>Remover</div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-
-          <div>
-            <label className="wiz-label" style={{ marginBottom: "8px" }}>
-              Estudo Técnico Preliminar (ETP) <span className="req-star">*</span>
-            </label>
-            {!dados.arquivoEtp ? (
-              <label className="wiz-upload-area" style={{ cursor: "pointer" }}>
-                <input
-                  type="file"
-                  accept=".doc,.docx"
-                  style={{ display: "none" }}
-                  onChange={(e) => selecionarArquivo(e, "arquivoEtp")}
-                />
-                <div className="wiz-upload-icon">📄</div>
-                <div className="wiz-upload-text">
-                  <div className="wiz-upload-label">Selecionar Arquivo ETP</div>
-                  <div className="wiz-upload-file">Nenhum selecionado (.doc, .docx)</div>
-                </div>
-                <div className="wiz-upload-cta">Procurar</div>
-              </label>
-            ) : (
-              <div className="wiz-upload-area has-file" onClick={() => atualizarDados({ arquivoEtp: null })}>
-                <div className="wiz-upload-icon">✓</div>
-                <div className="wiz-upload-text">
-                  <div className="wiz-upload-label">ETP Selecionado</div>
-                  <div className="wiz-upload-file">{dados.arquivoEtp.name}</div>
-                </div>
-                <div className="wiz-upload-cta" style={{ color: "var(--wiz-error)" }}>Remover</div>
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label className="wiz-label" style={{ marginBottom: "8px" }}>
-              Termo de Referência (TR) <span className="req-star">*</span>
-            </label>
-            {!dados.arquivoTr ? (
-              <label className="wiz-upload-area" style={{ cursor: "pointer" }}>
-                <input
-                  type="file"
-                  accept=".doc,.docx"
-                  style={{ display: "none" }}
-                  onChange={(e) => selecionarArquivo(e, "arquivoTr")}
-                />
-                <div className="wiz-upload-icon">📄</div>
-                <div className="wiz-upload-text">
-                  <div className="wiz-upload-label">Selecionar Arquivo TR</div>
-                  <div className="wiz-upload-file">Nenhum selecionado (.doc, .docx)</div>
-                </div>
-                <div className="wiz-upload-cta">Procurar</div>
-              </label>
-            ) : (
-              <div className="wiz-upload-area has-file" onClick={() => atualizarDados({ arquivoTr: null })}>
-                <div className="wiz-upload-icon">✓</div>
-                <div className="wiz-upload-text">
-                  <div className="wiz-upload-label">TR Selecionado</div>
-                  <div className="wiz-upload-file">{dados.arquivoTr.name}</div>
-                </div>
-                <div className="wiz-upload-cta" style={{ color: "var(--wiz-error)" }}>Remover</div>
-              </div>
-            )}
-          </div>
+            );
+          })}
         </div>
       </div>
+
       {!isLeilao && (
-      <div className="wiz-card">
-        <div className="wiz-card-header">
-          <div className="wiz-card-icon">➕</div>
-          <div>
-            <div className="wiz-card-title">Documentos & Declarações Adicionais</div>
-            <div className="wiz-card-subtitle">Itens extras exigidos no processo</div>
+        <div className="wiz-card">
+          <div className="wiz-card-header">
+            <div className="wiz-card-icon">➕</div>
+            <div>
+              <div className="wiz-card-title">Documentos & Declarações Adicionais</div>
+              <div className="wiz-card-subtitle">Itens extras exigidos no processo</div>
+            </div>
           </div>
-        </div>
-        
-        <div style={{ marginBottom: "24px" }}>
-          <div className="wiz-subsection-title">Documentos Adicionais</div>
-          <div className="wiz-person-list">
-            {(dados.documentosAdicionais || []).map((doc: string, index: number) => (
-              <div key={index} className="wiz-person-row" style={{ gridTemplateColumns: "1fr 36px" }}>
-                <input
-                  type="text"
-                  className="wiz-input"
-                  value={doc}
-                  onChange={(e) => {
-                    const novosDocs = [...(dados.documentosAdicionais || [])];
-                    novosDocs[index] = e.target.value;
-                    atualizarDados({ documentosAdicionais: novosDocs });
-                  }}
-                  placeholder="Nome do documento adicional"
-                />
-                <button
-                  type="button"
-                  className="wiz-btn-remove"
-                  onClick={() => {
-                    const novosDocs = (dados.documentosAdicionais || []).filter((_: any, i: number) => i !== index);
-                    atualizarDados({ documentosAdicionais: novosDocs });
-                  }}
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-            <button
-              type="button"
-              className="wiz-btn-add"
-              onClick={() => {
-                const novosDocs = [...(dados.documentosAdicionais || []), ""];
-                atualizarDados({ documentosAdicionais: novosDocs });
-              }}
-            >
-              <span style={{ fontSize: "16px", lineHeight: 1 }}>+</span> Adicionar Documento Adicional
-            </button>
-          </div>
-        </div>
 
-        <div>
-          <div className="wiz-subsection-title">Declarações Adicionais</div>
-          <div className="wiz-person-list">
-            {declAdicionaisArray.map((decl: string, index: number) => (
-              <div key={index} className="wiz-person-row" style={{ gridTemplateColumns: "1fr 36px" }}>
-                <textarea
-                  className="wiz-textarea"
-                  style={{ minHeight: "50px" }}
-                  value={decl}
-                  onChange={(e) => {
-                    const novasDecls = [...declAdicionaisArray];
-                    novasDecls[index] = e.target.value;
-                    atualizarDados({ declAdicionais: novasDecls });
-                  }}
-                  placeholder="Insira a declaração adicional..."
-                />
-                <button
-                  type="button"
-                  className="wiz-btn-remove"
-                  onClick={() => {
-                    const novasDecls = declAdicionaisArray.filter((_: any, i: number) => i !== index);
-                    atualizarDados({ declAdicionais: novasDecls });
-                  }}
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-            <button
-              type="button"
-              className="wiz-btn-add"
-              onClick={() => {
-                const novasDecls = [...declAdicionaisArray, ""];
-                atualizarDados({ declAdicionais: novasDecls });
-              }}
-            >
-              <span style={{ fontSize: "16px", lineHeight: 1 }}>+</span> Adicionar Declaração
-            </button>
+          <div style={{ marginBottom: "24px" }}>
+            <div className="wiz-subsection-title">Documentos Adicionais</div>
+            <div style={{ margin: "6px 0 12px", color: "var(--wiz-text-3)", fontSize: "13px", lineHeight: 1.5 }}>
+              Insira <strong>APENAS os documentos adicionais a partir do Documento 12</strong> do Termo de Referência (Documento 12 em diante). Não informe aqui os documentos já previstos até o Documento 11 e não inclua declarações; esses documentos serão adicionados automaticamente ao Edital.
+            </div>
+            <div className="wiz-person-list">
+              {(dados.documentosAdicionais || []).map((doc: string, index: number) => (
+                <div key={index} className="wiz-person-row" style={{ gridTemplateColumns: "1fr 36px" }}>
+                  <input
+                    type="text"
+                    className="wiz-input"
+                    value={doc}
+                    onChange={(e) => {
+                      const novosDocs = [...(dados.documentosAdicionais || [])];
+                      novosDocs[index] = e.target.value;
+                      atualizarDados({ documentosAdicionais: novosDocs });
+                    }}
+                    placeholder="Ex.: Documento 12 – ..."
+                  />
+                  <button type="button" className="wiz-btn-remove" onClick={() => atualizarDados({ documentosAdicionais: (dados.documentosAdicionais || []).filter((_: any, i: number) => i !== index) })}>✕</button>
+                </div>
+              ))}
+              <button type="button" className="wiz-btn-add" onClick={() => atualizarDados({ documentosAdicionais: [...(dados.documentosAdicionais || []), ""] })}>
+                <span style={{ fontSize: "16px", lineHeight: 1 }}>+</span> Adicionar Documento Adicional
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <div className="wiz-subsection-title">Declarações Adicionais</div>
+            <div style={{ margin: "6px 0 12px", color: "var(--wiz-text-3)", fontSize: "13px", lineHeight: 1.5 }}>
+              Informe <strong>apenas declarações especiais</strong>, que não sejam declarações padrão já previstas no modelo do Edital.
+            </div>
+            <div className="wiz-person-list">
+              {declAdicionaisArray.map((decl: string, index: number) => (
+                <div key={index} className="wiz-person-row" style={{ gridTemplateColumns: "1fr 36px" }}>
+                  <textarea
+                    className="wiz-textarea"
+                    style={{ minHeight: "50px" }}
+                    value={decl}
+                    onChange={(e) => {
+                      const novasDecls = [...declAdicionaisArray];
+                      novasDecls[index] = e.target.value;
+                      atualizarDados({ declAdicionais: novasDecls });
+                    }}
+                    placeholder="Insira somente uma declaração especial, não padrão..."
+                  />
+                  <button type="button" className="wiz-btn-remove" onClick={() => atualizarDados({ declAdicionais: declAdicionaisArray.filter((_: any, i: number) => i !== index) })}>✕</button>
+                </div>
+              ))}
+              <button type="button" className="wiz-btn-add" onClick={() => atualizarDados({ declAdicionais: [...declAdicionaisArray, ""] })}>
+                <span style={{ fontSize: "16px", lineHeight: 1 }}>+</span> Adicionar Declaração
+              </button>
+            </div>
           </div>
         </div>
-      </div>
       )}
+
       {!isLeilao && (
-      <>
-        <div className="wiz-card">
-          <div className="wiz-card-header">
-            <div className="wiz-card-icon">📝</div>
-            <div>
-              <div className="wiz-card-title">Cláusulas Adicionais</div>
-              <div className="wiz-card-subtitle">
-                Condições extras da contratante e contratada
+        <>
+          <div className="wiz-card">
+            <div className="wiz-card-header">
+              <div className="wiz-card-icon">📝</div>
+              <div>
+                <div className="wiz-card-title">Cláusulas Adicionais</div>
+                <div className="wiz-card-subtitle">Condições extras da contratante e contratada</div>
               </div>
+            </div>
+
+            <div className="wiz-field" style={{ marginBottom: "16px" }}>
+              <label className="wiz-label">Cláusulas da Contratante <span className="req-star">*</span></label>
+              <div style={{ marginBottom: "8px", color: "var(--wiz-text-3)", fontSize: "13px", lineHeight: 1.5 }}>
+                Insira <strong>TODAS as cláusulas</strong> da Contratante. Ao colar o conteúdo, a numeração no início das cláusulas será removida automaticamente.
+              </div>
+              <textarea
+                className="wiz-textarea"
+                value={dados.contratante || ""}
+                onChange={(e) => atualizarDados({ contratante: limparNumeracao(e.target.value) })}
+                placeholder="Cole TODAS as cláusulas da Contratante..."
+              />
+            </div>
+
+            <div className="wiz-field">
+              <label className="wiz-label">Cláusulas da Contratada <span className="req-star">*</span></label>
+              <div style={{ marginBottom: "8px", color: "var(--wiz-text-3)", fontSize: "13px", lineHeight: 1.5 }}>
+                Insira <strong>TODAS as cláusulas</strong> da Contratada. Ao colar o conteúdo, a numeração no início das cláusulas será removida automaticamente.
+              </div>
+              <textarea
+                className="wiz-textarea"
+                value={dados.contratada || ""}
+                onChange={(e) => atualizarDados({ contratada: limparNumeracao(e.target.value) })}
+                placeholder="Cole TODAS as cláusulas da Contratada..."
+              />
             </div>
           </div>
 
-          <div className="wiz-field" style={{ marginBottom: "16px" }}>
-            <label className="wiz-label">Cláusulas da Contratante</label>
-            <textarea
-              className="wiz-textarea"
-              value={dados.contratante || ""}
-              onChange={(e) =>
-                atualizarDados({ contratante: e.target.value })
-              }
-              placeholder="Insira as cláusulas da contratante (separe uma a uma com quebra de linha)..."
-            />
-          </div>
-
-          <div className="wiz-field">
-            <label className="wiz-label">Cláusulas da Contratada</label>
-            <textarea
-              className="wiz-textarea"
-              value={dados.contratada || ""}
-              onChange={(e) =>
-                atualizarDados({ contratada: e.target.value })
-              }
-              placeholder="Insira as cláusulas da contratada (separe uma a uma com quebra de linha)..."
-            />
-          </div>
-        </div>
-
-        <div className="wiz-card">
-          <div className="wiz-card-header">
-            <div className="wiz-card-icon">💳</div>
-            <div>
-              <div className="wiz-card-title">Pagamento</div>
-              <div className="wiz-card-subtitle">
-                Condições e regras para pagamento
+          <div className="wiz-card">
+            <div className="wiz-card-header">
+              <div className="wiz-card-icon">💳</div>
+              <div>
+                <div className="wiz-card-title">Pagamento</div>
+                <div className="wiz-card-subtitle">Condições e regras para pagamento</div>
               </div>
             </div>
-          </div>
 
-          <div className="wiz-field" style={{ marginBottom: "16px" }}>
-            <label className="wiz-label">Cláusulas de Pagamento <span className="req-star">*</span></label>
-            <textarea
-              className="wiz-textarea"
-              value={dados.pagamento || ""}
-              onChange={(e) =>
-                atualizarDados({ pagamento: e.target.value })
-              }
-              placeholder="Insira as cláusulas de pagamento (separe uma a uma com quebra de linha)..."
-            />
+            <div className="wiz-field" style={{ marginBottom: "16px" }}>
+              <label className="wiz-label">Cláusulas de Pagamento <span className="req-star">*</span></label>
+              <div style={{ marginBottom: "8px", color: "var(--wiz-text-3)", fontSize: "13px", lineHeight: 1.5 }}>
+                Insira <strong>TODAS as cláusulas de pagamento</strong> que constarem no Termo de Referência. Ao colar o conteúdo, a numeração no início das cláusulas será removida automaticamente.
+              </div>
+              <textarea
+                className="wiz-textarea"
+                value={dados.pagamento || ""}
+                onChange={(e) => atualizarDados({ pagamento: limparNumeracao(e.target.value) })}
+                placeholder="Cole TODAS as cláusulas de pagamento do TR..."
+              />
+            </div>
           </div>
-        </div>
-      </>
-    )}
+        </>
+      )}
       <div className="wiz-bottom-pad" />
     </div>
   );
