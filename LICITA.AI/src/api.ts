@@ -61,7 +61,7 @@ function construirPromptAuditoriaMarcas(itens: any[], instrucoesUsuario: string)
 
 function construirPromptContratacaoDireta(dadosUsuario: Record<string, string>, instrucoesUsuario: string, modalidade: string): string {
   const modalidadeNome = modalidade === "DISPENSA_BLL" ? "Dispensa de Licitação com lances em plataforma eletrônica (BLL)" : "Dispensa de Licitação com recebimento de propostas por e-mail";
-  return `Você é especialista sênior em contratação direta pela Lei Federal nº 14.133/2021, com experiência prática em instrução de processos municipais. Elabore o conteúdo de um Documento de Contratação Direta para o Município de São Francisco/SP.\n\nFINALIDADE:\nO documento será anexado ao processo administrativo e deve complementar a fase preparatória, sem substituir DFD, ETP ou TR. Produza texto formal, impessoal, juridicamente fundamentado, objetivo e operacional.\n\nREGRAS JURÍDICAS E DE FIDELIDADE:\n1. Use a Lei nº 14.133/2021 como referência central e considere sua redação vigente, sem inventar artigo, inciso, alínea ou limitação financeira.\n2. O FUNDAMENTO_CONTRATACAO_DIRETA deve reproduzir ou estruturar o fundamento informado pelo usuário. Se o fundamento legal não tiver sido informado, escreva exatamente: "Fundamento legal não informado no briefing; conferir e preencher antes da assinatura."\n3. NÃO invente número de processo, fornecedor, CNPJ, data, prazo de recebimento de propostas, valor contratado, cotação, pesquisa de preços, parecer, autorização ou publicação.\n4. Diferencie claramente valor estimado da contratação e eventual valor contratado.\n5. Não declare que documentos do art. 72 foram efetivamente juntados se isso não estiver nos dados. Apresente apenas uma orientação de instrução processual, identificando o que deve ser conferido.\n6. Na RAZAO/CRITERIOS de escolha do fornecedor, produza critérios e fundamentação para seleção objetiva. Não atribua a um fornecedor específico características que não foram fornecidas.\n7. Para a forma de processamento, respeite a modalidade informada: ${modalidadeNome}. Não invente regras específicas da plataforma ou prazos não fornecidos.\n8. Preserve integralmente os fatos fornecidos nos documentos anteriores e nas instruções do usuário.\n9. O texto deve ser específico para contratação direta; não trate o procedimento como pregão ou licitação ordinária.\n10. Retorne EXCLUSIVAMENTE um único objeto JSON válido, sem markdown ou comentários. Nenhum valor deve ser vazio.\n\nDADOS DO USUÁRIO:\n${JSON.stringify(dadosUsuario, null, 2)}\n\nDADOS DO USUÁRIO APÓS AUDITORIA:\n${DADOS_ATUALIZADOS}\n\nINSTRUÇÕES DO USUÁRIO:\n${instrucoesUsuario?.trim() || "Nenhuma instrução adicional."}\n\nDOCUMENTOS ANTERIORES DA MESMA CONTRATAÇÃO:\n${SAIDA_ETAPAS}\n\nESTRUTURA JSON OBRIGATÓRIA:\n{\n  "FUNDAMENTO_CONTRATACAO_DIRETA": "",\n  "JUSTIFICATIVA_CONTRATACAO_DIRETA": "",\n  "INSTRUCAO_ART72": "",\n  "CRITERIOS_ESCOLHA_FORNECEDOR": "",\n  "CONDICOES_CONTRATACAO": "",\n  "PUBLICIDADE_TRANSPARENCIA": "",\n  "CONCLUSAO_CONTRATACAO_DIRETA": ""\n}`;
+  return `Você é especialista sênior em contratação direta pela Lei Federal nº 14.133/2021, com experiência prática em instrução de processos municipais. Elabore o conteúdo de um Documento de Contratação Direta para o Município de São Francisco/SP.\n\nFINALIDADE:\nO documento será o documento específico da contratação direta. Não produza DFD, ETP ou TR neste fluxo. Produza texto formal, impessoal, juridicamente fundamentado, objetivo e operacional.\n\nREGRAS JURÍDICAS E DE FIDELIDADE:\n1. Use a Lei nº 14.133/2021 como referência central e considere sua redação vigente, sem inventar artigo, inciso, alínea ou limitação financeira.\n2. O FUNDAMENTO_CONTRATACAO_DIRETA deve reproduzir ou estruturar o fundamento informado pelo usuário. Se o fundamento legal não tiver sido informado, escreva exatamente: "Fundamento legal não informado no briefing; conferir e preencher antes da assinatura."\n3. NÃO invente número de processo, fornecedor, CNPJ, data, prazo de recebimento de propostas, valor contratado, cotação, pesquisa de preços, parecer, autorização ou publicação.\n4. Diferencie claramente valor estimado da contratação e eventual valor contratado.\n5. Não declare que documentos do art. 72 foram efetivamente juntados se isso não estiver nos dados. Apresente apenas uma orientação de instrução processual, identificando o que deve ser conferido.\n6. Na RAZAO/CRITERIOS de escolha do fornecedor, produza critérios e fundamentação para seleção objetiva. Não atribua a um fornecedor específico características que não foram fornecidas.\n7. Para a forma de processamento, respeite a modalidade informada: ${modalidadeNome}. Não invente regras específicas da plataforma ou prazos não fornecidos.\n8. Preserve integralmente os fatos fornecidos nas instruções do usuário.\n9. O texto deve ser específico para contratação direta; não trate o procedimento como pregão ou licitação ordinária.\n10. Retorne EXCLUSIVAMENTE um único objeto JSON válido, sem markdown ou comentários. Nenhum valor deve ser vazio.\n\nDADOS DO USUÁRIO:\n${JSON.stringify(dadosUsuario, null, 2)}\n\nINSTRUÇÕES DO USUÁRIO:\n${instrucoesUsuario?.trim() || "Nenhuma instrução adicional."}\n\nESTRUTURA JSON OBRIGATÓRIA:\n{\n  "FUNDAMENTO_CONTRATACAO_DIRETA": "",\n  "JUSTIFICATIVA_CONTRATACAO_DIRETA": "",\n  "INSTRUCAO_ART72": "",\n  "CRITERIOS_ESCOLHA_FORNECEDOR": "",\n  "CONDICOES_CONTRATACAO": "",\n  "PUBLICIDADE_TRANSPARENCIA": "",\n  "CONCLUSAO_CONTRATACAO_DIRETA": ""\n}`;
 }
 
 export const gerarFasePreparatoria = async (dados: any): Promise<FasePreparatoriaJob> => {
@@ -77,34 +77,47 @@ export const gerarFasePreparatoria = async (dados: any): Promise<FasePreparatori
 
   if (provedor !== "openrouter") throw new Error("Para a fila assíncrona, selecione o provedor OpenRouter nas configurações de IA.");
 
-  const etapas: Array<{ id: string; tipo: string; prompt: string }> = [];
-  const itensJson = dadosUsuario["{{ITENS}}"]; 
-  let itens: any[] = [];
-  if (typeof itensJson === "string") {
-    try { itens = JSON.parse(itensJson.replace(/^__TABLE__/, "")); } catch { itens = []; }
-  } else if (Array.isArray(itensJson)) {
-    itens = itensJson;
-  }
-
-  if (itens.length > 0) etapas.push({ id: "AUDITORIA_MARCAS", tipo: "auditoria_marcas", prompt: construirPromptAuditoriaMarcas(itens, instrucoes) });
-
-  const dfd = { ...dadosUsuario, INSTRUCOES_EXTRAS: criarContextoEtapa("DFD") };
-  etapas.push({ id: "DFD", tipo: "geracao_json", prompt: `${construirPrompt(dfd, meeppExclusivo, "DFD")}\n\nDADOS ATUALIZADOS APÓS ETAPAS PRÉVIAS:\n${DADOS_ATUALIZADOS}` });
-
-  const etp = { ...dadosUsuario, INSTRUCOES_EXTRAS: criarContextoEtapa("ETP", { DFD: CONTEXTO_DFD }) };
-  etapas.push({ id: "ETP", tipo: "geracao_json", prompt: `${construirPrompt(etp, meeppExclusivo, "ETP")}\n\nDADOS ATUALIZADOS APÓS ETAPAS PRÉVIAS:\n${DADOS_ATUALIZADOS}` });
-
-  const tr = { ...dadosUsuario, INSTRUCOES_EXTRAS: criarContextoEtapa("TR", { DFD: CONTEXTO_DFD, ETP: CONTEXTO_ETP }), REQUISITOS_ETP_ANTERIOR: CONTEXTO_ETP };
-  etapas.push({ id: "TR", tipo: "geracao_json", prompt: `${construirPrompt(tr, meeppExclusivo, "TR")}\n\nDADOS ATUALIZADOS APÓS ETAPAS PRÉVIAS:\n${DADOS_ATUALIZADOS}` });
-
   const modalidade = String(dadosUsuario["{{MODALIDADE}}"] || "").trim().toUpperCase();
-  if (["DISPENSA_EMAIL", "DISPENSA_BLL"].includes(modalidade)) etapas.push({ id: "CONTRATACAO_DIRETA", tipo: "geracao_contratacao_direta", prompt: construirPromptContratacaoDireta(dadosUsuario, instrucoes, modalidade) });
+  const ehContratacaoDireta = ["DISPENSA_EMAIL", "DISPENSA_BLL"].includes(modalidade);
+  const etapas: Array<{ id: string; tipo: string; prompt: string }> = [];
+
+  if (ehContratacaoDireta) {
+    const itensJson = dadosUsuario["{{ITENS}}"]; 
+    let itens: any[] = [];
+    if (typeof itensJson === "string") {
+      try { itens = JSON.parse(itensJson.replace(/^__TABLE__/, "")); } catch { itens = []; }
+    } else if (Array.isArray(itensJson)) {
+      itens = itensJson;
+    }
+
+    if (itens.length > 0) etapas.push({ id: "AUDITORIA_MARCAS", tipo: "auditoria_marcas", prompt: construirPromptAuditoriaMarcas(itens, instrucoes) });
+    etapas.push({ id: "CONTRATACAO_DIRETA", tipo: "geracao_contratacao_direta", prompt: construirPromptContratacaoDireta(dadosUsuario, instrucoes, modalidade) });
+  } else {
+    const itensJson = dadosUsuario["{{ITENS}}"]; 
+    let itens: any[] = [];
+    if (typeof itensJson === "string") {
+      try { itens = JSON.parse(itensJson.replace(/^__TABLE__/, "")); } catch { itens = []; }
+    } else if (Array.isArray(itensJson)) {
+      itens = itensJson;
+    }
+
+    if (itens.length > 0) etapas.push({ id: "AUDITORIA_MARCAS", tipo: "auditoria_marcas", prompt: construirPromptAuditoriaMarcas(itens, instrucoes) });
+
+    const dfd = { ...dadosUsuario, INSTRUCOES_EXTRAS: criarContextoEtapa("DFD") };
+    etapas.push({ id: "DFD", tipo: "geracao_json", prompt: `${construirPrompt(dfd, meeppExclusivo, "DFD")}\n\nDADOS ATUALIZADOS APÓS ETAPAS PRÉVIAS:\n${DADOS_ATUALIZADOS}` });
+
+    const etp = { ...dadosUsuario, INSTRUCOES_EXTRAS: criarContextoEtapa("ETP", { DFD: CONTEXTO_DFD }) };
+    etapas.push({ id: "ETP", tipo: "geracao_json", prompt: `${construirPrompt(etp, meeppExclusivo, "ETP")}\n\nDADOS ATUALIZADOS APÓS ETAPAS PRÉVIAS:\n${DADOS_ATUALIZADOS}` });
+
+    const tr = { ...dadosUsuario, INSTRUCOES_EXTRAS: criarContextoEtapa("TR", { DFD: CONTEXTO_DFD, ETP: CONTEXTO_ETP }), REQUISITOS_ETP_ANTERIOR: CONTEXTO_ETP };
+    etapas.push({ id: "TR", tipo: "geracao_json", prompt: `${construirPrompt(tr, meeppExclusivo, "TR")}\n\nDADOS ATUALIZADOS APÓS ETAPAS PRÉVIAS:\n${DADOS_ATUALIZADOS}` });
+  }
 
   const payload = {
     email: dados.email,
     instrucoes,
     dados_usuario: dadosUsuario,
-    dados_ia: { __LICITA_PIPELINE__: { version: 1, provider: provedor, model: modelo, temperature: 0.3, etapas } },
+    dados_ia: { __LICITA_PIPELINE__: { version: 2, provider: provedor, model: modelo, temperature: 0.3, eh_contratacao_direta: ehContratacaoDireta, etapas } },
   };
 
   const response = await fetch(`${BASE_URL}/licita/api/gerar-fase-preparatoria`, {
