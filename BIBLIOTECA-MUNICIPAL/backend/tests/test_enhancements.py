@@ -30,8 +30,9 @@ def test_edit_inactivate_and_renew(tmp_path,monkeypatch):
     person_edit=client.put(f"/api/pessoas/{person['id']}",headers=headers,json={'nome':'Pessoa Editada'}).json()
     assert person_edit['nome']=='Pessoa Editada'
     loan=client.post('/api/emprestimos',headers=headers,json={'livro_id':book['id'],'pessoa_id':person['id'],'quantidade':3,'prevista_devolucao':'2099-12-31'}).json()
-    partial=client.post(f"/api/emprestimos/{loan['id']}/devolver-parcial",headers=headers,json={'quantidade':1})
+    partial=client.post(f"/api/emprestimos/{loan['id']}/devolver",headers=headers,json={'quantidade':1})
     assert partial.status_code==200
+    assert partial.json()['devolvida_em']
     renewed=client.post(f"/api/emprestimos/{loan['id']}/renovar",headers=headers,json={'prevista_devolucao':'2100-12-31'})
     assert renewed.status_code==200
     blocked=client.post(f"/api/livros/{book['id']}/inativar",headers=headers)
