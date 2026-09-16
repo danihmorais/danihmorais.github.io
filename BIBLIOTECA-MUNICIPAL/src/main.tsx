@@ -31,9 +31,9 @@ export function App(){
  const [loanBook,setLoanBook]=useState(''),[loanPerson,setLoanPerson]=useState(''),[loanDate,setLoanDate]=useState(todayPlus(14)),[loanObs,setLoanObs]=useState(''),[exemplares,setExemplares]=useState<Exemplar[]>([]),[selected,setSelected]=useState<number[]>([])
  const [photoBookId,setPhotoBookId]=useState<number|null>(null),photoRef=useRef<HTMLInputElement>(null)
  const [scanner,setScanner]=useState(false),videoRef=useRef<HTMLVideoElement>(null),readerRef=useRef<any>(null)
- const [theme,setTheme]=useState<'light'|'dark'>((localStorage.getItem('app_theme') as 'light'|'dark')||'light')
+ const [theme,setTheme]=useState<'light'|'dark'>((localStorage.getItem('app_theme2') as 'light'|'dark')||'light')
  const run=async(fn:()=>Promise<void>)=>{setLoading(true);setNotice('');try{await fn()}catch(e){setNotice(e instanceof Error?e.message:'Não foi possível concluir a operação.')}finally{setLoading(false)}}
- useEffect(()=>{document.documentElement.dataset.theme=theme;localStorage.setItem('app_theme',theme)},[theme])
+ useEffect(()=>{document.documentElement.dataset.theme=theme;localStorage.setItem('app_theme2',theme)},[theme])
  useEffect(()=>{const expired=()=>{localStorage.removeItem('biblioteca_token');localStorage.removeItem('biblioteca_user');setAuth(null);setModal(null);setNotice('Sua sessão expirou. Entre novamente.')};window.addEventListener('biblioteca-auth-expired',expired);if(localStorage.getItem('biblioteca_token'))api<User>('/api/auth/me').then(setAuth).catch(()=>{});return()=>window.removeEventListener('biblioteca-auth-expired',expired)},[])
  useEffect(()=>{if(auth)loadDashboard()},[auth])
  useEffect(()=>{if(!auth)return;if(section==='livros')loadBooks();if(section==='pessoas')loadPeople();if(section==='usuarios')loadUsers();if(section==='emprestimos')loadLoans();if(section==='categorias')loadCategories();if(section==='logs')loadLogs()},[section,loanStatus,auth])
