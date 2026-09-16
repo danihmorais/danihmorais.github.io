@@ -1,3 +1,4 @@
+import sqlite3
 import main
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -27,14 +28,15 @@ def create_livro_com_exemplar(data: LivroCreateIn, user=Depends(main.current_use
         isbn = main.re.sub(r"[^0-9Xx]", "", data.isbn).upper()
         if isbn and conn.execute("SELECT id FROM livros WHERE ativo=1 AND isbn=?", (isbn,)).fetchone():
             raise HTTPException(409, "Já existe um livro ativo cadastrado com este ISBN.")
-        if conn.execute("SELECT id FROM exemplares WHERE codigo=?", (data.codigo_exemplar.strip(),)).fetchone():
-            raise HTTPException(409, f"Já existe um exemplar com o código {data.codigo_exemplar.strip()}.")
+        exemplar_code = data.codigo_exemplar.strip()
+        if conn.execute("SELECT id FROM exemplares WHERE codigo=?", (exemplar_code,)).fetchone():
+            raise HTTPException(409, f"Já existe um exemplar com o código {exemplar_code}.")
         t = main.now_iso()
         code = main.next_code(conn, "LIV", "livros")
         cur = conn.execute("INSERT INTO livros(codigo,titulo,autor,editora,ano,isbn,categoria,idioma,quantidade,localizacao,descricao,criado_em,atualizado_em) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", (code, data.titulo.strip(), data.autor.strip(), data.editora.strip(), data.ano, isbn, data.categoria.strip(), data.idioma.strip() or "Português", 1, data.localizacao.strip(), data.descricao.strip(), t, t))
-        exemplar_cur = conn.execute("INSERT INTO exemplares(livro_id,codigo,criado_em) VALUES(?,?,?)", (cur.lastrowid, data.codigo_exemplar.strip(), t))
+        exemplar_cur = conn.execute("INSERT INTO exemplares(livro_id,codigo,criado_em) VALUES(?,?,?)", (cur.lastrowid, exemplar_code, t))
         main.log(conn, "CRIAR", "livro", cur.lastrowid, f"Livro {code} cadastrado: {data.titulo}", {"codigo": code})
-        main.log(conn, "CRIAR", "exemplar", exemplar_cur.lastrowid, f"Exemplar {data.codigo_exemplar.strip()} cadastrado para {code}", {"livro_id": cur.lastrowid, "codigo": data.codigo_exemplar.strip()})
+        main.log(conn, "CRIAR", "exemplar", exemplar_cur.lastrowid, f"Exemplar {exemplar_code} cadastrado para {code}", {"livro_id": cur.lastrowid, "codigo": exemplar_code})
         conn.commit()
         result = conn.execute("SELECT * FROM livros WHERE id=?", (cur.lastrowid,)).fetchone()
         return main.row_dict(result)
