@@ -39,23 +39,23 @@ def test_app(tmp_path, monkeypatch):
     assert dashboard.status_code == 200
     assert dashboard.json()['emprestimos_recentes'] == []
 
-    book = client.post('/api/livros', headers=headers, json={'titulo':'Dom Casmurro','autor':'Machado de Assis','quantidade':2})
+    book = client.post('/api/livros', headers=headers, json={'titulo': 'Dom Casmurro', 'autor': 'Machado de Assis', 'quantidade': 1, 'codigo_exemplar': 'DC-001'})
     assert book.status_code == 200
-    person = client.post('/api/pessoas', headers=headers, json={'nome':'Maria Silva'})
+    person = client.post('/api/pessoas', headers=headers, json={'nome': 'Maria Silva'})
     assert person.status_code == 200
 
-    loan = client.post('/api/emprestimos', headers=headers, json={'livro_id':book.json()['id'],'pessoa_id':person.json()['id'],'quantidade':1,'prevista_devolucao':'2099-12-31'})
+    loan = client.post('/api/emprestimos', headers=headers, json={'livro_id': book.json()['id'], 'pessoa_id': person.json()['id'], 'quantidade': 1, 'prevista_devolucao': '2099-12-31'})
     assert loan.status_code == 200
     assert loan.json()['codigo'] == 'EMP-000001'
 
     current = client.get('/api/livros', headers=headers).json()[0]
-    assert current['disponiveis'] == 1
+    assert current['disponiveis'] == 0
 
     returned = client.post(f"/api/emprestimos/{loan.json()['id']}/devolver", headers=headers)
     assert returned.status_code == 200
     assert returned.json()['devolvida_em']
     assert client.get('/api/logs', headers=headers).status_code == 200
 
-    new_user = client.post('/api/usuarios', headers=headers, json={'nome':'Atendente','login':'atendente','perfil':'Atendente','senha':'SenhaAtendente123!'})
+    new_user = client.post('/api/usuarios', headers=headers, json={'nome': 'Atendente', 'login': 'atendente', 'perfil': 'Atendente', 'senha': 'SenhaAtendente123!'})
     assert new_user.status_code == 200
     assert 'senha_hash' not in new_user.json()
