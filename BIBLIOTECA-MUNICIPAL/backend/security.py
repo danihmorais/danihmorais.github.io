@@ -30,9 +30,15 @@ def client_key(request: Request):
 
 
 def normalize_isbn(value: str):
-    raw = value.strip().upper()
-    raw = re.sub(r"^ISBN(?:-1[03])?\s*[:.]?\s*", "", raw)
-    return "".join(ch for ch in raw if ch.isdigit() or ch == "X")
+    raw = str(value or "").strip().upper()
+    raw = re.sub(r"^ISBN(?:\s*[-:]?\s*(?:10|13))?\s*[:.]?\s*", "", raw)
+    digits = "".join(ch for ch in raw if ch.isdigit() or ch == "X")
+    if len(digits) in (10, 13):
+        return digits
+    embedded = re.search(r"978\d{10}", digits)
+    if embedded and (digits.startswith("10") or len(digits) > 13):
+        return embedded.group(0)
+    return digits
 
 
 def isbn10_to_13(isbn: str):
