@@ -11,7 +11,7 @@ function token() {
 }
 
 function requiresAuthentication(path: string) {
-  return path !== '/api/auth/status' && path !== '/api/auth/login' && path !== '/health'
+  return path !== '/api/auth/status' && path !== '/api/auth/login' && path !== '/api/auth/bootstrap' && path !== '/health'
 }
 
 function normalizeResponse(path: string, body: unknown): unknown {
@@ -60,19 +60,21 @@ function buildIsbnResult(isbn: string, titulo: string, autor: string, editora: s
 
 async function lookupIsbnFallback(value: string) {
   const isbn = normalizeIsbn(value)
-  if (!/^\d{10}|\d{13}$/.test(isbn)) return null
+  if (!/^(?:\d{10}|\d{13})$/.test(isbn)) return null
 
   const requests = [
     async () => {
-      const response = await fetch(`https://openlibrary.org/search.json?isbn=${encodeURIComponent(isbn)}&limit=1`, { headers: { Accept: 'application/json' } })
+      const fields = 'key,title,author_name,publisher,first_publish_year,language,cover_i'
+      const response = await fetch(`https://openlibrary.org/search.json?isbn=${encodeURIComponent(isbn)}&fields=${encodeURIComponent(fields)}&limit=1`)
       if (!response.ok) return null
       const payload: any = await response.json()
       const doc = payload?.docs?.[0]
       if (!doc) return null
-      return buildIsbnResult(isbn, doc.title || '', Array.isArray(doc.author_name) ? doc.author_name.join(', ') : '', Array.isArray(doc.publisher) ? doc.publisher[0] || '' : '', yearFrom(doc.first_publish_year), 'Português', '', 'Open Library')
+      const idioma = Array.isArray(doc.language) && doc.language.some((x: string) => x === 'por') ? 'Português' : ''
+      return buildIsbnResult(isbn, doc.title || '', Array.isArray(doc.author_name) ? doc.author_name.join(', ') : '', Array.isArray(doc.publisher) ? doc.publisher[0] || '' : '', yearFrom(doc.first_publish_year), idioma, '', 'Open Library')
     },
     async () => {
-      const response = await fetch(`https://openlibrary.org/isbn/${encodeURIComponent(isbn)}.json`, { headers: { Accept: 'application/json' } })
+      const response = await fetch(`https://openlibrary.org/isbn/${encodeURIComponent(isbn)}.json`)
       if (!response.ok) return null
       const payload: any = await response.json()
       const authors = Array.isArray(payload?.authors) ? payload.authors.map((x: any) => typeof x === 'string' ? x : x?.name || '').filter(Boolean).join(', ') : ''
@@ -81,7 +83,7 @@ async function lookupIsbnFallback(value: string) {
       return buildIsbnResult(isbn, payload?.title || '', authors, publishers, yearFrom(payload?.publish_date), 'Português', notes, 'Open Library')
     },
     async () => {
-      const response = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${encodeURIComponent(isbn)}&maxResults=5`, { headers: { Accept: 'application/json' } })
+      const response = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${encodeURIComponent(isbn)}&maxResults=5`)
       if (!response.ok) return null
       const payload: any = await response.json()
       for (const item of payload?.items || []) {
@@ -124,7 +126,8 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   try { body = await response.json() } catch { body = null }
 
   if (path.startsWith('/api/livros/buscar-isbn')) {
-    const resolved = await resolveIsbnResponse(new URLSearchParams(path.split('?')[1] || '').get('codigo') || '', body, response.status)
+    const query = new URLSearchParams(path.split('?')[1] || '')
+    const resolved = await resolveIsbnResponse(query.get('codigo') || '', body, response.status)
     if (resolved) return resolved as T
   }
 
