@@ -17,6 +17,7 @@ Sistema de gestão da Biblioteca Municipal Carlos Eduardo Telles, R. Santa Catar
 - Cadastro e pesquisa de livros, pessoas e usuários.
 - Leitura de ISBN/código de barras pela câmera do celular.
 - Consulta de dados bibliográficos por ISBN.
+- Cadastro, edição e exclusão controlada de categorias.
 - Controle de exemplares e disponibilidade.
 - Empréstimos, devoluções parciais/totais e renovação.
 - Fotos das obras armazenadas no computador do backend.
