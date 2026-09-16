@@ -2,18 +2,50 @@ import main
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel, Field
 
-TARGET_PATH = "/api/emprestimos/{emprestimo_id}/devolver"
-
-for route in list(main.app.router.routes):
-    if getattr(route, "path", None) == TARGET_PATH and "POST" in (getattr(route, "methods", None) or set()):
-        main.app.router.routes.remove(route)
+for target_path in ["/api/emprestimos/{emprestimo_id}/devolver", "/api/livros"]:
+    for route in list(main.app.router.routes):
+        if getattr(route, "path", None) == target_path and "POST" in (getattr(route, "methods", None) or set()):
+            main.app.router.routes.remove(route)
 
 import enhancements
 import exemplares
 
 
+class LivroCreateIn(main.LivroIn):
+    codigo_exemplar: str = Field(min_length=1, max_length=80)
+
+
 class ExemplarCodigoIn(BaseModel):
     codigo: str = Field(min_length=1, max_length=80)
+
+
+@main.app.post("/api/livros")
+def create_livro_com_exemplar(data: LivroCreateIn, user=Depends(main.current_user)):
+    conn = main.db()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        isbn = main.re.sub(r"[^0-9Xx]", "", data.isbn).upper()
+        if isbn and conn.execute("SELECT id FROM livros WHERE ativo=1 AND isbn=?", (isbn,)).fetchone():
+            raise HTTPException(409, "Já existe um livro ativo cadastrado com este ISBN.")
+        if conn.execute("SELECT id FROM exemplares WHERE codigo=?", (data.codigo_exemplar.strip(),)).fetchone():
+            raise HTTPException(409, f"Já existe um exemplar com o código {data.codigo_exemplar.strip()}.")
+        t = main.now_iso()
+        code = main.next_code(conn, "LIV", "livros")
+        cur = conn.execute("INSERT INTO livros(codigo,titulo,autor,editora,ano,isbn,categoria,idioma,quantidade,localizacao,descricao,criado_em,atualizado_em) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", (code, data.titulo.strip(), data.autor.strip(), data.editora.strip(), data.ano, isbn, data.categoria.strip(), data.idioma.strip() or "Português", 1, data.localizacao.strip(), data.descricao.strip(), t, t))
+        exemplar_cur = conn.execute("INSERT INTO exemplares(livro_id,codigo,criado_em) VALUES(?,?,?)", (cur.lastrowid, data.codigo_exemplar.strip(), t))
+        main.log(conn, "CRIAR", "livro", cur.lastrowid, f"Livro {code} cadastrado: {data.titulo}", {"codigo": code})
+        main.log(conn, "CRIAR", "exemplar", exemplar_cur.lastrowid, f"Exemplar {data.codigo_exemplar.strip()} cadastrado para {code}", {"livro_id": cur.lastrowid, "codigo": data.codigo_exemplar.strip()})
+        conn.commit()
+        result = conn.execute("SELECT * FROM livros WHERE id=?", (cur.lastrowid,)).fetchone()
+        return main.row_dict(result)
+    except HTTPException:
+        conn.rollback()
+        raise
+    except sqlite3.IntegrityError:
+        conn.rollback()
+        raise HTTPException(409, "Não foi possível gerar um cadastro único para o livro/exemplar. Tente novamente.")
+    finally:
+        conn.close()
 
 
 @main.app.put("/api/exemplares/{exemplar_id}/codigo")
