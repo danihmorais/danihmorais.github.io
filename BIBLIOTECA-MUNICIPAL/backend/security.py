@@ -1,6 +1,7 @@
 from datetime import date, datetime, timezone
-import hashlib
 import json
+import os
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -16,7 +17,7 @@ LOGIN_FAILURES = {}
 SESSION_IDLE_SECONDS = 30 * 60
 SESSION_ABSOLUTE_SECONDS = 12 * 60 * 60
 SESSION_TIMES = {}
-TRUSTED_PROXY_IPS = {x.strip() for x in __import__("os").getenv("BIBLIOTECA_TRUSTED_PROXY_IPS", "").split(",") if x.strip()}
+TRUSTED_PROXY_IPS = {x.strip() for x in os.getenv("BIBLIOTECA_TRUSTED_PROXY_IPS", "").split(",") if x.strip()}
 
 
 def client_key(request: Request):
@@ -30,8 +31,7 @@ def client_key(request: Request):
 
 def normalize_isbn(value: str):
     raw = value.strip().upper()
-    if raw.startswith("ISBN"):
-        raw = raw[4:].lstrip(" :")
+    raw = re.sub(r"^ISBN(?:-1[03])?\s*[:.]?\s*", "", raw)
     return "".join(ch for ch in raw if ch.isdigit() or ch == "X")
 
 
@@ -43,7 +43,7 @@ def isbn10_to_13(isbn: str):
 
 def valid_isbn(isbn: str):
     if len(isbn) == 10:
-        if not __import__("re").fullmatch(r"[0-9]{9}[0-9X]", isbn):
+        if not re.fullmatch(r"[0-9]{9}[0-9X]", isbn):
             return False
         total = sum((10 - i) * (10 if ch == "X" else int(ch)) for i, ch in enumerate(isbn))
         return total % 11 == 0
@@ -54,11 +54,11 @@ def valid_isbn(isbn: str):
 
 
 def year_from(value):
-    match = __import__("re").search(r"\b(1[5-9]\d{2}|20\d{2})\b", str(value or ""))
+    match = re.search(r"\b(1[5-9]\d{2}|20\d{2})\b", str(value or ""))
     return int(match.group(1)) if match else None
 
 
-def result_from_openlibrary(isbn, payload, source="Open Library"):
+def result_from_openlibrary(isbn, payload):
     item = payload.get(f"ISBN:{isbn}") if isinstance(payload, dict) else None
     if not item:
         return None
@@ -70,14 +70,13 @@ def result_from_openlibrary(isbn, payload, source="Open Library"):
         "ano": year_from(item.get("publish_date")),
         "idioma": "Português",
         "descricao": item.get("notes", "") if isinstance(item.get("notes"), str) else "",
-        "fonte": source,
+        "fonte": "Open Library",
     }
 
 
 def result_from_openlibrary_isbn(isbn, payload):
     if not isinstance(payload, dict):
         return None
-    title = payload.get("title") or ""
     authors = []
     for author in payload.get("authors", []) or []:
         if isinstance(author, dict) and author.get("name"):
@@ -90,6 +89,7 @@ def result_from_openlibrary_isbn(isbn, payload):
             publishers.append(publisher["name"])
         elif isinstance(publisher, str):
             publishers.append(publisher)
+    title = payload.get("title") or ""
     if not title and not authors and not publishers:
         return None
     return {
@@ -144,6 +144,20 @@ def lookup_isbn_data(isbn):
     return None
 
 
+def isbn_response(codigo):
+    isbn = normalize_isbn(codigo)
+    if not valid_isbn(isbn):
+        raise HTTPException(400, "Código não é um ISBN válido. Confira os dígitos e tente novamente.")
+    result = lookup_isbn_data(isbn)
+    if not result and len(isbn) == 10:
+        result = lookup_isbn_data(isbn10_to_13(isbn))
+        if result:
+            result["isbn"] = isbn
+    if result:
+        return result
+    raise HTTPException(404, "ISBN válido, mas não encontrei os dados bibliográficos nas fontes consultadas. O livro pode ser cadastrado manualmente.")
+
+
 @main.app.middleware("http")
 async def security_middleware(request: Request, call_next):
     path = request.url.path
@@ -175,8 +189,17 @@ async def security_middleware(request: Request, call_next):
                     return JSONResponse({"detail": "Sessão expirada."}, status_code=401)
                 SESSION_TIMES[token] = (created, now)
 
-                if path == "/api/usuarios" and request.method == "GET" and session.get("perfil") != "Administrador":
-                    return JSONResponse({"detail": "Somente administradores podem listar usuários."}, status_code=403)
+                if path == "/api/usuarios" and request.method == "GET":
+                    if session.get("perfil") != "Administrador":
+                        return JSONResponse({"detail": "Somente administradores podem listar usuários."}, status_code=403)
+
+                if path == "/api/livros/buscar-isbn" and request.method == "GET":
+                    codigo = request.query_params.get("codigo", "")
+                    try:
+                        result = isbn_response(codigo)
+                        return JSONResponse(result)
+                    except HTTPException as exc:
+                        return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
 
     if path in {"/api/emprestimos", "/api/emprestimos-com-exemplares"} and request.method == "POST":
         body = await request.body()
@@ -195,30 +218,6 @@ async def security_middleware(request: Request, call_next):
             return JSONResponse({"detail": "A data de devolução prevista deve ser válida no formato AAAA-MM-DD."}, status_code=422)
 
     return await call_next(request)
-
-
-@main.app.get("/api/livros/buscar-isbn")
-def buscar_isbn_seguro(codigo: str, user=Depends(main.current_user)):
-    isbn = normalize_isbn(codigo)
-    if len(isbn) == 10 and valid_isbn(isbn):
-        canonical_isbn = isbn
-    elif len(isbn) == 13 and valid_isbn(isbn):
-        canonical_isbn = isbn
-    else:
-        raise HTTPException(400, "Código não é um ISBN válido. Confira os dígitos e tente novamente.")
-
-    result = lookup_isbn_data(canonical_isbn)
-    if result:
-        return result
-
-    if len(canonical_isbn) == 10:
-        isbn13 = isbn10_to_13(canonical_isbn)
-        result = lookup_isbn_data(isbn13)
-        if result:
-            result["isbn"] = canonical_isbn
-            return result
-
-    raise HTTPException(404, "ISBN válido, mas não encontrei os dados bibliográficos nas fontes consultadas. O livro pode ser cadastrado manualmente.")
 
 
 @main.app.post("/api/emprestimos/{emprestimo_id}/devolver-parcial")
