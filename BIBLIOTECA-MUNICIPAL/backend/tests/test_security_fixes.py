@@ -24,7 +24,10 @@ def test_isbn_normalization_and_checksum(monkeypatch):
     import security
 
     assert security.normalize_isbn("ISBN 978-85-359-0277-8") == "9788535902778"
+    assert security.normalize_isbn("10.9788506055106") == "9788506055106"
+    assert security.normalize_isbn("ISBN 10: 8506055105") == "8506055105"
     assert security.valid_isbn("9788535902778")
+    assert security.valid_isbn("9788506055106")
     assert security.valid_isbn("0306406152")
     assert not security.valid_isbn("9788535902777")
 
