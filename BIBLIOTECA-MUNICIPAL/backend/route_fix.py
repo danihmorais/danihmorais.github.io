@@ -22,6 +22,7 @@ class ExemplarCodigoIn(BaseModel):
 
 @main.app.post("/api/livros")
 def create_livro_com_exemplar(data: LivroCreateIn, user=Depends(main.current_user)):
+    exemplares.setup()
     conn = main.db()
     try:
         conn.execute("BEGIN IMMEDIATE")
@@ -52,6 +53,7 @@ def create_livro_com_exemplar(data: LivroCreateIn, user=Depends(main.current_use
 
 @main.app.put("/api/exemplares/{exemplar_id}/codigo")
 def alterar_codigo_exemplar(exemplar_id: int, data: ExemplarCodigoIn, user=Depends(main.current_user)):
+    exemplares.setup()
     codigo = data.codigo.strip()
     conn = main.db()
     row = conn.execute("SELECT id,livro_id,codigo,ativo FROM exemplares WHERE id=?", (exemplar_id,)).fetchone()
