@@ -62,6 +62,12 @@ def verify_password(password: str, salt_hex: str, hash_hex: str):
 def init_db():
     conn = db()
     conn.executescript("""
+    CREATE TABLE IF NOT EXISTS categorias (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nome TEXT UNIQUE NOT NULL,
+      criado_em TEXT NOT NULL,
+      atualizado_em TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS livros (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       codigo TEXT UNIQUE NOT NULL,
@@ -133,6 +139,11 @@ def init_db():
         conn.execute("ALTER TABLE usuarios ADD COLUMN senha_salt TEXT DEFAULT ''")
     if "senha_hash" not in columns:
         conn.execute("ALTER TABLE usuarios ADD COLUMN senha_hash TEXT DEFAULT ''")
+    conn.commit()
+    rows = conn.execute("SELECT DISTINCT TRIM(categoria) categoria FROM livros WHERE TRIM(COALESCE(categoria,'')) <> ''").fetchall()
+    t = now_iso()
+    for row in rows:
+        conn.execute("INSERT OR IGNORE INTO categorias(nome,criado_em,atualizado_em) VALUES(?,?,?)", (row['categoria'], t, t))
     conn.commit()
     conn.close()
     ensure_bootstrap_file()
@@ -363,6 +374,54 @@ def buscar_isbn(codigo: str = Query(..., min_length=8, max_length=32), user=Depe
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
             continue
     raise HTTPException(404, "Não encontrei dados bibliográficos para este ISBN.")
+
+
+@app.get("/api/categorias")
+def list_categorias(user=Depends(current_user)):
+    conn=db()
+    rows=conn.execute("SELECT c.id,c.nome,COUNT(l.id) livros FROM categorias c LEFT JOIN livros l ON l.ativo=1 AND l.categoria=c.nome GROUP BY c.id,c.nome ORDER BY c.nome COLLATE NOCASE").fetchall()
+    conn.close()
+    return [row_dict(r) for r in rows]
+
+
+class CategoriaIn(BaseModel):
+    nome: str = Field(min_length=1, max_length=120)
+
+
+@app.post("/api/categorias")
+def create_categoria(data: CategoriaIn, user=Depends(current_user)):
+    if user["perfil"] != "Administrador": raise HTTPException(403, "Somente administradores podem gerenciar categorias.")
+    nome=data.nome.strip()
+    conn=db()
+    try:
+        t=now_iso(); cur=conn.execute("INSERT INTO categorias(nome,criado_em,atualizado_em) VALUES(?,?,?)",(nome,t,t)); log(conn,'CRIAR','categoria',cur.lastrowid,f"Categoria cadastrada: {nome}"); conn.commit(); r=conn.execute("SELECT c.id,c.nome,0 livros FROM categorias c WHERE c.id=?",(cur.lastrowid,)).fetchone(); conn.close(); return row_dict(r)
+    except sqlite3.IntegrityError:
+        conn.close(); raise HTTPException(409, "Já existe uma categoria com esse nome.")
+
+
+@app.put("/api/categorias/{categoria_id}")
+def update_categoria(categoria_id: int, data: CategoriaIn, user=Depends(current_user)):
+    if user["perfil"] != "Administrador": raise HTTPException(403, "Somente administradores podem gerenciar categorias.")
+    nome=data.nome.strip(); conn=db(); old=conn.execute("SELECT * FROM categorias WHERE id=?",(categoria_id,)).fetchone()
+    if not old: conn.close(); raise HTTPException(404, "Categoria não encontrada.")
+    try:
+        conn.execute("UPDATE categorias SET nome=?, atualizado_em=? WHERE id=?",(nome,now_iso(),categoria_id))
+        conn.execute("UPDATE livros SET categoria=?, atualizado_em=? WHERE categoria=?",(nome,now_iso(),old['nome']))
+        log(conn,'ALTERAR','categoria',categoria_id,f"Categoria alterada: {old['nome']} → {nome}")
+        conn.commit(); r=conn.execute("SELECT c.id,c.nome,COUNT(l.id) livros FROM categorias c LEFT JOIN livros l ON l.ativo=1 AND l.categoria=c.nome WHERE c.id=? GROUP BY c.id,c.nome",(categoria_id,)).fetchone(); conn.close(); return row_dict(r)
+    except sqlite3.IntegrityError:
+        conn.rollback(); conn.close(); raise HTTPException(409, "Já existe uma categoria com esse nome.")
+
+
+@app.delete("/api/categorias/{categoria_id}")
+def delete_categoria(categoria_id: int, user=Depends(current_user)):
+    if user["perfil"] != "Administrador": raise HTTPException(403, "Somente administradores podem gerenciar categorias.")
+    conn=db(); row=conn.execute("SELECT * FROM categorias WHERE id=?",(categoria_id,)).fetchone()
+    if not row: conn.close(); raise HTTPException(404, "Categoria não encontrada.")
+    vinculados=conn.execute("SELECT COUNT(*) v FROM livros WHERE ativo=1 AND categoria=?",(row['nome'],)).fetchone()['v']
+    if vinculados:
+        conn.close(); raise HTTPException(409, f"Não é possível excluir a categoria: há {vinculados} livro(s) vinculado(s).")
+    conn.execute("DELETE FROM categorias WHERE id=?",(categoria_id,)); log(conn,'EXCLUIR','categoria',categoria_id,f"Categoria excluída: {row['nome']}"); conn.commit(); conn.close(); return {"ok":True}
 
 
 @app.post("/api/livros")
