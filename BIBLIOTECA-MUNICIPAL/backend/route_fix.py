@@ -27,6 +27,10 @@ def create_livro_com_exemplar(data: LivroCreateIn, user=Depends(main.current_use
     try:
         conn.execute("BEGIN IMMEDIATE")
         isbn = main.re.sub(r"[^0-9Xx]", "", data.isbn).upper()
+        if len(isbn) not in (0, 10, 13):
+            embedded = main.re.search(r"978\d{10}", isbn)
+            if embedded and (isbn.startswith("10") or len(isbn) > 13):
+                isbn = embedded.group(0)
         if isbn and conn.execute("SELECT id FROM livros WHERE ativo=1 AND isbn=?", (isbn,)).fetchone():
             raise HTTPException(409, "Já existe um livro ativo cadastrado com este ISBN.")
         exemplar_code = data.codigo_exemplar.strip()
