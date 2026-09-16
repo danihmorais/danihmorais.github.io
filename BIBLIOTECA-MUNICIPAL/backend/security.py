@@ -192,12 +192,16 @@ async def security_middleware(request: Request, call_next):
                 if path == "/api/usuarios" and request.method == "GET":
                     if session.get("perfil") != "Administrador":
                         return JSONResponse({"detail": "Somente administradores podem listar usuários."}, status_code=403)
+                    conn = main.db()
+                    incluir_inativos = request.query_params.get("incluir_inativos", "false").lower() in {"1", "true", "sim", "yes"}
+                    clause = "1=1" if incluir_inativos else "ativo=1"
+                    rows = conn.execute(f"SELECT * FROM usuarios WHERE {clause} ORDER BY ativo DESC,nome COLLATE NOCASE").fetchall()
+                    conn.close()
+                    return JSONResponse([{**main.public_user(row), "ativo": bool(row["ativo"])} for row in rows])
 
                 if path == "/api/livros/buscar-isbn" and request.method == "GET":
-                    codigo = request.query_params.get("codigo", "")
                     try:
-                        result = isbn_response(codigo)
-                        return JSONResponse(result)
+                        return JSONResponse(isbn_response(request.query_params.get("codigo", "")))
                     except HTTPException as exc:
                         return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
 
