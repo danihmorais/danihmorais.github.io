@@ -23,14 +23,14 @@ def setup_app(tmp_path, monkeypatch):
 def test_isbn_normalization_and_checksum(monkeypatch):
     import security
 
-    assert security.normalize_isbn("ISBN 978-85-359-0277-5") == "9788535902775"
-    assert security.valid_isbn("9788535902775")
+    assert security.normalize_isbn("ISBN 978-85-359-0277-8") == "9788535902778"
+    assert security.valid_isbn("9788535902778")
     assert security.valid_isbn("0306406152")
-    assert not security.valid_isbn("9788535902776")
+    assert not security.valid_isbn("9788535902777")
 
     monkeypatch.setattr(security, "lookup_isbn_data", lambda isbn: {"isbn": isbn, "titulo": "Livro de teste", "autor": "Autor", "editora": "Editora", "ano": 2020, "idioma": "Português", "descricao": "", "fonte": "Teste"})
-    result = security.isbn_response("ISBN-13: 978-85-359-0277-5")
-    assert result["isbn"] == "9788535902775"
+    result = security.isbn_response("ISBN-13: 978-85-359-0277-8")
+    assert result["isbn"] == "9788535902778"
     assert result["titulo"] == "Livro de teste"
 
 
