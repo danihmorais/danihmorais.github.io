@@ -126,7 +126,7 @@ def reset_password(usuario_id:int,data:PasswordResetIn,user=Depends(main.current
 def change_password(data:PasswordChangeIn,user=Depends(main.current_user)):
     conn=main.db(); row=conn.execute("SELECT * FROM usuarios WHERE id=? AND ativo=1",(user["id"],)).fetchone()
     if not row or not main.verify_password(data.senha_atual,row["senha_salt"],row["senha_hash"]): conn.close(); raise HTTPException(400,"A senha atual está incorreta.")
-    salt,password_hash=main.hash_password(data.nova_senha); conn.execute("UPDATE usuarios SET senha_salt=?,senha_hash=?,atualizado_em=? WHERE id=?",(salt,password_hash,main.now_iso(),user["id"])); main.log(conn,"ALTERAR_SENHA",user["id"],f"Senha do usuário {user['login']} alterada"); conn.commit(); conn.close(); return {"ok":True}
+    salt,password_hash=main.hash_password(data.nova_senha); conn.execute("UPDATE usuarios SET senha_salt=?,senha_hash=?,atualizado_em=? WHERE id=?",(salt,password_hash,main.now_iso(),user["id"])); main.log(conn,"ALTERAR_SENHA","usuario",user["id"],f"Senha do usuário {user['login']} alterada"); conn.commit(); conn.close(); return {"ok":True}
 
 
 @main.app.post("/api/emprestimos/{emprestimo_id}/devolver")
