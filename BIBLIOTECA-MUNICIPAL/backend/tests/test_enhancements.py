@@ -27,7 +27,11 @@ def setup_client(tmp_path, monkeypatch):
 
 def test_edit_inactivate_and_renew(tmp_path,monkeypatch):
     client,headers=setup_client(tmp_path,monkeypatch)
-    book=client.post('/api/livros',headers=headers,json={'titulo':'Livro Original','quantidade':3}).json()
+    book_response=client.post('/api/livros',headers=headers,json={'titulo':'Livro Original','quantidade':1,'codigo_exemplar':'LO-001'})
+    assert book_response.status_code==200
+    book=book_response.json()
+    extra=client.post(f"/api/livros/{book['id']}/exemplares",headers=headers,json={'codigos':['LO-002','LO-003']})
+    assert extra.status_code==200
     person=client.post('/api/pessoas',headers=headers,json={'nome':'Pessoa Original'}).json()
     edited=client.put(f"/api/livros/{book['id']}",headers=headers,json={'titulo':'Livro Editado','quantidade':3}).json()
     assert edited['titulo']=='Livro Editado'
@@ -45,7 +49,7 @@ def test_edit_inactivate_and_renew(tmp_path,monkeypatch):
 
 def test_past_due_date_is_rejected(tmp_path,monkeypatch):
     client,headers=setup_client(tmp_path,monkeypatch)
-    book=client.post('/api/livros',headers=headers,json={'titulo':'Livro Data','quantidade':1}).json()
+    book=client.post('/api/livros',headers=headers,json={'titulo':'Livro Data','quantidade':1,'codigo_exemplar':'LD-001'}).json()
     person=client.post('/api/pessoas',headers=headers,json={'nome':'Pessoa Data'}).json()
     response=client.post('/api/emprestimos',headers=headers,json={'livro_id':book['id'],'pessoa_id':person['id'],'quantidade':1,'prevista_devolucao':'2020-01-01'})
     assert response.status_code==422
