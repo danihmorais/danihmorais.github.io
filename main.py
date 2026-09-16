@@ -35,6 +35,36 @@ def load_app_from_path(module_name, file_path, dir_name):
         sys.path = original_sys_path
 
 
+def load_module_from_path(module_name, file_path, dir_name, compatibility_main=None):
+    original_cwd = os.getcwd()
+    original_sys_path = sys.path.copy()
+    original_main = sys.modules.get("main")
+
+    abs_dir = os.path.abspath(dir_name)
+    os.chdir(abs_dir)
+    sys.path.insert(0, abs_dir)
+    sys.path.insert(0, original_cwd)
+
+    try:
+        if compatibility_main is not None:
+            sys.modules["main"] = compatibility_main
+        abs_file_path = os.path.join(original_cwd, file_path)
+        spec = importlib.util.spec_from_file_location(module_name, abs_file_path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"Não foi possível carregar {file_path}")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        if original_main is not None:
+            sys.modules["main"] = original_main
+        else:
+            sys.modules.pop("main", None)
+        os.chdir(original_cwd)
+        sys.path = original_sys_path
+
+
 app_licita = load_app_from_path("licita_main", "LICITA.AI/main.py", "LICITA.AI")
 app_monta = load_app_from_path("monta_main", "MONTAEDITAL/main.py", "MONTAEDITAL")
 app_email = load_app_from_path("email_main", "EMAIL-ATAS-CONTRATOS/main.py", "EMAIL-ATAS-CONTRATOS")
@@ -77,6 +107,34 @@ app_biblioteca = load_app_from_path(
     "biblioteca_main",
     "BIBLIOTECA-MUNICIPAL/backend/main.py",
     "BIBLIOTECA-MUNICIPAL/backend",
+)
+
+biblioteca_main_module = sys.modules["biblioteca_main"]
+biblioteca_main_module.SESSION_IDLE_SECONDS = 30 * 60
+biblioteca_main_module.SESSION_ABSOLUTE_SECONDS = 12 * 60 * 60
+load_module_from_path(
+    "biblioteca_security",
+    "BIBLIOTECA-MUNICIPAL/backend/security.py",
+    "BIBLIOTECA-MUNICIPAL/backend",
+    compatibility_main=biblioteca_main_module,
+)
+load_module_from_path(
+    "biblioteca_enhancements",
+    "BIBLIOTECA-MUNICIPAL/backend/enhancements.py",
+    "BIBLIOTECA-MUNICIPAL/backend",
+    compatibility_main=biblioteca_main_module,
+)
+load_module_from_path(
+    "biblioteca_exemplares",
+    "BIBLIOTECA-MUNICIPAL/backend/exemplares.py",
+    "BIBLIOTECA-MUNICIPAL/backend",
+    compatibility_main=biblioteca_main_module,
+)
+load_module_from_path(
+    "biblioteca_route_fix",
+    "BIBLIOTECA-MUNICIPAL/backend/route_fix.py",
+    "BIBLIOTECA-MUNICIPAL/backend",
+    compatibility_main=biblioteca_main_module,
 )
 app_biblioteca.init_db()
 app.mount("/biblioteca-api", app_biblioteca)
@@ -258,42 +316,32 @@ async def serve_model_file(file_path: str, request: Request):
     requested = _safe_file(root, file_path)
     size = requested.stat().st_size
     media_type = _media_type(requested)
-    download = request.query_params.get("download", "").lower() in {"1", "true", "yes"}
+    range_header = request.headers.get("range")
+    interval = _parse_range(range_header, size)
 
-    common_headers = {
-        "Accept-Ranges": "bytes",
-        "Content-Type": media_type,
-        "Content-Disposition": _content_disposition(requested, download=download),
-        "X-Content-Type-Options": "nosniff",
-        "Cache-Control": "no-cache",
-    }
-
-    try:
-        byte_range = _parse_range(request.headers.get("range"), size)
-    except HTTPException as exc:
-        return Response(
-            status_code=exc.status_code,
-            headers={**common_headers, "Content-Range": f"bytes */{size}"},
-            content=exc.detail if isinstance(exc.detail, str) else "Range Not Satisfiable",
-        )
-
-    if byte_range is None:
+    if interval:
+        start, end = interval
         return StreamingResponse(
-            _iter_file(requested, 0, max(size - 1, 0)),
-            status_code=200,
-            headers={**common_headers, "Content-Length": str(size)},
+            _iter_file(requested, start, end),
+            status_code=206,
             media_type=media_type,
+            headers={
+                "Accept-Ranges": "bytes",
+                "Content-Range": f"bytes {start}-{end}/{size}",
+                "Content-Length": str(end - start + 1),
+                "Content-Disposition": _content_disposition(requested, False),
+                "X-Content-Type-Options": "nosniff",
+            },
         )
 
-    start, end = byte_range
-    content_length = end - start + 1
     return StreamingResponse(
-        _iter_file(requested, start, end),
-        status_code=206,
-        headers={
-            **common_headers,
-            "Content-Length": str(content_length),
-            "Content-Range": f"bytes {start}-{end}/{size}",
-        },
+        _iter_file(requested, 0, size - 1),
+        status_code=200,
         media_type=media_type,
+        headers={
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(size),
+            "Content-Disposition": _content_disposition(requested, False),
+            "X-Content-Type-Options": "nosniff",
+        },
     )
