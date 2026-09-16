@@ -1,7 +1,7 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 import sqlite3
 
-from fastapi import Depends, HTTPException, Query, Request
+from fastapi import Depends, HTTPException
 from pydantic import BaseModel, Field
 
 import main
@@ -46,22 +46,6 @@ def due_date(value: str):
     return parsed
 
 
-@main.app.middleware("http")
-async def session_middleware(request: Request, call_next):
-    if request.url.path.startswith("/api/") and request.url.path not in {"/api/auth/status", "/api/auth/login", "/api/auth/bootstrap"}:
-        auth = request.headers.get("authorization", "")
-        if auth.startswith("Bearer "):
-            token = auth[7:].strip()
-            session = main.SESSIONS.get(token)
-            if session and isinstance(session, dict) and "user" in session:
-                now = datetime.now(timezone.utc).timestamp()
-                if now - session.get("created", now) > main.SESSION_ABSOLUTE_SECONDS or now - session.get("last_seen", now) > main.SESSION_IDLE_SECONDS:
-                    main.SESSIONS.pop(token, None)
-                    raise HTTPException(401, "Sessão expirada.")
-                session["last_seen"] = now
-    return await call_next(request)
-
-
 @main.app.put("/api/livros/{livro_id}")
 def update_livro(livro_id: int, data: main.LivroIn, user=Depends(main.current_user)):
     conn=main.db(); row=conn.execute("SELECT * FROM livros WHERE id=?",(livro_id,)).fetchone()
@@ -98,11 +82,6 @@ def inativar_pessoa(pessoa_id:int,user=Depends(main.current_user)):
     open_count=conn.execute("SELECT COUNT(*) v FROM emprestimos WHERE pessoa_id=? AND devolvida_em IS NULL",(pessoa_id,)).fetchone()["v"]
     if open_count: conn.close(); raise HTTPException(409,"Não é possível inativar uma pessoa com empréstimo em aberto.")
     conn.execute("UPDATE pessoas SET ativo=0,atualizado_em=? WHERE id=?",(main.now_iso(),pessoa_id)); main.log(conn,"INATIVAR","pessoa",pessoa_id,f"Pessoa {row['codigo']} inativada"); conn.commit(); conn.close(); return {"ok":True}
-
-
-@main.app.get("/api/usuarios")
-def enhanced_users(incluir_inativos: bool=False,user=Depends(main.current_user)):
-    admin(user); conn=main.db(); clause="1=1" if incluir_inativos else "ativo=1"; rows=conn.execute(f"SELECT * FROM usuarios WHERE {clause} ORDER BY ativo DESC,nome COLLATE NOCASE").fetchall(); conn.close(); return [{**main.public_user(r),"ativo":bool(r["ativo"])} for r in rows]
 
 
 @main.app.put("/api/usuarios/{usuario_id}")
@@ -147,7 +126,7 @@ def reset_password(usuario_id:int,data:PasswordResetIn,user=Depends(main.current
 def change_password(data:PasswordChangeIn,user=Depends(main.current_user)):
     conn=main.db(); row=conn.execute("SELECT * FROM usuarios WHERE id=? AND ativo=1",(user["id"],)).fetchone()
     if not row or not main.verify_password(data.senha_atual,row["senha_salt"],row["senha_hash"]): conn.close(); raise HTTPException(400,"A senha atual está incorreta.")
-    salt,password_hash=main.hash_password(data.nova_senha); conn.execute("UPDATE usuarios SET senha_salt=?,senha_hash=?,atualizado_em=? WHERE id=?",(salt,password_hash,main.now_iso(),user["id"])); main.log(conn,"ALTERAR_SENHA","usuario",user["id"],f"Senha do usuário {user['login']} alterada"); conn.commit(); conn.close(); return {"ok":True}
+    salt,password_hash=main.hash_password(data.nova_senha); conn.execute("UPDATE usuarios SET senha_salt=?,senha_hash=?,atualizado_em=? WHERE id=?",(salt,password_hash,main.now_iso(),user["id"])); main.log(conn,"ALTERAR_SENHA",user["id"],f"Senha do usuário {user['login']} alterada"); conn.commit(); conn.close(); return {"ok":True}
 
 
 @main.app.post("/api/emprestimos/{emprestimo_id}/devolver")
