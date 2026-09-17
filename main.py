@@ -136,6 +136,12 @@ load_module_from_path(
     "BIBLIOTECA-MUNICIPAL/backend",
     compatibility_main=biblioteca_main_module,
 )
+load_module_from_path(
+    "biblioteca_access_routes",
+    "BIBLIOTECA-MUNICIPAL/backend/access_routes.py",
+    "BIBLIOTECA-MUNICIPAL/backend",
+    compatibility_main=biblioteca_main_module,
+)
 app_biblioteca.init_db()
 app.mount("/biblioteca-api", app_biblioteca)
 
