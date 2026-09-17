@@ -72,6 +72,21 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           npm run build
+      - name: Corrigir sintaxe da Biblioteca Municipal
+        working-directory: ./BIBLIOTECA-MUNICIPAL
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("src/main.tsx")
+          lines = p.read_text(encoding="utf-8").splitlines()
+          for i, line in enumerate(lines):
+              stripped = line.rstrip()
+              if stripped.startswith(" async function loadLogs(){"):
+                  if stripped.endswith("))}"):
+                      lines[i] = stripped[:-1] + ")}" 
+                  break
+          p.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
       - name: Build Biblioteca Municipal
         working-directory: ./BIBLIOTECA-MUNICIPAL
         env:
