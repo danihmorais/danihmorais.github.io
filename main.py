@@ -131,8 +131,8 @@ load_module_from_path(
     compatibility_main=biblioteca_main_module,
 )
 load_module_from_path(
-    "biblioteca_route_fix",
-    "BIBLIOTECA-MUNICIPAL/backend/route_fix.py",
+    "biblioteca_routes",
+    "BIBLIOTECA-MUNICIPAL/backend/routes.py",
     "BIBLIOTECA-MUNICIPAL/backend",
     compatibility_main=biblioteca_main_module,
 )
