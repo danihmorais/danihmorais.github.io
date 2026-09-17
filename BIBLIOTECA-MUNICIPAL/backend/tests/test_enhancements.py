@@ -12,7 +12,7 @@ def setup_client(tmp_path, monkeypatch):
     main.BOOTSTRAP_TOKEN_PATH=data_dir/'bootstrap.token'
     main.SESSIONS.clear()
     main.init_db()
-    import route_fix
+    import routes
     import security
     security.LOGIN_FAILURES.clear()
     security.SESSION_TIMES.clear()
