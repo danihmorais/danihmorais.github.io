@@ -1,11 +1,12 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
+import os
 import sqlite3
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 DATA_DIR = ROOT_DIR / "BIBLIOTECA-MUNICIPAL" / "data"
 DB_PATH = DATA_DIR / "biblioteca.db"
-BACKUP_DIR = DATA_DIR / "backups"
+BACKUP_DIR = Path(os.getenv("BIBLIOTECA_BACKUP_DIR", "/mnt/c/Users/servidor/Biblioteca-Backups"))
 RETENTION_DAYS = 30
 
 
@@ -14,7 +15,7 @@ def backup_database():
         raise FileNotFoundError(f"Banco não encontrado: {DB_PATH}")
 
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d")
+    stamp = datetime.now().astimezone().strftime("%Y-%m-%d")
     backup_path = BACKUP_DIR / f"biblioteca-{stamp}.db"
 
     source = sqlite3.connect(DB_PATH, timeout=60)
