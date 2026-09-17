@@ -195,7 +195,7 @@ async def lifespan(_app):
     SESSIONS.clear()
 
 
-app = FastAPI(title="Biblioteca Municipal Carlos Eduardo Telles", version="1.1.2", lifespan=lifespan)
+app = FastAPI(title="Biblioteca Municipal Carlos Eduardo Telles", version="1.1.3", lifespan=lifespan)
 origins = {"https://danihmorais.github.io", "http://localhost", "http://localhost:5173", "http://127.0.0.1:5173"}
 origins.update(x.strip().rstrip("/") for x in os.getenv("CORS_ORIGINS", "").split(",") if x.strip())
 app.add_middleware(CORSMiddleware, allow_origins=sorted(origins), allow_credentials=False, allow_methods=["*"], allow_headers=["*"])
