@@ -1,0 +1,192 @@
+name: Limpeza estrutural da Biblioteca Municipal
+
+on:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Limpar e consolidar Biblioteca Municipal
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path.cwd()
+          biblioteca = root / "BIBLIOTECA-MUNICIPAL"
+
+          main_tsx = biblioteca / "src/main.tsx"
+          text = main_tsx.read_text(encoding="utf-8")
+          old = "async function loadLogs(){await run(async()=>setLogs(await api<Log[]>(`/api/logs?q=${encodeURIComponent(query)}`))}"
+          new = "async function loadLogs(){await run(async()=>setLogs(await api<Log[]>(`/api/logs?q=${encodeURIComponent(query)}`)))}"
+          if old not in text:
+              raise SystemExit("Sintaxe esperada de loadLogs não encontrada.")
+          text = text.replace(old, new, 1)
+
+          toolbar_old = "function Toolbar({query,setQuery,onSearch,button,onButton}:{query:string;setQuery:(v:string)=>void;onSearch:()=>Promise<void>;button?:string;onButton?:()=>void}){return <div className=\"toolbar\"><div className=\"search\"><input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==='Enter'&&onSearch()} placeholder=\"Buscar...\"/><button onClick={onSearch}>Buscar</button></div>{button&&<button className=\"primary\" onClick={onButton}>{button}</button>}</div>}"
+          toolbar_new = "function Toolbar({query,setQuery,onSearch,button,onButton,showSearch=true}:{query:string;setQuery:(v:string)=>void;onSearch:()=>Promise<void>;button?:string;onButton?:()=>void;showSearch?:boolean}){return <div className=\"toolbar\">{showSearch&&<div className=\"search\"><input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==='Enter'&&onSearch()} placeholder=\"Buscar...\"/><button onClick={onSearch}>Buscar</button></div>}{button&&<button className=\"primary\" onClick={onButton}>{button}</button>}</div>}"
+          if toolbar_old not in text:
+              raise SystemExit("Componente Toolbar não encontrado.")
+          text = text.replace(toolbar_old, toolbar_new, 1)
+
+          users_old = "<Toolbar query=\"\" setQuery={()=>{}} onSearch={loadUsers} button={auth.perfil==='Administrador'?'Novo usuário':undefined}"
+          users_new = "<Toolbar query=\"\" setQuery={()=>{}} onSearch={loadUsers} showSearch={false} button={auth.perfil==='Administrador'?'Novo usuário':undefined}"
+          if users_old not in text:
+              raise SystemExit("Toolbar de usuários não encontrada.")
+          text = text.replace(users_old, users_new, 1)
+
+          categories_pattern = re.compile(r"function Categories\(\{.*?\nfunction Empty\(", re.S)
+          categories_new = '''function Categories({categories,name,setName,onCreate,onEdit,onDelete,canManage}:{categories:Category[];name:string;setName:(v:string)=>void;onCreate:()=>Promise<void>;onEdit:(c:Category)=>void;onDelete:(c:Category)=>void;canManage:boolean}){return <div className="category-page">{canManage&&<div className="card category-form"><h2>Nova categoria</h2><div className="inline"><input value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')onCreate()}} placeholder="Ex.: Literatura"/><button className="primary" onClick={onCreate}>Cadastrar</button></div></div>}<div className="list">{categories.length===0?<Empty text="Nenhuma categoria cadastrada."/>:categories.map(c=><div className="row" key={c.id}><div><b>{c.nome}</b><small>{c.livros} livro(s) vinculado(s)</small></div>{canManage&&<div className="actions"><button onClick={()=>onEdit(c)}>Editar</button><button onClick={()=>onDelete(c)} disabled={c.livros>0}>Excluir</button></div>}</div>)}</div></div>}
+function Empty('''
+          new_text, count = categories_pattern.subn(categories_new, text, count=1)
+          if count != 1:
+              raise SystemExit("Componente Categories não encontrado.")
+          text = new_text
+
+          category_call_old = "<Categories categories={categories} name={categoryName} setName={setCategoryName} onCreate={saveCategory} onEdit={editCategory} onDelete={deleteCategory}/>"
+          category_call_new = "<Categories categories={categories} name={categoryName} setName={setCategoryName} onCreate={saveCategory} onEdit={editCategory} onDelete={deleteCategory} canManage={auth.perfil==='Administrador'}/>"
+          if category_call_old not in text:
+              raise SystemExit("Chamada de Categories não encontrada.")
+          text = text.replace(category_call_old, category_call_new, 1)
+          main_tsx.write_text(text, encoding="utf-8")
+
+          index = biblioteca / "index.html"
+          text = index.read_text(encoding="utf-8")
+          marker = '  <script src="./ui-fixes.js"></script>\n'
+          if marker not in text:
+              raise SystemExit("Referência a ui-fixes.js não encontrada no index.")
+          index.write_text(text.replace(marker, "", 1), encoding="utf-8")
+
+          backend_main = biblioteca / "backend/main.py"
+          text = backend_main.read_text(encoding="utf-8")
+          field_old = '    descricao: str = ""\n\n\nclass PessoaIn(BaseModel):'
+          field_new = '    descricao: str = ""\n    codigo_exemplar: str = Field(default="", max_length=80)\n\n\nclass PessoaIn(BaseModel):'
+          if field_old not in text:
+              raise SystemExit("Modelo LivroIn não encontrado.")
+          text = text.replace(field_old, field_new, 1)
+
+          create_pattern = re.compile(r'@app\.post\("/api/livros"\)\ndef create_livro\(data: LivroIn, user=Depends\(current_user\)\):.*?\n\n@app\.post\("/api/livros/\{livro_id\}/foto"\)', re.S)
+          create_new = '''@app.post("/api/livros")
+def create_livro(data: LivroIn, user=Depends(current_user)):
+    exemplar_code = data.codigo_exemplar.strip()
+    if not exemplar_code:
+        raise HTTPException(422, "Informe o código do exemplar inicial.")
+    conn = db()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.executescript("""
+        CREATE TABLE IF NOT EXISTS exemplares (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          livro_id INTEGER NOT NULL REFERENCES livros(id),
+          codigo TEXT UNIQUE NOT NULL,
+          criado_em TEXT NOT NULL,
+          ativo INTEGER NOT NULL DEFAULT 1
+        );
+        CREATE TABLE IF NOT EXISTS emprestimo_exemplares (
+          emprestimo_id INTEGER NOT NULL REFERENCES emprestimos(id),
+          exemplar_id INTEGER NOT NULL REFERENCES exemplares(id),
+          devolvida_em TEXT,
+          PRIMARY KEY (emprestimo_id, exemplar_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_exemplares_livro ON exemplares(livro_id, ativo);
+        CREATE INDEX IF NOT EXISTS idx_emprestimo_exemplares_emprestimo ON emprestimo_exemplares(emprestimo_id);
+        CREATE INDEX IF NOT EXISTS idx_emprestimo_exemplares_exemplar ON emprestimo_exemplares(exemplar_id);
+        """)
+        isbn = re.sub(r"[^0-9Xx]", "", data.isbn).upper()
+        if isbn and conn.execute("SELECT id FROM livros WHERE ativo=1 AND isbn=?", (isbn,)).fetchone():
+            raise HTTPException(409, "Já existe um livro ativo cadastrado com este ISBN.")
+        if conn.execute("SELECT id FROM exemplares WHERE codigo=?", (exemplar_code,)).fetchone():
+            raise HTTPException(409, f"Já existe um exemplar com o código {exemplar_code}.")
+        t = now_iso()
+        code = next_code(conn, "LIV", "livros")
+        cur = conn.execute("INSERT INTO livros(codigo,titulo,autor,editora,ano,isbn,categoria,idioma,quantidade,localizacao,descricao,criado_em,atualizado_em) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", (code, data.titulo.strip(), data.autor.strip(), data.editora.strip(), data.ano, isbn, data.categoria.strip(), data.idioma.strip() or "Português", 1, data.localizacao.strip(), data.descricao.strip(), t, t))
+        exemplar_cur = conn.execute("INSERT INTO exemplares(livro_id,codigo,criado_em) VALUES(?,?,?)", (cur.lastrowid, exemplar_code, t))
+        log(conn, "CRIAR", "livro", cur.lastrowid, f"Livro {code} cadastrado: {data.titulo}", {"codigo": code})
+        log(conn, "CRIAR", "exemplar", exemplar_cur.lastrowid, f"Exemplar {exemplar_code} cadastrado para {code}", {"livro_id": cur.lastrowid, "codigo": exemplar_code})
+        conn.commit()
+        result = conn.execute("SELECT * FROM livros WHERE id=?", (cur.lastrowid,)).fetchone()
+        return row_dict(result)
+    except HTTPException:
+        conn.rollback()
+        raise
+    except sqlite3.IntegrityError:
+        conn.rollback()
+        raise HTTPException(409, "Não foi possível gerar um cadastro único para o livro/exemplar. Tente novamente.")
+    finally:
+        conn.close()
+
+
+@app.post("/api/livros/{livro_id}/foto")'''
+          text, count = create_pattern.subn(create_new, text, count=1)
+          if count != 1:
+              raise SystemExit("Rota POST /api/livros não encontrada.")
+          backend_main.write_text(text, encoding="utf-8")
+
+          exemplares = biblioteca / "backend/exemplares.py"
+          text = exemplares.read_text(encoding="utf-8")
+          if '@main.app.put("/api/exemplares/{exemplar_id}/codigo")' not in text:
+              text += '''\n\nclass ExemplarCodigoIn(BaseModel):\n    codigo: str = Field(min_length=1, max_length=80)\n\n\n@main.app.put("/api/exemplares/{exemplar_id}/codigo")\ndef alterar_codigo_exemplar(exemplar_id: int, data: ExemplarCodigoIn, user=Depends(main.current_user)):\n    setup()\n    codigo = data.codigo.strip()\n    conn = main.db()\n    try:\n        row = conn.execute("SELECT id,livro_id,codigo,ativo FROM exemplares WHERE id=?", (exemplar_id,)).fetchone()\n        if not row:\n            raise HTTPException(404, "Exemplar não encontrado.")\n        if not row["ativo"]:\n            raise HTTPException(409, "O exemplar está inativo.")\n        duplicate = conn.execute("SELECT id FROM exemplares WHERE codigo=? AND id<>?", (codigo, exemplar_id)).fetchone()\n        if duplicate:\n            raise HTTPException(409, "Já existe um exemplar com este código.")\n        conn.execute("UPDATE exemplares SET codigo=? WHERE id=?", (codigo, exemplar_id))\n        main.log(conn, "ALTERAR", "exemplar", exemplar_id, f"Código do exemplar alterado para {codigo}", {"codigo": codigo})\n        conn.commit()\n        return dict(conn.execute("SELECT id,livro_id,codigo,ativo FROM exemplares WHERE id=?", (exemplar_id,)).fetchone())\n    except Exception:\n        conn.rollback()\n        raise\n    finally:\n        conn.close()\n'''
+          exemplares.write_text(text, encoding="utf-8")
+
+          root_main = root / "main.py"
+          text = root_main.read_text(encoding="utf-8")
+          block = '''load_module_from_path(\n    "biblioteca_route_fix",\n    "BIBLIOTECA-MUNICIPAL/backend/route_fix.py",\n    "BIBLIOTECA-MUNICIPAL/backend",\n    compatibility_main=biblioteca_main_module,\n)\n'''
+          if block not in text:
+              raise SystemExit("Carregador biblioteca_route_fix não encontrado no backend compartilhado.")
+          root_main.write_text(text.replace(block, "", 1), encoding="utf-8")
+
+          tests = biblioteca / "backend/tests/test_enhancements.py"
+          text = tests.read_text(encoding="utf-8")
+          if "    import route_fix\n" not in text:
+              raise SystemExit("Import route_fix não encontrado no teste de enhancements.")
+          tests.write_text(text.replace("    import route_fix\n", "    import exemplares\n", 1), encoding="utf-8")
+
+          security_test = biblioteca / "backend/tests/test_security_fixes.py"
+          security_new = biblioteca / "backend/tests/test_security.py"
+          if not security_test.exists():
+              raise SystemExit("test_security_fixes.py não encontrado.")
+          security_test.rename(security_new)
+
+          (biblioteca / "public/ui-fixes.js").unlink(missing_ok=False)
+          (biblioteca / "backend/route_fix.py").unlink(missing_ok=False)
+
+          bad = [str(p.relative_to(root)) for p in biblioteca.rglob("*") if "fix" in p.name.lower()]
+          if bad:
+              raise SystemExit("Arquivos com 'fix' ainda presentes: " + ", ".join(bad))
+          if "route_fix" in root_main.read_text(encoding="utf-8"):
+              raise SystemExit("Referência residual a route_fix encontrada.")
+          if "ui-fixes" in index.read_text(encoding="utf-8"):
+              raise SystemExit("Referência residual a ui-fixes encontrada.")
+          PY
+
+          cd BIBLIOTECA-MUNICIPAL
+          npm install --no-audit --no-fund --package-lock=false
+          npm run build
+          cd backend
+          python -m pip install -r requirements.txt
+          PYTHONPATH="$PWD" pytest -q
+          cd ../..
+
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git rm .github/workflows/cleanup-biblioteca.yml
+          git add -A
+          git commit -m "Limpa estrutura da Biblioteca Municipal"
+          git push
