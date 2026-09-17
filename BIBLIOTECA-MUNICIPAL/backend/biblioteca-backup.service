@@ -5,4 +5,5 @@ Description=Backup do banco da Biblioteca Municipal
 Type=oneshot
 User=daniel
 WorkingDirectory=%h/Downloads/danihmorais.github.io
+Environment=BIBLIOTECA_BACKUP_DIR=/mnt/c/Users/servidor/Biblioteca-Backups
 ExecStart=/usr/bin/python3 %h/Downloads/danihmorais.github.io/BIBLIOTECA-MUNICIPAL/backend/backup.py
