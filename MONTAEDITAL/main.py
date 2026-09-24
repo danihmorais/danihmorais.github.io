@@ -50,6 +50,14 @@ MODALIDADE_TEXTO = {
 
 AVISO_MODELO = os.path.join(BASE_DIR, "modelos", "AVISO XX.XX.XXXX.rtf")
 
+AVISOS_MUNICIPAIS = {
+    "DISPENSA": "modelos/AVISO MUNICIPAL DISPENSA PRESENCIAL {{N.MODALIDADE}}.docx",
+    "DISPENSA_BLL": "modelos/AVISO MUNICIPAL DISPENSA ELETRÔNICA {{N.MODALIDADE}}.docx",
+    "PREGAO_ELETRONICO": "modelos/AVISO MUNICIPAL PREGÃO ELETRÔNICO {{N.MODALIDADE}}.docx",
+    "PREGAO_PRESENCIAL": "modelos/AVISO MUNICIPAL PREGÃO PRESENCIAL {{N.MODALIDADE}}.docx",
+    "LEILAO_ELETRONICO": "modelos/AVISO MUNICIPAL LEILÃO ELETRÔNICO {{N.MODALIDADE}}.docx",
+}
+
 class EditalRequest(BaseModel):
     tipo_edital: str
     dados_preenchimento: dict
@@ -276,8 +284,38 @@ async def gerar_edital_endpoint(req: EditalRequest, background_tasks: Background
     zip_filename = f"Editais_{num_mod_arq}_{session_id[:6]}.zip"
     caminho_zip = os.path.join(temp_dir, zip_filename)
     
+    caminho_aviso_municipal = None
+    nome_arq_aviso_municipal = None
+
     caminho_aviso = None
     nome_arq_aviso = None
+
+    # O Aviso Municipal é sempre gerado, usando o modelo específico da modalidade.
+    caminho_modelo_aviso_municipal_rel = AVISOS_MUNICIPAIS.get(modalidade_raw)
+    if caminho_modelo_aviso_municipal_rel:
+        caminho_modelo_aviso_municipal = os.path.join(
+            BASE_DIR, caminho_modelo_aviso_municipal_rel
+        )
+
+        if not os.path.exists(caminho_modelo_aviso_municipal):
+            raise HTTPException(
+                status_code=500,
+                detail=f"Modelo de Aviso Municipal não encontrado para a modalidade: {modalidade_raw}"
+            )
+
+        nome_modelo_aviso_municipal = os.path.basename(caminho_modelo_aviso_municipal)
+        nome_arq_aviso_municipal = nome_modelo_aviso_municipal.replace(
+            "{{N.MODALIDADE}}", num_mod_arq
+        )
+        caminho_aviso_municipal = os.path.join(
+            temp_dir, nome_arq_aviso_municipal
+        )
+
+        preencher_documento(
+            caminho_modelo_aviso_municipal,
+            caminho_aviso_municipal,
+            dados_processados,
+        )
 
     publicar_diario_estadual = bool(req.dados_preenchimento.get("publicar_diario_estadual", False))
     publicar_diario_federal = bool(req.dados_preenchimento.get("publicar_diario_federal", False))
@@ -332,6 +370,8 @@ async def gerar_edital_endpoint(req: EditalRequest, background_tasks: Background
     with zipfile.ZipFile(caminho_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
         zipf.write(caminho_edital, nome_arq_edital)
         zipf.write(caminho_minuta, nome_arq_minuta)
+        if caminho_aviso_municipal and nome_arq_aviso_municipal:
+            zipf.write(caminho_aviso_municipal, nome_arq_aviso_municipal)
         if caminho_aviso and nome_arq_aviso:
             zipf.write(caminho_aviso, nome_arq_aviso)
         
