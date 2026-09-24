@@ -7,6 +7,7 @@ function anoAtual(): string {
 function mascararNumeroProcesso(valor: string): string {
   const limpo = valor.replace(/[^\d/]/g, "");
   const posicaoBarra = limpo.indexOf("/");
+  const anoPadrao = anoAtual();
 
   if (posicaoBarra >= 0) {
     const antes = limpo.slice(0, posicaoBarra).replace(/\D/g, "").slice(0, 3);
@@ -15,14 +16,18 @@ function mascararNumeroProcesso(valor: string): string {
   }
 
   const numeros = limpo.replace(/\D/g, "").slice(0, 3);
-  return numeros;
+  return numeros ? `${numeros}/${anoPadrao}` : "";
 }
 
 function completarAnoAtual(valor: string): string {
   const mascarado = mascararNumeroProcesso(valor);
 
-  if (/^\d{2,3}$/.test(mascarado)) {
-    return `${mascarado}/${anoAtual()}`;
+  if (/^\d{2,3}\/\d{4}$/.test(mascarado)) {
+    return mascarado;
+  }
+
+  if (/^\d{2,3}\/$/.test(mascarado)) {
+    return `${mascarado}${anoAtual()}`;
   }
 
   return mascarado;
