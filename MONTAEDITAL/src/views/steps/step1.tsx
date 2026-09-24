@@ -14,7 +14,8 @@ export default function Step1({ dados, atualizarDados }: any) {
     }
 
     if (val === "LEILAO_ELETRONICO") {
-    updates.instrumento = "SEM_CONTRATO";
+      updates.instrumento = "SEM_CONTRATO";
+      updates.criterios = "ITEM";
     } else if (dados.instrumento === "SEM_CONTRATO") {
       updates.instrumento = "CONTRATO";
     }
@@ -93,10 +94,17 @@ export default function Step1({ dados, atualizarDados }: any) {
               className="wiz-select"
               value={dados.criterios || "ITEM"}
               onChange={(e) => atualizarDados({ criterios: e.target.value })}
+              disabled={dados.modalidade === "LEILAO_ELETRONICO"}
             >
-              <option value="ITEM">Menor Preço por Item</option>
-              <option value="LOTE">Menor Preço por Lote</option>
-              <option value="GLOBAL">Menor Preço Global</option>
+              {dados.modalidade === "LEILAO_ELETRONICO" ? (
+                <option value="ITEM">Maior Preço por Item</option>
+              ) : (
+                <>
+                  <option value="ITEM">Menor Preço por Item</option>
+                  <option value="LOTE">Menor Preço por Lote</option>
+                  <option value="GLOBAL">Menor Preço Global</option>
+                </>
+              )}
             </select>
           </div>
           <div className="wiz-field">
