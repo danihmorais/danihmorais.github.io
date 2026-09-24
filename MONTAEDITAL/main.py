@@ -72,6 +72,67 @@ def cleanup_temp_dir(path: str):
     shutil.rmtree(path, ignore_errors=True)
 
 
+def _validar_dados_procedimento(dados: dict, modalidade_raw: str):
+    obrigatorios = {
+        "{{DATA AUT}}": "Data de autorização do Prefeito",
+        "{{SEC}}": "Secretaria",
+        "{{DATA_TR}}": "Data do Termo de Referência",
+        "{{SERVIDOR}}": "Servidor",
+        "{{DATA.MODALIDADE}}": "Data do pedido da modalidade ao Prefeito",
+        "{{DATA.DOTACAO}}": "Data do pedido de dotação orçamentária",
+        "{{DATA PED. PARECER}}": "Data do pedido de parecer jurídico",
+    }
+
+    faltantes = [
+        rotulo
+        for chave, rotulo in obrigatorios.items()
+        if not str(dados.get(chave, "") or "").strip()
+    ]
+    if faltantes:
+        raise HTTPException(
+            status_code=400,
+            detail="Preencha os dados do Procedimento: " + ", ".join(faltantes) + ".",
+        )
+
+    datas = [
+        ("{{DATA AUT}}", "Data de autorização do Prefeito"),
+        ("{{DATA_TR}}", "Data do Termo de Referência"),
+        ("{{DATA.MODALIDADE}}", "Data do pedido da modalidade ao Prefeito"),
+        ("{{DATA.DOTACAO}}", "Data do pedido de dotação orçamentária"),
+        ("{{DATA PED. PARECER}}", "Data do pedido de parecer jurídico"),
+    ]
+    datas_parseadas = {}
+    for chave, rotulo in datas:
+        valor = str(dados.get(chave, "")).strip()
+        try:
+            datas_parseadas[chave] = datetime.strptime(valor, "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{rotulo} inválida. Use uma data válida.",
+            )
+
+    if datas_parseadas["{{DATA.MODALIDADE}}"] <= datas_parseadas["{{DATA AUT}}"]:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "A Data do pedido da modalidade ao Prefeito deve ser posterior "
+                "à Data de autorização do Prefeito."
+            ),
+        )
+
+    if modalidade_raw == "PREGAO_PRESENCIAL" and not str(
+        dados.get("{{JUSTIFICATIVA}}", "") or ""
+    ).strip():
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Para Pregão Presencial, informe a justificativa para a "
+                "utilização da forma presencial."
+            ),
+        )
+
+
 def _converter_modelo_procedimento_para_docx(caminho_modelo: str, pasta_saida: str) -> str:
     """
     O modelo do Procedimento é um .doc (Word legado). O processador do projeto
@@ -305,6 +366,9 @@ async def gerar_edital_endpoint(req: EditalRequest, background_tasks: Background
     
     dados_processados = montar_variaveis_fixas(req.dados_preenchimento)
 
+    modalidade_raw = dados_processados.get("{{MODALIDADE}}", "PREGAO_ELETRONICO")
+    _validar_dados_procedimento(req.dados_preenchimento, modalidade_raw)
+
     for key, ph in [("DFD_B64", "{{DFD}}"), ("ETP_B64", "{{ETP}}"), ("TR_B64", "{{TR}}")]:
         if key in req.dados_preenchimento and req.dados_preenchimento[key]:
             file_path = os.path.join(temp_dir, f"{key}.docx")
@@ -312,7 +376,6 @@ async def gerar_edital_endpoint(req: EditalRequest, background_tasks: Background
                 f.write(base64.b64decode(req.dados_preenchimento[key]))
             dados_processados[ph] = file_path
     
-    modalidade_raw = dados_processados.get("{{MODALIDADE}}", "PREGAO_ELETRONICO")
     mod_abr = MOD_ABR_MAP.get(modalidade_raw, "PE")
     modalidade_nome = MODALIDADE_TEXTO.get(modalidade_raw, "Pregão Eletrônico")
     
