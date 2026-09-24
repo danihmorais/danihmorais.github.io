@@ -8,6 +8,7 @@ import { ThemeContext } from "../context/ThemeContext";
 import "./wizard.css";
 import logo from "../assets/logo.png";
 import { gerarEdital } from "../api";
+import { criarDadosTeste, MODALIDADES_TESTE, type ModalidadeTeste } from "../utils/testesModalidade";
 
 
 export default function Wizard() {
@@ -68,6 +69,7 @@ export default function Wizard() {
   const [erroMsg, setErroMsg] = useState<string | null>(null);
   const [geracaoSucesso, setGeracaoSucesso] = useState(false);
   const [mostrarDiarios, setMostrarDiarios] = useState(false);
+  const [mostrarTestes, setMostrarTestes] = useState(false);
   const [publicarDiarioEstadual, setPublicarDiarioEstadual] = useState(false);
   const [publicarDiarioFederal, setPublicarDiarioFederal] = useState(false);
   const [erroProcedimento, setErroProcedimento] = useState("");
@@ -313,6 +315,25 @@ function numeroProcessoValido(valor: string): boolean {
     setEtapaAtual(0);
   };
 
+  const aplicarTesteModalidade = (modalidade: ModalidadeTeste) => {
+    if (downloadUrl) {
+      window.URL.revokeObjectURL(downloadUrl);
+    }
+
+    setDados((prev) => ({ ...prev, ...criarDadosTeste(modalidade) }));
+    setEtapaAtual(0);
+    setMostrarTestes(false);
+    setMostrarDiarios(false);
+    setPublicarDiarioEstadual(false);
+    setPublicarDiarioFederal(false);
+    setErroProcedimento("");
+    setErroMsg(null);
+    setGeracaoSucesso(false);
+    setCarregando(false);
+    setDownloadUrl(null);
+    setDownloadFilename("edital.zip");
+  };
+
   const renderizarEtapa = () => {
     switch (etapaAtual) {
       case 0: return <Step1 dados={dados} atualizarDados={atualizarDados} />;
@@ -407,20 +428,90 @@ function numeroProcessoValido(valor: string): boolean {
             ))}
           </div>
 
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className="wiz-theme-toggle"
-            title={theme === 'dark' ? 'Mudar para modo claro' : 'Mudar para modo escuro'}
-          >
-            {theme === 'dark' ? '☀️' : '🌙'}
-          </button>
+          <div className="wiz-header-actions">
+            <button
+              type="button"
+              className="wiz-test-button"
+              onClick={() => setMostrarTestes(true)}
+              aria-haspopup="dialog"
+              aria-expanded={mostrarTestes}
+              title="Carregar dados de teste completos"
+            >
+              🧪 Testes
+            </button>
+
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="wiz-theme-toggle"
+              title={theme === 'dark' ? 'Mudar para modo claro' : 'Mudar para modo escuro'}
+            >
+              {theme === 'dark' ? '☀️' : '🌙'}
+            </button>
+          </div>
         </div>
       </div>
 
       <div className="wiz-body" ref={scrollRef}>
         {renderizarEtapa()}
       </div>
+
+      {mostrarTestes && (
+        <div
+          className="wiz-test-overlay"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setMostrarTestes(false);
+          }}
+        >
+          <div
+            className="wiz-test-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="wiz-test-title"
+          >
+            <div className="wiz-card-header" style={{ marginBottom: "18px" }}>
+              <div className="wiz-card-icon">🧪</div>
+              <div>
+                <div id="wiz-test-title" className="wiz-card-title">
+                  Escolha a modalidade para testar
+                </div>
+                <div className="wiz-card-subtitle">
+                  Todos os campos obrigatórios serão preenchidos automaticamente, inclusive os dados do Procedimento e os anexos DOCX.
+                </div>
+              </div>
+              <button
+                type="button"
+                className="wiz-btn-remove"
+                onClick={() => setMostrarTestes(false)}
+                title="Fechar"
+                aria-label="Fechar"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="wiz-test-options">
+              {MODALIDADES_TESTE.map((teste) => (
+                <button
+                  key={teste.value}
+                  type="button"
+                  className="wiz-test-option"
+                  onClick={() => aplicarTesteModalidade(teste.value)}
+                >
+                  <span className="wiz-test-option-title">{teste.label}</span>
+                  <span className="wiz-test-option-desc">{teste.descricao}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="wiz-test-note">
+              Os arquivos DFD, ETP e TR usados no teste são DOCX válidos e ficam apenas na memória do navegador até a geração.
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {mostrarDiarios && (
         <div

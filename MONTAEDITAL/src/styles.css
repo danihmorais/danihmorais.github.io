@@ -71,6 +71,121 @@ body.dark {
   height: 64px;
 }
 
+.wiz-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.wiz-test-button {
+  min-height: 38px;
+  padding: 0 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: var(--wiz-accent-soft);
+  border: 1px solid var(--wiz-border);
+  border-radius: 999px;
+  color: var(--wiz-text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--wiz-dur) var(--wiz-ease), border-color var(--wiz-dur) var(--wiz-ease), transform var(--wiz-dur) var(--wiz-ease);
+}
+
+.wiz-test-button:hover {
+  background: var(--wiz-accent-glow);
+  border-color: var(--wiz-accent);
+  transform: translateY(-1px);
+}
+
+.wiz-test-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.wiz-test-dialog {
+  width: 100%;
+  max-width: 680px;
+  max-height: 88vh;
+  overflow-y: auto;
+  background: var(--wiz-surface);
+  color: var(--wiz-text);
+  border: 1px solid var(--wiz-border);
+  border-radius: var(--wiz-radius);
+  padding: 26px;
+  box-shadow: var(--wiz-shadow-md);
+}
+
+.wiz-test-dialog .wiz-card-header {
+  align-items: flex-start;
+}
+
+.wiz-test-dialog .wiz-btn-remove {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.wiz-test-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.wiz-test-option {
+  min-height: 92px;
+  padding: 14px 15px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 5px;
+  text-align: left;
+  background: var(--wiz-surface-2);
+  border: 1px solid var(--wiz-border);
+  border-radius: var(--wiz-radius-sm);
+  color: var(--wiz-text);
+  cursor: pointer;
+  transition: border-color var(--wiz-dur) var(--wiz-ease), background var(--wiz-dur) var(--wiz-ease), transform var(--wiz-dur) var(--wiz-ease);
+}
+
+.wiz-test-option:hover {
+  border-color: var(--wiz-accent);
+  background: var(--wiz-accent-soft);
+  transform: translateY(-1px);
+}
+
+.wiz-test-option-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.wiz-test-option-desc {
+  font-size: 12px;
+  color: var(--wiz-text-3);
+  line-height: 1.4;
+}
+
+.wiz-test-note {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: var(--wiz-radius-sm);
+  background: var(--wiz-accent-soft);
+  color: var(--wiz-text-2);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+
 .wiz-brand {
   display: flex;
   align-items: center;
