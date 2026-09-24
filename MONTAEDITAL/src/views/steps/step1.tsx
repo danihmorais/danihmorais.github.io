@@ -7,40 +7,68 @@ function anoAtual(): string {
 function mascararNumeroProcesso(valor: string): string {
   const limpo = valor.replace(/[^\d/]/g, "");
   const posicaoBarra = limpo.indexOf("/");
-  const anoPadrao = anoAtual();
 
   if (posicaoBarra >= 0) {
     const antes = limpo.slice(0, posicaoBarra).replace(/\D/g, "").slice(0, 3);
     const depois = limpo.slice(posicaoBarra + 1).replace(/\D/g, "").slice(0, 4);
-
-    if (!antes) {
-      return `/${depois}`;
-    }
-
     return `${antes}/${depois}`;
   }
 
-  const numeros = limpo.replace(/\D/g, "").slice(0, 7);
-
-  if (numeros.length <= 3) {
-    return `${numeros}/${anoPadrao}`;
-  }
-
-  return `${numeros.slice(0, 3)}/${numeros.slice(3)}`;
+  const numeros = limpo.replace(/\D/g, "").slice(0, 3);
+  return numeros;
 }
 
 function completarAnoAtual(valor: string): string {
   const mascarado = mascararNumeroProcesso(valor);
 
-  if (/^\d{2,3}\/\d{4}$/.test(mascarado)) {
-    return mascarado;
-  }
-
-  if (/^\d{2,3}\/?$/.test(mascarado)) {
-    return mascarado.replace(/\/?$/, `/${anoAtual()}`);
+  if (/^\d{2,3}$/.test(mascarado)) {
+    return `${mascarado}/${anoAtual()}`;
   }
 
   return mascarado;
+}
+
+function MascaraNumero({
+  valor,
+  onChange,
+}: {
+  valor: string;
+  onChange: (valor: string) => void;
+}) {
+  const vazio = !valor;
+
+  return (
+    <div style={{ position: "relative" }}>
+      {vazio && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            padding: "0 14px",
+            pointerEvents: "none",
+            fontSize: "14px",
+            fontFamily: "inherit",
+            zIndex: 1,
+          }}
+        >
+          <span style={{ color: "var(--wiz-text-3)", opacity: 0.35 }}>XX</span>
+          <span style={{ color: "var(--wiz-text-3)", opacity: 0.5 }}>/</span>
+          <span style={{ color: "var(--wiz-text-3)", opacity: 0.85 }}>{anoAtual()}</span>
+        </div>
+      )}
+      <input
+        type="text"
+        className="wiz-input"
+        value={valor}
+        onChange={(e) => onChange(mascararNumeroProcesso(e.target.value))}
+        maxLength={8}
+        style={{ position: "relative", zIndex: 2, background: vazio ? "transparent" : undefined }}
+      />
+    </div>
+  );
 }
 
 export default function Step1({ dados, atualizarDados }: any) {
@@ -81,28 +109,18 @@ export default function Step1({ dados, atualizarDados }: any) {
             <label className="wiz-label">
               Número do Processo <span className="req-star">*</span>
             </label>
-            <input
-              type="text"
-              className="wiz-input"
-              value={dados.numeroProcesso || `/${new Date().getFullYear()}`}
-              onChange={(e) => atualizarDados({ numeroProcesso: mascararNumeroProcesso(e.target.value) })}
-              onBlur={(e) => atualizarDados({ numeroProcesso: completarAnoAtual(e.target.value) })}
-              placeholder="Ex: 25/2026 ou 123/2026"
-              maxLength={8}
+            <MascaraNumero
+              valor={dados.numeroProcesso || ""}
+              onChange={(valor) => atualizarDados({ numeroProcesso: valor })}
             />
           </div>
           <div className="wiz-field">
             <label className="wiz-label">
               Número do Edital <span className="req-star">*</span>
             </label>
-            <input
-              type="text"
-              className="wiz-input"
-              value={dados.numeroModalidade || `/${new Date().getFullYear()}`}
-              onChange={(e) => atualizarDados({ numeroModalidade: mascararNumeroProcesso(e.target.value) })}
-              onBlur={(e) => atualizarDados({ numeroModalidade: completarAnoAtual(e.target.value) })}
-              placeholder="Ex: 05/2026 ou 123/2026"
-              maxLength={8}
+            <MascaraNumero
+              valor={dados.numeroModalidade || ""}
+              onChange={(valor) => atualizarDados({ numeroModalidade: valor })}
             />
           </div>
         </div>
