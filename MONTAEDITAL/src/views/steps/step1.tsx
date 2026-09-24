@@ -37,6 +37,13 @@ function MascaraNumero({
 }) {
   const vazio = !valor;
 
+  const completar = () => {
+    const completado = completarAnoAtual(valor);
+    if (completado !== valor) {
+      onChange(completado);
+    }
+  };
+
   return (
     <div style={{ position: "relative" }}>
       {vazio && (
@@ -64,6 +71,7 @@ function MascaraNumero({
         className="wiz-input"
         value={valor}
         onChange={(e) => onChange(mascararNumeroProcesso(e.target.value))}
+        onBlur={completar}
         maxLength={8}
         style={{ position: "relative", zIndex: 2, background: vazio ? "transparent" : undefined }}
       />
