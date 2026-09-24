@@ -643,7 +643,7 @@ function numeroProcessoValido(valor: string): boolean {
                   <div className="wiz-toggle-title">Diário Estadual</div>
                   <div className="wiz-toggle-desc">Gerar o Aviso de Edital para publicação no Diário Estadual.</div>
                 </div>
-                <div className="wiz-switch on" style={{ display: publicarDiarioEstadual ? "block" : undefined }} />
+                <div className={publicarDiarioEstadual ? "wiz-switch on" : "wiz-switch"} />
               </label>
 
               <label
@@ -655,7 +655,7 @@ function numeroProcessoValido(valor: string): boolean {
                   <div className="wiz-toggle-title">Diário Federal</div>
                   <div className="wiz-toggle-desc">Gerar o Aviso de Edital para publicação no Diário Federal.</div>
                 </div>
-                <div className="wiz-switch on" style={{ display: publicarDiarioFederal ? "block" : undefined }} />
+                <div className={publicarDiarioFederal ? "wiz-switch on" : "wiz-switch"} />
               </label>
             </div>
 
