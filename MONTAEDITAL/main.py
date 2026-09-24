@@ -220,9 +220,6 @@ def _data_para_nome_aviso(data_str: str) -> str:
     return "XX.XX.XXXX"
 
 
-def cleanup_temp_dir(path: str):
-    shutil.rmtree(path, ignore_errors=True)
-
 @app.post("/api/gerar-edital")
 async def gerar_edital_endpoint(req: EditalRequest, background_tasks: BackgroundTasks):
     caminho_modelo = os.path.join(BASE_DIR, MODELOS_DISPONIVEIS.get(req.tipo_edital, ""))
