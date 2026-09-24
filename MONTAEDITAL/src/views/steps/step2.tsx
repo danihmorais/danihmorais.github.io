@@ -240,7 +240,7 @@ export default function Step2({ dados, atualizarDados }: any) {
               className="wiz-textarea"
               value={dados.especificacoesEspeciais || ""}
               onChange={(e) =>
-                atualizarDados({ especificacoesEspeciais: e.target.value })
+                atualizarDados({ especificacoesEspeciais: limparNumeracao(e.target.value) })
               }
               placeholder="Insira especificações especiais (opcional)..."
             />
