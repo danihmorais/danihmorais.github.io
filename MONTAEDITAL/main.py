@@ -53,7 +53,7 @@ AVISO_MODELO = os.path.join(BASE_DIR, "modelos", "AVISO XX.XX.XXXX.rtf")
 PROCEDIMENTO_MODELO = os.path.join(
     BASE_DIR,
     "modelos",
-    "Procedimento - {{MODALIDADE}} {{N.MODALIDADE}}.doc",
+    "Procedimento - {{MODALIDADE}} {{N.MODALIDADE}}.docx",
 )
 
 AVISOS_MUNICIPAIS = {
@@ -131,63 +131,6 @@ def _validar_dados_procedimento(dados: dict, modalidade_raw: str):
                 "utilização da forma presencial."
             ),
         )
-
-
-def _converter_modelo_procedimento_para_docx(caminho_modelo: str, pasta_saida: str) -> str:
-    """
-    O modelo do Procedimento é um .doc (Word legado). O processador do projeto
-    trabalha com .docx, então a conversão é feita somente em uma cópia temporária.
-    """
-    executavel = shutil.which("soffice") or shutil.which("libreoffice")
-    if not executavel:
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                "O modelo do Procedimento é .doc e exige LibreOffice "
-                "(soffice/libreoffice) no servidor para conversão para .docx."
-            ),
-        )
-
-    os.makedirs(pasta_saida, exist_ok=True)
-
-    try:
-        subprocess.run(
-            [
-                executavel,
-                "--headless",
-                "--convert-to",
-                "docx",
-                "--outdir",
-                pasta_saida,
-                caminho_modelo,
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise HTTPException(
-            status_code=500,
-            detail="Tempo excedido ao converter o modelo do Procedimento para DOCX.",
-        ) from exc
-    except subprocess.CalledProcessError as exc:
-        detalhe = (exc.stderr or exc.stdout or "").strip()
-        raise HTTPException(
-            status_code=500,
-            detail=f"Falha ao converter o modelo do Procedimento para DOCX. {detalhe}",
-        ) from exc
-
-    nome_docx = os.path.splitext(os.path.basename(caminho_modelo))[0] + ".docx"
-    caminho_convertido = os.path.join(pasta_saida, nome_docx)
-
-    if not os.path.exists(caminho_convertido):
-        raise HTTPException(
-            status_code=500,
-            detail="O LibreOffice não gerou o DOCX convertido do Procedimento.",
-        )
-
-    return caminho_convertido
 
 
 def _rtf_visivel(rtf: str):
@@ -385,13 +328,7 @@ async def gerar_edital_endpoint(req: EditalRequest, background_tasks: Background
     num_mod_arq = num_mod_raw.replace("/", "-").replace("\\", "-")
     num_proc_arq = num_proc_raw.replace("/", "-").replace("\\", "-")
 
-    # Gera também o Procedimento usando o modelo .doc legado.
-    pasta_procedimento_modelo = os.path.join(temp_dir, "procedimento_modelo")
-    caminho_modelo_procedimento_docx = _converter_modelo_procedimento_para_docx(
-        PROCEDIMENTO_MODELO,
-        pasta_procedimento_modelo,
-    )
-
+    caminho_modelo_procedimento_docx = PROCEDIMENTO_MODELO
     dados_procedimento = dados_processados.copy()
     dados_procedimento["{{MODALIDADE}}"] = modalidade_nome
     dados_procedimento["{{N.MODALIDADE}}"] = num_mod_raw
