@@ -3,6 +3,7 @@ import uuid
 import zipfile
 import tempfile
 import shutil
+import subprocess
 import base64
 from datetime import datetime
 from fastapi import FastAPI, HTTPException, BackgroundTasks
@@ -49,6 +50,11 @@ MODALIDADE_TEXTO = {
 }
 
 AVISO_MODELO = os.path.join(BASE_DIR, "modelos", "AVISO XX.XX.XXXX.rtf")
+PROCEDIMENTO_MODELO = os.path.join(
+    BASE_DIR,
+    "modelos",
+    "Procedimento - {{MODALIDADE}} {{N.MODALIDADE}}.doc",
+)
 
 AVISOS_MUNICIPAIS = {
     "DISPENSA": "modelos/AVISO MUNICIPAL DISPENSA PRESENCIAL {{N.MODALIDADE}}.docx",
@@ -64,6 +70,63 @@ class EditalRequest(BaseModel):
 
 def cleanup_temp_dir(path: str):
     shutil.rmtree(path, ignore_errors=True)
+
+
+def _converter_modelo_procedimento_para_docx(caminho_modelo: str, pasta_saida: str) -> str:
+    """
+    O modelo do Procedimento é um .doc (Word legado). O processador do projeto
+    trabalha com .docx, então a conversão é feita somente em uma cópia temporária.
+    """
+    executavel = shutil.which("soffice") or shutil.which("libreoffice")
+    if not executavel:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "O modelo do Procedimento é .doc e exige LibreOffice "
+                "(soffice/libreoffice) no servidor para conversão para .docx."
+            ),
+        )
+
+    os.makedirs(pasta_saida, exist_ok=True)
+
+    try:
+        subprocess.run(
+            [
+                executavel,
+                "--headless",
+                "--convert-to",
+                "docx",
+                "--outdir",
+                pasta_saida,
+                caminho_modelo,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Tempo excedido ao converter o modelo do Procedimento para DOCX.",
+        ) from exc
+    except subprocess.CalledProcessError as exc:
+        detalhe = (exc.stderr or exc.stdout or "").strip()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Falha ao converter o modelo do Procedimento para DOCX. {detalhe}",
+        ) from exc
+
+    nome_docx = os.path.splitext(os.path.basename(caminho_modelo))[0] + ".docx"
+    caminho_convertido = os.path.join(pasta_saida, nome_docx)
+
+    if not os.path.exists(caminho_convertido):
+        raise HTTPException(
+            status_code=500,
+            detail="O LibreOffice não gerou o DOCX convertido do Procedimento.",
+        )
+
+    return caminho_convertido
 
 
 def _rtf_visivel(rtf: str):
@@ -258,6 +321,29 @@ async def gerar_edital_endpoint(req: EditalRequest, background_tasks: Background
     
     num_mod_arq = num_mod_raw.replace("/", "-").replace("\\", "-")
     num_proc_arq = num_proc_raw.replace("/", "-").replace("\\", "-")
+
+    # Gera também o Procedimento usando o modelo .doc legado.
+    pasta_procedimento_modelo = os.path.join(temp_dir, "procedimento_modelo")
+    caminho_modelo_procedimento_docx = _converter_modelo_procedimento_para_docx(
+        PROCEDIMENTO_MODELO,
+        pasta_procedimento_modelo,
+    )
+
+    dados_procedimento = dados_processados.copy()
+    dados_procedimento["{{MODALIDADE}}"] = modalidade_nome
+    dados_procedimento["{{N.MODALIDADE}}"] = num_mod_raw
+    nome_arq_procedimento = (
+        f"Procedimento - {modalidade_nome} {num_mod_arq}.docx"
+    )
+    caminho_procedimento = os.path.join(
+        temp_dir,
+        nome_arq_procedimento,
+    )
+    preencher_documento(
+        caminho_modelo_procedimento_docx,
+        caminho_procedimento,
+        dados_procedimento,
+    )
     
     dados_edital = dados_processados.copy()
     dados_edital["{{MINUTA DE}}"] = ""
@@ -370,6 +456,7 @@ async def gerar_edital_endpoint(req: EditalRequest, background_tasks: Background
     with zipfile.ZipFile(caminho_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
         zipf.write(caminho_edital, nome_arq_edital)
         zipf.write(caminho_minuta, nome_arq_minuta)
+        zipf.write(caminho_procedimento, nome_arq_procedimento)
         if caminho_aviso_municipal and nome_arq_aviso_municipal:
             zipf.write(caminho_aviso_municipal, nome_arq_aviso_municipal)
         if caminho_aviso and nome_arq_aviso:
