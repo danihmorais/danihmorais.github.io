@@ -1,5 +1,22 @@
 import React from "react";
 
+function mascararNumeroProcesso(valor: string): string {
+  const limpo = valor.replace(/[^\d/]/g, "");
+  const posicaoBarra = limpo.indexOf("/");
+
+  if (posicaoBarra >= 0) {
+    const antes = limpo.slice(0, posicaoBarra).replace(/\D/g, "").slice(0, 3);
+    const depois = limpo.slice(posicaoBarra + 1).replace(/\D/g, "").slice(0, 4);
+    return antes ? `${antes}/${depois}` : depois;
+  }
+
+  const numeros = limpo.replace(/\D/g, "").slice(0, 7);
+
+  if (numeros.length <= 2) return numeros;
+  if (numeros.length <= 6) return `${numeros.slice(0, 2)}/${numeros.slice(2)}`;
+  return `${numeros.slice(0, 3)}/${numeros.slice(3)}`;
+}
+
 export default function Step1({ dados, atualizarDados }: any) {
   const handleModalidadeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
@@ -42,8 +59,9 @@ export default function Step1({ dados, atualizarDados }: any) {
               type="text"
               className="wiz-input"
               value={dados.numeroProcesso || ""}
-              onChange={(e) => atualizarDados({ numeroProcesso: e.target.value })}
-              placeholder="Ex: 25/2026"
+              onChange={(e) => atualizarDados({ numeroProcesso: mascararNumeroProcesso(e.target.value) })}
+              placeholder="Ex: 25/2026 ou 123/2026"
+              maxLength={8}
             />
           </div>
           <div className="wiz-field">
@@ -54,8 +72,9 @@ export default function Step1({ dados, atualizarDados }: any) {
               type="text"
               className="wiz-input"
               value={dados.numeroModalidade || ""}
-              onChange={(e) => atualizarDados({ numeroModalidade: e.target.value })}
-              placeholder="Ex: 05/2026"
+              onChange={(e) => atualizarDados({ numeroModalidade: mascararNumeroProcesso(e.target.value) })}
+              placeholder="Ex: 05/2026 ou 123/2026"
+              maxLength={8}
             />
           </div>
         </div>
