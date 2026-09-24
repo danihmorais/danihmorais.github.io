@@ -320,7 +320,7 @@ function numeroProcessoValido(valor: string): boolean {
       window.URL.revokeObjectURL(downloadUrl);
     }
 
-    setDados((prev) => ({ ...prev, ...criarDadosTeste(modalidade) }));
+    setDados((prev) => ({ ...prev, ...criarDadosTeste(modalidade) } as any));
     setEtapaAtual(0);
     setMostrarTestes(false);
     setMostrarDiarios(false);
