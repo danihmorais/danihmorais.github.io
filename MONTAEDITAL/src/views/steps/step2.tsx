@@ -174,6 +174,7 @@ export default function Step2({ dados, atualizarDados }: any) {
                 ? "Execução, entrega e devoluções"
                 : "Condições de retirada do bem"}
             </div>
+            </div>
         </div>
         {!isLeilao && (
           <div className="wiz-field" style={{ marginBottom: "16px" }}>
