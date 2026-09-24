@@ -48,6 +48,14 @@ export default function Wizard() {
     retirada: "",
     valor: "",
     exclusivo: "NAO",
+    dataAutorizacao: "",
+    secretaria: "",
+    dataTr: "",
+    servidorProcedimento: "",
+    dataModalidade: "",
+    justificativaProcedimento: "",
+    dataDotacao: "",
+    dataPedParecer: "",
     prorrogacaoCheck: "SIM",
     itens: [],
     arquivoDfd: null,
@@ -62,6 +70,7 @@ export default function Wizard() {
   const [mostrarDiarios, setMostrarDiarios] = useState(false);
   const [publicarDiarioEstadual, setPublicarDiarioEstadual] = useState(false);
   const [publicarDiarioFederal, setPublicarDiarioFederal] = useState(false);
+  const [erroProcedimento, setErroProcedimento] = useState("");
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [downloadFilename, setDownloadFilename] = useState<string>("edital.zip");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -245,12 +254,40 @@ function numeroProcessoValido(valor: string): boolean {
   };
 
   const confirmarGeracao = () => {
+    const camposObrigatorios = [
+      [dados.dataAutorizacao, "Data de autorização do Prefeito"],
+      [dados.secretaria, "Secretaria"],
+      [dados.dataTr, "Data do Termo de Referência"],
+      [dados.servidorProcedimento, "Servidor"],
+      [dados.dataModalidade, "Data do pedido da modalidade ao Prefeito"],
+      [dados.dataDotacao, "Data do pedido de dotação orçamentária"],
+      [dados.dataPedParecer, "Data do pedido de parecer jurídico"],
+    ] as const;
+
+    const faltante = camposObrigatorios.find(([valor]) => !String(valor || "").trim());
+    if (faltante) {
+      setErroProcedimento(`Preencha o campo obrigatório: ${faltante[1]}.`);
+      return;
+    }
+
+    if (dados.modalidade === "PREGAO_PRESENCIAL" && !String(dados.justificativaProcedimento || "").trim()) {
+      setErroProcedimento("Para Pregão Presencial, informe a justificativa para a utilização da forma presencial.");
+      return;
+    }
+
+    if (String(dados.dataModalidade) <= String(dados.dataAutorizacao)) {
+      setErroProcedimento("A Data do pedido da modalidade ao Prefeito deve ser posterior à Data de autorização do Prefeito.");
+      return;
+    }
+
+    setErroProcedimento("");
     setMostrarDiarios(false);
     confeccionarDocumentos();
   };
 
   const cancelarGeracao = () => {
     setMostrarDiarios(false);
+    setErroProcedimento("");
   };
 
   const baixarManualmente = () => {
@@ -406,22 +443,194 @@ function numeroProcessoValido(valor: string): boolean {
             className="wiz-card"
             style={{
               width: "100%",
-              maxWidth: "500px",
+              maxWidth: "760px",
+              maxHeight: "88vh",
+              overflowY: "auto",
               margin: 0,
               padding: "28px",
               boxShadow: "var(--wiz-shadow-md)",
             }}
           >
             <div className="wiz-card-header" style={{ marginBottom: "18px" }}>
-              <div className="wiz-card-icon">📰</div>
+              <div className="wiz-card-icon">📋</div>
               <div>
                 <div id="wiz-diarios-title" className="wiz-card-title">
-                  Publicação do aviso de edital
+                  Dados do procedimento e publicação
                 </div>
                 <div className="wiz-card-subtitle">
-                  Selecione os Diários nos quais pretende publicar o aviso.
+                  Preencha os dados do Procedimento e, ao final, selecione os Diários nos quais pretende publicar o aviso.
                 </div>
               </div>
+            </div>
+
+            <div className="wiz-grid-2" style={{ marginBottom: "18px" }}>
+              <div className="wiz-field">
+                <label className="wiz-label">
+                  Data de autorização do Prefeito <span className="req-star">*</span>
+                </label>
+                <input
+                  type="date"
+                  className="wiz-input"
+                  value={dados.dataAutorizacao || ""}
+                  onChange={(e) => {
+                    setErroProcedimento("");
+                    atualizarDados({ dataAutorizacao: e.target.value });
+                  }}
+                />
+              </div>
+
+              <div className="wiz-field">
+                <label className="wiz-label">
+                  Secretaria <span className="req-star">*</span>
+                </label>
+                <select
+                  className="wiz-select"
+                  value={dados.secretaria || ""}
+                  onChange={(e) => {
+                    setErroProcedimento("");
+                    atualizarDados({ secretaria: e.target.value });
+                  }}
+                >
+                  <option value="">Selecione a Secretaria</option>
+                  <option value="Diversos">Diversos</option>
+                  <option value="Gabinete do Prefeito">Gabinete do Prefeito</option>
+                  <option value="Fundo Social de Solidariedade">Fundo Social de Solidariedade</option>
+                  <option value="Secretaria de Administração">Secretaria de Administração</option>
+                  <option value="Secretaria de Educação, Cultura, Esporte e Lazer">Secretaria de Educação, Cultura, Esporte e Lazer</option>
+                  <option value="Secretaria de Desenvolvimento e Promoção Social">Secretaria de Desenvolvimento e Promoção Social</option>
+                  <option value="Secretaria de Saúde">Secretaria de Saúde</option>
+                  <option value="Secretaria de Obras e Serviços Públicos">Secretaria de Obras e Serviços Públicos</option>
+                  <option value="Secretaria de Agricultura, Meio Ambiente, Industria e Comércio">Secretaria de Agricultura, Meio Ambiente, Industria e Comércio</option>
+                </select>
+              </div>
+
+              <div className="wiz-field">
+                <label className="wiz-label">
+                  Data do Termo de Referência <span className="req-star">*</span>
+                </label>
+                <input
+                  type="date"
+                  className="wiz-input"
+                  value={dados.dataTr || ""}
+                  onChange={(e) => {
+                    setErroProcedimento("");
+                    atualizarDados({ dataTr: e.target.value });
+                  }}
+                />
+              </div>
+
+              <div className="wiz-field">
+                <label className="wiz-label">Gestor (utilizado no Procedimento)</label>
+                <div className="wiz-input" style={{ minHeight: "40px", display: "flex", alignItems: "center", lineHeight: 1.35 }}>
+                  {(dados.gestores || [])
+                    .map((g: any) => g.nome)
+                    .filter((nome: string) => nome.trim())
+                    .join("; ") || "Nenhum gestor informado"}
+                </div>
+              </div>
+
+              <div className="wiz-field">
+                <label className="wiz-label">
+                  Servidor <span className="req-star">*</span>
+                </label>
+                <select
+                  className="wiz-select"
+                  value={dados.servidorProcedimento || ""}
+                  onChange={(e) => {
+                    setErroProcedimento("");
+                    atualizarDados({ servidorProcedimento: e.target.value });
+                  }}
+                >
+                  <option value="">Selecione o servidor</option>
+                  <option value="FERNANDA REGINA YONEZAWA SHIMADA">FERNANDA REGINA YONEZAWA SHIMADA</option>
+                  <option value="EDIVALDO ROCHA DA SILVA JUNIOR">EDIVALDO ROCHA DA SILVA JUNIOR</option>
+                </select>
+              </div>
+
+              <div className="wiz-field">
+                <label className="wiz-label">
+                  Data do pedido da modalidade ao Prefeito <span className="req-star">*</span>
+                </label>
+                <input
+                  type="date"
+                  className="wiz-input"
+                  min={dados.dataAutorizacao || undefined}
+                  value={dados.dataModalidade || ""}
+                  onChange={(e) => {
+                    setErroProcedimento("");
+                    atualizarDados({ dataModalidade: e.target.value });
+                  }}
+                />
+              </div>
+            </div>
+
+            {dados.modalidade === "PREGAO_PRESENCIAL" && (
+              <div className="wiz-field" style={{ marginBottom: "18px" }}>
+                <label className="wiz-label">
+                  Justificativa para utilização da forma presencial <span className="req-star">*</span>
+                </label>
+                <textarea
+                  className="wiz-textarea"
+                  value={dados.justificativaProcedimento || ""}
+                  onChange={(e) => {
+                    setErroProcedimento("");
+                    atualizarDados({ justificativaProcedimento: e.target.value });
+                  }}
+                  placeholder="Informe a justificativa para a realização do Pregão Presencial."
+                />
+              </div>
+            )}
+
+            <div className="wiz-grid-2" style={{ marginBottom: "18px" }}>
+              <div className="wiz-field">
+                <label className="wiz-label">
+                  Data do pedido de dotação orçamentária <span className="req-star">*</span>
+                </label>
+                <input
+                  type="date"
+                  className="wiz-input"
+                  value={dados.dataDotacao || ""}
+                  onChange={(e) => {
+                    setErroProcedimento("");
+                    atualizarDados({ dataDotacao: e.target.value });
+                  }}
+                />
+              </div>
+
+              <div className="wiz-field">
+                <label className="wiz-label">
+                  Data do pedido de parecer jurídico <span className="req-star">*</span>
+                </label>
+                <input
+                  type="date"
+                  className="wiz-input"
+                  value={dados.dataPedParecer || ""}
+                  onChange={(e) => {
+                    setErroProcedimento("");
+                    atualizarDados({ dataPedParecer: e.target.value });
+                  }}
+                />
+              </div>
+            </div>
+
+            {erroProcedimento && (
+              <div
+                style={{
+                  background: "var(--wiz-error-soft)",
+                  border: "1px solid var(--wiz-error)",
+                  color: "var(--wiz-error)",
+                  borderRadius: "10px",
+                  padding: "12px 14px",
+                  fontSize: "13px",
+                  marginBottom: "12px",
+                }}
+              >
+                {erroProcedimento}
+              </div>
+            )}
+
+            <div className="wiz-subsection-title" style={{ marginBottom: "10px" }}>
+              Publicação do Aviso
             </div>
 
             <div style={{ display: "grid", gap: "10px", marginBottom: "24px" }}>
@@ -434,7 +643,7 @@ function numeroProcessoValido(valor: string): boolean {
                   <div className="wiz-toggle-title">Diário Estadual</div>
                   <div className="wiz-toggle-desc">Gerar o Aviso de Edital para publicação no Diário Estadual.</div>
                 </div>
-                <div className={`wiz-switch ${publicarDiarioEstadual ? "on" : ""}`} />
+                <div className="wiz-switch on" style={{ display: publicarDiarioEstadual ? "block" : undefined }} />
               </label>
 
               <label
@@ -446,7 +655,7 @@ function numeroProcessoValido(valor: string): boolean {
                   <div className="wiz-toggle-title">Diário Federal</div>
                   <div className="wiz-toggle-desc">Gerar o Aviso de Edital para publicação no Diário Federal.</div>
                 </div>
-                <div className={`wiz-switch ${publicarDiarioFederal ? "on" : ""}`} />
+                <div className="wiz-switch on" style={{ display: publicarDiarioFederal ? "block" : undefined }} />
               </label>
             </div>
 
