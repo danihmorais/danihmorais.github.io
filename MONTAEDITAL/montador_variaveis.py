@@ -263,6 +263,27 @@ def montar_variaveis_fixas(dados_usuario: dict) -> dict:
 
     modalidade_raw = dados_usuario.get("{{MODALIDADE}}", "PREGAO_ELETRONICO")
 
+    # Dados específicos do Procedimento.
+    # As datas são sempre convertidas para o formato por extenso no momento da substituição.
+    resultado["{{DATA AUT}}"] = _data_por_extenso(dados_usuario.get("{{DATA AUT}}", ""))
+    resultado["{{SEC}}"] = dados_usuario.get("{{SEC}}", "")
+    resultado["{{DATA_TR}}"] = _data_por_extenso(dados_usuario.get("{{DATA_TR}}", ""))
+    resultado["{{SERVIDOR}}"] = dados_usuario.get("{{SERVIDOR}}", "")
+    resultado["{{DATA.MODALIDADE}}"] = _data_por_extenso(dados_usuario.get("{{DATA.MODALIDADE}}", ""))
+    resultado["{{DATA.DOTACAO}}"] = _data_por_extenso(dados_usuario.get("{{DATA.DOTACAO}}", ""))
+    resultado["{{DATA PED. PARECER}}"] = _data_por_extenso(dados_usuario.get("{{DATA PED. PARECER}}", ""))
+
+    # Só o Pregão Presencial recebe justificativa. Nas demais modalidades o placeholder é apagado.
+    if modalidade_raw == "PREGAO_PRESENCIAL":
+        resultado["{{PRESENCIAL}}"] = "Ressalta-se que, de acordo com o art. 17, §2º, é admitida a utilização da forma presencial, desde que motivada, devendo a sessão pública ser registrada em ata e gravada em áudio e vídeo, condicionada a discricionariedade de Vossa Excelência"
+        resultado["{{JUSTIFICATIVA}}"] = dados_usuario.get("{{JUSTIFICATIVA}}", "")
+    elif modalidade_raw in {"PREGAO_ELETRONICO", "LEILAO_ELETRONICO"}:
+        resultado["{{PRESENCIAL}}"] = "Ressalta-se que, de acordo com o art. 17, §2º, é admitida a utilização da forma presencial, desde que motivada, devendo a sessão pública ser registrada em ata e gravada em áudio e vídeo, condicionada a discricionariedade de Vossa Excelência"
+        resultado["{{JUSTIFICATIVA}}"] = ""
+    else:
+        resultado["{{PRESENCIAL}}"] = ""
+        resultado["{{JUSTIFICATIVA}}"] = ""
+
     prorroga_check = dados_usuario.get("{{PRORROGACAO_CHECK}}", "NAO")
     sim_prorroga = _converter_para_sim(prorroga_check)
 
