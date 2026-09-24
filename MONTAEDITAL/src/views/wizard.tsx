@@ -74,14 +74,18 @@ export default function Wizard() {
     }
   }, [etapaAtual]);
 
+function numeroProcessoValido(valor: string): boolean {
+    return /^(?:\d{2}|\d{3})\/\d{4}$/.test(valor);
+  }
+
   const validarEtapa = () => {
     const isLeilao = dados.modalidade === "LEILAO_ELETRONICO";
 
     switch (etapaAtual) {
       case 0:
         return !!(
-          dados.numeroProcesso &&
-          dados.numeroModalidade &&
+          numeroProcessoValido(dados.numeroProcesso) &&
+          numeroProcessoValido(dados.numeroModalidade) &&
           dados.modalidade &&
           dados.criterios &&
           dados.instrumento &&
