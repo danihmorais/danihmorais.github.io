@@ -59,6 +59,9 @@ export default function Wizard() {
   const [statusTexto, setStatusTexto] = useState("Iniciando...");
   const [erroMsg, setErroMsg] = useState<string | null>(null);
   const [geracaoSucesso, setGeracaoSucesso] = useState(false);
+  const [mostrarDiarios, setMostrarDiarios] = useState(false);
+  const [publicarDiarioEstadual, setPublicarDiarioEstadual] = useState(false);
+  const [publicarDiarioFederal, setPublicarDiarioFederal] = useState(false);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [downloadFilename, setDownloadFilename] = useState<string>("edital.zip");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -162,7 +165,7 @@ function numeroProcessoValido(valor: string): boolean {
     if (etapaAtual < 2) {
       setEtapaAtual(etapaAtual + 1);
     } else {
-      confeccionarDocumentos();
+      setMostrarDiarios(true);
     }
   };
 
@@ -204,6 +207,9 @@ function numeroProcessoValido(valor: string): boolean {
       else if (dados.modalidade === "PREGAO_PRESENCIAL") tipoEditalStr = "pregao_presencial";
       else if (dados.modalidade === "LEILAO_ELETRONICO") tipoEditalStr = "leilao_eletronico";
 
+      payload.publicar_diario_estadual = publicarDiarioEstadual;
+      payload.publicar_diario_federal = publicarDiarioFederal;
+
       const { blob, filename } = await gerarEdital({
         tipo_edital: tipoEditalStr,
         dados_preenchimento: payload
@@ -238,6 +244,15 @@ function numeroProcessoValido(valor: string): boolean {
     }
   };
 
+  const confirmarGeracao = () => {
+    setMostrarDiarios(false);
+    confeccionarDocumentos();
+  };
+
+  const cancelarGeracao = () => {
+    setMostrarDiarios(false);
+  };
+
   const baixarManualmente = () => {
     if (!downloadUrl) return;
     const a = document.createElement("a");
@@ -255,6 +270,9 @@ function numeroProcessoValido(valor: string): boolean {
     setDownloadUrl(null);
     setCarregando(false);
     setGeracaoSucesso(false);
+    setMostrarDiarios(false);
+    setPublicarDiarioEstadual(false);
+    setPublicarDiarioFederal(false);
     setEtapaAtual(0);
   };
 
@@ -366,6 +384,91 @@ function numeroProcessoValido(valor: string): boolean {
       <div className="wiz-body" ref={scrollRef}>
         {renderizarEtapa()}
       </div>
+
+      {mostrarDiarios && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="wiz-diarios-title"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1000,
+            background: "rgba(15, 23, 42, 0.55)",
+            backdropFilter: "blur(2px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+          }}
+        >
+          <div
+            className="wiz-card"
+            style={{
+              width: "100%",
+              maxWidth: "500px",
+              margin: 0,
+              padding: "28px",
+              boxShadow: "var(--wiz-shadow-md)",
+            }}
+          >
+            <div className="wiz-card-header" style={{ marginBottom: "18px" }}>
+              <div className="wiz-card-icon">📰</div>
+              <div>
+                <div id="wiz-diarios-title" className="wiz-card-title">
+                  Publicação do aviso de edital
+                </div>
+                <div className="wiz-card-subtitle">
+                  Selecione os Diários nos quais pretende publicar o aviso.
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gap: "10px", marginBottom: "24px" }}>
+              <label
+                className="wiz-toggle-row"
+                style={{ cursor: "pointer" }}
+                onClick={() => setPublicarDiarioEstadual((v) => !v)}
+              >
+                <div className="wiz-toggle-info">
+                  <div className="wiz-toggle-title">Diário Estadual</div>
+                  <div className="wiz-toggle-desc">Gerar o Aviso de Edital para publicação no Diário Estadual.</div>
+                </div>
+                <div className={`wiz-switch ${publicarDiarioEstadual ? "on" : ""}`} />
+              </label>
+
+              <label
+                className="wiz-toggle-row"
+                style={{ cursor: "pointer" }}
+                onClick={() => setPublicarDiarioFederal((v) => !v)}
+              >
+                <div className="wiz-toggle-info">
+                  <div className="wiz-toggle-title">Diário Federal</div>
+                  <div className="wiz-toggle-desc">Gerar o Aviso de Edital para publicação no Diário Federal.</div>
+                </div>
+                <div className={`wiz-switch ${publicarDiarioFederal ? "on" : ""}`} />
+              </label>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+              <button
+                type="button"
+                onClick={cancelarGeracao}
+                className="wiz-btn wiz-btn-ghost"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmarGeracao}
+                className="wiz-btn wiz-btn-primary"
+              >
+                ✓ Gerar documentos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="wiz-footer">
         <div className="wiz-footer-left">
