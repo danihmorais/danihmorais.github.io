@@ -53,8 +53,8 @@ function MascaraNumero({
         placeholder="XX"
         maxLength={3}
         style={{
-          flex: "0 0 56px",
-          width: "56px",
+          flex: "0 0 40px",
+          width: "40px",
           border: "none",
           outline: "none",
           background: "transparent",
