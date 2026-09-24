@@ -169,8 +169,11 @@ export default function Step2({ dados, atualizarDados }: any) {
           <div className="wiz-card-icon">📍</div>
           <div>
             <div className="wiz-card-title">Prazos e Locais</div>
-            <div className="wiz-card-subtitle">Execução, entrega e devoluções ou retirada</div>
-          </div>
+            <div className="wiz-card-subtitle">
+              {!isLeilao
+                ? "Execução, entrega e devoluções"
+                : "Condições de retirada do bem"}
+            </div>
         </div>
         {!isLeilao && (
           <div className="wiz-field" style={{ marginBottom: "16px" }}>
@@ -189,12 +192,12 @@ export default function Step2({ dados, atualizarDados }: any) {
         <div className="wiz-grid-1" style={{ marginBottom: "16px" }}>
           <div className="wiz-field">
             <label className="wiz-label">
-              {isLeilao ? "Local de Retirada" : "Forma de Execução / Local e Prazo de Execução/Entrega"}{" "}
+              {isLeilao ? "Local de Retirada" : "Da Forma de Execução"}{" "}
               <span className="req-star">*</span>
             </label>
             {!isLeilao && (
               <div style={{ marginBottom: "8px", color: "var(--wiz-text-3)", fontSize: "13px" }}>
-                Insira <strong>TODAS as cláusulas</strong> que constarem na seção Forma de Execução do Termo de Referência. A numeração colada no início das cláusulas será removida automaticamente.
+                Insira <strong>TODAS as cláusulas</strong> que constarem na seção DA FORMA DE EXECUÇÃO do Termo de Referência. A numeração colada no início das cláusulas será removida automaticamente.
               </div>
             )}
             <textarea
@@ -211,7 +214,7 @@ export default function Step2({ dados, atualizarDados }: any) {
               placeholder={
                 isLeilao
                   ? "Informe o local de retirada, endereço, condições e demais informações pertinentes..."
-                  : "Cole TODAS as cláusulas da seção Forma de Execução do TR. A numeração será removida automaticamente..."
+                  : "Cole TODAS as cláusulas da seção DA FORMA DE EXECUÇÃO do TR. A numeração será removida automaticamente..."
               }
             />
           </div>
