@@ -734,6 +734,13 @@ def preencher_documento(caminho_modelo: str, caminho_saida: str, dados: dict) ->
         _processar_paragrafo(paragrafo, dados, e_arp)
         
     for tabela in doc.tables:
+        # Primeiro materializa os marcadores nas células. Sem isso, a detecção
+        # da coluna ocorria antes de {{UNID}} virar __REMOVER_COLUNA__.
+        for linha in tabela.rows:
+            for celula in linha.cells:
+                for paragrafo in list(celula.paragraphs):
+                    _processar_paragrafo(paragrafo, dados, e_arp)
+
         colunas_para_remover = []
         for i, coluna in enumerate(tabela.columns):
             remover_esta = False
@@ -743,7 +750,7 @@ def preencher_documento(caminho_modelo: str, caminho_saida: str, dados: dict) ->
                     break
             if remover_esta:
                 colunas_para_remover.append(i)
-                
+
         if len(colunas_para_remover) == len(tabela.columns) and len(tabela.columns) > 0:
             try:
                 tbl = tabela._tbl
@@ -762,13 +769,7 @@ def preencher_documento(caminho_modelo: str, caminho_saida: str, dados: dict) ->
                             parent.remove(tc)
                     except Exception:
                         pass
-                        
-        if tabela._tbl.getparent() is not None:
-            for linha in tabela.rows:
-                for celula in linha.cells:
-                    for paragrafo in list(celula.paragraphs):
-                        _processar_paragrafo(paragrafo, dados, e_arp)
-                    
+
     for section in doc.sections:
         for header in [section.header, section.first_page_header, section.even_page_header]:
             if header:
