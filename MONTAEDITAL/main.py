@@ -47,9 +47,177 @@ MODALIDADE_TEXTO = {
     "LEILAO_ELETRONICO": "Leilão Eletrônico"
 }
 
+AVISO_MODELO = os.path.join(BASE_DIR, "modelos", "AVISO XX.XX.XXXX.rtf")
+
 class EditalRequest(BaseModel):
     tipo_edital: str
     dados_preenchimento: dict
+
+def cleanup_temp_dir(path: str):
+    shutil.rmtree(path, ignore_errors=True)
+
+
+def _rtf_visivel(rtf: str):
+    """
+    Retorna os caracteres visíveis do RTF com as posições no texto-fonte.
+    Isso permite substituir placeholders mesmo quando o Word os dividiu
+    entre vários runs/grupos RTF.
+    """
+    visiveis = []
+    i = 0
+
+    while i < len(rtf):
+        ch = rtf[i]
+
+        if ch in "{}":
+            i += 1
+            continue
+
+        if ch != "\\":
+            if ch not in "\r\n":
+                visiveis.append((ch, i, i + 1))
+            i += 1
+            continue
+
+        if i + 1 >= len(rtf):
+            i += 1
+            continue
+
+        prox = rtf[i + 1]
+
+        if prox in "{}\\":
+            visiveis.append((prox, i, i + 2))
+            i += 2
+            continue
+
+        if prox == "~":
+            visiveis.append((" ", i, i + 2))
+            i += 2
+            continue
+
+        if prox == "'":
+            if i + 3 < len(rtf):
+                try:
+                    byte = bytes.fromhex(rtf[i + 2:i + 4])
+                    visiveis.append((byte.decode("cp1252"), i, i + 4))
+                    i += 4
+                    continue
+                except Exception:
+                    pass
+            i += 2
+            continue
+
+        if prox.isalpha():
+            j = i + 1
+            while j < len(rtf) and rtf[j].isalpha():
+                j += 1
+
+            palavra = rtf[i + 1:j]
+
+            sinal = 1
+            if j < len(rtf) and rtf[j] == "-":
+                sinal = -1
+                j += 1
+
+            inicio_num = j
+            while j < len(rtf) and rtf[j].isdigit():
+                j += 1
+
+            numero = rtf[inicio_num:j] if j > inicio_num else ""
+
+            if palavra == "u" and numero:
+                try:
+                    valor = int(numero) * sinal
+                    if valor < 0:
+                        valor += 65536
+                    visiveis.append((chr(valor), i, j))
+                    if j < len(rtf) and rtf[j] == "?":
+                        j += 1
+                    i = j
+                    continue
+                except Exception:
+                    pass
+
+            if j < len(rtf) and rtf[j] == " ":
+                j += 1
+
+            i = j
+            continue
+
+        # Demais símbolos de controle RTF (\*, \-, etc.)
+        i += 2
+
+    return visiveis
+
+
+def _rtf_escape_texto(valor) -> str:
+    texto = str(valor or "")
+    partes = []
+
+    for ch in texto:
+        if ch == "\\":
+            partes.append(r"\\")
+        elif ch == "{":
+            partes.append(r"\{")
+        elif ch == "}":
+            partes.append(r"\}")
+        elif ch == "\n":
+            partes.append(r"\line ")
+        elif ord(ch) < 128:
+            partes.append(ch)
+        else:
+            try:
+                byte = ch.encode("cp1252")
+                partes.append("".join(f"\\'{b:02x}" for b in byte))
+            except UnicodeEncodeError:
+                code = ord(ch)
+                signed = code if code <= 32767 else code - 65536
+                partes.append(f"\\u{signed}?")
+
+    return "".join(partes)
+
+
+def _substituir_placeholders_rtf(rtf: str, substituicoes: dict) -> str:
+    visiveis = _rtf_visivel(rtf)
+    texto_visivel = "".join(item[0] for item in visiveis)
+    alteracoes = []
+
+    for placeholder, valor in substituicoes.items():
+        inicio_busca = 0
+
+        while True:
+            indice = texto_visivel.find(placeholder, inicio_busca)
+            if indice < 0:
+                break
+
+            fim = indice + len(placeholder)
+            primeira = visiveis[indice]
+            alteracoes.append((primeira[1], primeira[2], _rtf_escape_texto(valor)))
+
+            for pos in range(indice + 1, fim):
+                alteracoes.append((visiveis[pos][1], visiveis[pos][2], ""))
+
+            inicio_busca = fim
+
+    for inicio, fim, substituto in sorted(alteracoes, key=lambda item: item[0], reverse=True):
+        rtf = rtf[:inicio] + substituto + rtf[fim:]
+
+    return rtf
+
+
+def _data_para_nome_aviso(data_str: str) -> str:
+    if not data_str:
+        return "XX.XX.XXXX"
+
+    for formato in ("%Y-%m-%d", "%d/%m/%Y", "%d.%m.%Y"):
+        try:
+            data = datetime.strptime(str(data_str).strip(), formato)
+            return data.strftime("%d.%m.%Y")
+        except Exception:
+            continue
+
+    return "XX.XX.XXXX"
+
 
 def cleanup_temp_dir(path: str):
     shutil.rmtree(path, ignore_errors=True)
@@ -110,9 +278,64 @@ async def gerar_edital_endpoint(req: EditalRequest, background_tasks: Background
     zip_filename = f"Editais_{num_mod_arq}_{session_id[:6]}.zip"
     caminho_zip = os.path.join(temp_dir, zip_filename)
     
+    caminho_aviso = None
+    nome_arq_aviso = None
+
+    publicar_diario_estadual = bool(req.dados_preenchimento.get("publicar_diario_estadual", False))
+    publicar_diario_federal = bool(req.dados_preenchimento.get("publicar_diario_federal", False))
+
+    if publicar_diario_estadual or publicar_diario_federal:
+        if not os.path.exists(AVISO_MODELO):
+            raise HTTPException(status_code=500, detail="Modelo de Aviso de Edital não encontrado.")
+
+        with open(AVISO_MODELO, "rb") as f:
+            aviso_rtf = f.read().decode("cp1252")
+
+        cad_prot_env = {
+            "DISPENSA": "Envio ou Protocolo",
+            "DISPENSA_BLL": "Cadastro",
+            "PREGAO_ELETRONICO": "Cadastro",
+            "PREGAO_PRESENCIAL": "Protocolo",
+            "LEILAO_ELETRONICO": "Cadastro",
+        }.get(modalidade_raw, "Cadastro")
+
+        data_sessao_aviso = dados_processados.get("{{DATA DA SESSAO}}", "")
+        if modalidade_raw == "DISPENSA":
+            data_sessao_aviso = dados_processados.get(
+                "{{DATA DA SESSAO2}}",
+                data_sessao_aviso,
+            )
+
+        dados_aviso = {
+            "{{MODALIDADE}}": modalidade_nome,
+            "{{N.MODALIDADE}}": num_mod_raw,
+            "{{N.PROCESSO}}": num_proc_raw,
+            "{{OBJETO}}": dados_processados.get("{{OBJETO}}", ""),
+            "{{CAD.PROT.ENV}}": cad_prot_env,
+            "{{DATA REC PROP1}}": dados_processados.get("{{DATA REC PROP1}}", ""),
+            "{{DATA DA SESSAO_AVISO}}": data_sessao_aviso,
+            "{{HORA FIM DO REC}}": dados_processados.get("{{HORA FIM DO REC}}", ""),
+            "{{DATA DA SESSAO}}": dados_processados.get("{{DATA DA SESSAO}}", ""),
+            "{{HORA SESSAO}}": dados_processados.get("{{HORA SESSAO}}", ""),
+            "{{DATA DO EDITAL}}": dados_processados.get("{{DATA DO EDITAL}}", ""),
+        }
+
+        aviso_rtf = _substituir_placeholders_rtf(aviso_rtf, dados_aviso)
+
+        data_nome_aviso = _data_para_nome_aviso(
+            req.dados_preenchimento.get("{{DATA DO EDITAL}}", "")
+        )
+        nome_arq_aviso = f"AVISO {data_nome_aviso}.rtf"
+        caminho_aviso = os.path.join(temp_dir, nome_arq_aviso)
+
+        with open(caminho_aviso, "wb") as f:
+            f.write(aviso_rtf.encode("cp1252"))
+
     with zipfile.ZipFile(caminho_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
         zipf.write(caminho_edital, nome_arq_edital)
         zipf.write(caminho_minuta, nome_arq_minuta)
+        if caminho_aviso and nome_arq_aviso:
+            zipf.write(caminho_aviso, nome_arq_aviso)
         
     return FileResponse(
         path=caminho_zip,
