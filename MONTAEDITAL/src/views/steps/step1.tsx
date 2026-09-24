@@ -4,33 +4,14 @@ function anoAtual(): string {
   return String(new Date().getFullYear());
 }
 
-function mascararNumeroProcesso(valor: string): string {
+function separarNumero(valor: string): { numero: string; ano: string } {
   const limpo = valor.replace(/[^\d/]/g, "");
-  const posicaoBarra = limpo.indexOf("/");
-  const anoPadrao = anoAtual();
+  const [numero = "", ano = ""] = limpo.split("/");
 
-  if (posicaoBarra >= 0) {
-    const antes = limpo.slice(0, posicaoBarra).replace(/\D/g, "").slice(0, 3);
-    const depois = limpo.slice(posicaoBarra + 1).replace(/\D/g, "").slice(0, 4);
-    return `${antes}/${depois}`;
-  }
-
-  const numeros = limpo.replace(/\D/g, "").slice(0, 3);
-  return numeros ? `${numeros}/${anoPadrao}` : "";
-}
-
-function completarAnoAtual(valor: string): string {
-  const mascarado = mascararNumeroProcesso(valor);
-
-  if (/^\d{2,3}\/\d{4}$/.test(mascarado)) {
-    return mascarado;
-  }
-
-  if (/^\d{2,3}\/$/.test(mascarado)) {
-    return `${mascarado}${anoAtual()}`;
-  }
-
-  return mascarado;
+  return {
+    numero: numero.slice(0, 3),
+    ano: (ano || anoAtual()).slice(0, 4),
+  };
 }
 
 function MascaraNumero({
@@ -40,45 +21,77 @@ function MascaraNumero({
   valor: string;
   onChange: (valor: string) => void;
 }) {
-  const vazio = !valor;
+  const partes = separarNumero(valor);
+  const numeroPreenchido = partes.numero.length > 0;
 
-  const completar = () => {
-    const completado = completarAnoAtual(valor);
-    if (completado !== valor) {
-      onChange(completado);
-    }
+  const atualizarNumero = (novoNumero: string) => {
+    const numero = novoNumero.replace(/\D/g, "").slice(0, 3);
+    onChange(numero ? `${numero}/${partes.ano}` : "");
+  };
+
+  const atualizarAno = (novoAno: string) => {
+    const ano = novoAno.replace(/\D/g, "").slice(0, 4);
+    onChange(numeroPreenchido ? `${partes.numero}/${ano}` : "");
   };
 
   return (
-    <div style={{ position: "relative" }}>
-      {vazio && (
-        <div
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            alignItems: "center",
-            padding: "0 14px",
-            pointerEvents: "none",
-            fontSize: "14px",
-            fontFamily: "inherit",
-            zIndex: 1,
-          }}
-        >
-          <span style={{ color: "var(--wiz-text-3)", opacity: 0.35 }}>XX</span>
-          <span style={{ color: "var(--wiz-text-3)", opacity: 0.5 }}>/</span>
-          <span style={{ color: "var(--wiz-text-3)", opacity: 0.85 }}>{anoAtual()}</span>
-        </div>
-      )}
+    <div
+      className="wiz-input"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        padding: 0,
+        overflow: "hidden",
+      }}
+    >
       <input
         type="text"
-        className="wiz-input"
-        value={valor}
-        onChange={(e) => onChange(mascararNumeroProcesso(e.target.value))}
-        onBlur={completar}
-        maxLength={8}
-        style={{ position: "relative", zIndex: 2, background: vazio ? "transparent" : undefined }}
+        inputMode="numeric"
+        aria-label="Número"
+        value={partes.numero}
+        onChange={(e) => atualizarNumero(e.target.value)}
+        placeholder="XX"
+        maxLength={3}
+        style={{
+          flex: "0 0 56px",
+          width: "56px",
+          border: "none",
+          outline: "none",
+          background: "transparent",
+          color: "var(--wiz-text)",
+          fontSize: "13.5px",
+          fontFamily: "inherit",
+          padding: "10px 0 10px 13px",
+        }}
+      />
+      <span
+        aria-hidden="true"
+        style={{
+          color: "var(--wiz-text-3)",
+          fontSize: "13.5px",
+          userSelect: "none",
+        }}
+      >
+        /
+      </span>
+      <input
+        type="text"
+        inputMode="numeric"
+        aria-label="Ano"
+        value={partes.ano}
+        onChange={(e) => atualizarAno(e.target.value)}
+        maxLength={4}
+        style={{
+          flex: 1,
+          minWidth: 0,
+          border: "none",
+          outline: "none",
+          background: "transparent",
+          color: numeroPreenchido ? "var(--wiz-text)" : "var(--wiz-text-3)",
+          fontSize: "13.5px",
+          fontFamily: "inherit",
+          padding: "10px 13px 10px 6px",
+        }}
       />
     </div>
   );
