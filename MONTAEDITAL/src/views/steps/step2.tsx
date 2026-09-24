@@ -282,7 +282,7 @@ export default function Step2({ dados, atualizarDados }: any) {
                 onChange={(e) =>
                   atualizarDados({ textoVistoria: limparNumeracao(e.target.value) })
                 }
-                placeholder="Descreva as condições da vistoria..."
+                placeholder="Descreva as condições da vistoria... A numeração colada no início das cláusulas será removida automaticamente."
               />
             )}
 
@@ -294,7 +294,7 @@ export default function Step2({ dados, atualizarDados }: any) {
                 onChange={(e) =>
                   atualizarDados({ textoVistoria: limparNumeracao(e.target.value) })
                 }
-                placeholder="Descreva as condições, local, horários e demais informações da vistoria..."
+                placeholder="Descreva as condições, local, horários e demais informações da vistoria... A numeração colada no início das cláusulas será removida automaticamente."
               />
             )}
           </div>
@@ -326,7 +326,7 @@ export default function Step2({ dados, atualizarDados }: any) {
                   onChange={(e) =>
                     atualizarDados({ textoAmostra: limparNumeracao(e.target.value) })
                   }
-                  placeholder="Descreva as condições da amostra..."
+                  placeholder="Descreva as condições da amostra... A numeração colada no início das cláusulas será removida automaticamente."
                 />
               )}
             </div>
