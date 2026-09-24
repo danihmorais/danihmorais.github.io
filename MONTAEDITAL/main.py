@@ -149,7 +149,7 @@ def _rtf_visivel(rtf: str):
             i += 1
             continue
 
-        if ch != "\":
+        if ch != "\\":
             if ch not in "\r\n":
                 visiveis.append((ch, i, i + 1))
             i += 1
@@ -161,7 +161,7 @@ def _rtf_visivel(rtf: str):
 
         prox = rtf[i + 1]
 
-        if prox in "{}\":
+        if prox in "{}\\":
             visiveis.append((prox, i, i + 2))
             i += 2
             continue
@@ -231,8 +231,8 @@ def _rtf_escape_texto(valor) -> str:
     partes = []
 
     for ch in texto:
-        if ch == "\":
-            partes.append(r"\")
+        if ch == "\\":
+            partes.append(r"\\")
         elif ch == "{":
             partes.append(r"\{")
         elif ch == "}":
@@ -244,11 +244,11 @@ def _rtf_escape_texto(valor) -> str:
         else:
             try:
                 byte = ch.encode("cp1252")
-                partes.append("".join(f"\'{b:02x}" for b in byte))
+                partes.append("".join(f"\\'{b:02x}" for b in byte))
             except UnicodeEncodeError:
                 code = ord(ch)
                 signed = code if code <= 32767 else code - 65536
-                partes.append(f"\u{signed}?")
+                partes.append(f"\\u{signed}?")
 
     return "".join(partes)
 
