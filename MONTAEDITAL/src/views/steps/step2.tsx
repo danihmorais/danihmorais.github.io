@@ -242,7 +242,7 @@ export default function Step2({ dados, atualizarDados }: any) {
               onChange={(e) =>
                 atualizarDados({ especificacoesEspeciais: limparNumeracao(e.target.value) })
               }
-              placeholder="Insira especificações especiais (opcional)..."
+              placeholder="Insira especificações especiais (opcional)... A numeração colada no início das cláusulas será removida automaticamente."
             />
           </div>
         )}
@@ -280,7 +280,7 @@ export default function Step2({ dados, atualizarDados }: any) {
                 className="wiz-textarea"
                 value={dados.textoVistoria || ""}
                 onChange={(e) =>
-                  atualizarDados({ textoVistoria: e.target.value })
+                  atualizarDados({ textoVistoria: limparNumeracao(e.target.value) })
                 }
                 placeholder="Descreva as condições da vistoria..."
               />
@@ -292,7 +292,7 @@ export default function Step2({ dados, atualizarDados }: any) {
                 style={{ minHeight: "140px" }}
                 value={dados.textoVistoria || ""}
                 onChange={(e) =>
-                  atualizarDados({ textoVistoria: e.target.value })
+                  atualizarDados({ textoVistoria: limparNumeracao(e.target.value) })
                 }
                 placeholder="Descreva as condições, local, horários e demais informações da vistoria..."
               />
@@ -324,7 +324,7 @@ export default function Step2({ dados, atualizarDados }: any) {
                   className="wiz-textarea"
                   value={dados.textoAmostra || ""}
                   onChange={(e) =>
-                    atualizarDados({ textoAmostra: e.target.value })
+                    atualizarDados({ textoAmostra: limparNumeracao(e.target.value) })
                   }
                   placeholder="Descreva as condições da amostra..."
                 />
