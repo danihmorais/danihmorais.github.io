@@ -111,7 +111,7 @@ export default function Step3({ dados, atualizarDados }: any) {
             </div>
             <div className="wiz-field">
               <label className="wiz-label">
-                Permitir Prorrogação? <span className="req-star">*</span>
+                Permitir Prorrogação do Instrumento Contratual? <span className="req-star">*</span>
               </label>
               <select className="wiz-select" value={dados.prorrogacaoCheck || "NAO"} onChange={(e) => atualizarDados({ prorrogacaoCheck: e.target.value })}>
                 <option value="NAO">Não</option>
@@ -290,17 +290,11 @@ export default function Step3({ dados, atualizarDados }: any) {
               <div style={{ marginBottom: "8px", color: "var(--wiz-text-3)", fontSize: "13px", lineHeight: 1.5 }}>
                 Insira <strong>TODAS as cláusulas de pagamento</strong> que constarem no Termo de Referência. Ao colar o conteúdo, a numeração no início das cláusulas será removida automaticamente.
               </div>
-              {!obrigacoesPreenchidas && (
-                <div style={{ marginBottom: "8px", padding: "10px 12px", borderRadius: "8px", background: "var(--wiz-error-soft)", border: "1px solid var(--wiz-error)", color: "var(--wiz-error)", fontSize: "13px", lineHeight: 1.45 }}>
-                  Preencha primeiro as cláusulas da Contratante e da Contratada. O preenchimento das cláusulas de pagamento será liberado depois.
-                </div>
-              )}
               <textarea
                 className="wiz-textarea"
                 value={dados.pagamento || ""}
-                disabled={!obrigacoesPreenchidas}
                 onChange={(e) => handlePagamentoChange(e.target.value)}
-                placeholder={obrigacoesPreenchidas ? "Cole TODAS as cláusulas de pagamento do TR..." : "Preencha primeiro Contratante e Contratada..."}
+                placeholder="Cole TODAS as cláusulas de pagamento do TR... A numeração colada no início das cláusulas será removida automaticamente."}
               />
             </div>
           </div>
