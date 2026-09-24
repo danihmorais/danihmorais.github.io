@@ -17,6 +17,17 @@ function mascararNumeroProcesso(valor: string): string {
   return `${numeros.slice(0, 3)}/${numeros.slice(3)}`;
 }
 
+function completarAnoAtual(valor: string): string {
+  const mascarado = mascararNumeroProcesso(valor);
+  if (/^\d{2,3}$/.test(mascarado)) {
+    return `${mascarado}/${new Date().getFullYear()}`;
+  }
+  if (/^\d{2,3}\/$/.test(mascarado)) {
+    return `${mascarado}${new Date().getFullYear()}`;
+  }
+  return mascarado;
+}
+
 export default function Step1({ dados, atualizarDados }: any) {
   const handleModalidadeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
@@ -60,6 +71,7 @@ export default function Step1({ dados, atualizarDados }: any) {
               className="wiz-input"
               value={dados.numeroProcesso || ""}
               onChange={(e) => atualizarDados({ numeroProcesso: mascararNumeroProcesso(e.target.value) })}
+              onBlur={(e) => atualizarDados({ numeroProcesso: completarAnoAtual(e.target.value) })}
               placeholder="Ex: 25/2026 ou 123/2026"
               maxLength={8}
             />
@@ -73,6 +85,7 @@ export default function Step1({ dados, atualizarDados }: any) {
               className="wiz-input"
               value={dados.numeroModalidade || ""}
               onChange={(e) => atualizarDados({ numeroModalidade: mascararNumeroProcesso(e.target.value) })}
+              onBlur={(e) => atualizarDados({ numeroModalidade: completarAnoAtual(e.target.value) })}
               placeholder="Ex: 05/2026 ou 123/2026"
               maxLength={8}
             />
