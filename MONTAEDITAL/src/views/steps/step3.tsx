@@ -351,7 +351,7 @@ export default function Step3({ dados, atualizarDados }: any) {
                 className="wiz-textarea"
                 value={dados.pagamento || ""}
                 onChange={(e) => handlePagamentoChange(e.target.value)}
-                placeholder="Cole TODAS as cláusulas de pagamento do TR... A numeração colada no início das cláusulas será removida automaticamente."}
+                placeholder="Cole TODAS as cláusulas de pagamento do TR... A numeração colada no início das cláusulas será removida automaticamente."
               />
             </div>
           </div>
