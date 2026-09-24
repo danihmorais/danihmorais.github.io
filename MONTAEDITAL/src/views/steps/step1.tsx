@@ -1,30 +1,45 @@
 import React from "react";
 
+function anoAtual(): string {
+  return String(new Date().getFullYear());
+}
+
 function mascararNumeroProcesso(valor: string): string {
   const limpo = valor.replace(/[^\d/]/g, "");
   const posicaoBarra = limpo.indexOf("/");
+  const anoPadrao = anoAtual();
 
   if (posicaoBarra >= 0) {
     const antes = limpo.slice(0, posicaoBarra).replace(/\D/g, "").slice(0, 3);
     const depois = limpo.slice(posicaoBarra + 1).replace(/\D/g, "").slice(0, 4);
-    return antes ? `${antes}/${depois}` : depois;
+
+    if (!antes) {
+      return `/${depois}`;
+    }
+
+    return `${antes}/${depois}`;
   }
 
   const numeros = limpo.replace(/\D/g, "").slice(0, 7);
 
-  if (numeros.length <= 2) return numeros;
-  if (numeros.length <= 6) return `${numeros.slice(0, 2)}/${numeros.slice(2)}`;
+  if (numeros.length <= 3) {
+    return `${numeros}/${anoPadrao}`;
+  }
+
   return `${numeros.slice(0, 3)}/${numeros.slice(3)}`;
 }
 
 function completarAnoAtual(valor: string): string {
   const mascarado = mascararNumeroProcesso(valor);
-  if (/^\d{2,3}$/.test(mascarado)) {
-    return `${mascarado}/${new Date().getFullYear()}`;
+
+  if (/^\d{2,3}\/\d{4}$/.test(mascarado)) {
+    return mascarado;
   }
-  if (/^\d{2,3}\/$/.test(mascarado)) {
-    return `${mascarado}${new Date().getFullYear()}`;
+
+  if (/^\d{2,3}\/?$/.test(mascarado)) {
+    return mascarado.replace(/\/?$/, `/${anoAtual()}`);
   }
+
   return mascarado;
 }
 
@@ -69,7 +84,7 @@ export default function Step1({ dados, atualizarDados }: any) {
             <input
               type="text"
               className="wiz-input"
-              value={dados.numeroProcesso || ""}
+              value={dados.numeroProcesso || `/${new Date().getFullYear()}`}
               onChange={(e) => atualizarDados({ numeroProcesso: mascararNumeroProcesso(e.target.value) })}
               onBlur={(e) => atualizarDados({ numeroProcesso: completarAnoAtual(e.target.value) })}
               placeholder="Ex: 25/2026 ou 123/2026"
@@ -83,7 +98,7 @@ export default function Step1({ dados, atualizarDados }: any) {
             <input
               type="text"
               className="wiz-input"
-              value={dados.numeroModalidade || ""}
+              value={dados.numeroModalidade || `/${new Date().getFullYear()}`}
               onChange={(e) => atualizarDados({ numeroModalidade: mascararNumeroProcesso(e.target.value) })}
               onBlur={(e) => atualizarDados({ numeroModalidade: completarAnoAtual(e.target.value) })}
               placeholder="Ex: 05/2026 ou 123/2026"
