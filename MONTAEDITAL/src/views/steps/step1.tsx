@@ -23,6 +23,7 @@ function MascaraNumero({
 }) {
   const partes = separarNumero(valor);
   const numeroPreenchido = partes.numero.length > 0;
+  const larguraNumero = Math.max(34, partes.numero.length * 8 + 13);
 
   const atualizarNumero = (novoNumero: string) => {
     const numero = novoNumero.replace(/\D/g, "").slice(0, 3);
@@ -53,8 +54,8 @@ function MascaraNumero({
         placeholder="XX"
         maxLength={3}
         style={{
-          flex: "0 0 34px",
-          width: "34px",
+          flex: `0 0 ${larguraNumero}px`,
+          width: `${larguraNumero}px`,
           boxSizing: "border-box",
           border: "none",
           outline: "none",
