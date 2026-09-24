@@ -27,7 +27,7 @@ export default function Wizard() {
     arquivoMagnetico: false,
     dataEdital: new Date().toISOString().split("T")[0],
     dataSessao: "",
-    horaSessao: "",
+    horaSessao: "09:00",
     dataRecProp1: (() => {const d = new Date(); do { d.setDate(d.getDate() + 1); } while (d.getDay() === 0 || d.getDay() === 6); return d.toISOString().split("T")[0]; })(),
     objeto: "",
     gestores: [{ nome: "", cargo: "" }],
