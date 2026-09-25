@@ -307,9 +307,15 @@ body.dark {
 
 .wiz-textarea {
   min-height: 90px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   height: auto;
   field-sizing: content;
   resize: vertical;
+  overflow-x: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
   line-height: 1.55;
 }
 
@@ -802,6 +808,9 @@ body.dark {
 }
 
 .wiz-decl-input {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   padding-left: 34px !important;
 }
 
