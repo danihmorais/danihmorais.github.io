@@ -112,11 +112,11 @@ def _validar_dados_procedimento(dados: dict, modalidade_raw: str):
                 detail=f"{rotulo} inválida. Use uma data válida.",
             )
 
-    if datas_parseadas["{{DATA.MODALIDADE}}"] <= datas_parseadas["{{DATA AUT}}"]:
+    if datas_parseadas["{{DATA.MODALIDADE}}"] < datas_parseadas["{{DATA AUT}}"]:
         raise HTTPException(
             status_code=400,
             detail=(
-                "A Data do pedido da modalidade ao Prefeito deve ser posterior "
+                "A Data do pedido da modalidade ao Prefeito não pode ser anterior "
                 "à Data de autorização do Prefeito."
             ),
         )
