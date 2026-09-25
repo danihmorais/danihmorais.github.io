@@ -201,20 +201,22 @@ export default function Step3({ dados, atualizarDados }: any) {
                 return (
                   <div key={index} className="wiz-person-row" style={{ gridTemplateColumns: "1fr 36px" }}>
                     <div className="wiz-field">
-                      <label className="wiz-label" style={{ marginBottom: "2px" }}>
-                        Documento {numeroDocumento.toString().padStart(2, "0")}
-                      </label>
-                      <input
-                        type="text"
-                        className="wiz-input"
-                        value={doc}
-                        onChange={(e) => {
-                          const novosDocs = [...(dados.documentosAdicionais || [])];
-                          novosDocs[index] = e.target.value;
-                          atualizarDados({ documentosAdicionais: novosDocs });
-                        }}
-                        placeholder="Descreva o documento adicional..."
-                      />
+                      <div className="wiz-doc-input-wrap">
+                        <span className="wiz-doc-input-prefix">
+                          Documento {numeroDocumento.toString().padStart(2, "0")}
+                        </span>
+                        <input
+                          type="text"
+                          className="wiz-input wiz-doc-input"
+                          value={doc}
+                          onChange={(e) => {
+                            const novosDocs = [...(dados.documentosAdicionais || [])];
+                            novosDocs[index] = e.target.value;
+                            atualizarDados({ documentosAdicionais: novosDocs });
+                          }}
+                          placeholder="Descreva o documento adicional..."
+                        />
+                      </div>
                     </div>
                     <button
                       type="button"
