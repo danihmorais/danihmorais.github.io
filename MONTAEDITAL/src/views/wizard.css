@@ -801,6 +801,10 @@ body.dark {
   padding-left: 140px !important;
 }
 
+.wiz-decl-input {
+  padding-left: 34px !important;
+}
+
 .wiz-doc-input-prefix {
   position: absolute;
   left: 13px;
