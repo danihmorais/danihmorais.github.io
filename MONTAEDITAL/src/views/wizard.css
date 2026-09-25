@@ -791,6 +791,28 @@ body.dark {
   box-shadow: 0 0 0 3px var(--wiz-accent-glow);
 }
 
+.wiz-doc-input-wrap {
+  position: relative;
+}
+
+.wiz-doc-input {
+  padding-left: 116px;
+}
+
+.wiz-doc-input-prefix {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--wiz-accent);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+  z-index: 1;
+}
+
 .wiz-prefix-wrap {
   position: relative;
 }
