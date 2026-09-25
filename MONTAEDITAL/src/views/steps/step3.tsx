@@ -31,6 +31,17 @@ export default function Step3({ dados, atualizarDados }: any) {
     ? dados.documentosAdicionais
     : [];
 
+  const letraDeclaracao = (index: number) => {
+    let numero = index + 12; // começa em "l" (12ª letra)
+    let resultado = "";
+    while (numero > 0) {
+      numero--;
+      resultado = String.fromCharCode(97 + (numero % 26)) + resultado;
+      numero = Math.floor(numero / 26);
+    }
+    return resultado;
+  };
+
   const selecionarArquivo = (
     event: React.ChangeEvent<HTMLInputElement>,
     chave: string
@@ -244,41 +255,29 @@ export default function Step3({ dados, atualizarDados }: any) {
               Informe <strong>apenas declarações especiais</strong>, que não sejam declarações padrão já previstas no modelo do Edital.
             </div>
             <div className="wiz-person-list">
-              {declAdicionaisArray.map((decl: string, index: number) => {
-                const numero = index + 12;
-                let n = numero;
-                let letra = "";
-                while (n > 0) {
-                  n--;
-                  letra = String.fromCharCode(97 + (n % 26)) + letra;
-                  n = Math.floor(n / 26);
-                }
-                const letraExibida = String.fromCharCode(97 + ((letra.charCodeAt(0) - 97 + 11) % 26)) + letra.slice(1);
-
-                return (
-                  <div key={index} className="wiz-person-row" style={{ gridTemplateColumns: "1fr 36px" }}>
-                    <div className="wiz-field">
-                      <div className="wiz-doc-input-wrap">
-                        <span className="wiz-doc-input-prefix">
-                          {String.fromCharCode(108 + index) + ")"}
-                        </span>
-                        <textarea
-                          className="wiz-textarea wiz-decl-input"
-                          style={{ minHeight: "50px" }}
-                          value={decl}
-                          onChange={(e) => {
-                            const novasDecls = [...declAdicionaisArray];
-                            novasDecls[index] = e.target.value;
-                            atualizarDados({ declAdicionais: novasDecls });
-                          }}
-                          placeholder="Insira somente uma declaração especial, não padrão..."
-                        />
-                      </div>
+              {declAdicionaisArray.map((decl: string, index: number) => (
+                <div key={index} className="wiz-person-row" style={{ gridTemplateColumns: "1fr 36px" }}>
+                  <div className="wiz-field">
+                    <div className="wiz-doc-input-wrap">
+                      <span className="wiz-doc-input-prefix">
+                        {letraDeclaracao(index)})
+                      </span>
+                      <textarea
+                        className="wiz-textarea wiz-decl-input"
+                        style={{ minHeight: "50px" }}
+                        value={decl}
+                        onChange={(e) => {
+                          const novasDecls = [...declAdicionaisArray];
+                          novasDecls[index] = e.target.value;
+                          atualizarDados({ declAdicionais: novasDecls });
+                        }}
+                        placeholder="Insira somente uma declaração especial, não padrão..."
+                      />
                     </div>
-                    <button type="button" className="wiz-btn-remove" onClick={() => atualizarDados({ declAdicionais: declAdicionaisArray.filter((_: any, i: number) => i !== index) })}>✕</button>
                   </div>
-                );
-              })}
+                  <button type="button" className="wiz-btn-remove" onClick={() => atualizarDados({ declAdicionais: declAdicionaisArray.filter((_: any, i: number) => i !== index) })}>✕</button>
+                </div>
+              ))}
               <button type="button" className="wiz-btn-add" onClick={() => atualizarDados({ declAdicionais: [...declAdicionaisArray, ""] })}>
                 <span style={{ fontSize: "16px", lineHeight: 1 }}>+</span> Adicionar Declaração
               </button>
