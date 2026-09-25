@@ -73,6 +73,7 @@ export default function Wizard() {
   const [publicarDiarioEstadual, setPublicarDiarioEstadual] = useState(false);
   const [publicarDiarioFederal, setPublicarDiarioFederal] = useState(false);
   const [erroProcedimento, setErroProcedimento] = useState("");
+  const [notificacao, setNotificacao] = useState<{ tipo: "success" | "error"; mensagem: string } | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [downloadFilename, setDownloadFilename] = useState<string>("edital.zip");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -148,7 +149,7 @@ export default function Wizard() {
       a.remove();
       window.URL.revokeObjectURL(url);
     } catch (erro: any) {
-      window.alert(erro?.message || "Não foi possível exportar os dados.");
+      setNotificacao({ tipo: "error", mensagem: erro?.message || "Não foi possível exportar os dados." });
     }
   };
 
@@ -194,9 +195,9 @@ export default function Wizard() {
       setDownloadUrl(null);
       setDownloadFilename("edital.zip");
 
-      window.alert("Dados pré-preenchidos importados com sucesso.");
+      setNotificacao({ tipo: "success", mensagem: "Dados pré-preenchidos importados com sucesso." });
     } catch (erro: any) {
-      window.alert(erro?.message || "Não foi possível importar o arquivo JSON.");
+      setNotificacao({ tipo: "error", mensagem: erro?.message || "Não foi possível importar o arquivo JSON." });
     }
   };
 
@@ -205,6 +206,12 @@ export default function Wizard() {
       scrollRef.current.scrollTop = 0;
     }
   }, [etapaAtual]);
+
+  useEffect(() => {
+    if (!notificacao) return;
+    const timer = window.setTimeout(() => setNotificacao(null), 4500);
+    return () => window.clearTimeout(timer);
+  }, [notificacao]);
 
 function numeroProcessoValido(valor: string): boolean {
     return /^(?:\d{2}|\d{3})\/\d{4}$/.test(valor);
@@ -516,6 +523,28 @@ function numeroProcessoValido(valor: string): boolean {
 
   return (
     <div className={`wiz-root ${theme === 'dark' ? 'dark' : ''}`}>
+      {notificacao && (
+        <div
+          className={`wiz-toast ${notificacao.tipo}`}
+          role="status"
+          aria-live="polite"
+        >
+          <div className="wiz-toast-icon">
+            {notificacao.tipo === "success" ? "✓" : "!"}
+          </div>
+          <div className="wiz-toast-message">{notificacao.mensagem}</div>
+          <button
+            type="button"
+            className="wiz-toast-close"
+            onClick={() => setNotificacao(null)}
+            aria-label="Fechar notificação"
+            title="Fechar"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       <div className="wiz-header">
         <div className="wiz-header-inner">
           <div className="wiz-brand">
