@@ -77,9 +77,127 @@ export default function Wizard() {
   const [downloadFilename, setDownloadFilename] = useState<string>("edital.zip");
   const scrollRef = useRef<HTMLDivElement>(null);
   const { theme, toggleTheme } = useContext(ThemeContext);
+  const importDadosRef = useRef<HTMLInputElement>(null);
 
   const atualizarDados = (novosDados: Partial<typeof dados>) => {
     setDados((prev) => ({ ...prev, ...novosDados }));
+  };
+
+  const serializarArquivo = (arquivo: File | null): Promise<Record<string, any> | null> => {
+    return new Promise((resolve, reject) => {
+      if (!arquivo) {
+        resolve(null);
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.readAsDataURL(arquivo);
+      reader.onload = () => {
+        resolve({
+          name: arquivo.name,
+          type: arquivo.type,
+          lastModified: arquivo.lastModified,
+          dataUrl: reader.result as string,
+        });
+      };
+      reader.onerror = () => reject(new Error(`Não foi possível ler o arquivo "${arquivo.name}".`));
+    });
+  };
+
+  const desserializarArquivo = async (arquivo: any): Promise<File | null> => {
+    if (!arquivo || typeof arquivo !== "object" || typeof arquivo.dataUrl !== "string") {
+      return null;
+    }
+
+    const resposta = await fetch(arquivo.dataUrl);
+    const blob = await resposta.blob();
+    return new File(
+      [blob],
+      String(arquivo.name || "anexo.docx"),
+      {
+        type: String(arquivo.type || blob.type || "application/octet-stream"),
+        lastModified: Number(arquivo.lastModified) || Date.now(),
+      }
+    );
+  };
+
+  const exportarDados = async () => {
+    try {
+      const pacote = {
+        tipo: "MONTAEDITAL_DADOS",
+        versao: 1,
+        exportadoEm: new Date().toISOString(),
+        dados: {
+          ...dados,
+          arquivoDfd: await serializarArquivo(dados.arquivoDfd as unknown as File | null),
+          arquivoEtp: await serializarArquivo(dados.arquivoEtp as unknown as File | null),
+          arquivoTr: await serializarArquivo(dados.arquivoTr as unknown as File | null),
+        },
+      };
+
+      const blob = new Blob([JSON.stringify(pacote, null, 2)], { type: "application/json;charset=utf-8" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const nomeBase = String(dados.numeroProcesso || dados.numeroModalidade || "dados")
+        .replace(/[^a-zA-Z0-9._-]+/g, "_");
+
+      a.href = url;
+      a.download = `montaedital-${nomeBase}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (erro: any) {
+      window.alert(erro?.message || "Não foi possível exportar os dados.");
+    }
+  };
+
+  const importarDados = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const arquivo = event.target.files?.[0];
+    event.target.value = "";
+    if (!arquivo) return;
+
+    try {
+      const texto = await arquivo.text();
+      const pacote = JSON.parse(texto);
+      const dadosImportados =
+        pacote?.dados && typeof pacote.dados === "object"
+          ? pacote.dados
+          : pacote;
+
+      if (!dadosImportados || typeof dadosImportados !== "object" || Array.isArray(dadosImportados)) {
+        throw new Error("O arquivo selecionado não contém dados válidos do MONTA EDITAL.");
+      }
+
+      const atualizacao: any = { ...dadosImportados };
+
+      if (Object.prototype.hasOwnProperty.call(dadosImportados, "arquivoDfd")) {
+        atualizacao.arquivoDfd = await desserializarArquivo(dadosImportados.arquivoDfd);
+      }
+      if (Object.prototype.hasOwnProperty.call(dadosImportados, "arquivoEtp")) {
+        atualizacao.arquivoEtp = await desserializarArquivo(dadosImportados.arquivoEtp);
+      }
+      if (Object.prototype.hasOwnProperty.call(dadosImportados, "arquivoTr")) {
+        atualizacao.arquivoTr = await desserializarArquivo(dadosImportados.arquivoTr);
+      }
+
+      setDados((prev) => ({ ...prev, ...atualizacao }) as any);
+      setEtapaAtual(0);
+      setMostrarTestes(false);
+      setMostrarDiarios(false);
+      setPublicarDiarioEstadual(false);
+      setPublicarDiarioFederal(false);
+      setErroProcedimento("");
+      setErroMsg(null);
+      setGeracaoSucesso(false);
+      setCarregando(false);
+      setDownloadUrl(null);
+      setDownloadFilename("edital.zip");
+
+      window.alert("Dados pré-preenchidos importados com sucesso.");
+    } catch (erro: any) {
+      window.alert(erro?.message || "Não foi possível importar o arquivo JSON.");
+    }
   };
 
   useEffect(() => {
@@ -277,8 +395,8 @@ function numeroProcessoValido(valor: string): boolean {
       return;
     }
 
-    if (String(dados.dataModalidade) <= String(dados.dataAutorizacao)) {
-      setErroProcedimento("A Data do pedido da modalidade ao Prefeito deve ser posterior à Data de autorização do Prefeito.");
+    if (String(dados.dataModalidade) < String(dados.dataAutorizacao)) {
+      setErroProcedimento("A Data do pedido da modalidade ao Prefeito não pode ser anterior à Data de autorização do Prefeito.");
       return;
     }
 
@@ -429,6 +547,32 @@ function numeroProcessoValido(valor: string): boolean {
           </div>
 
           <div className="wiz-header-actions">
+            <input
+              ref={importDadosRef}
+              type="file"
+              accept=".json,application/json"
+              style={{ display: "none" }}
+              onChange={importarDados}
+            />
+
+            <button
+              type="button"
+              className="wiz-test-button"
+              onClick={exportarDados}
+              title="Exportar os dados pré-preenchidos para JSON"
+            >
+              ⬇️ Exportar
+            </button>
+
+            <button
+              type="button"
+              className="wiz-test-button"
+              onClick={() => importDadosRef.current?.click()}
+              title="Importar dados pré-preenchidos de um JSON"
+            >
+              ⬆️ Importar
+            </button>
+
             <button
               type="button"
               className="wiz-test-button"
