@@ -307,6 +307,8 @@ body.dark {
 
 .wiz-textarea {
   min-height: 90px;
+  height: auto;
+  field-sizing: content;
   resize: vertical;
   line-height: 1.55;
 }
