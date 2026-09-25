@@ -133,6 +133,25 @@ def _validar_dados_procedimento(dados: dict, modalidade_raw: str):
         )
 
 
+def _formatar_gestor_procedimento(nomes_str: str, cargos_str: str) -> str:
+    if not nomes_str or nomes_str == "[Não informado]":
+        return "[Não informado]" if nomes_str == "[Não informado]" else ""
+
+    nomes = [nome.strip() for nome in str(nomes_str).split(",") if nome.strip()]
+    cargos = [cargo.strip() for cargo in str(cargos_str).split(",") if cargo.strip()]
+    blocos = []
+
+    for i, nome in enumerate(nomes):
+        cargo = cargos[i] if i < len(cargos) else ""
+        linhas = [nome]
+        if cargo:
+            linhas.append(cargo)
+        linhas.append("GESTORA")
+        blocos.append("\n".join(linhas))
+
+    return "\n".join(blocos)
+
+
 def _rtf_visivel(rtf: str):
     """
     Retorna os caracteres visíveis do RTF com as posições no texto-fonte.
@@ -332,6 +351,10 @@ async def gerar_edital_endpoint(req: EditalRequest, background_tasks: Background
     dados_procedimento = dados_processados.copy()
     dados_procedimento["{{MODALIDADE}}"] = modalidade_nome
     dados_procedimento["{{N.MODALIDADE}}"] = num_mod_raw
+    dados_procedimento["{{GESTOR}}"] = _formatar_gestor_procedimento(
+        dados_processados.get("{{GESTOR}}", ""),
+        dados_processados.get("{{GESTOR_CARGO}}", ""),
+    )
     nome_arq_procedimento = (
         f"Procedimento - {modalidade_nome} {num_mod_arq}.docx"
     )
