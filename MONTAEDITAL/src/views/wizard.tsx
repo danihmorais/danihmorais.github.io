@@ -172,6 +172,20 @@ export default function Wizard() {
 
       const atualizacao: any = { ...dadosImportados };
 
+      if (
+        Array.isArray(atualizacao.documentosAdicionais) &&
+        atualizacao.documentosAdicionais.every((item: any) => typeof item !== "string" || item.trim() === "")
+      ) {
+        atualizacao.documentosAdicionais = [];
+      }
+
+      if (
+        Array.isArray(atualizacao.declAdicionais) &&
+        atualizacao.declAdicionais.every((item: any) => typeof item !== "string" || item.trim() === "")
+      ) {
+        atualizacao.declAdicionais = [];
+      }
+
       if (Object.prototype.hasOwnProperty.call(dadosImportados, "arquivoDfd")) {
         atualizacao.arquivoDfd = await desserializarArquivo(dadosImportados.arquivoDfd);
       }
