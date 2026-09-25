@@ -798,7 +798,7 @@ body.dark {
 }
 
 .wiz-doc-input {
-  padding-left: 116px;
+  padding-left: 140px !important;
 }
 
 .wiz-doc-input-prefix {
