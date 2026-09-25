@@ -42,24 +42,6 @@ def _formatar_nomes_com_sufixo(nomes_str: str, cargos_str: str, sufixo: str) -> 
             resultado.append(f"{nome} - {sufixo}")
     return "\n".join(resultado)
 
-def _formatar_gestores(nomes_str: str, cargos_str: str) -> str:
-    if not nomes_str or nomes_str == "[Não informado]":
-        return "[Não informado]" if nomes_str == "[Não informado]" else ""
-
-    nomes = [n.strip() for n in nomes_str.split(",") if n.strip()]
-    cargos = [c.strip() for c in cargos_str.split(",") if c.strip()]
-    resultado = []
-
-    for i, nome in enumerate(nomes):
-        cargo = cargos[i] if i < len(cargos) else ""
-        linhas = [nome]
-        if cargo:
-            linhas.append(cargo)
-        linhas.append("GESTORA")
-        resultado.append("\n".join(linhas))
-
-    return "\n".join(resultado)
-
 def _formatar_hora_min(hora_str: str) -> str:
     if not hora_str:
         return ""
@@ -360,7 +342,7 @@ def montar_variaveis_fixas(dados_usuario: dict) -> dict:
     fiscais_str = dados_usuario.get("{{FISCAL}}", "")
     cargos_fiscais_str = dados_usuario.get("{{FISCAL_CARGO}}", "")
 
-    resultado["{{GESTOR}}"] = _formatar_gestores(gestores_str, cargos_gestores_str)
+    resultado["{{GESTOR}}"] = gestores_str
     resultado["{{FISCAL}}"] = _formatar_nomes_com_sufixo(fiscais_str, cargos_fiscais_str, "Fiscal")
 
     blocos_ges_fis = []
