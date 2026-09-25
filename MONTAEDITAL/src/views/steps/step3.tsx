@@ -216,9 +216,9 @@ export default function Step3({ dados, atualizarDados }: any) {
                         <span className="wiz-doc-input-prefix">
                           Documento {numeroDocumento.toString().padStart(2, "0")}
                         </span>
-                        <input
-                          type="text"
-                          className="wiz-input wiz-doc-input"
+                        <textarea
+                          className="wiz-textarea wiz-doc-input"
+                          style={{ minHeight: "50px" }}
                           value={doc}
                           onChange={(e) => {
                             const novosDocs = [...(dados.documentosAdicionais || [])];
