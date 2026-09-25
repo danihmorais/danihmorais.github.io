@@ -31,12 +31,6 @@ export default function Step3({ dados, atualizarDados }: any) {
     ? dados.documentosAdicionais
     : [];
 
-  const documentosPreenchidos = documentosAdicionaisArray.filter(
-    (doc: string) => typeof doc === "string" && doc.trim() !== ""
-  );
-
-  const proximoNumeroDocumento = 12 + documentosPreenchidos.length;
-
   const selecionarArquivo = (
     event: React.ChangeEvent<HTMLInputElement>,
     chave: string
@@ -196,69 +190,46 @@ export default function Step3({ dados, atualizarDados }: any) {
               Insira <strong>APENAS os documentos adicionais a partir do Documento 12</strong> do Termo de Referência (Documento 12 em diante). Não informe aqui os documentos já previstos até o Documento 11 e não inclua declarações; esses documentos serão adicionados automaticamente ao Edital.
             </div>
 
-            <div className="wiz-doc-preview">
-              <div className="wiz-doc-preview-head">
-                <div>
-                  <div className="wiz-doc-preview-title">Como a numeração ficará no Edital</div>
-                  <div className="wiz-doc-preview-subtitle">
-                    A numeração é automática e segue somente os documentos preenchidos.
-                  </div>
-                </div>
-                <div className="wiz-doc-preview-auto">AUTOMÁTICA</div>
-              </div>
-
-              <div className="wiz-doc-preview-list">
-                {documentosPreenchidos.length > 0 ? (
-                  documentosPreenchidos.map((doc: string, index: number) => (
-                    <div key={index} className="wiz-doc-preview-row">
-                      <span className="wiz-doc-preview-number">
-                        Documento {(12 + index).toString().padStart(2, "0")}
-                      </span>
-                      <span className="wiz-doc-preview-text">{doc.trim()}</span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="wiz-doc-preview-empty">
-                    <span className="wiz-doc-preview-number">Documento 12</span>
-                    <span>O primeiro documento adicional preenchido será numerado aqui.</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="wiz-doc-preview-next">
-                <div className="wiz-doc-preview-next-item">
-                  <span className="wiz-doc-preview-label">Declarações padrão</span>
-                  <strong>Documento {proximoNumeroDocumento.toString().padStart(2, "0")}</strong>
-                </div>
-                <div className="wiz-doc-preview-arrow">→</div>
-                <div className="wiz-doc-preview-next-item">
-                  <span className="wiz-doc-preview-label">Proposta</span>
-                  <strong>Documento {(proximoNumeroDocumento + 1).toString().padStart(2, "0")}</strong>
-                </div>
-              </div>
-
-              <div className="wiz-doc-preview-hint">
-                Linhas deixadas em branco não entram na numeração e não consomem número.
-              </div>
-            </div>
-
             <div className="wiz-person-list">
-              {(dados.documentosAdicionais || []).map((doc: string, index: number) => (
-                <div key={index} className="wiz-person-row" style={{ gridTemplateColumns: "1fr 36px" }}>
-                  <input
-                    type="text"
-                    className="wiz-input"
-                    value={doc}
-                    onChange={(e) => {
-                      const novosDocs = [...(dados.documentosAdicionais || [])];
-                      novosDocs[index] = e.target.value;
-                      atualizarDados({ documentosAdicionais: novosDocs });
-                    }}
-                    placeholder="Ex.: Documento 12 – ..."
-                  />
-                  <button type="button" className="wiz-btn-remove" onClick={() => atualizarDados({ documentosAdicionais: (dados.documentosAdicionais || []).filter((_: any, i: number) => i !== index) })}>✕</button>
-                </div>
-              ))}
+              {(dados.documentosAdicionais || []).map((doc: string, index: number) => {
+                const documentosAnterioresPreenchidos = (dados.documentosAdicionais || [])
+                  .slice(0, index)
+                  .filter((item: any) => typeof item === "string" && item.trim() !== "")
+                  .length;
+                const numeroDocumento = 12 + documentosAnterioresPreenchidos;
+
+                return (
+                  <div key={index} className="wiz-person-row" style={{ gridTemplateColumns: "1fr 36px" }}>
+                    <div className="wiz-field">
+                      <label className="wiz-label" style={{ marginBottom: "2px" }}>
+                        Documento {numeroDocumento.toString().padStart(2, "0")}
+                      </label>
+                      <input
+                        type="text"
+                        className="wiz-input"
+                        value={doc}
+                        onChange={(e) => {
+                          const novosDocs = [...(dados.documentosAdicionais || [])];
+                          novosDocs[index] = e.target.value;
+                          atualizarDados({ documentosAdicionais: novosDocs });
+                        }}
+                        placeholder="Descreva o documento adicional..."
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      className="wiz-btn-remove"
+                      onClick={() =>
+                        atualizarDados({
+                          documentosAdicionais: (dados.documentosAdicionais || []).filter((_: any, i: number) => i !== index),
+                        })
+                      }
+                    >
+                      ✕
+                    </button>
+                  </div>
+                );
+              })}
               <button type="button" className="wiz-btn-add" onClick={() => atualizarDados({ documentosAdicionais: [...(dados.documentosAdicionais || []), ""] })}>
                 <span style={{ fontSize: "16px", lineHeight: 1 }}>+</span> Adicionar Documento Adicional
               </button>
