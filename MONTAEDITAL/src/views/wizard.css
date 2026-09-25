@@ -259,6 +259,8 @@ body.dark {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .wiz-label {
@@ -310,10 +312,12 @@ body.dark {
   width: 100%;
   max-width: 100%;
   min-width: 0;
+  box-sizing: border-box;
   height: auto;
   field-sizing: content;
   resize: vertical;
   overflow-x: hidden;
+  overflow-y: hidden;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
   line-height: 1.55;
@@ -503,10 +507,14 @@ body.dark {
 
 .wiz-person-row {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr 36px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 36px;
   gap: 10px;
   align-items: flex-end;
   padding: 14px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   background: var(--wiz-surface-2);
   border: 1px solid var(--wiz-border);
   border-radius: var(--wiz-radius-sm);
@@ -801,6 +809,10 @@ body.dark {
 
 .wiz-doc-input-wrap {
   position: relative;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .wiz-doc-input {
@@ -811,6 +823,7 @@ body.dark {
   width: 100%;
   max-width: 100%;
   min-width: 0;
+  box-sizing: border-box;
   padding-left: 34px !important;
 }
 
