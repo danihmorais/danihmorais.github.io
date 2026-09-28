@@ -52,7 +52,7 @@ def _process_one_job() -> None:
         dados_usuario = dict(job.get("pipeline_dados_usuario") or job.get("dados_usuario") or {})
         resultados = dict(job.get("pipeline_results") or {})
         completed = {str(item).upper() for item in job.get("completed_stages", [])}
-        modelo = str(job.get("resolved_model") or pipeline.get("model") or "openrouter/free")
+        modelo = str(job.get("resolved_model") or pipeline.get("model") or "unsloth-auto")
         temperatura = float(pipeline.get("temperature", 0.3))
 
         for etapa in etapas:
@@ -71,7 +71,7 @@ def _process_one_job() -> None:
 
             prompt_processado = _substituir_contextos(prompt, dados_usuario, resultados)
             resultado, modelo_resolvido = _chamar_ia(prompt_processado, modelo, temperatura)
-            if pipeline.get("model") == "openrouter/free" and modelo_resolvido:
+            if modelo_resolvido:
                 modelo = modelo_resolvido
                 job["resolved_model"] = modelo_resolvido
 
