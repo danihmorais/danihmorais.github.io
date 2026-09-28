@@ -251,6 +251,7 @@ def _process_pipeline(job: dict) -> None:
 
         prompt_processado = _substituir_contextos(prompt, dados_usuario, resultados)
         resultado, modelo_resolvido = _chamar_ia(prompt_processado, modelo, temperatura)
+        if modelo_resolvido:
             modelo = modelo_resolvido
             job["resolved_model"] = modelo_resolvido
 
