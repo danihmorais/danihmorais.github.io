@@ -16,16 +16,7 @@ def _utc_now() -> str:
 
 def _chamar_ia(prompt: str, model: str, temperature: float = 0.3) -> tuple[dict, str]:
     modelo = str(model or "unsloth-auto").strip()
-    usando_unsloth = modelo == "unsloth-auto" or modelo.startswith("unsloth")
-    try:
-        return _chamar_ia_primaria(prompt, modelo, temperature)
-    except Exception as erro_local:
-        if not usando_unsloth:
-            raise
-        try:
-            return _chamar_ia_primaria(prompt, "openrouter/free", temperature)
-        except Exception as erro_fallback:
-            raise RuntimeError(f"Unsloth local falhou: {erro_local}; OpenRouter fallback também falhou: {erro_fallback}") from erro_fallback
+    return _chamar_ia_primaria(prompt, modelo, temperature)
 
 
 def _delay(attempts: int) -> int:
@@ -69,9 +60,6 @@ def _process_pipeline(job: dict) -> None:
                 prompt_processado += "\n\nRESULTADOS JÁ PRODUZIDOS NESTA SOLICITAÇÃO:\n" + json.dumps(resultados, ensure_ascii=False, indent=2)
 
         resultado, modelo_resolvido = _chamar_ia(prompt_processado, modelo, temperatura)
-        if (modelo == "unsloth-auto" or modelo.startswith("unsloth")) and modelo_resolvido == "openrouter/free":
-            job["fallback_provider"] = "openrouter"
-            job["fallback_at"] = _utc_now()
         if modelo_resolvido:
             job["resolved_model"] = modelo_resolvido
 
