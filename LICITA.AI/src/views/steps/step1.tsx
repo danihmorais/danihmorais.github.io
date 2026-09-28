@@ -3,7 +3,6 @@ import * as XLSX from "xlsx";
 import { calcularValorEstimadoItens } from "../../utils/regrasContratacao";
 import { melhorarDescricaoItem } from "../../providers/services/contratacaoDiretaIA";
 import { lerConfigIA } from "../../utils/storageLocal";
-import { MODELO_PADRAO_POR_PROVEDOR } from "../../providers/llm";
 
 export default function Step1({ dados = { itens: [], objeto: "", necessidade: "" }, atualizarDados }: any) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -43,12 +42,8 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
   const melhorarItem = async (item: any) => {
     if (!String(item.descricao || "").trim()) return;
     const config = lerConfigIA();
-    const apiKey = config.chave_api || "";
-    const modelo = config.modelo || MODELO_PADRAO_POR_PROVEDOR[config.provedor || "openrouter"] || MODELO_PADRAO_POR_PROVEDOR.openrouter;
-    if (!apiKey) {
-      alert("Nenhuma API de IA está configurada.");
-      return;
-    }
+    const apiKey = config.chave_api || "backend";
+    const modelo = config.modelo || "unsloth-auto";
     setItemEmMelhoria(item.id);
     try {
       const descricao = await melhorarDescricaoItem(String(item.descricao), objeto, necessidade, apiKey, modelo);
