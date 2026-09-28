@@ -35,13 +35,13 @@ test("auditoria de marcas remove somente marca sem reescrever o descritivo", asy
   const modulo = loadTsModule("src/providers/services/contratacaoDiretaIA.ts", {
     replacements: [
       [
-        'import { gerarTextoOpenRouter } from "../llm";',
-        "const { gerarTextoOpenRouter } = __injected_llm;",
+        'import { gerarTextoIA } from "../llm";',
+        "const { gerarTextoIA } = __injected_llm;",
       ],
     ],
     globals: {
       __injected_llm: {
-        gerarTextoOpenRouter: async () => ({
+        gerarTextoIA: async () => ({
           itens: [
             {
               numero: 1,
@@ -79,13 +79,13 @@ test("auditoria rejeita uma reescrita que não seja mera remoção de marca", as
   const modulo = loadTsModule("src/providers/services/contratacaoDiretaIA.ts", {
     replacements: [
       [
-        'import { gerarTextoOpenRouter } from "../llm";',
-        "const { gerarTextoOpenRouter } = __injected_llm;",
+        'import { gerarTextoIA } from "../llm";',
+        "const { gerarTextoIA } = __injected_llm;",
       ],
     ],
     globals: {
       __injected_llm: {
-        gerarTextoOpenRouter: async () => ({
+        gerarTextoIA: async () => ({
           itens: [
             {
               numero: 1,
@@ -115,13 +115,13 @@ test("melhorarDescricaoItem trabalha somente com um item", async () => {
   const modulo = loadTsModule("src/providers/services/contratacaoDiretaIA.ts", {
     replacements: [
       [
-        'import { gerarTextoOpenRouter } from "../llm";',
-        "const { gerarTextoOpenRouter } = __injected_llm;",
+        'import { gerarTextoIA } from "../llm";',
+        "const { gerarTextoIA } = __injected_llm;",
       ],
     ],
     globals: {
       __injected_llm: {
-        gerarTextoOpenRouter: async (texto) => {
+        gerarTextoIA: async (texto) => {
           prompt = texto;
           return { descricao: "Notebook portátil com tela de 15,6 polegadas" };
         },
@@ -148,13 +148,13 @@ test("geração de contratação direta exige os sete campos específicos", asyn
   const modulo = loadTsModule("src/providers/services/contratacaoDiretaIA.ts", {
     replacements: [
       [
-        'import { gerarTextoOpenRouter } from "../llm";',
-        "const { gerarTextoOpenRouter } = __injected_llm;",
+        'import { gerarTextoIA } from "../llm";',
+        "const { gerarTextoIA } = __injected_llm;",
       ],
     ],
     globals: {
       __injected_llm: {
-        gerarTextoOpenRouter: async (texto) => {
+        gerarTextoIA: async (texto) => {
           prompt = texto;
           return {
             FUNDAMENTO_CONTRATACAO_DIRETA: "Art. 75, conforme fundamento informado no processo.",
@@ -202,7 +202,7 @@ test("fila normal envia uma única etapa de IA para DFD, ETP e TR", async () => 
         construirPrompt: (_dados, _meepp, etapa) => `PROMPT_${etapa}`,
       },
       __injected_storage: {
-        lerConfigIA: () => ({ provedor: "openrouter", modelo: "modelo-teste" }),
+        lerConfigIA: () => ({ provedor: "unsloth", modelo: "modelo-teste" }),
       },
       fetch: async (url, options) => {
         chamada = { url, options };
@@ -256,7 +256,7 @@ test("fila de contratação direta não cria DFD, ETP ou TR", async () => {
         construirPrompt: () => "PROMPT_TESTE",
       },
       __injected_storage: {
-        lerConfigIA: () => ({ provedor: "openrouter", modelo: "modelo-teste" }),
+        lerConfigIA: () => ({ provedor: "unsloth", modelo: "modelo-teste" }),
       },
       fetch: async (url, options) => {
         chamada = { url, options };
