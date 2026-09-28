@@ -1,4 +1,4 @@
-import { gerarTextoOpenRouter } from '../llm';
+import { gerarTextoIA } from '../llm';
 
 const STAGE_CHAVES: Record<string, string[]> = {
     "DFD": [
@@ -209,6 +209,5 @@ export async function processarDadosIA(
     modelo: string
 ): Promise<Record<string, string>> {
     const prompt = construirPrompt(dadosUsuario, meeppExclusivo, etapa);
-    if (provider === "openrouter") return await gerarTextoOpenRouter(prompt, apiKey, modelo);
-    throw new Error(`Provedor IA não suportado: ${provider}`);
+    return await gerarTextoIA(prompt, apiKey, modelo);
 }
