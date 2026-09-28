@@ -245,7 +245,7 @@ def replace_text_in_paragraph(paragraph, replacements):
         _apply_segments_to_paragraph(paragraph, paragraph_groups[0], extracted_runs_data)
         return
 
-    for segments in reversed(paragraph_groups[:-1]):
+    for segments in paragraph_groups[:-1]:
         new_para = paragraph.insert_paragraph_before(text=None, style=paragraph.style)
         _copy_paragraph_properties(paragraph, new_para)
         new_para.paragraph_format.space_before = 0
