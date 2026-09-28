@@ -54,14 +54,14 @@ def extrair_placeholders_modelos(pasta_modelos, arquivos_base):
     return placeholders
 
 
-def _copy_numbering_properties(source_paragraph, target_paragraph):
-    if source_paragraph._p.pPr is None or source_paragraph._p.pPr.numPr is None:
+def _copy_paragraph_properties(source_paragraph, target_paragraph):
+    source_pPr = source_paragraph._p.pPr
+    if source_pPr is None:
         return
-    target_pPr = target_paragraph._p.get_or_add_pPr()
-    for child in list(target_pPr):
-        if child.tag == qn("w:numPr"):
-            target_pPr.remove(child)
-    target_pPr.append(deepcopy(source_paragraph._p.pPr.numPr))
+    target_pPr = target_paragraph._p.pPr
+    if target_pPr is not None:
+        target_paragraph._p.remove(target_pPr)
+    target_paragraph._p.insert(0, deepcopy(source_pPr))
 
 
 def _split_linear_content_for_paragraphs(linear_content):
@@ -178,45 +178,33 @@ def _apply_segments_to_paragraph(paragraph, segments, extracted_runs_data):
     alinhamento_original = paragraph.alignment
     paragraph.clear()
     paragraph.alignment = alinhamento_original
-
     for segment in segments:
         if not segment.get("text"):
             continue
-
         original_run_data = extracted_runs_data[segment["original_run_index"]]
-        parts = segment["text"].split("\n")
-
-        for i, part in enumerate(parts):
-            if part:
-                if part.startswith("__IMG__"):
-                    img_ref = part.replace("__IMG__", "")
-                    try:
-                        if img_ref.startswith("data:image"):
-                            _, b64_data = img_ref.split(",", 1)
-                            imagem_bytes = base64.b64decode(b64_data)
-                            new_run = paragraph.add_run()
-                            new_run.add_picture(io.BytesIO(imagem_bytes), width=Inches(6.0))
-                        elif os.path.exists(img_ref):
-                            new_run = paragraph.add_run()
-                            new_run.add_picture(img_ref, width=Inches(6.0))
-                        else:
-                            raise FileNotFoundError(img_ref)
-                    except Exception:
-                        new_run = paragraph.add_run("[IMAGEM DE DOTAÇÃO NÃO PÔDE SER INSERIDA]")
-                        new_run.font.color.rgb = RGBColor(255, 0, 0)
-                        new_run.bold = True
-                elif part.startswith("__TABLE__"):
-                    json_str = part.replace("__TABLE__", "", 1)
-                    _inserir_tabela(paragraph, json_str)
+        part = segment["text"]
+        if part.startswith("__IMG__"):
+            img_ref = part.replace("__IMG__", "")
+            try:
+                if img_ref.startswith("data:image"):
+                    _, b64_data = img_ref.split(",", 1)
+                    imagem_bytes = base64.b64decode(b64_data)
+                    new_run = paragraph.add_run()
+                    new_run.add_picture(io.BytesIO(imagem_bytes), width=Inches(6.0))
+                elif os.path.exists(img_ref):
+                    new_run = paragraph.add_run()
+                    new_run.add_picture(img_ref, width=Inches(6.0))
                 else:
-                    _adicionar_run_preservando_formatacao(paragraph, part, original_run_data)
-
-            if i < len(parts) - 1:
-                quebra = paragraph.add_run()
-                r_pr = original_run_data.get("rPr")
-                if r_pr is not None:
-                    quebra._r.insert(0, deepcopy(r_pr))
-                quebra.add_break()
+                    raise FileNotFoundError(img_ref)
+            except Exception:
+                new_run = paragraph.add_run("[IMAGEM DE DOTAÇÃO NÃO PÔDE SER INSERIDA]")
+                new_run.font.color.rgb = RGBColor(255, 0, 0)
+                new_run.bold = True
+        elif part.startswith("__TABLE__"):
+            json_str = part.replace("__TABLE__", "", 1)
+            _inserir_tabela(paragraph, json_str)
+        else:
+            _adicionar_run_preservando_formatacao(paragraph, part, original_run_data)
 
 
 def replace_text_in_paragraph(paragraph, replacements):
@@ -231,15 +219,14 @@ def replace_text_in_paragraph(paragraph, replacements):
         return
 
     linear_content = [
-        {"text": run_data["text"], "original_run_index": index}
+        {"text": (run_data["text"] or "").replace("\r\n", "\n").replace("\r", "\n"), "original_run_index": index}
         for index, run_data in enumerate(extracted_runs_data)
     ]
 
     for old_text, new_text in replacements.items():
         linear_content = _replace_in_linear_content(linear_content, old_text, new_text)
 
-    list_paragraph = paragraph._p.pPr is not None and paragraph._p.pPr.numPr is not None
-    paragraph_groups = _split_linear_content_for_paragraphs(linear_content) if list_paragraph else [linear_content]
+    paragraph_groups = _split_linear_content_for_paragraphs(linear_content)
 
     if len(paragraph_groups) == 1:
         _apply_segments_to_paragraph(paragraph, paragraph_groups[0], extracted_runs_data)
@@ -247,7 +234,7 @@ def replace_text_in_paragraph(paragraph, replacements):
 
     for segments in reversed(paragraph_groups[:-1]):
         new_para = paragraph.insert_paragraph_before(text=None, style=paragraph.style)
-        _copy_numbering_properties(paragraph, new_para)
+        _copy_paragraph_properties(paragraph, new_para)
         _apply_segments_to_paragraph(new_para, segments, extracted_runs_data)
 
     _apply_segments_to_paragraph(paragraph, paragraph_groups[-1], extracted_runs_data)
