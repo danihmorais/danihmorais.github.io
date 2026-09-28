@@ -85,6 +85,27 @@ class ProcessadorDocxTests(unittest.TestCase):
         self.assertNotIn("<w:br", doc.paragraphs[0]._p.xml)
         self.assertNotIn("<w:br", doc.paragraphs[1]._p.xml)
 
+    def test_paragrafos_gerados_nao_criam_espacamento_entre_si(self):
+        doc = Document()
+        paragraph = doc.add_paragraph("{{CHAVE}}")
+        paragraph.paragraph_format.space_before = 0
+        paragraph.paragraph_format.space_after = 6
+
+        replace_text_in_paragraph(
+            paragraph,
+            {"{{CHAVE}}": "Primeiro parágrafo.\nSegundo parágrafo.\nTerceiro parágrafo."},
+        )
+
+        self.assertEqual(len(doc.paragraphs), 3)
+        self.assertEqual(
+            [p.paragraph_format.space_before for p in doc.paragraphs],
+            [0, 0, 0],
+        )
+        self.assertEqual(
+            [p.paragraph_format.space_after for p in doc.paragraphs],
+            [0, 0, 0],
+        )
+
     def test_placeholder_dividido_em_tres_runs_preserva_estilos_dos_trechos(self):
         doc = Document()
         paragraph = doc.add_paragraph()
