@@ -9,7 +9,7 @@ const LICITA_DIR = path.resolve(TESTS_DIR, "../..");
 
 function testRequire(request) {
   if (request === "./providers/llm") {
-    return { MODELO_PADRAO_POR_PROVEDOR: { openrouter: "openrouter/free", unsloth: "unsloth-auto" } };
+    return {};
   }
   if (request === "./providers/services/geradorIA") {
     return {
@@ -23,7 +23,7 @@ function testRequire(request) {
     };
   }
   if (request === "./utils/storageLocal") {
-    return { lerConfigIA: () => ({ provedor: "openrouter", chave_api: "backend", modelo: "openrouter/free" }) };
+    return { lerConfigIA: () => ({ provedor: "unsloth", chave_api: "backend", modelo: "unsloth-auto" }) };
   }
   if (request === "./utils/mapearDados") {
     return { mapearDadosWizard: (dados) => ({ ...dados }) };
