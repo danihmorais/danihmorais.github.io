@@ -32,8 +32,8 @@ export default function App() {
 
   const obterStatus = () => {
     if (statusIA === null) return { texto: "Verificando o backend de inteligência artificial...", cor: "var(--text-muted)" };
-    if (statusIA) return { texto: "Backend conectado — Unsloth é o primário e OpenRouter é o fallback", cor: "var(--btn-success)" };
-    return { texto: "Backend conectado, mas nenhuma credencial de IA está disponível.", cor: "var(--btn-danger)" };
+    if (statusIA) return { texto: "Backend conectado — Unsloth local disponível", cor: "var(--btn-success)" };
+    return { texto: "Backend de IA indisponível.", cor: "var(--btn-danger)" };
   };
 
   const status = obterStatus();
