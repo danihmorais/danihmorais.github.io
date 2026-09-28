@@ -85,6 +85,20 @@ class ProcessadorDocxTests(unittest.TestCase):
         self.assertNotIn("<w:br", doc.paragraphs[0]._p.xml)
         self.assertNotIn("<w:br", doc.paragraphs[1]._p.xml)
 
+    def test_quebras_consecutivas_nao_criam_paragrafos_vazios(self):
+        doc = Document()
+        paragraph = doc.add_paragraph("{{CHAVE}}")
+        replace_text_in_paragraph(
+            paragraph,
+            {"{{CHAVE}}": "Primeiro parágrafo.\n\nSegundo parágrafo.\n\n\nTerceiro parágrafo."},
+        )
+        self.assertEqual(
+            [p.text for p in doc.paragraphs],
+            ["Primeiro parágrafo.", "Segundo parágrafo.", "Terceiro parágrafo."],
+        )
+        self.assertEqual(len(doc.paragraphs), 3)
+        self.assertTrue(all(p.text for p in doc.paragraphs))
+
     def test_paragrafos_gerados_nao_criam_espacamento_entre_si(self):
         doc = Document()
         paragraph = doc.add_paragraph("{{CHAVE}}")
