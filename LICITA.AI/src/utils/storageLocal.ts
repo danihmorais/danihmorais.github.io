@@ -19,7 +19,7 @@ export function lerConfigIA(): ConfigIA {
     return {
       provedor,
       chave_api: "backend",
-      modelo: salvo?.modelo === MODELO_PADRAO ? MODELO_PADRAO : MODELO_PADRAO,
+      modelo: typeof salvo?.modelo === "string" && salvo.modelo.trim() ? salvo.modelo : MODELO_PADRAO,
       configurada: Boolean(salvo?.configurada),
     };
   } catch {
@@ -34,7 +34,7 @@ export function lerConfigIA(): ConfigIA {
 
 export function salvarConfigIA(config: ConfigIA): void {
   const provedor = config.provedor === "unsloth" ? "unsloth" : "backend";
-  const modelo = config.modelo === MODELO_PADRAO ? MODELO_PADRAO : MODELO_PADRAO;
+  const modelo = typeof config.modelo === "string" && config.modelo.trim() ? config.modelo.trim() : MODELO_PADRAO;
   localStorage.setItem(CHAVE_CONFIG_IA, JSON.stringify({
     provedor,
     modelo,
