@@ -79,13 +79,13 @@ test("llm consulta o status pelo proxy do backend", async () => {
       localStorage: storage,
       fetch: async (url, options) => {
         chamada = { url, options };
-        return response({ json: { ok: true, unsloth: true, openrouter: true } });
+        return response({ json: { ok: true, unsloth: true, unsloth: true } });
       },
     },
   });
 
   const status = await obterStatusBackendIA();
-  assertJsonEqual(status, { ok: true, unsloth: true, openrouter: true });
+  assertJsonEqual(status, { ok: true, unsloth: true, unsloth: true });
   assert.match(chamada.url, /\/licita\/api\/ia\/status$/);
   assert.equal(chamada.options.method, "GET");
 });
@@ -93,7 +93,7 @@ test("llm consulta o status pelo proxy do backend", async () => {
 test("llm usa somente o proxy do backend e não envia Authorization do frontend", async () => {
   let chamada = null;
   const storage = new MemoryStorage();
-  const { gerarTextoOpenRouter } = loadTsModule("src/providers/llm.ts", {
+  const { gerarTextoIA } = loadTsModule("src/providers/llm.ts", {
     globals: {
       localStorage: storage,
       fetch: async (url, options) => {
@@ -103,7 +103,7 @@ test("llm usa somente o proxy do backend e não envia Authorization do frontend"
     },
   });
 
-  const resultado = await gerarTextoOpenRouter("prompt", "backend", "unsloth-auto");
+  const resultado = await gerarTextoIA("prompt", "backend", "unsloth-auto");
   assertJsonEqual(resultado, { resultado: "ok" });
   assert.match(chamada.url, /\/licita\/api\/ia\/chat$/);
   assert.equal("Authorization" in chamada.options.headers, false);
@@ -124,7 +124,7 @@ test("llm repete falha temporária e encerra em erro fatal", async () => {
       fetch: async () => { chamadas += 1; return respostas.shift(); },
     },
   });
-  assertJsonEqual(await modulo.gerarTextoOpenRouter("prompt", "backend", "modelo"), { ok: true });
+  assertJsonEqual(await modulo.gerarTextoIA("prompt", "backend", "modelo"), { ok: true });
   assert.equal(chamadas, 2);
 });
 
