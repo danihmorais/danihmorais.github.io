@@ -235,8 +235,14 @@ def replace_text_in_paragraph(paragraph, replacements):
     for segments in reversed(paragraph_groups[:-1]):
         new_para = paragraph.insert_paragraph_before(text=None, style=paragraph.style)
         _copy_paragraph_properties(paragraph, new_para)
+        new_para.paragraph_format.space_before = 0
+        new_para.paragraph_format.space_after = 0
         _apply_segments_to_paragraph(new_para, segments, extracted_runs_data)
 
+    # Quando um placeholder vira vários parágrafos, não deixe o espaçamento
+    # do parágrafo-modelo criar uma "linha em branco" entre eles.
+    paragraph.paragraph_format.space_before = 0
+    paragraph.paragraph_format.space_after = 0
     _apply_segments_to_paragraph(paragraph, paragraph_groups[-1], extracted_runs_data)
 
 
