@@ -1,4 +1,4 @@
-import { gerarTextoOpenRouter } from "../llm";
+import { gerarTextoIA } from "../llm";
 
 interface ItemAuditoria {
   numero: number | string;
@@ -128,7 +128,7 @@ FORMATO OBRIGATÓRIO:
   ]
 }`;
 
-  const resposta = await gerarTextoOpenRouter(prompt, apiKey, modelo);
+  const resposta = await gerarTextoIA(prompt, apiKey, modelo);
   const auditoria = validarAuditoria(itensOriginais, resposta);
   const auditoriaPorNumero = new Map(auditoria.map((item) => [String(item.numero), item]));
 
@@ -175,7 +175,7 @@ ${normalizarNome(necessidade) || "Não informada."}
 DESCRIÇÃO ORIGINAL DO ITEM:
 ${original}`;
 
-  const resposta = await gerarTextoOpenRouter(prompt, apiKey, modelo);
+  const resposta = await gerarTextoIA(prompt, apiKey, modelo);
   const novaDescricao = normalizarNome(resposta?.descricao);
   if (!novaDescricao) throw new Error("A IA não retornou uma descrição válida para o item.");
   return novaDescricao;
@@ -230,7 +230,7 @@ ESTRUTURA JSON OBRIGATÓRIA:
   "CONCLUSAO_CONTRATACAO_DIRETA": ""
 }`;
 
-  const resposta = await gerarTextoOpenRouter(prompt, apiKey, modelo);
+  const resposta = await gerarTextoIA(prompt, apiKey, modelo);
   const chavesObrigatorias = [
     "FUNDAMENTO_CONTRATACAO_DIRETA",
     "JUSTIFICATIVA_CONTRATACAO_DIRETA",
