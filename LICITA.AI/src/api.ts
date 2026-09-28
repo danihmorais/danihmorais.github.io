@@ -1,4 +1,3 @@
-import { MODELO_PADRAO_POR_PROVEDOR } from "./providers/llm";
 import { construirPrompt } from "./providers/services/geradorIA";
 import { lerConfigIA } from "./utils/storageLocal";
 import { mapearDadosWizard } from "./utils/mapearDados";
@@ -68,9 +67,7 @@ export const gerarFasePreparatoria = async (dados: any): Promise<FasePreparatori
   const instrucoes = String(dados?.instrucoes || "").trim();
   const meeppExclusivo = dadosUsuario["{{ME_EPP}}"] === "SIM";
   const config = lerConfigIA();
-  const provedor = config.provedor || "backend";
-  const modeloSalvo = config.modelo || MODELO_PADRAO_POR_PROVEDOR[provedor] || MODELO_PADRAO_POR_PROVEDOR.backend;
-  const modelo = modeloSalvo || "unsloth-auto";
+  const modelo = config.modelo || "unsloth-auto";
 
   const modalidade = String(dadosUsuario["{{MODALIDADE}}"] || "").trim().toUpperCase();
   const ehContratacaoDireta = ["DISPENSA_EMAIL", "DISPENSA_BLL"].includes(modalidade);
@@ -96,7 +93,7 @@ export const gerarFasePreparatoria = async (dados: any): Promise<FasePreparatori
     email: dados.email,
     instrucoes,
     dados_usuario: dadosUsuario,
-    dados_ia: { __LICITA_PIPELINE__: { version: 3, provider: provedor, model: modelo, temperature: 0.3, eh_contratacao_direta: ehContratacaoDireta, etapas } },
+    dados_ia: { __LICITA_PIPELINE__: { version: 4, model: modelo, temperature: 0.3, eh_contratacao_direta: ehContratacaoDireta, etapas } },
   };
 
   const response = await fetch(`${BASE_URL}/licita/api/gerar-fase-preparatoria`, {
