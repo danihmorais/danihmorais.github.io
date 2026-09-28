@@ -74,6 +74,17 @@ class ProcessadorDocxTests(unittest.TestCase):
         self.assertTrue(runs[1].bold)
         self.assertTrue(runs[2].underline)
 
+    def test_quebras_de_linha_geram_paragrafos_reais_e_preservam_alinhamento(self):
+        doc = Document()
+        paragraph = doc.add_paragraph("{{CHAVE}}")
+        paragraph.alignment = 3
+        replace_text_in_paragraph(paragraph, {"{{CHAVE}}": "Primeiro parágrafo.\nSegundo parágrafo."})
+        self.assertEqual([p.text for p in doc.paragraphs], ["Primeiro parágrafo.", "Segundo parágrafo."])
+        self.assertEqual(len(doc.paragraphs), 2)
+        self.assertTrue(all(p.alignment == 3 for p in doc.paragraphs))
+        self.assertNotIn("<w:br", doc.paragraphs[0]._p.xml)
+        self.assertNotIn("<w:br", doc.paragraphs[1]._p.xml)
+
     def test_placeholder_dividido_em_tres_runs_preserva_estilos_dos_trechos(self):
         doc = Document()
         paragraph = doc.add_paragraph()
