@@ -67,14 +67,27 @@ def _copy_paragraph_properties(source_paragraph, target_paragraph):
 def _split_linear_content_for_paragraphs(linear_content):
     paragraphs = [[]]
     for segment in linear_content:
-        if "\n" in segment["text"]:
-            parts = segment["text"].split("\n")
-            for i, part in enumerate(parts):
+        text = segment["text"]
+        if "\n" not in text:
+            if text:
+                paragraphs[-1].append(segment)
+            continue
+
+        parts = text.split("\n")
+        for i, part in enumerate(parts):
+            if part:
                 paragraphs[-1].append({**segment, "text": part})
-                if i < len(parts) - 1:
+
+            if i < len(parts) - 1:
+                # Vários "\n" seguidos representam uma única troca de
+                # parágrafo. Não criamos parágrafos vazios entre eles.
+                if paragraphs[-1]:
                     paragraphs.append([])
-        else:
-            paragraphs[-1].append(segment)
+
+    # Uma quebra no fim do texto não deve criar um parágrafo vazio.
+    while len(paragraphs) > 1 and not paragraphs[-1]:
+        paragraphs.pop()
+
     return paragraphs
 
 
