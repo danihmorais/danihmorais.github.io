@@ -9,14 +9,6 @@ else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     EXECUTABLE_DIR = BASE_DIR
 
-MODEL_OPENROUTER = "openrouter/free"
-
-PROVEDORES_IA = {
-    "openrouter": "OpenRouter",
-}
-
-DEFAULT_PROVIDER = "openrouter"
-
 BASE_FILES = [
     "DFD - BASE.docx",
     "ETP - BASE.docx",
