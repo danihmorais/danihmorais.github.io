@@ -24,8 +24,6 @@ from fila import (
     gerar_zip,
 )
 
-API_OPENROUTER_URL = os.getenv("LICITA_OPENROUTER_URL", "https://openrouter.ai/api/v1").rstrip("/")
-API_OPENROUTER_KEY = os.getenv("LICITA_OPENROUTER_KEY", os.getenv("API_OPENROUTER", "")).strip()
 API_UNSLOTH_URL = os.getenv("LICITA_UNSLOTH_URL", os.getenv("UNSLOTH_URL", "http://127.0.0.1:8888/v1")).rstrip("/")
 API_UNSLOTH_KEY = os.getenv("LICITA_UNSLOTH_KEY", os.getenv("API_UNSLOTH", "")).strip()
 AI_TIMEOUT_SECONDS = max(60, int(os.getenv("LICITA_QUEUE_AI_TIMEOUT", "600")))
@@ -185,10 +183,8 @@ def _aplicar_auditoria_marcas(dados_usuario: dict, resposta: dict) -> tuple[dict
 
 
 def _provider_config(model: str) -> tuple[str, str, str]:
-    modelo = str(model or "openrouter/free").strip()
-    if modelo == "unsloth-auto" or modelo.startswith("unsloth"):
-        return API_UNSLOTH_URL, API_UNSLOTH_KEY, modelo
-    return API_OPENROUTER_URL, API_OPENROUTER_KEY, modelo
+    modelo = str(model or "unsloth-auto").strip()
+    return API_UNSLOTH_URL, API_UNSLOTH_KEY, modelo
 
 
 def _chamar_ia(prompt: str, model: str, temperature: float = 0.3) -> tuple[dict, str]:
@@ -237,7 +233,6 @@ def _process_pipeline(job: dict) -> None:
     dados_usuario = dict(job.get("pipeline_dados_usuario") or job.get("dados_usuario") or {})
     resultados = dict(job.get("pipeline_results") or {})
     completed = {str(item).upper() for item in job.get("completed_stages", [])}
-    modelo = str(job.get("resolved_model") or pipeline.get("model") or "openrouter/free")
     temperatura = float(pipeline.get("temperature", 0.3))
 
     for etapa in etapas:
@@ -256,7 +251,6 @@ def _process_pipeline(job: dict) -> None:
 
         prompt_processado = _substituir_contextos(prompt, dados_usuario, resultados)
         resultado, modelo_resolvido = _chamar_ia(prompt_processado, modelo, temperatura)
-        if pipeline.get("model") == "openrouter/free" and modelo_resolvido:
             modelo = modelo_resolvido
             job["resolved_model"] = modelo_resolvido
 
