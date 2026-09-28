@@ -17,7 +17,6 @@ os.environ["LICITA_QUEUE_DIR"] = str(QUEUE_DIR)
 os.environ["LICITA_QUEUE_POLL_SECONDS"] = "3600"
 os.environ["LICITA_QUEUE_MAX_ATTEMPTS"] = "1"
 os.environ["LICITA_UNSLOTH_KEY"] = "test-unsloth"
-os.environ["LICITA_OPENROUTER_KEY"] = "test-openrouter"
 
 import fila
 
@@ -154,10 +153,8 @@ class LicitaBackendTests(unittest.TestCase):
         body = response.json()
         self.assertTrue(body["ok"])
         self.assertTrue(body["unsloth"])
-        self.assertTrue(body["openrouter"])
         self.assertNotIn("key", json.dumps(body).lower())
         self.assertNotIn("test-unsloth", json.dumps(body))
-        self.assertNotIn("test-openrouter", json.dumps(body))
 
     def test_chat_ia_rejeita_prompt_vazio(self):
         with TestClient(app) as client:
