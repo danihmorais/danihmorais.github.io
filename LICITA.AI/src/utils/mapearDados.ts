@@ -1,5 +1,12 @@
 export const mapearDadosWizard = (dados: any) => {
   const itens = dados.itens || [];
+  const pagamentoTipo = String(dados.pagamentoTipo || "CONFORME_ENTREGAS").trim().toUpperCase();
+  const pagamentoEtapas = String(dados.pagamentoEtapas || "").trim();
+  const pagamentoPadrao = pagamentoTipo === "MENSALMENTE"
+    ? "Pagamento será efetuado mensalmente, até o 10º dia útil após a prestação de serviços, emissão da Nota Fiscal e aceite pelo setor Contábil."
+    : "Pagamento até o 10º dia útil após a entrega, emissão da Nota Fiscal e aceite pelo setor Contábil.";
+  const pagamentoMapeado = pagamentoTipo === "POR_ETAPAS" ? pagamentoEtapas : pagamentoPadrao;
+  const prazoRefazimentoDias = Math.max(1, Number.parseInt(String(dados.prazoRefazimentoDias ?? 5), 10) || 5);
   const totalItens = itens.reduce((acc: number, i: any) => acc + (Number(i.qtd || 0) * Number(i.valor || 0)), 0);
   const valorEstimadoFormatado = totalItens.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -46,6 +53,10 @@ export const mapearDadosWizard = (dados: any) => {
     "{{SECRETARIAS}}": Array.isArray(dados.secretarias) ? dados.secretarias.join(", ") : "",
     "{{CONTATOS_SECRETARIAS}}": contatosStr,
     "{{VIGENCIA}}": `${dados.vigenciaNum || 1} ${dados.vigenciaUnidade || 'Meses'}`,
+    "{{PAGAMENTO}}": pagamentoMapeado,
+    "PAGAMENTO_TIPO": pagamentoTipo,
+    "PAGAMENTO_ETAPAS_RAW": pagamentoEtapas,
+    "{{PRAZO REFAZIMENTO}}": `${prazoRefazimentoDias} dias úteis`,
     "{{DOTACAO}}": (() => {
       const blocos = Array.isArray(dados.dotacaoBlocos) ? dados.dotacaoBlocos : [];
       if (blocos.length > 0) {
