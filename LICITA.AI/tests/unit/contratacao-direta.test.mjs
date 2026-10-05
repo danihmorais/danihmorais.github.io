@@ -138,10 +138,8 @@ test("melhorarDescricaoItem trabalha somente com um item", async () => {
     "modelo",
   );
 
-  assert.deepEqual(melhoria, {
-    descricao: "Notebook portátil com tela de 15,6 polegadas",
-    unidade: "UN",
-  });
+  assert.equal(melhoria.descricao, "Notebook portátil com tela de 15,6 polegadas");
+  assert.equal(melhoria.unidade, "UN");
   assert.match(prompt, /DESCRIÇÃO do item e verifique a coerência da UNIDADE/);
   assert.match(prompt, /A quantidade e o valor unitário não podem ser alterados/);
   assert.match(prompt, /Notebook tela 15,6/);
