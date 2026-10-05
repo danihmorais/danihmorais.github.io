@@ -90,11 +90,14 @@ def _process_pipeline(job: dict) -> None:
     for etapa_id, resultado in resultados.items():
         if etapa_id == "AUDITORIA_MARCAS" or not isinstance(resultado, dict):
             continue
-        if etapa_id == "FASE_PREPARATORIA" and all(isinstance(resultado.get(bloco), dict) for bloco in ("DFD", "ETP", "TR")):
-            for bloco in ("DFD", "ETP", "TR"):
-                dados_ia_final.update(resultado[bloco])
-        else:
-            dados_ia_final.update(resultado)
+        blocos = resultado if etapa_id == "FASE_PREPARATORIA" and all(isinstance(resultado.get(bloco), dict) for bloco in ("DFD", "ETP", "TR")) else {"_": resultado}
+        for bloco in blocos.values():
+            if not isinstance(bloco, dict):
+                continue
+            for chave, valor in bloco.items():
+                if chave == "PAGAMENTO" and etapa_id != "PAGAMENTO_ETAPAS":
+                    continue
+                dados_ia_final[chave] = valor
 
     generated_path, zip_filename = gerar_zip(dados_usuario, dados_ia_final, job["job_id"])
     temp_root = generated_path.parent
