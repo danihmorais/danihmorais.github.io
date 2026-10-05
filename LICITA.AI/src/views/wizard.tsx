@@ -33,6 +33,9 @@ export default function Wizard() {
     motivoPac: "",
     vigenciaNum: 1,
     vigenciaUnidade: "Meses",
+    pagamentoTipo: "CONFORME_ENTREGAS",
+    pagamentoEtapas: "",
+    prazoRefazimentoDias: 5,
     dotacao: "",
     caminhoImagemDotacao: "",
     dotacaoBlocos: []
@@ -88,7 +91,9 @@ export default function Wizard() {
               (bloco?.tipo === "texto" && String(bloco.texto || "").trim())
           );
         const dotacaoValida = dados.dotacao.trim() !== "" || !!dados.caminhoImagemDotacao || dotacaoBlocosValidos;
-        return dados.instrumento !== "" && criterioValido && modalidadeValida && pacValido && dotacaoValida;
+        const pagamentoValido = dados.pagamentoTipo !== "POR_ETAPAS" || String(dados.pagamentoEtapas || "").trim() !== "";
+        const prazoRefazimentoValido = Number(dados.prazoRefazimentoDias) >= 1;
+        return dados.instrumento !== "" && criterioValido && modalidadeValida && pacValido && dotacaoValida && pagamentoValido && prazoRefazimentoValido;
       default:
         return true;
     }
