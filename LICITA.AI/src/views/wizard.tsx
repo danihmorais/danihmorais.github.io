@@ -4,7 +4,6 @@ import Step2 from "./steps/step2";
 import Step3 from "./steps/step3";
 import Step4 from "./steps/step4";
 import Step5 from "./steps/step5";
-import ConfigIA from "../components/configIA";
 import PromptModal from "../components/promptModal";
 import { ThemeContext } from "../context/ThemeContext";
 import { gerarFasePreparatoria } from "../api";
@@ -42,7 +41,6 @@ export default function Wizard() {
   const [erroMsg, setErroMsg] = useState<string | null>(null);
   const [geracaoSucesso, setGeracaoSucesso] = useState(false);
   const [jobAgendado, setJobAgendado] = useState<{ job_id: string; status: string; email: string; message: string; fila_posicao?: number; solicitacoes_a_frente?: number } | null>(null);
-  const [mostrarConfig, setMostrarConfig] = useState(false);
   const [mostrarTestes, setMostrarTestes] = useState(false);
   const [mostrarPromptModal, setMostrarPromptModal] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -55,7 +53,6 @@ export default function Wizard() {
     setDados(criarDadosTeste(tipo) as any);
     setEtapaAtual(0);
     setMostrarTestes(false);
-    setMostrarConfig(false);
     setMostrarPromptModal(false);
     setCarregando(false);
     setErroMsg(null);
@@ -206,7 +203,6 @@ export default function Wizard() {
               </div>
             )}
           </div>
-          <button onClick={() => setMostrarConfig(true)} style={{ background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: "8px", width: "44px", height: "44px", cursor: "pointer", boxShadow: "var(--shadow-sm)", fontSize: "20px" }} title="Configurações de IA">⚙️</button>
           <button onClick={toggleTheme} style={{ width: "44px", height: "44px", borderRadius: "8px", border: "none", cursor: "pointer", background: "var(--bg-subtle)", color: "var(--text-main)" }}>{isDark ? "☀️" : "🌙"}</button>
         </div>
       </div>
@@ -221,16 +217,6 @@ export default function Wizard() {
         <button onClick={voltar} style={{ width: "140px", height: "44px", borderRadius: "12px", border: "2px solid var(--border)", background: "transparent", color: "var(--text-main)", fontWeight: "bold", fontSize: "14px", opacity: etapaAtual === 0 ? 0.5 : 1 }}>Voltar</button>
         <button onClick={avancar} disabled={!podeAvancar} style={{ width: "140px", height: "44px", borderRadius: "12px", border: "none", background: !podeAvancar ? "var(--text-light)" : etapaAtual === 4 ? "var(--btn-success)" : "var(--btn-primary)", color: "#fff", fontWeight: "bold", fontSize: "14px", cursor: !podeAvancar ? "not-allowed" : "pointer" }}>{etapaAtual === 4 ? "Confeccionar" : "Avançar"}</button>
       </div>
-
-      {mostrarConfig && (
-        <div style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
-          <div style={{ background: "var(--bg-panel)", padding: "32px", borderRadius: "24px", width: "100%", maxWidth: "500px", position: "relative", boxShadow: "var(--shadow-lg)" }}>
-            <button onClick={() => setMostrarConfig(false)} style={{ position: "absolute", top: "20px", right: "20px", background: "var(--bg-subtle)", border: "none", borderRadius: "50%", width: "32px", height: "32px", cursor: "pointer", color: "var(--text-muted)", fontWeight: "bold" }}>✕</button>
-            <h2 style={{ marginTop: 0, marginBottom: "24px", color: "var(--text-main)", textAlign: "center", fontSize: "20px" }}>⚙️ Configurações de IA</h2>
-            <ConfigIA onSuccess={() => setMostrarConfig(false)} textoBotao="Salvar Alterações" />
-          </div>
-        </div>
-      )}
 
       <PromptModal isOpen={mostrarPromptModal} onClose={() => setMostrarPromptModal(false)} onConfirm={confeccionarDocumentos} />
     </div>

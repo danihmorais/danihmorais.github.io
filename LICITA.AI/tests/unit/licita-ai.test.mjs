@@ -44,52 +44,6 @@ test("mapearDadosWizard calcula o valor estimado e preserva defaults", () => {
   assert.equal(dados["{{MODALIDADE}}"], "PREGAO_ELETRONICO");
 });
 
-test("storageLocal mantém apenas a configuração de modelo e nunca persiste credenciais", () => {
-  const storage = new MemoryStorage();
-  const { lerConfigIA, salvarConfigIA } = loadTsModule("src/utils/storageLocal.ts", { globals: { localStorage: storage } });
-  salvarConfigIA({ provedor: "unsloth", chave_api: "secret-do-usuario", modelo: "modelo-teste" });
-  const salvo = JSON.parse(storage.getItem("licita_ai:config_ia"));
-
-  assertJsonEqual(salvo, { provedor: "unsloth", modelo: "modelo-teste", configurada: true });
-  assert.equal("chave_api" in salvo, false);
-
-  const config = lerConfigIA();
-  assert.equal(config.provedor, "unsloth");
-  assert.equal(config.chave_api, "backend");
-  assert.equal(config.modelo, "modelo-teste");
-  assert.equal(config.configurada, true);
-});
-
-test("storageLocal usa Unsloth local como modelo padrão quando ainda não há configuração", () => {
-  const storage = new MemoryStorage();
-  const { lerConfigIA } = loadTsModule("src/utils/storageLocal.ts", { globals: { localStorage: storage } });
-  assertJsonEqual(lerConfigIA(), {
-    provedor: "backend",
-    chave_api: "backend",
-    modelo: "unsloth-auto",
-    configurada: false,
-  });
-});
-
-test("llm consulta o status pelo proxy do backend", async () => {
-  const storage = new MemoryStorage();
-  let chamada = null;
-  const { obterStatusBackendIA } = loadTsModule("src/providers/llm.ts", {
-    globals: {
-      localStorage: storage,
-      fetch: async (url, options) => {
-        chamada = { url, options };
-        return response({ json: { ok: true, unsloth: true, unsloth: true } });
-      },
-    },
-  });
-
-  const status = await obterStatusBackendIA();
-  assertJsonEqual(status, { ok: true, unsloth: true, unsloth: true });
-  assert.match(chamada.url, /\/licita\/api\/ia\/status$/);
-  assert.equal(chamada.options.method, "GET");
-});
-
 test("llm usa somente o proxy do backend e não envia Authorization do frontend", async () => {
   let chamada = null;
   const storage = new MemoryStorage();
@@ -126,15 +80,6 @@ test("llm repete falha temporária e encerra em erro fatal", async () => {
   });
   assertJsonEqual(await modulo.gerarTextoIA("prompt", "backend", "modelo"), { ok: true });
   assert.equal(chamadas, 2);
-});
-
-test("configIA mantém a janela aberta quando usada nas configurações", () => {
-  const configSource = fs.readFileSync(licitaPath("src/components/configIA.tsx"), "utf8");
-  const wizardSource = fs.readFileSync(licitaPath("src/views/wizard.tsx"), "utf8");
-  assert.match(configSource, /textoBotao === "Acessar Sistema"\) onSuccess/);
-  assert.match(configSource, /Atualizar status/);
-  assert.match(wizardSource, /textoBotao="Salvar Alterações"/);
-  assert.match(wizardSource, /onSuccess=\{\(\) => setMostrarConfig\(false\)\}/);
 });
 
 test("index.html usa caminho relativo compatível com GitHub Pages", () => {

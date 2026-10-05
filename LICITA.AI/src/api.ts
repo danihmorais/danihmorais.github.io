@@ -1,5 +1,4 @@
 import { construirPrompt } from "./providers/services/geradorIA";
-import { lerConfigIA } from "./utils/storageLocal";
 import { mapearDadosWizard } from "./utils/mapearDados";
 
 const BASE_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
@@ -66,8 +65,7 @@ export const gerarFasePreparatoria = async (dados: any): Promise<FasePreparatori
   const dadosUsuario = mapearDadosWizard(dadosOriginais) as Record<string, string>;
   const instrucoes = String(dados?.instrucoes || "").trim();
   const meeppExclusivo = dadosUsuario["{{ME_EPP}}"] === "SIM";
-  const config = lerConfigIA();
-  const modelo = config.modelo || "unsloth-auto";
+  const modelo = "unsloth-auto";
 
   const modalidade = String(dadosUsuario["{{MODALIDADE}}"] || "").trim().toUpperCase();
   const ehContratacaoDireta = ["DISPENSA_EMAIL", "DISPENSA_BLL"].includes(modalidade);
