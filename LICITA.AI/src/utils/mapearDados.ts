@@ -46,8 +46,22 @@ export const mapearDadosWizard = (dados: any) => {
     "{{SECRETARIAS}}": Array.isArray(dados.secretarias) ? dados.secretarias.join(", ") : "",
     "{{CONTATOS_SECRETARIAS}}": contatosStr,
     "{{VIGENCIA}}": `${dados.vigenciaNum || 1} ${dados.vigenciaUnidade || 'Meses'}`,
-    "{{DOTACAO}}": dados.dotacao || "",
-    "{{CAMINHO_IMAGEM_DOTACAO}}": dados.caminhoImagemDotacao ? `__IMG__${dados.caminhoImagemDotacao}` : "",
+    "{{DOTACAO}}": (() => {
+      const blocos = Array.isArray(dados.dotacaoBlocos) ? dados.dotacaoBlocos : [];
+      if (blocos.length > 0) {
+        return blocos
+          .map((bloco: any) => {
+            if (bloco?.tipo === "imagem" && bloco.imagemBase64) return `__IMG__${bloco.imagemBase64}`;
+            return String(bloco?.texto || "");
+          })
+          .filter((parte: string) => parte !== "")
+          .join("\n");
+      }
+      return dados.dotacao || "";
+    })(),
+    "{{CAMINHO_IMAGEM_DOTACAO}}": !Array.isArray(dados.dotacaoBlocos) || dados.dotacaoBlocos.length === 0
+      ? (dados.caminhoImagemDotacao ? `__IMG__${dados.caminhoImagemDotacao}` : "")
+      : "",
     "INSTRUCOES_EXTRAS": dados.instrucoesExtras || "",
     "RAW_EXECUCAO": dados.execucao || "",
     "RAW_MOTIVO_CRITERIO": dados.motivoCriterio || "",
