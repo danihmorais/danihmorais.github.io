@@ -1,4 +1,5 @@
 import React from "react";
+import DotacaoEditor, { type DotacaoBloco } from "../../components/DotacaoEditor";
 import {
   calcularValorEstimadoItens,
   exclusividadeMeeppPermitida,
@@ -59,27 +60,32 @@ const JustificationBox = ({ label, value, onChange, errorMsg }: any) => {
 };
 
 export default function Step5({ dados, atualizarDados }: any) {
-  const inputImagemRef = React.useRef<HTMLInputElement>(null);
+  const blocosDotacao: DotacaoBloco[] = React.useMemo(() => {
+    if (Array.isArray(dados.dotacaoBlocos) && dados.dotacaoBlocos.length > 0) {
+      return dados.dotacaoBlocos;
+    }
 
-  const handleAnexarImagem = (e: React.MouseEvent) => {
-    e.preventDefault();
-    inputImagemRef.current?.click();
-  };
+    const blocosLegados: DotacaoBloco[] = [];
+    if (String(dados.dotacao || "").trim()) {
+      blocosLegados.push({ tipo: "texto", texto: String(dados.dotacao) });
+    }
+    if (dados.caminhoImagemDotacao) {
+      blocosLegados.push({ tipo: "imagem", imagemBase64: dados.caminhoImagemDotacao });
+    }
+    return blocosLegados;
+  }, [dados.dotacaoBlocos, dados.dotacao, dados.caminhoImagemDotacao]);
 
-  const handleArquivoSelecionado = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const arquivo = e.target.files?.[0];
-    if (!arquivo) return;
+  const atualizarBlocosDotacao = (novosBlocos: DotacaoBloco[]) => {
+    const texto = novosBlocos
+      .filter((bloco) => bloco.tipo === "texto" && String(bloco.texto || "").trim())
+      .map((bloco) => String(bloco.texto || ""))
+      .join("\n");
 
-    const leitor = new FileReader();
-    leitor.onload = () => {
-      atualizarDados({ caminhoImagemDotacao: leitor.result as string });
-    };
-    leitor.onerror = () => {
-      alert("Erro ao ler a imagem selecionada.");
-    };
-    leitor.readAsDataURL(arquivo);
-
-    e.target.value = "";
+    atualizarDados({
+      dotacaoBlocos: novosBlocos,
+      dotacao: texto,
+      caminhoImagemDotacao: "",
+    });
   };
 
   const decrementarVigencia = (e: React.MouseEvent) => {
@@ -95,7 +101,13 @@ export default function Step5({ dados, atualizarDados }: any) {
   };
 
   const temLote = dados.itens && dados.itens.some((item: any) => item.lote && item.lote.toString().trim() !== "");
-  const faltaDotacao = dados.dotacao.trim() === "" && !dados.caminhoImagemDotacao;
+  const faltaDotacao =
+    (!String(dados.dotacao || "").trim()) &&
+    !blocosDotacao.some(
+      (bloco) =>
+        (bloco.tipo === "imagem" && !!bloco.imagemBase64) ||
+        (bloco.tipo === "texto" && String(bloco.texto || "").trim())
+    );
   const totalGeral = calcularValorEstimadoItens(dados.itens || []);
   const meeppExclusivoPermitido = exclusividadeMeeppPermitida(dados.itens || []);
   const totalAcimaDoLimite = totalGeral > LIMITE_EXCLUSIVIDADE_MEEPP;
@@ -243,30 +255,15 @@ export default function Step5({ dados, atualizarDados }: any) {
         <h2 style={styles.title}>
           Dotação Orçamentária <span style={styles.asterisk}>*</span>
         </h2>
-        <p style={styles.subtitleMargin}>Preencha o campo de texto ou anexe uma imagem do comprovante de dotação.</p>
-        <div style={styles.attachWrapper}>
-          <textarea 
-            value={dados.dotacao}
-            onChange={(e) => atualizarDados({ dotacao: e.target.value })}
-            placeholder="Descreva a dotação orçamentária..."
-            style={styles.textareaLarge(faltaDotacao)}
-          />
-          <input
-            ref={inputImagemRef}
-            type="file"
-            accept="image/png,image/jpeg"
-            onChange={handleArquivoSelecionado}
-            style={{ display: "none" }}
-          />
-          <button 
-            type="button"
-            onClick={handleAnexarImagem} 
-            style={styles.attachBtn(!!dados.caminhoImagemDotacao)}
-          >
-            {dados.caminhoImagemDotacao ? "Imagem Anexada ✓" : "Anexar Imagem"}
-          </button>
-        </div>
-        {faltaDotacao && <span style={styles.errorText}>É obrigatório preencher a dotação ou anexar uma imagem.</span>}
+        <p style={styles.subtitleMargin}>
+          Digite a dotação e insira quantas imagens forem necessárias, na ordem em que devem aparecer no documento.
+        </p>
+        <DotacaoEditor
+          value={blocosDotacao}
+          onChange={atualizarBlocosDotacao}
+          placeholder="Digite a dotação orçamentária..."
+        />
+        {faltaDotacao && <span style={styles.errorText}>É obrigatório preencher a dotação ou inserir uma imagem.</span>}
       </div>
 
       <div style={styles.sectionGroup}>
