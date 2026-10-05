@@ -42,6 +42,9 @@ test("mapearDadosWizard calcula o valor estimado e preserva defaults", () => {
   assert.equal(dados["{{INSTRUMENTO}}"], "CONTRATO");
   assert.equal(dados["{{CRITERIOS}}"], "ITEM");
   assert.equal(dados["{{MODALIDADE}}"], "PREGAO_ELETRONICO");
+  assert.equal(dados["{{PAGAMENTO}}"], "Pagamento até o 10º dia útil após a entrega, emissão da Nota Fiscal e aceite pelo setor Contábil.");
+  assert.equal(dados["{{PRAZO REFAZIMENTO}}"], "5 dias úteis");
+  assert.equal(dados["PAGAMENTO_TIPO"], "CONFORME_ENTREGAS");
 });
 
 test("llm usa somente o proxy do backend e não envia Authorization do frontend", async () => {
@@ -94,4 +97,81 @@ test("arquivos essenciais do LICITA.AI permanecem presentes", () => {
     "src/api.ts", "src/providers/llm.ts", "src/providers/services/geradorIA.ts", "src/utils/mapearDados.ts",
     "main.py", "fila.py", "processador_docx.py",
   ]) assert.equal(fs.existsSync(licitaPath(relativePath)), true, `Arquivo ausente: ${relativePath}`);
+});
+
+test("mapearDadosWizard usa o texto fixo de pagamento mensal", () => {
+  const { mapearDadosWizard } = loadTsModule("src/utils/mapearDados.ts");
+  const dados = mapearDadosWizard({ pagamentoTipo: "MENSALMENTE", prazoRefazimentoDias: 12 });
+  assert.equal(dados["{{PAGAMENTO}}"], "Pagamento será efetuado mensalmente, até o 10º dia útil após a prestação de serviços, emissão da Nota Fiscal e aceite pelo setor Contábil.");
+  assert.equal(dados["{{PRAZO REFAZIMENTO}}"], "12 dias úteis");
+});
+
+test("gerarFasePreparatoria cria etapa de IA somente para pagamento por etapas", async () => {
+  let chamada = null;
+  const modulo = loadTsModule("src/api.ts", {
+    replacements: [
+      [
+        'import { construirPrompt } from "./providers/services/geradorIA";',
+        'const { construirPrompt } = __injected_gerador;',
+      ],
+    ],
+    globals: {
+      __injected_gerador: { construirPrompt: () => "PROMPT_TESTE" },
+      fetch: async (url, options) => {
+        chamada = { url, options };
+        return {
+          ok: true,
+          async json() {
+            return { job_id: "c".repeat(32), status: "queued", email: "teste@example.com", message: "ok" };
+          },
+        };
+      },
+    },
+  });
+
+  await modulo.gerarFasePreparatoria({
+    email: "teste@example.com",
+    instrucoes: "",
+    dados_usuario: {
+      pagamentoTipo: "POR_ETAPAS",
+      pagamentoEtapas: "40% após a conclusão da etapa 1 e 60% após a etapa 2.",
+      modalidade: "PREGAO_ELETRONICO",
+      itens: [],
+    },
+  });
+
+  const body = JSON.parse(chamada.options.body);
+  const etapas = body.dados_ia.__LICITA_PIPELINE__.etapas;
+  const pagamento = etapas.find((etapa) => etapa.id === "PAGAMENTO_ETAPAS");
+  assert.equal(pagamento.tipo, "geracao_json");
+  assert.match(pagamento.prompt, /40% após a conclusão/);
+  assert.match(pagamento.prompt, /EXCLUSIVAMENTE JSON válido/);
+});
+
+test("gerarFasePreparatoria rejeita pagamento por etapas sem descrição", async () => {
+  const modulo = loadTsModule("src/api.ts", {
+    replacements: [
+      [
+        'import { construirPrompt } from "./providers/services/geradorIA";',
+        'const { construirPrompt } = __injected_gerador;',
+      ],
+    ],
+    globals: {
+      __injected_gerador: { construirPrompt: () => "PROMPT_TESTE" },
+    },
+  });
+
+  await assert.rejects(
+    () => modulo.gerarFasePreparatoria({
+      email: "teste@example.com",
+      instrucoes: "",
+      dados_usuario: {
+        pagamentoTipo: "POR_ETAPAS",
+        pagamentoEtapas: "   ",
+        modalidade: "PREGAO_ELETRONICO",
+        itens: [],
+      },
+    }),
+    /pagamento por etapas/i,
+  );
 });
