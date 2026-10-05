@@ -62,7 +62,7 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
       });
     } catch (erro: any) {
       console.error("Erro ao melhorar descrição:", erro);
-      alert(erro?.message || "Não foi possível melhorar a descrição deste item.");
+      alert(erro?.message || "Não foi possível melhorar a descrição e a unidade deste item.");
     } finally {
       setItemEmMelhoria(null);
     }
@@ -161,7 +161,7 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
                     onChange={(e) => atualizarItem(item.id, "descricao", e.target.value)}
                     style={{ flex: 1, minWidth: 180, padding: 8, borderColor: descricao.trim() ? "var(--input-border)" : "var(--btn-danger)", resize: "none" }}
                   />
-                  <button type="button" onClick={() => melhorarItem(item)} disabled={carregando || !descricao.trim()} title="Melhorar descrição deste item com IA" aria-label={`Melhorar descrição do item ${item.numero || index + 1} com IA`} style={{ height: 34, padding: "0 10px", border: "1px solid var(--border)", borderRadius: "var(--radius)", background: "var(--bg-panel)", color: "var(--text-main)", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }}>{carregando ? "..." : "✨ IA"}</button>
+                  <button type="button" onClick={() => melhorarItem(item)} disabled={carregando || !descricao.trim()} title="Melhorar descrição e unidade deste item com IA" aria-label={`Melhorar descrição e unidade do item ${item.numero || index + 1} com IA`} style={{ height: 34, padding: "0 10px", border: "1px solid var(--border)", borderRadius: "var(--radius)", background: "var(--bg-panel)", color: "var(--text-main)", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }}>{carregando ? "..." : "✨ IA"}</button>
                 </div>
                 <input type="text" required value={item.un} onChange={(e) => atualizarItem(item.id, "un", e.target.value)} style={{ width: 60, padding: 8, textAlign: "center" }} />
                 <input type="number" required min="0.0001" step="any" value={item.qtd} onChange={(e) => atualizarItem(item.id, "qtd", parseFloat(e.target.value) || "")} style={{ width: 80, padding: 8, textAlign: "right" }} />
