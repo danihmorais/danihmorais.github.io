@@ -44,8 +44,22 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
     const modelo = "unsloth-auto";
     setItemEmMelhoria(item.id);
     try {
-      const descricao = await melhorarDescricaoItem(String(item.descricao), objeto, necessidade, apiKey, modelo);
-      atualizarItem(item.id, "descricao", descricao);
+      const melhoria = await melhorarDescricaoItem(
+        String(item.descricao),
+        String(item.un || ""),
+        objeto,
+        necessidade,
+        apiKey,
+        modelo,
+      );
+      atualizarDados({
+        ...dados,
+        itens: itens.map((itemAtual: any) =>
+          itemAtual.id === item.id
+            ? { ...itemAtual, descricao: melhoria.descricao, un: melhoria.unidade }
+            : itemAtual
+        ),
+      });
     } catch (erro: any) {
       console.error("Erro ao melhorar descrição:", erro);
       alert(erro?.message || "Não foi possível melhorar a descrição deste item.");
@@ -110,7 +124,13 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
     <section>
       <label style={{ fontWeight: 600, fontSize: 16, display: "block", marginBottom: 8 }}>Objeto da Licitação: <span style={{ color: "var(--btn-danger)" }}>*</span></label>
       <p style={{ color: "var(--text-muted)", fontSize: 13, margin: "0 0 12px" }}>Descreva brevemente o objeto licitado para direcionar a geração de especificações.</p>
-      <input type="text" required value={objeto} onChange={(e) => atualizarDados({ ...dados, objeto: e.target.value })} style={{ padding: 12, borderRadius: "var(--radius-lg)", borderColor: objeto.trim() ? "var(--input-border)" : "var(--btn-danger)" }} />
+      <textarea
+        required
+        rows={1}
+        value={objeto}
+        onChange={(e) => atualizarDados({ ...dados, objeto: e.target.value })}
+        style={{ padding: 12, borderRadius: "var(--radius-lg)", borderColor: objeto.trim() ? "var(--input-border)" : "var(--btn-danger)", resize: "none" }}
+      />
     </section>
     <section>
       <label style={{ fontWeight: 600, fontSize: 16, display: "block", marginBottom: 8 }}>Justificativa da Demanda: <span style={{ color: "var(--btn-danger)" }}>*</span></label>
@@ -134,7 +154,13 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
               return <div key={item.id} style={{ display: "flex", alignItems: "center", background: "var(--bg-subtle)", padding: "8px 12px", borderRadius: "var(--radius)", gap: 8 }}>
                 <div style={{ width: 40, fontWeight: 600 }}>{item.numero || index + 1}</div>
                 <div style={{ flex: 1, minWidth: 300, display: "flex", gap: 6, alignItems: "center" }}>
-                  <input type="text" required value={descricao} onChange={(e) => atualizarItem(item.id, "descricao", e.target.value)} style={{ flex: 1, minWidth: 180, padding: 8, borderColor: descricao.trim() ? "var(--input-border)" : "var(--btn-danger)" }} />
+                  <textarea
+                    required
+                    rows={1}
+                    value={descricao}
+                    onChange={(e) => atualizarItem(item.id, "descricao", e.target.value)}
+                    style={{ flex: 1, minWidth: 180, padding: 8, borderColor: descricao.trim() ? "var(--input-border)" : "var(--btn-danger)", resize: "none" }}
+                  />
                   <button type="button" onClick={() => melhorarItem(item)} disabled={carregando || !descricao.trim()} title="Melhorar descrição deste item com IA" aria-label={`Melhorar descrição do item ${item.numero || index + 1} com IA`} style={{ height: 34, padding: "0 10px", border: "1px solid var(--border)", borderRadius: "var(--radius)", background: "var(--bg-panel)", color: "var(--text-main)", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }}>{carregando ? "..." : "✨ IA"}</button>
                 </div>
                 <input type="text" required value={item.un} onChange={(e) => atualizarItem(item.id, "un", e.target.value)} style={{ width: 60, padding: 8, textAlign: "center" }} />
