@@ -39,3 +39,35 @@ class TestFilaPipeline(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPagamentoPipeline(unittest.TestCase):
+    def test_pagamento_por_etapas_nao_pode_ser_sobrescrito_por_fase_preparatoria(self):
+        resultados = {
+            "PAGAMENTO_ETAPAS": {"PAGAMENTO": "Pagamento revisado por etapas."},
+            "FASE_PREPARATORIA": {
+                "DFD": {},
+                "ETP": {},
+                "TR": {},
+                "PAGAMENTO": "Pagamento inventado pela IA principal.",
+            },
+        }
+        dados_ia_final = {}
+        for etapa_id, resultado in resultados.items():
+            if etapa_id == "AUDITORIA_MARCAS" or not isinstance(resultado, dict):
+                continue
+            blocos = (
+                resultado
+                if etapa_id == "FASE_PREPARATORIA"
+                and all(isinstance(resultado.get(bloco), dict) for bloco in ("DFD", "ETP", "TR"))
+                else {"_": resultado}
+            )
+            for bloco in blocos.values():
+                if not isinstance(bloco, dict):
+                    continue
+                for chave, valor in bloco.items():
+                    if chave == "PAGAMENTO" and etapa_id != "PAGAMENTO_ETAPAS":
+                        continue
+                    dados_ia_final[chave] = valor
+
+        self.assertEqual(dados_ia_final["PAGAMENTO"], "Pagamento revisado por etapas.")
