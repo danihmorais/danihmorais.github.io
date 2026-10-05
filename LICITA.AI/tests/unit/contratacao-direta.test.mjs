@@ -129,18 +129,23 @@ test("melhorarDescricaoItem trabalha somente com um item", async () => {
     },
   });
 
-  const descricao = await modulo.melhorarDescricaoItem(
+  const melhoria = await modulo.melhorarDescricaoItem(
     "Notebook tela 15,6",
+    "UN",
     "Aquisição de equipamentos de informática",
     "Atendimento da demanda administrativa",
     "api-key",
     "modelo",
   );
 
-  assert.equal(descricao, "Notebook portátil com tela de 15,6 polegadas");
-  assert.match(prompt, /EXCLUSIVAMENTE a descrição do item/);
+  assert.deepEqual(melhoria, {
+    descricao: "Notebook portátil com tela de 15,6 polegadas",
+    unidade: "UN",
+  });
+  assert.match(prompt, /DESCRIÇÃO do item e verifique a coerência da UNIDADE/);
+  assert.match(prompt, /A quantidade e o valor unitário não podem ser alterados/);
   assert.match(prompt, /Notebook tela 15,6/);
-  assert.doesNotMatch(prompt, /Lápis/);
+  assert.match(prompt, /UNIDADE ATUAL DO ITEM:/);
 });
 
 test("geração de contratação direta exige os sete campos específicos", async () => {
