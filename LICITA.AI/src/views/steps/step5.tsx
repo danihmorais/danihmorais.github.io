@@ -286,7 +286,7 @@ export default function Step5({ dados, atualizarDados }: any) {
               <span style={styles.errorText}>Este campo é obrigatório.</span>
             )}
             <span style={{ ...styles.subtitleMargin, margin: "8px 0 0" }}>
-              O texto informado será revisado pela IA antes de substituir {{PAGAMENTO}} no documento.
+              O texto informado será revisado pela IA antes de substituir {`{{PAGAMENTO}}`} no documento.
             </span>
           </div>
         ) : (
