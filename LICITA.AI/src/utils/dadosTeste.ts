@@ -52,6 +52,9 @@ export const criarDadosTeste = (tipo: TipoTesteContratacao) => {
     motivoPac: "",
     vigenciaNum: 12,
     vigenciaUnidade: "Meses",
+    pagamentoTipo: "CONFORME_ENTREGAS",
+    pagamentoEtapas: "",
+    prazoRefazimentoDias: 5,
     dotacao: "02.01.04.122.0001.2001 - 3.3.90.30 - Material de Consumo",
     caminhoImagemDotacao: "",
   };
