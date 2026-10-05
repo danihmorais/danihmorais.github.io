@@ -252,6 +252,73 @@ export default function Step5({ dados, atualizarDados }: any) {
       </div>
 
       <div style={styles.sectionGroup}>
+        <h2 style={styles.titleCompact}>Condições de Pagamento</h2>
+        <p style={styles.subtitleMargin}>
+          Selecione a forma de pagamento. Nas opções padronizadas, o texto será aplicado diretamente, sem geração pela IA.
+        </p>
+        <select
+          value={dados.pagamentoTipo || "CONFORME_ENTREGAS"}
+          onChange={(e) => atualizarDados({ pagamentoTipo: e.target.value })}
+          style={{ ...styles.select, marginLeft: 0 }}
+        >
+          <option value="CONFORME_ENTREGAS">CONFORME ENTREGAS</option>
+          <option value="MENSALMENTE">MENSALMENTE</option>
+          <option value="POR_ETAPAS">POR ETAPAS</option>
+        </select>
+
+        {dados.pagamentoTipo === "POR_ETAPAS" ? (
+          <div style={{ ...styles.justificationBox(String(dados.pagamentoEtapas || "").trim() === ""), width: "100%", boxSizing: "border-box" }}>
+            <label style={styles.justificationTitle}>
+              Descreva como será o pagamento por etapas <span style={styles.asterisk}>*</span>
+            </label>
+            <textarea
+              value={dados.pagamentoEtapas || ""}
+              onChange={(e) => atualizarDados({ pagamentoEtapas: e.target.value })}
+              placeholder="Informe como será o pagamento, indicando as etapas e as respectivas condições de pagamento..."
+              style={{
+                ...styles.textarea(String(dados.pagamentoEtapas || "").trim() === ""),
+                width: "100%",
+                boxSizing: "border-box",
+                minHeight: "100px",
+              }}
+            />
+            {!String(dados.pagamentoEtapas || "").trim() && (
+              <span style={styles.errorText}>Este campo é obrigatório.</span>
+            )}
+            <span style={{ ...styles.subtitleMargin, margin: "8px 0 0" }}>
+              O texto informado será revisado pela IA antes de substituir {{PAGAMENTO}} no documento.
+            </span>
+          </div>
+        ) : (
+          <div style={{ color: "var(--text-muted)", fontSize: "13px", lineHeight: 1.5, maxWidth: "900px" }}>
+            {dados.pagamentoTipo === "MENSALMENTE"
+              ? "Pagamento será efetuado mensalmente, até o 10º dia útil após a prestação de serviços, emissão da Nota Fiscal e aceite pelo setor Contábil."
+              : "Pagamento até o 10º dia útil após a entrega, emissão da Nota Fiscal e aceite pelo setor Contábil."}
+          </div>
+        )}
+      </div>
+
+      <div style={styles.sectionGroup}>
+        <h2 style={styles.titleCompact}>Prazo para Refazimento</h2>
+        <p style={styles.subtitleMargin}>
+          Informe o prazo fixo para refazimento/correção, sempre em dias úteis. Este valor não é gerado nem alterado pela IA.
+        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <input
+            type="number"
+            min={1}
+            step={1}
+            value={dados.prazoRefazimentoDias ?? 5}
+            onChange={(e) => {
+              const valor = Number.parseInt(e.target.value, 10);
+              atualizarDados({ prazoRefazimentoDias: Number.isFinite(valor) && valor > 0 ? valor : 1 });
+            }}
+            style={{ ...styles.counterInput, width: "90px", textAlign: "center" }}
+          />
+          <span style={{ color: "var(--text-main)", fontSize: "14px" }}>dias úteis</span>
+        </div>
+      </div>
+      <div style={styles.sectionGroup}>
         <h2 style={styles.title}>
           Dotação Orçamentária <span style={styles.asterisk}>*</span>
         </h2>
