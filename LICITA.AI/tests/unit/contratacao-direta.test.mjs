@@ -192,17 +192,10 @@ test("fila normal envia uma única etapa de IA para DFD, ETP e TR", async () => 
         'import { construirPrompt } from "./providers/services/geradorIA";',
         'const { construirPrompt } = __injected_gerador;',
       ],
-      [
-        'import { lerConfigIA } from "./utils/storageLocal";',
-        'const { lerConfigIA } = __injected_storage;',
-      ],
     ],
     globals: {
       __injected_gerador: {
         construirPrompt: (_dados, _meepp, etapa) => `PROMPT_${etapa}`,
-      },
-      __injected_storage: {
-        lerConfigIA: () => ({ provedor: "unsloth", modelo: "modelo-teste" }),
       },
       fetch: async (url, options) => {
         chamada = { url, options };
@@ -246,17 +239,10 @@ test("fila de contratação direta não cria DFD, ETP ou TR", async () => {
         'import { construirPrompt } from "./providers/services/geradorIA";',
         'const { construirPrompt } = __injected_gerador;',
       ],
-      [
-        'import { lerConfigIA } from "./utils/storageLocal";',
-        'const { lerConfigIA } = __injected_storage;',
-      ],
     ],
     globals: {
       __injected_gerador: {
         construirPrompt: () => "PROMPT_TESTE",
-      },
-      __injected_storage: {
-        lerConfigIA: () => ({ provedor: "unsloth", modelo: "modelo-teste" }),
       },
       fetch: async (url, options) => {
         chamada = { url, options };

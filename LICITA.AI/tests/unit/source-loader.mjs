@@ -22,9 +22,6 @@ function testRequire(request) {
       gerarDadosContratacaoDireta: async () => ({}),
     };
   }
-  if (request === "./utils/storageLocal") {
-    return { lerConfigIA: () => ({ provedor: "unsloth", chave_api: "backend", modelo: "unsloth-auto" }) };
-  }
   if (request === "./utils/mapearDados") {
     return { mapearDadosWizard: (dados) => ({ ...dados }) };
   }

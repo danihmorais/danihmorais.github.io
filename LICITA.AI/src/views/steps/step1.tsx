@@ -2,7 +2,6 @@ import React, { useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { calcularValorEstimadoItens } from "../../utils/regrasContratacao";
 import { melhorarDescricaoItem } from "../../providers/services/contratacaoDiretaIA";
-import { lerConfigIA } from "../../utils/storageLocal";
 
 export default function Step1({ dados = { itens: [], objeto: "", necessidade: "" }, atualizarDados }: any) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -41,9 +40,8 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
 
   const melhorarItem = async (item: any) => {
     if (!String(item.descricao || "").trim()) return;
-    const config = lerConfigIA();
-    const apiKey = config.chave_api || "backend";
-    const modelo = config.modelo || "unsloth-auto";
+    const apiKey = "backend";
+    const modelo = "unsloth-auto";
     setItemEmMelhoria(item.id);
     try {
       const descricao = await melhorarDescricaoItem(String(item.descricao), objeto, necessidade, apiKey, modelo);

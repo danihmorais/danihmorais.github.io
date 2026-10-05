@@ -1,23 +1,7 @@
 const MAX_TENTATIVAS = 3;
 
-export interface OpcaoModelo {
-  value: string;
-  label: string;
-}
-
-export interface StatusBackendIA {
-  ok: boolean;
-  unsloth: boolean;
-}
-
 const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 const IA_CHAT_URL = `${API_URL}/licita/api/ia/chat`;
-const IA_STATUS_URL = `${API_URL}/licita/api/ia/status`;
-
-export const MODELOS_DISPONIVEIS: Record<string, OpcaoModelo[]> = {
-  backend: [{ value: "unsloth-auto", label: "Unsloth local (automático)" }],
-  unsloth: [{ value: "unsloth-auto", label: "Unsloth local (automático)" }],
-};
 
 const CHAVE_LOGS_ERRO = "licita_ai:logs_erro";
 const MAX_LOGS_GUARDADOS = 20;
@@ -91,21 +75,6 @@ async function chamarBackend(payload: Record<string, any>): Promise<any> {
   try { data = raw ? JSON.parse(raw) : null; } catch { throw new Error("A API do backend retornou uma resposta inválida."); }
   if (!data?.content) throw new Error("A API do backend retornou uma resposta vazia.");
   return { json: extrairEConverterJSON(String(data.content)), model: typeof data.model === "string" ? data.model : payload.model, provider: "unsloth" };
-}
-
-export async function obterStatusBackendIA(): Promise<StatusBackendIA> {
-  if (!API_URL) return { ok: false, unsloth: false };
-  try {
-    const response = await fetch(IA_STATUS_URL, { method: "GET" });
-    const data = await response.json().catch(() => null);
-    if (!response.ok) return { ok: false, unsloth: false };
-    return { ok: Boolean(data?.ok), unsloth: Boolean(data?.unsloth) };
-  } catch (error) { await salvarLogErro("validacao-backend", error); return { ok: false, unsloth: false }; }
-}
-
-export async function validarChaveUnsloth(): Promise<boolean> {
-  const data = await obterStatusBackendIA();
-  return Boolean(data.ok && data.unsloth);
 }
 
 export async function gerarTextoIA(prompt: string, _legacyApiKey: string, model: string, onModelResolved?: (modelUsed: string) => void): Promise<any> {
