@@ -162,8 +162,13 @@ def gerar_zip(dados_usuario: dict, dados_ia: dict, session_id: str) -> tuple[Pat
     temp_dir = Path(tempfile.mkdtemp(prefix=f"fase_prep_{session_id}_"))
     try:
         modificacoes = filtrar_chaves_docx(montar_variaveis_fixas(dados_usuario))
+        pagamento_tipo = str(dados_usuario.get("PAGAMENTO_TIPO", "")).strip().upper()
         for chave, valor in dados_ia.items():
             chave_docx = chave if chave.startswith("{{") and chave.endswith("}}") else f"{{{{{chave}}}}}"
+            if chave_docx == "{{PRAZO REFAZIMENTO}}":
+                continue
+            if chave_docx == "{{PAGAMENTO}}" and pagamento_tipo != "POR_ETAPAS":
+                continue
             modificacoes[chave_docx] = valor
 
         for chave1, chave2 in config.ALIASES:
