@@ -144,27 +144,33 @@ FORMATO OBRIGATÓRIO:
 
 export async function melhorarDescricaoItem(
   descricao: string,
+  unidade: string,
   objeto: string,
   necessidade: string,
   apiKey: string,
   modelo: string,
-): Promise<string> {
+): Promise<{ descricao: string; unidade: string }> {
   const original = normalizarNome(descricao);
   if (!original) throw new Error("Informe uma descrição antes de solicitar a melhoria.");
 
+  const unidadeOriginal = normalizarNome(unidade);
+
   const prompt = `Você é um redator técnico especializado em especificações para contratações públicas.
 
-Melhore EXCLUSIVAMENTE a descrição do item abaixo. Retorne uma descrição mais clara, objetiva, técnica e apta à contratação, preservando exatamente o objeto pretendido.
+Melhore a DESCRIÇÃO do item e verifique a coerência da UNIDADE DE MEDIDA. Retorne uma descrição mais clara, objetiva, técnica e apta à contratação, preservando exatamente o objeto pretendido.
 
 REGRAS ABSOLUTAS:
 1. Trabalhe SOMENTE neste item; não analise nem mencione outros itens.
-2. Não altere quantidade ou unidade.
-3. Não invente marca, fabricante, modelo, código proprietário, certificação, norma ou característica que não esteja implícita de forma segura na descrição original.
-4. Não transforme a descrição em justificativa, obrigação contratual, condição de habilitação ou exigência de fornecedor.
-5. Não crie requisito restritivo sem necessidade técnica evidente.
-6. Preserve medidas, capacidades, materiais e características existentes quando forem inequívocos.
-7. Corrija problemas de redação, ambiguidades linguísticas e organização das características.
-8. Retorne EXCLUSIVAMENTE JSON válido no formato {\"descricao\":\"...\"}.
+2. A quantidade e o valor unitário não podem ser alterados.
+3. A unidade de medida pode ser corrigida SOMENTE quando a descrição contiver uma indicação clara e inequívoca de que a unidade atual está incompatível com o que está sendo adquirido.
+4. Não faça conversões de quantidade ou de embalagem. Ex.: não transforme "caixa com 12" em 12 unidades nem altere a quantidade informada.
+5. Quando a unidade atual for compatível ou quando houver dúvida, preserve exatamente a unidade atual.
+6. Não invente marca, fabricante, modelo, código proprietário, certificação, norma ou característica que não esteja implícita de forma segura na descrição original.
+7. Não transforme a descrição em justificativa, obrigação contratual, condição de habilitação ou exigência de fornecedor.
+8. Não crie requisito restritivo sem necessidade técnica evidente.
+9. Preserve medidas, capacidades, materiais e características existentes quando forem inequívocos.
+10. Corrija problemas de redação, ambiguidades linguísticas e organização das características.
+11. Retorne EXCLUSIVAMENTE JSON válido no formato {"descricao":"...","unidade":"..."}.
 
 OBJETO DA CONTRATAÇÃO:
 ${normalizarNome(objeto) || "Não informado."}
@@ -173,12 +179,17 @@ NECESSIDADE ADMINISTRATIVA:
 ${normalizarNome(necessidade) || "Não informada."}
 
 DESCRIÇÃO ORIGINAL DO ITEM:
-${original}`;
+${original}
+
+UNIDADE ATUAL DO ITEM:
+${unidadeOriginal || "Não informada."}`;
 
   const resposta = await gerarTextoIA(prompt, apiKey, modelo);
   const novaDescricao = normalizarNome(resposta?.descricao);
+  const novaUnidade = normalizarNome(resposta?.unidade) || unidadeOriginal;
   if (!novaDescricao) throw new Error("A IA não retornou uma descrição válida para o item.");
-  return novaDescricao;
+  if (!novaUnidade) throw new Error("A IA não retornou uma unidade válida para o item.");
+  return { descricao: novaDescricao, unidade: novaUnidade };
 }
 
 export async function gerarDadosContratacaoDireta(
