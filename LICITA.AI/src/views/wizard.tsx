@@ -34,7 +34,8 @@ export default function Wizard() {
     vigenciaNum: 1,
     vigenciaUnidade: "Meses",
     dotacao: "",
-    caminhoImagemDotacao: ""
+    caminhoImagemDotacao: "",
+    dotacaoBlocos: []
   });
   const [carregando, setCarregando] = useState(false);
   const [statusTexto, setStatusTexto] = useState("Iniciando...");
@@ -79,7 +80,14 @@ export default function Wizard() {
         const criterioValido = dados.criterio === "ITEM" || ((dados.criterio === "GLOBAL" || dados.criterio === "LOTE") && dados.motivoCriterio.trim() !== "");
         const modalidadeValida = dados.modalidade === "PREGAO_ELETRONICO" || dados.motivoModalidade.trim() !== "";
         const pacValido = dados.pac === "SIM" || dados.motivoPac.trim() !== "";
-        const dotacaoValida = dados.dotacao.trim() !== "" || !!dados.caminhoImagemDotacao;
+        const dotacaoBlocosValidos =
+          Array.isArray(dados.dotacaoBlocos) &&
+          dados.dotacaoBlocos.some(
+            (bloco: any) =>
+              (bloco?.tipo === "imagem" && !!bloco.imagemBase64) ||
+              (bloco?.tipo === "texto" && String(bloco.texto || "").trim())
+          );
+        const dotacaoValida = dados.dotacao.trim() !== "" || !!dados.caminhoImagemDotacao || dotacaoBlocosValidos;
         return dados.instrumento !== "" && criterioValido && modalidadeValida && pacValido && dotacaoValida;
       default:
         return true;
