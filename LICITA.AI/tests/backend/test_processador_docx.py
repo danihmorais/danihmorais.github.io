@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import io
 import json
 import sys
 import tempfile
@@ -7,11 +9,12 @@ import unittest
 from pathlib import Path
 
 from docx import Document
+from docx.shared import Inches
 
 TEST_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(TEST_ROOT))
 
-from processador_docx import replace_text_in_paragraph
+from processador_docx import modificar_documento, replace_text_in_paragraph
 
 
 class ProcessadorDocxTests(unittest.TestCase):
@@ -119,6 +122,32 @@ class ProcessadorDocxTests(unittest.TestCase):
             [p.paragraph_format.space_after for p in doc.paragraphs],
             [0, 0, 0],
         )
+
+    def test_imagem_no_cabecalho_sem_placeholder_e_preservada(self):
+        doc = Document()
+        header = doc.sections[0].header
+        image_run = header.paragraphs[0].add_run()
+        image_run.add_picture(
+            io.BytesIO(
+                base64.b64decode(
+                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+                )
+            ),
+            width=Inches(0.5),
+        )
+        body_paragraph = doc.add_paragraph("{{CHAVE}}")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            origem = Path(temp_dir) / "modelo.docx"
+            destino = Path(temp_dir) / "gerado.docx"
+            doc.save(origem)
+
+            modificar_documento(str(origem), str(destino), {"{{CHAVE}}": "resultado"})
+
+            reaberto = Document(destino)
+            self.assertEqual(reaberto.paragraphs[0].text, "resultado")
+            header_xml = reaberto.sections[0].header.paragraphs[0]._p.xml
+            self.assertIn("<a:blip", header_xml)
 
     def test_placeholder_dividido_em_tres_runs_preserva_estilos_dos_trechos(self):
         doc = Document()
