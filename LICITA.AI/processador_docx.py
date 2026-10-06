@@ -231,6 +231,13 @@ def replace_text_in_paragraph(paragraph, replacements):
     if not extracted_runs_data:
         return
 
+    # Não reconstrua um parágrafo que não contém nenhum texto a substituir.
+    # Isso é essencial para preservar desenhos/imagens do modelo, inclusive
+    # imagens inseridas nos cabeçalhos e rodapés.
+    texto_original = "".join(run_data["text"] for run_data in extracted_runs_data)
+    if not any(old_text and old_text in texto_original for old_text in replacements):
+        return
+
     linear_content = [
         {"text": (run_data["text"] or "").replace("\r\n", "\n").replace("\r", "\n"), "original_run_index": index}
         for index, run_data in enumerate(extracted_runs_data)
