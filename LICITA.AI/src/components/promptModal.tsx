@@ -73,7 +73,7 @@ export default function PromptModal({ isOpen, onClose, onConfirm }: PromptModalP
             })}
           </div>
           <div style={{ marginTop: "10px", color: "var(--text-muted)", fontSize: "12px" }}>
-            Formatos aceitos: PDF e DOCX. O arquivo original não é enviado à IA quando for um Edital/Aviso; apenas os anexos DFD/ETP/TR encontrados são encaminhados como contexto.
+            Formatos aceitos: PDF e DOCX. PDFs ou DOCX escaneados terão OCR automático quando não houver texto extraível. O arquivo original não é enviado à IA quando for um Edital/Aviso; apenas os anexos DFD/ETP/TR encontrados são encaminhados como contexto.
           </div>
         </div>
 
