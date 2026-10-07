@@ -11,6 +11,18 @@ export interface FasePreparatoriaJob {
   fila_posicao?: number;
   solicitacoes_a_frente?: number;
   message: string;
+  documentos_referencia?: {
+    quantidade: number;
+    total_caracteres: number;
+    documentos: Array<{ tipo: string; nome: string; origem: string }>;
+  };
+}
+
+export interface DocumentosReferenciaUpload {
+  dfd?: File | null;
+  etp?: File | null;
+  tr?: File | null;
+  edital?: File | null;
 }
 
 export const consultarFilaFasePreparatoria = async (jobId: string, statusToken?: string) => {
@@ -81,7 +93,7 @@ function construirPromptUnificado(dadosUsuario: Record<string, string>, meeppExc
   return `Você é especialista sênior em licitações e contratos administrativos para a Prefeitura de São Francisco/SP.\n\nGERE DFD, ETP E TR EM UMA ÚNICA CHAMADA DE IA.\nOs três documentos pertencem à mesma contratação e devem ser escritos com um único raciocínio global. A resposta deve ser um único objeto JSON contendo exatamente três blocos: DFD, ETP e TR.\n\nDADOS DA CONTRATAÇÃO:\n${JSON.stringify(dadosUsuario, null, 2)}\n\nESPECIFICAÇÕES OBRIGATÓRIAS DO DFD:\n${dfd}\n\nESPECIFICAÇÕES OBRIGATÓRIAS DO ETP:\n${etp}\n\nESPECIFICAÇÕES OBRIGATÓRIAS DO TR:\n${tr}\n\nESTRUTURA JSON FINAL OBRIGATÓRIA:\n{\n  "DFD": {\n    "OBJETO": "",\n    "TIPO_OBJ": "",\n    "JUSTIFICATIVA": "",\n    "ESTIMATIVA_QUANTIDADES": "",\n    "RESULTADOS_ESPERADOS": ""\n  },\n  "ETP": {\n    "REQUISITOS_ETP": "",\n    "SUBCONTRATACAO_ETP": "",\n    "ME_EPP_ETP": "",\n    "JUSTIFICATIVA_PAC": "",\n    "MERCADO": "",\n    "SOLUCAO": "",\n    "CRITERIOS_JUSTIFICATIVA_ETP": "",\n    "CRITERIOS_SUSTENTABILIDADE": "",\n    "MODALIDADE_JUSTIFICATIVA_ETP": "",\n    "PROVIDENCIAS_CONT": "",\n    "CORRELATAS_INTER": "",\n    "JUSTIFICATIVA_ESTIMATIVA": "",\n    "GARANTIAS_ETP": "",\n    "VISTORIA_ETP": "",\n    "AMOSTRA_ETP": "",\n    "VALOR_ESTIMADO_APROXIMADO": "",\n    "PARCELAMENTO": "",\n    "CONCLUSAO": ""\n  },\n  "TR": {\n    "REQUISITOS_TR": "",\n    "OBRIGACOES_CONTRATADA": "",\n    "OBRIGACOES_CONTRANTE": "",\n    "QUALIFICACAO_TECNICA": "",\n    "GARANTIAS_TR": "",\n    "EXECUCAO": "",\n    "PRAZO_EXEC": "",\n    "LOCAL": "",\n    "AMOSTRA_TR": ""\n  }\n}\n\nREGRAS FINAIS:\n1. Retorne EXCLUSIVAMENTE JSON válido, sem markdown.\n2. Não deixe nenhuma chave obrigatória vazia.\n3. Não invente fatos.\n4. Mantenha absoluta coerência entre DFD, ETP e TR.\n5. O objeto deve conter somente os três blocos DFD, ETP e TR.`;
 }
 
-export const gerarFasePreparatoria = async (dados: any): Promise<FasePreparatoriaJob> => {
+export const gerarFasePreparatoria = async (dados: any, arquivos?: DocumentosReferenciaUpload): Promise<FasePreparatoriaJob> => {
   if (!BASE_URL) throw new Error("API do Licita.AI não configurada.");
 
   const dadosOriginais = { ...(dados?.dados_usuario || {}) } as Record<string, any>;
@@ -130,12 +142,34 @@ export const gerarFasePreparatoria = async (dados: any): Promise<FasePreparatori
     dados_ia: { __LICITA_PIPELINE__: { version: 4, model: modelo, temperature: 0.3, eh_contratacao_direta: ehContratacaoDireta, etapas } },
   };
 
-  const response = await fetch(`${BASE_URL}/licita/api/gerar-fase-preparatoria`, {
+  const anexos = arquivos || {};
+  const uploads: Array<[keyof DocumentosReferenciaUpload, File | null | undefined]> = [
+    ["dfd", anexos.dfd],
+    ["etp", anexos.etp],
+    ["tr", anexos.tr],
+    ["edital", anexos.edital],
+  ];
+  const haUploads = uploads.some(([, arquivo]) => arquivo instanceof File);
+
+  let requestInit: RequestInit = {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
-  });
+  };
 
+  if (haUploads) {
+    const formData = new FormData();
+    formData.append("payload", JSON.stringify(payload));
+    for (const [campo, arquivo] of uploads) {
+      if (arquivo instanceof File) formData.append(campo, arquivo, arquivo.name);
+    }
+    requestInit = {
+      method: "POST",
+      body: formData,
+    };
+  }
+
+  const response = await fetch(`${BASE_URL}/licita/api/gerar-fase-preparatoria`, requestInit);
   if (!response.ok) {
     let detalhe = "Falha ao colocar a geração na fila.";
     try { const erroJson = await response.json(); detalhe = erroJson?.detail || detalhe; } catch {}
