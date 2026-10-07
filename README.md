@@ -10,6 +10,8 @@ Hub de ferramentas web para automação de processos de **licitação pública m
 |---|---|
 | 🗂️ **[MontaEdital](./MONTAEDITAL)** | Elaboração da fase preparatória e montagem de editais a partir de modelos `.docx`. |
 | 🤖 **[Licita.AI](./LICITA.AI)** | Geração assistida por IA de DFD, ETP e TR a partir dos dados do processo. |
+
+O **Licita.AI** também aceita DFD, ETP e TR anteriores como contexto prioritário e Edital/Aviso de Dispensa para localizar automaticamente esses anexos. Documentos escaneados passam por OCR automático quando não há texto extraível.
 | 📄 **[Conversor Fiorilli](./FIORIILICSVTOWORD)** | Conversão de relatórios `.txt`/`.csv` do Fiorilli para Word. |
 | 📚 **[Documentos da Licitação](./documentos-modelo.html)** | Consulta, visualização, impressão e download dos documentos e vídeos disponibilizados pelo backend. |
 | ✉️ **[Email ARPs/Contratos](./EMAIL-ATAS-CONTRATOS)** | Envio em lote de atas e contratos em PDF por e-mail. |
