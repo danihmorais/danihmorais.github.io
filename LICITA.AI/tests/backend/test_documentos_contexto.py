@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import unittest
+from unittest.mock import patch
 
 from docx import Document
 
@@ -66,6 +67,26 @@ class TestDocumentosContexto(unittest.TestCase):
         self.assertIn("Condições do TR", textos)
         self.assertNotIn("Preço e condições da proposta", textos)
         self.assertNotIn("EDITAL DE LICITAÇÃO", textos)
+
+    def test_pdf_sem_texto_dispara_ocr_automaticamente(self):
+        class Pagina:
+            def extract_text(self):
+                return ""
+
+        class Leitor:
+            def __init__(self, _stream):
+                self.pages = [Pagina()]
+
+        with patch("documentos_contexto.PdfReader", Leitor), patch(
+            "documentos_contexto._ocr_pdf",
+            return_value="Texto reconhecido por OCR.",
+        ) as ocr:
+            from documentos_contexto import _extrair_pdf
+
+            texto = _extrair_pdf(b"%PDF-falso")
+
+        self.assertEqual(texto, "Texto reconhecido por OCR.")
+        ocr.assert_called_once()
 
     def test_extrair_anexos_rejeita_edital_sem_anexos_reconheciveis(self):
         texto = "EDITAL\nANEXO I - MODELO DE PROPOSTA\nPreço da proposta."
