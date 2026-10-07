@@ -28,6 +28,7 @@ export default function PromptModal({ isOpen, onClose, onConfirm }: PromptModalP
     if (!emailValido) return;
     onConfirm({ instrucoes: texto.trim(), email: email.trim(), arquivos });
     setTexto("");
+    setArquivos({});
   };
 
   const handleCancelar = () => {
