@@ -2,9 +2,35 @@ import json
 import unittest
 
 from fila_pipeline import _aplicar_auditoria_marcas, _extrair_json, _substituir_contextos, _validar_json_geracao
+from fila_pipeline_unificado import _adicionar_documentos_de_referencia
 
 
 class TestFilaPipeline(unittest.TestCase):
+    def test_documentos_de_referencia_entram_no_prompt_com_prioridade(self):
+        prompt = _adicionar_documentos_de_referencia(
+            "PROMPT BASE",
+            [
+                {
+                    "tipo": "DFD",
+                    "origem": "documento_anterior",
+                    "nome": "DFD anterior.docx",
+                    "texto": "Objeto anterior e justificativa relevante.",
+                },
+                {
+                    "tipo": "TR",
+                    "origem": "anexo_do_edital",
+                    "nome": "Edital — ANEXO III - TERMO DE REFERÊNCIA",
+                    "texto": "Condição operacional do TR anterior.",
+                },
+            ],
+        )
+        self.assertIn("DOCUMENTOS DE REFERÊNCIA PRIORITÁRIA", prompt)
+        self.assertIn("principal referência factual e estrutural", prompt)
+        self.assertIn("Objeto anterior e justificativa relevante.", prompt)
+        self.assertIn("Condição operacional do TR anterior.", prompt)
+        self.assertIn("dados atuais do usuário e as instruções atuais prevalecem", prompt)
+
+
     def test_substitui_contextos(self):
         texto = "DFD={{DFD}} ET={{ETP}} DADOS={{DADOS}} STAGES={{STAGES}}"
         resultado = _substituir_contextos(
