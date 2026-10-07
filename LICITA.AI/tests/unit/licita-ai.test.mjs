@@ -106,6 +106,55 @@ test("mapearDadosWizard usa o texto fixo de pagamento mensal", () => {
   assert.equal(dados["{{PRAZO REFAZIMENTO}}"], "12 dias úteis");
 });
 
+test("gerarFasePreparatoria usa multipart quando há documentos de referência", async () => {
+  let chamada = null;
+  const modulo = loadTsModule("src/api.ts", {
+    replacements: [
+      [
+        'import { construirPrompt } from "./providers/services/geradorIA";',
+        'const { construirPrompt } = __injected_gerador;',
+      ],
+    ],
+    globals: {
+      __injected_gerador: { construirPrompt: () => "PROMPT_TESTE" },
+      fetch: async (url, options) => {
+        chamada = { url, options };
+        return {
+          ok: true,
+          async json() {
+            return { job_id: "d".repeat(32), status: "queued", email: "teste@example.com", message: "ok" };
+          },
+        };
+      },
+    },
+  });
+
+  const arquivo = new File(["conteúdo de referência"], "DFD anterior.docx", {
+    type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  });
+
+  await modulo.gerarFasePreparatoria(
+    {
+      email: "teste@example.com",
+      instrucoes: "",
+      dados_usuario: {
+        modalidade: "PREGAO_ELETRONICO",
+        itens: [],
+      },
+    },
+    { dfd: arquivo },
+  );
+
+  assert.equal(chamada.url, "https://api.example.test/licita/api/gerar-fase-preparatoria");
+  assert.equal(chamada.options.method, "POST");
+  assert.equal("Content-Type" in (chamada.options.headers || {}), false);
+  assert.ok(chamada.options.body instanceof FormData);
+  assert.equal(chamada.options.body.get("dfd").name, "DFD anterior.docx");
+  const payload = JSON.parse(chamada.options.body.get("payload"));
+  assert.equal(payload.email, "teste@example.com");
+  assert.equal(payload.dados_ia.__LICITA_PIPELINE__.etapas.length, 1);
+});
+
 test("gerarFasePreparatoria cria etapa de IA somente para pagamento por etapas", async () => {
   let chamada = null;
   const modulo = loadTsModule("src/api.ts", {
