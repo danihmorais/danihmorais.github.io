@@ -25,6 +25,12 @@ export interface DocumentosReferenciaUpload {
   edital?: File | null;
 }
 
+function ehArquivoUpload(valor: unknown): valor is File {
+  if (!valor || typeof valor !== "object") return false;
+  const arquivo = valor as Record<string, unknown>;
+  return typeof arquivo.name === "string" && typeof arquivo.size === "number";
+}
+
 export const consultarFilaFasePreparatoria = async (jobId: string, statusToken?: string) => {
   const query = statusToken ? `?token=${encodeURIComponent(statusToken)}` : "";
   const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}${query}`);
@@ -149,7 +155,7 @@ export const gerarFasePreparatoria = async (dados: any, arquivos?: DocumentosRef
     ["tr", anexos.tr],
     ["edital", anexos.edital],
   ];
-  const haUploads = uploads.some(([, arquivo]) => arquivo instanceof File);
+  const haUploads = uploads.some(([, arquivo]) => ehArquivoUpload(arquivo));
 
   let requestInit: RequestInit = {
     method: "POST",
@@ -161,7 +167,7 @@ export const gerarFasePreparatoria = async (dados: any, arquivos?: DocumentosRef
     const formData = new FormData();
     formData.append("payload", JSON.stringify(payload));
     for (const [campo, arquivo] of uploads) {
-      if (arquivo instanceof File) formData.append(campo, arquivo, arquivo.name);
+      if (ehArquivoUpload(arquivo)) formData.append(campo, arquivo, arquivo.name);
     }
     requestInit = {
       method: "POST",
