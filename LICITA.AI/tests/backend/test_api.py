@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from io import BytesIO
 import os
 import shutil
 import sys
@@ -17,6 +18,8 @@ os.environ["LICITA_QUEUE_DIR"] = str(QUEUE_DIR)
 os.environ["LICITA_QUEUE_POLL_SECONDS"] = "3600"
 os.environ["LICITA_QUEUE_MAX_ATTEMPTS"] = "1"
 os.environ["LICITA_UNSLOTH_KEY"] = "test-unsloth"
+
+from docx import Document
 
 import fila
 
@@ -65,6 +68,51 @@ class LicitaBackendTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("supera R$ 80.000,00", response.json()["detail"])
         self.assertEqual(list(QUEUE_DIR.glob("*.json")), [])
+
+    def test_endpoint_multipart_processa_documento_de_referencia(self):
+        documento = Document()
+        documento.add_paragraph("DOCUMENTO DE FORMALIZAÇÃO DA DEMANDA")
+        documento.add_paragraph("Objeto anterior usado como referência.")
+        buffer = BytesIO()
+        documento.save(buffer)
+
+        payload = {
+            "email": "teste-documento@example.com",
+            "instrucoes": "Considerar o documento anterior como referência principal.",
+            "dados_ia": {
+                "__LICITA_PIPELINE__": {
+                    "version": 4,
+                    "model": "unsloth-auto",
+                    "temperature": 0.3,
+                    "etapas": [{"id": "FASE_PREPARATORIA", "tipo": "geracao_unificada", "prompt": "PROMPT"}],
+                }
+            },
+            "dados_usuario": {"{{OBJETO}}": "Objeto atual"},
+        }
+
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/gerar-fase-preparatoria",
+                data={"payload": json.dumps(payload)},
+                files={
+                    "dfd": (
+                        "DFD-anterior.docx",
+                        buffer.getvalue(),
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    )
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["documentos_referencia"]["quantidade"], 1)
+        self.assertEqual(body["documentos_referencia"]["documentos"][0]["tipo"], "DFD")
+
+        job = fila.get_job(body["job_id"])
+        documentos = job["dados_ia"]["__LICITA_PIPELINE__"]["documentos_anteriores"]
+        self.assertEqual(len(documentos), 1)
+        self.assertEqual(documentos[0]["tipo"], "DFD")
+        self.assertIn("Objeto anterior usado como referência", documentos[0]["texto"])
 
     def test_endpoint_agenda_e_consulta_job(self):
         payload = {

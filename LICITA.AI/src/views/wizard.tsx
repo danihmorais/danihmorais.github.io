@@ -6,7 +6,7 @@ import Step4 from "./steps/step4";
 import Step5 from "./steps/step5";
 import PromptModal from "../components/promptModal";
 import { ThemeContext } from "../context/ThemeContext";
-import { gerarFasePreparatoria } from "../api";
+import { gerarFasePreparatoria, type DocumentosReferenciaUpload } from "../api";
 import { criarDadosTeste, TipoTesteContratacao } from "../utils/dadosTeste";
 
 export default function Wizard() {
@@ -109,20 +109,23 @@ export default function Wizard() {
     else window.location.href = "/";
   };
 
-  const confeccionarDocumentos = async ({ instrucoes, email }: { instrucoes: string; email: string }) => {
+  const confeccionarDocumentos = async ({ instrucoes, email, arquivos }: { instrucoes: string; email: string; arquivos: DocumentosReferenciaUpload }) => {
     setMostrarPromptModal(false);
     setCarregando(true);
     setErroMsg(null);
     setGeracaoSucesso(false);
     setJobAgendado(null);
-    setStatusTexto("Registrando a solicitação e colocando todo o processamento na fila...");
+    const quantidadeArquivos = Object.values(arquivos || {}).filter((arquivo): arquivo is File => arquivo instanceof File).length;
+    setStatusTexto(quantidadeArquivos > 0
+      ? "Processando os documentos de referência e colocando a solicitação na fila..."
+      : "Registrando a solicitação e colocando todo o processamento na fila...");
 
     try {
       const resultado = await gerarFasePreparatoria({
         email,
         instrucoes: instrucoes.trim(),
         dados_usuario: dados,
-      });
+      }, arquivos);
       setJobAgendado(resultado);
       setStatusTexto("Solicitação registrada. A IA e o envio SMTP serão processados em segundo plano.");
       setGeracaoSucesso(true);

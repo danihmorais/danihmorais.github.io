@@ -9,7 +9,9 @@ import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from starlette.datastructures import UploadFile
 
+from documentos_contexto import MAX_CONTEXT_CHARS, extrair_contexto_documentos
 from fila import EMAIL_RE, QUEUE_DIR, enqueue_job, get_job
 from fila_pipeline_unificado import iniciar_worker
 
@@ -39,6 +41,8 @@ class IAChatRequest(BaseModel):
 
 
 API_UNSLOTH_URL = os.getenv("LICITA_UNSLOTH_URL", os.getenv("UNSLOTH_URL", "http://127.0.0.1:8888/v1")).rstrip("/")
+MAX_UPLOAD_BYTES = max(1_000_000, int(os.getenv("LICITA_DOCUMENT_MAX_BYTES", str(15 * 1024 * 1024))))
+UPLOAD_FIELDS = ("dfd", "etp", "tr", "edital")
 API_UNSLOTH_KEY = os.getenv("LICITA_UNSLOTH_KEY", os.getenv("API_UNSLOTH", "")).strip()
 
 IA_RATE_WINDOW_SECONDS = max(10, int(os.getenv("LICITA_IA_RATE_WINDOW", "60")))
@@ -160,8 +164,84 @@ def _queue_position(job_id: str) -> tuple[int | None, int | None]:
     return None, None
 
 
+async def _ler_payload_fase_preparatoria(request: Request) -> tuple[FasePreparatoriaRequest, dict | None]:
+    content_type = request.headers.get("content-type", "").lower()
+
+    if "multipart/form-data" not in content_type:
+        try:
+            payload = await request.json()
+            return FasePreparatoriaRequest.model_validate(payload), None
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(status_code=400, detail="Payload JSON inválido.") from exc
+
+    try:
+        form = await request.form()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Não foi possível ler os arquivos enviados: {exc}") from exc
+
+    payload_bruto = form.get("payload")
+    if not isinstance(payload_bruto, str):
+        raise HTTPException(status_code=400, detail="O campo payload é obrigatório no envio multipart.")
+
+    try:
+        req = FasePreparatoriaRequest.model_validate(__import__("json").loads(payload_bruto))
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=400, detail="Payload JSON inválido no envio multipart.") from exc
+
+    arquivos: dict[str, tuple[str, bytes] | None] = {campo: None for campo in UPLOAD_FIELDS}
+    houve_upload = False
+    for campo in UPLOAD_FIELDS:
+        upload = form.get(campo)
+        if upload is None:
+            continue
+        if not isinstance(upload, UploadFile):
+            raise HTTPException(status_code=400, detail=f"O campo de arquivo '{campo}' é inválido.")
+        nome = str(upload.filename or "").strip()
+        if not nome:
+            raise HTTPException(status_code=400, detail=f"O arquivo do campo '{campo}' não possui nome.")
+        conteudo = await upload.read(MAX_UPLOAD_BYTES + 1)
+        if len(conteudo) > MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"O arquivo '{nome}' excede o limite de {MAX_UPLOAD_BYTES // (1024 * 1024)} MB.",
+            )
+        arquivos[campo] = (nome, conteudo)
+        houve_upload = True
+
+    if not houve_upload:
+        return req, None
+
+    try:
+        contexto = extrair_contexto_documentos(arquivos)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Não foi possível processar os documentos de referência: {exc}") from exc
+
+    pipeline = req.dados_ia.get("__LICITA_PIPELINE__") if isinstance(req.dados_ia, dict) else None
+    if not isinstance(pipeline, dict):
+        raise HTTPException(status_code=400, detail="Não foi possível associar os documentos de referência ao pipeline de IA.")
+
+    dados_ia = dict(req.dados_ia)
+    pipeline_atualizado = dict(pipeline)
+    pipeline_atualizado["documentos_anteriores"] = contexto["documentos"]
+    dados_ia["__LICITA_PIPELINE__"] = pipeline_atualizado
+
+    req = req.model_copy(update={"dados_ia": dados_ia})
+    resumo = {
+        "quantidade": contexto["quantidade"],
+        "total_caracteres": min(contexto["total_caracteres"], MAX_CONTEXT_CHARS),
+        "documentos": [
+            {"tipo": item["tipo"], "nome": item["nome"], "origem": item["origem"]}
+            for item in contexto["documentos"]
+        ],
+    }
+    return req, resumo
+
+
 @app.post("/api/gerar-fase-preparatoria")
-async def agendar_fase_preparatoria(request: Request, req: FasePreparatoriaRequest):
+async def agendar_fase_preparatoria(request: Request):
+    req, contexto_resumo = await _ler_payload_fase_preparatoria(request)
     email = req.email.strip()
     if not EMAIL_RE.fullmatch(email):
         raise HTTPException(status_code=400, detail="Informe um e-mail válido para receber os documentos.")
@@ -178,6 +258,8 @@ async def agendar_fase_preparatoria(request: Request, req: FasePreparatoriaReque
         position, ahead = _queue_position(job["job_id"])
         job["fila_posicao"] = position
         job["solicitacoes_a_frente"] = ahead
+        if contexto_resumo:
+            job["documentos_referencia"] = contexto_resumo
         job["message"] = (
             f"Solicitação registrada na fila. Posição aproximada: {position}º. Os documentos serão enviados para {email} após o processamento."
             if position is not None
