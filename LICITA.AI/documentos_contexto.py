@@ -129,23 +129,27 @@ def extrair_texto_arquivo(nome: str, data: bytes) -> str:
 
 
 def _classificar_anexo(trecho: str, cabecalho: str) -> str | None:
-    amostra = _normalizar_texto(f"{cabecalho}\n{trecho[:3500]}")
-    prioridades = ("DFD", "ETP", "TR")
-    encontrados: list[str] = []
+    # Primeiro usa o próprio cabeçalho do anexo, onde normalmente está o título.
+    cab = _normalizar_texto(cabecalho)
+    for tipo, padroes in TIPO_PATTERNS.items():
+        if any(padrao.search(cab) for padrao in padroes):
+            return tipo
 
-    for tipo in prioridades:
-        padroes = TIPO_PATTERNS[tipo]
-        if any(padrao.search(amostra) for padrao in padroes):
-            encontrados.append(tipo)
+    # Depois procura o primeiro título explícito no início do anexo.
+    inicio = _normalizar_texto(trecho[:1800])
+    candidatos: list[tuple[int, str]] = []
+    for tipo, padroes in TIPO_PATTERNS.items():
+        for padrao in padroes:
+            encontrado = padrao.search(inicio)
+            if encontrado:
+                candidatos.append((encontrado.start(), tipo))
+                break
 
-    if not encontrados:
-        return None
+    if candidatos:
+        candidatos.sort(key=lambda item: (item[0], ("DFD", "ETP", "TR").index(item[1])))
+        return candidatos[0][1]
 
-    # Evita classificar como TR apenas porque um texto contém a sigla "TR".
-    if "TR" in encontrados and not any(TIPO_PATTERNS["TR"][0].search(amostra) for _ in [0]):
-        encontrados.remove("TR")
-
-    return encontrados[0] if encontrados else None
+    return None
 
 
 def extrair_anexos_dfd_etp_tr(texto_edital: str, nome_edital: str) -> list[dict]:
