@@ -14,6 +14,21 @@ from docx.text.paragraph import Paragraph
 from docx import Document
 
 try:
+    import fitz  # PyMuPDF
+except ImportError:  # pragma: no cover - dependência obrigatória em produção
+    fitz = None
+
+try:
+    import pytesseract
+except ImportError:  # pragma: no cover - dependência obrigatória em produção
+    pytesseract = None
+
+try:
+    from PIL import Image
+except ImportError:  # pragma: no cover - dependência obrigatória em produção
+    Image = None
+
+try:
     from pypdf import PdfReader
 except ImportError:  # pragma: no cover - dependência obrigatória em produção
     PdfReader = None
@@ -21,6 +36,9 @@ except ImportError:  # pragma: no cover - dependência obrigatória em produçã
 
 MAX_DOCUMENT_CHARS = 45_000
 MAX_CONTEXT_CHARS = 100_000
+MIN_TEXT_FOR_OCR_PAGE = 80
+OCR_DPI = 220
+OCR_LANG = "por+eng"
 
 ANEXO_RE = re.compile(
     r"(?im)^\s*ANEXO(?:\s+(?:ÚNICO|[IVXLCDM]+|\d+))?\b[^\n]{0,240}$"
@@ -74,6 +92,52 @@ def _iter_block_items(parent: DocumentClass | _Cell) -> Iterable[Paragraph | Tab
             yield Table(child, parent)
 
 
+def _ocr_imagem(imagem: object) -> str:
+    if pytesseract is None or Image is None:
+        raise RuntimeError(
+            "OCR não está disponível no backend. Instale pytesseract, Pillow e o Tesseract OCR."
+        )
+    try:
+        return _normalizar_texto(pytesseract.image_to_string(imagem, lang=OCR_LANG))
+    except Exception as exc:
+        try:
+            return _normalizar_texto(pytesseract.image_to_string(imagem, lang="eng"))
+        except Exception as fallback_exc:
+            raise RuntimeError(
+                "Não foi possível executar o OCR. Verifique se o Tesseract OCR e o idioma português estão instalados."
+            ) from fallback_exc
+
+
+def _ocr_pdf(data: bytes) -> str:
+    if fitz is None:
+        raise RuntimeError("OCR de PDF requer PyMuPDF no backend.")
+    if pytesseract is None or Image is None:
+        raise RuntimeError("OCR de PDF requer pytesseract e Pillow no backend.")
+
+    paginas: list[str] = []
+    try:
+        with fitz.open(stream=data, filetype="pdf") as documento:
+            for numero, pagina in enumerate(documento, start=1):
+                texto_nativo = _normalizar_texto(pagina.get_text("text") or "")
+                if len(texto_nativo) >= MIN_TEXT_FOR_OCR_PAGE:
+                    paginas.append(f"--- PÁGINA {numero} ---\n{texto_nativo}")
+                    continue
+
+                pixmap = pagina.get_pixmap(dpi=OCR_DPI, alpha=False)
+                imagem = Image.open(BytesIO(pixmap.tobytes("png")))
+                texto_ocr = _ocr_imagem(imagem)
+                if texto_ocr:
+                    paginas.append(f"--- PÁGINA {numero} [OCR] ---\n{texto_ocr}")
+                elif texto_nativo:
+                    paginas.append(f"--- PÁGINA {numero} ---\n{texto_nativo}")
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        raise RuntimeError(f"Não foi possível renderizar o PDF para OCR: {exc}") from exc
+
+    return _normalizar_texto("\n\n".join(paginas))
+
+
 def _extrair_docx(data: bytes) -> str:
     documento = Document(BytesIO(data))
     blocos: list[str] = []
@@ -89,19 +153,80 @@ def _extrair_docx(data: bytes) -> str:
         texto = _normalizar_texto(texto)
         if texto:
             blocos.append(texto)
-    return _normalizar_texto("\n\n".join(blocos))
+
+    texto_nativo = _normalizar_texto("\n\n".join(blocos))
+    if texto_nativo:
+        return texto_nativo
+
+    # DOCX totalmente escaneado: tenta OCR nas imagens incorporadas.
+    if pytesseract is None or Image is None:
+        raise RuntimeError(
+            "O DOCX não contém texto selecionável e precisa de OCR. "
+            "Instale pytesseract, Pillow e o Tesseract OCR."
+        )
+
+    imagens_ocr: list[str] = []
+    for indice, rel_id in enumerate(documento.part.part.rels, start=1):
+        rel = documento.part.part.rels[rel_id]
+        if "image" not in rel.reltype:
+            continue
+        try:
+            imagem = Image.open(BytesIO(rel.target_part.blob))
+            texto = _ocr_imagem(imagem)
+            if texto:
+                imagens_ocr.append(f"--- IMAGEM {indice} [OCR] ---\n{texto}")
+        except Exception:
+            continue
+
+    return _normalizar_texto("\n\n".join(imagens_ocr))
 
 
 def _extrair_pdf(data: bytes) -> str:
     if PdfReader is None:
         raise RuntimeError("A biblioteca pypdf não está disponível no backend.")
-    reader = PdfReader(BytesIO(data))
-    paginas: list[str] = []
-    for numero, pagina in enumerate(reader.pages, start=1):
-        texto = _normalizar_texto(pagina.extract_text() or "")
-        if texto:
-            paginas.append(f"--- PÁGINA {numero} ---\n{texto}")
-    return _normalizar_texto("\n\n".join(paginas))
+    leitor = PdfReader(BytesIO(data))
+    texto_nativo = _normalizar_texto(
+        "\n\n".join(
+            f"--- PÁGINA {numero} ---\n{_normalizar_texto(pagina.extract_text() or '')}"
+            for numero, pagina in enumerate(leitor.pages, start=1)
+            if _normalizar_texto(pagina.extract_text() or "")
+        )
+    )
+
+    # OCR página a página somente quando a extração nativa não encontrou texto
+    # suficiente no documento inteiro. O renderer do PyMuPDF permite tratar PDFs
+    # mistos (algumas páginas digitais e outras escaneadas).
+    try:
+        if texto_nativo and len(texto_nativo.replace("PÁGINA", "")) >= MIN_TEXT_FOR_OCR_PAGE:
+            # Mesmo em PDFs digitais, páginas individuais quase vazias podem ser
+            # imagens. O OCR detalhado abaixo é acionado apenas nessas páginas.
+            if fitz is None:
+                return texto_nativo
+
+            with fitz.open(stream=data, filetype="pdf") as documento:
+                resultado: list[str] = []
+                paginas_nativas = [pagina.get_text("text") or "" for pagina in documento]
+                for numero, texto in enumerate(paginas_nativas, start=1):
+                    texto_limpo = _normalizar_texto(texto)
+                    if len(texto_limpo) >= MIN_TEXT_FOR_OCR_PAGE:
+                        resultado.append(f"--- PÁGINA {numero} ---\n{texto_limpo}")
+                    else:
+                        pagina = documento.load_page(numero - 1)
+                        pixmap = pagina.get_pixmap(dpi=OCR_DPI, alpha=False)
+                        imagem = Image.open(BytesIO(pixmap.tobytes("png")))
+                        texto_ocr = _ocr_imagem(imagem)
+                        if texto_ocr:
+                            resultado.append(f"--- PÁGINA {numero} [OCR] ---\n{texto_ocr}")
+                        elif texto_limpo:
+                            resultado.append(f"--- PÁGINA {numero} ---\n{texto_limpo}")
+                return _normalizar_texto("\n\n".join(resultado))
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        raise RuntimeError(f"Não foi possível complementar o PDF com OCR: {exc}") from exc
+
+    # PDF totalmente escaneado ou sem camada de texto.
+    return _ocr_pdf(data)
 
 
 def extrair_texto_arquivo(nome: str, data: bytes) -> str:
@@ -122,8 +247,8 @@ def extrair_texto_arquivo(nome: str, data: bytes) -> str:
 
     if not texto:
         raise ValueError(
-            f"Não foi possível extrair texto de '{nome}'. "
-            "Verifique se o arquivo contém texto selecionável; PDFs digitalizados podem exigir OCR."
+            f"Não foi possível extrair texto de '{nome}' mesmo após tentativa automática de OCR. "
+            "Verifique se o arquivo contém conteúdo legível."
         )
     return texto
 
