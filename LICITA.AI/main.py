@@ -6,9 +6,10 @@ import time
 from collections import deque
 
 import httpx
-from fastapi import FastAPI, HTTPException, Request, UploadFile
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from starlette.datastructures import UploadFile
 
 from documentos_contexto import MAX_CONTEXT_CHARS, extrair_contexto_documentos
 from fila import EMAIL_RE, QUEUE_DIR, enqueue_job, get_job
