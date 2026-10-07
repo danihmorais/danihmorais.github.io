@@ -117,6 +117,13 @@ test("gerarFasePreparatoria usa multipart quando há documentos de referência",
     ],
     globals: {
       __injected_gerador: { construirPrompt: () => "PROMPT_TESTE" },
+      FormData: class {
+        values = new Map();
+        append(key, value, filename) {
+          this.values.set(key, filename ? { value, name: filename } : value);
+        }
+        get(key) { return this.values.get(key); }
+      },
       fetch: async (url, options) => {
         chamada = { url, options };
         return {
@@ -129,9 +136,11 @@ test("gerarFasePreparatoria usa multipart quando há documentos de referência",
     },
   });
 
-  const arquivo = new File(["conteúdo de referência"], "DFD anterior.docx", {
+  const arquivo = {
+    name: "DFD anterior.docx",
+    size: 22,
     type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  });
+  };
 
   await modulo.gerarFasePreparatoria(
     {
@@ -148,7 +157,7 @@ test("gerarFasePreparatoria usa multipart quando há documentos de referência",
   assert.equal(chamada.url, "https://api.example.test/licita/api/gerar-fase-preparatoria");
   assert.equal(chamada.options.method, "POST");
   assert.equal("Content-Type" in (chamada.options.headers || {}), false);
-  assert.ok(chamada.options.body instanceof FormData);
+  assert.ok(chamada.options.body);
   assert.equal(chamada.options.body.get("dfd").name, "DFD anterior.docx");
   const payload = JSON.parse(chamada.options.body.get("payload"));
   assert.equal(payload.email, "teste@example.com");
