@@ -46,7 +46,7 @@ export const parseRelatorioCotacaoPdf = (texto: string): ItemCotacaoPdf[] => {
   const linhasTabela = linhas.slice(inicioTabela + 1);
   const itens: ItemCotacaoPdf[] = [];
   const regexItem =
-    /^(\d+)\)\s*(.*?)\s+(\d+)\s+(\d+(?:[\.,]\d+)?)\s+([A-Za-zÀ-ÿ.]+)\s+R\$\s*([\d.]+,\d{2})\s+[-–—]\s+R\$\s*([\d.]+,\d{2})/i;
+    /^(\d+)\)\s*(.*?)\s+(\d+)\s+(\d+(?:[\.,]\d+)?)\s+([A-Za-zÀ-ÿ.]+)\s+R\$\s*([\d.]+,\d{2})\s*(?:\([^)]*\)\s*)?[-–—]\s+R\$\s*([\d.]+,\d{2})/i;
 
   for (const linha of linhasTabela) {
     const match = linha.match(regexItem);
