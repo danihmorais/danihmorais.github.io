@@ -158,7 +158,7 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
                 .sort((a, b) => a.x - b.x)
                 .map((item) => item.str)
                 .join(" ")
-                .replace(/\\s+/g, " ")
+                .replace(/\s+/g, " ")
                 .trim();
               if (linha) linhas.push(linha);
             });
