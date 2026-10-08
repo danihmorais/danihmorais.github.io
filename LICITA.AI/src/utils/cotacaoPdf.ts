@@ -25,11 +25,16 @@ export const extrairObjetoCotacaoPdf = (texto: string) => {
   const indice = linhas.findIndex((linha) => /Relatório de Cotação:/i.test(linha));
   if (indice < 0) return "";
 
-  const mesmaLinha = linhas[indice].match(/Relatório de Cotação:\s*(.+)$/i)?.[1]?.trim();
-  if (mesmaLinha) return mesmaLinha;
+  const partes: string[] = [];
+  const inicial = linhas[indice].match(/Relatório de Cotação:\s*(.+)$/i)?.[1]?.trim();
+  if (inicial) partes.push(inicial);
 
-  const proximaLinha = linhas.slice(indice + 1).find(Boolean) || "";
-  return proximaLinha;
+  for (const linha of linhas.slice(indice + 1)) {
+    if (!linha || /^Pesquisa realizada entre\b/i.test(linha)) break;
+    partes.push(linha);
+  }
+
+  return normalizarLinha(partes.join(" "));
 };
 
 export const parseRelatorioCotacaoPdf = (texto: string): ItemCotacaoPdf[] => {
