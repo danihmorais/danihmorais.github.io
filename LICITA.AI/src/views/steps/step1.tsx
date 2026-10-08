@@ -137,7 +137,7 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
         for (let pagina = 1; pagina <= documento.numPages; pagina += 1) {
           const page = await documento.getPage(pagina);
           const conteudo = await page.getTextContent();
-          const itensTexto = (conteudo.items || []).filter((item: any) => typeof item?.str === "string");
+          const itensTexto = (conteudo.items || []).filter((item: any) => typeof item?.str === "string") as any[];
 
           const grupos: { y: number; itens: { x: number; str: string }[] }[] = [];
           for (const item of itensTexto) {
