@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import { calcularValorEstimadoItens } from "../../utils/regrasContratacao";
 import { melhorarDescricaoItem } from "../../providers/services/contratacaoDiretaIA";
 import { extrairObjetoCotacaoPdf, parseRelatorioCotacaoPdf } from "../../utils/cotacaoPdf";
-import pdfjs from "@bundled-es-modules/pdfjs-dist/build/pdf";
+import * as pdfjs from "@bundled-es-modules/pdfjs-dist/build/pdf";
 import pdfWorkerUrl from "@bundled-es-modules/pdfjs-dist/build/pdf.worker.js?url";
 
 export default function Step1({ dados = { itens: [], objeto: "", necessidade: "" }, atualizarDados }: any) {
