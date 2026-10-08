@@ -2,9 +2,14 @@ import React, { useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { calcularValorEstimadoItens } from "../../utils/regrasContratacao";
 import { melhorarDescricaoItem } from "../../providers/services/contratacaoDiretaIA";
+import { extrairObjetoCotacaoPdf, parseRelatorioCotacaoPdf } from "../../utils/cotacaoPdf";
+import * as pdfjs from "@bundled-es-modules/pdfjs-dist/build/pdf";
+import pdfWorkerUrl from "@bundled-es-modules/pdfjs-dist/build/pdf.worker.js?url";
 
 export default function Step1({ dados = { itens: [], objeto: "", necessidade: "" }, atualizarDados }: any) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
+  const [importandoPdf, setImportandoPdf] = useState(false);
   const [itemEmMelhoria, setItemEmMelhoria] = useState<number | string | null>(null);
   const itens = dados.itens || [];
   const objeto = dados.objeto || "";
@@ -117,10 +122,80 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
     leitor.readAsArrayBuffer(arquivo);
   };
 
+  const importarPdf = async (evento: React.ChangeEvent<HTMLInputElement>) => {
+    const arquivo = evento.target.files?.[0];
+    if (!arquivo) return;
+
+    setImportandoPdf(true);
+    try {
+      pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+      const dadosPdf = new Uint8Array(await arquivo.arrayBuffer());
+      const documento = await pdfjs.getDocument({ data: dadosPdf }).promise;
+      const linhas: string[] = [];
+
+      try {
+        for (let pagina = 1; pagina <= documento.numPages; pagina += 1) {
+          const page = await documento.getPage(pagina);
+          const conteudo = await page.getTextContent();
+          const itensTexto = (conteudo.items || []).filter((item: any) => typeof item?.str === "string") as any[];
+
+          const grupos: { y: number; itens: { x: number; str: string }[] }[] = [];
+          for (const item of itensTexto) {
+            const x = Number(item.transform?.[4] || 0);
+            const y = Number(item.transform?.[5] || 0);
+            let grupo = grupos.find((atual) => Math.abs(atual.y - y) <= 2.5);
+            if (!grupo) {
+              grupo = { y, itens: [] };
+              grupos.push(grupo);
+            }
+            grupo.itens.push({ x, str: item.str });
+          }
+
+          grupos
+            .sort((a, b) => b.y - a.y)
+            .forEach((grupo) => {
+              const linha = grupo.itens
+                .sort((a, b) => a.x - b.x)
+                .map((item) => item.str)
+                .join(" ")
+                .replace(/\s+/g, " ")
+                .trim();
+              if (linha) linhas.push(linha);
+            });
+        }
+      } finally {
+        await documento.destroy();
+      }
+
+      const texto = linhas.join("\n");
+      const importados = parseRelatorioCotacaoPdf(texto);
+      const objetoPdf = extrairObjetoCotacaoPdf(texto);
+      const objetoAtual = String(dados.objeto || "").trim();
+
+      atualizarDados({
+        ...dados,
+        itens: importados.map((item) => ({
+          ...item,
+          id: Date.now() + Math.random(),
+        })),
+        ...(objetoAtual ? {} : (objetoPdf ? { objeto: objetoPdf } : {})),
+      });
+
+      alert(`Cotação PDF importada com sucesso: ${importados.length} itens.`);
+    } catch (erro: any) {
+      console.error("Erro ao importar cotação PDF:", erro);
+      alert(`Erro ao importar cotação PDF: ${erro?.message || "arquivo inválido"}`);
+    } finally {
+      setImportandoPdf(false);
+      if (pdfInputRef.current) pdfInputRef.current.value = "";
+    }
+  };
+
   const totalGeral = calcularValorEstimadoItens(itens);
 
   return <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
     <input ref={fileInputRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={importarXlsx} />
+    <input ref={pdfInputRef} type="file" accept="application/pdf,.pdf" style={{ display: "none" }} onChange={importarPdf} />
     <section>
       <label style={{ fontWeight: 600, fontSize: 16, display: "block", marginBottom: 8 }}>Objeto da Licitação: <span style={{ color: "var(--btn-danger)" }}>*</span></label>
       <p style={{ color: "var(--text-muted)", fontSize: 13, margin: "0 0 12px" }}>Descreva brevemente o objeto licitado para direcionar a geração de especificações.</p>
@@ -141,6 +216,7 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
       <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
         <button type="button" onClick={adicionarItem} style={{ height: 38, padding: "0 16px", background: "var(--btn-primary)", color: "var(--bg-panel)", border: 0, borderRadius: "var(--radius-lg)" }}>+ Novo Item</button>
         <button type="button" onClick={() => fileInputRef.current?.click()} style={{ height: 38, padding: "0 16px", background: "var(--btn-primary)", color: "var(--bg-panel)", border: 0, borderRadius: "var(--radius-lg)" }}>Importar XLSX</button>
+        <button type="button" onClick={() => pdfInputRef.current?.click()} disabled={importandoPdf} style={{ height: 38, padding: "0 16px", background: "var(--btn-primary)", color: "var(--bg-panel)", border: 0, borderRadius: "var(--radius-lg)", opacity: importandoPdf ? 0.7 : 1 }}>{importandoPdf ? "Lendo PDF..." : "Importar Cotação PDF"}</button>
       </div>
       <div style={{ overflowX: "auto" }}>
         <div style={{ minWidth: 930 }}>
