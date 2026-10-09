@@ -45,7 +45,7 @@ const RadioOption = ({ label, value, checked, onChange, disabled = false }: any)
 const JustificationBox = ({ label, value, onChange, errorMsg }: any) => {
   const hasError = value.trim() === "";
   return (
-    <div style={styles.justificationBox(hasError)}>
+    <div className="setting-justification" style={styles.justificationBox(hasError)}>
       <label style={styles.justificationTitle}>
         {label} <span style={styles.asterisk}>*</span>
       </label>
@@ -267,7 +267,7 @@ export default function Step5({ dados, atualizarDados }: any) {
         </select>
 
         {dados.pagamentoTipo === "POR_ETAPAS" ? (
-          <div style={{ ...styles.justificationBox(String(dados.pagamentoEtapas || "").trim() === ""), width: "100%", boxSizing: "border-box" }}>
+          <div className="setting-justification" style={{ ...styles.justificationBox(String(dados.pagamentoEtapas || "").trim() === ""), width: "100%", boxSizing: "border-box" }}>
             <label style={styles.justificationTitle}>
               Descreva como será o pagamento por etapas <span style={styles.asterisk}>*</span>
             </label>
