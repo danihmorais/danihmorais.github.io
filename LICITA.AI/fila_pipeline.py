@@ -9,7 +9,7 @@ import httpx
 
 API_UNSLOTH_URL = os.getenv("LICITA_UNSLOTH_URL", os.getenv("UNSLOTH_URL", "http://127.0.0.1:8888/v1")).rstrip("/")
 API_UNSLOTH_KEY = os.getenv("LICITA_UNSLOTH_KEY", os.getenv("API_UNSLOTH", "")).strip()
-AI_TIMEOUT_SECONDS = max(60, int(os.getenv("LICITA_QUEUE_AI_TIMEOUT", os.getenv("LICITA_IA_TIMEOUT", "600"))))
+AI_TIMEOUT_SECONDS = max(60, int(os.getenv("LICITA_QUEUE_AI_TIMEOUT", "600")))
 
 _PIPE_DFD = "__LICITA_PIPE_DFD__"
 _PIPE_ETP = "__LICITA_PIPE_ETP__"
