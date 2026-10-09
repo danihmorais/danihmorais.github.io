@@ -139,7 +139,7 @@ export default function Step3({ dados = { secretarias: [], contatosSecretarias: 
       </div>
 
       {secretarias.length > 0 && (
-        <div>
+        <div className="department-contacts-section">
           <h2 style={{ fontSize: "16px", margin: "0 0 16px 0", color: "var(--text-main)" }}>Dados de Contato por Secretaria</h2>
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
             {secretarias.map((sec: string) => {
