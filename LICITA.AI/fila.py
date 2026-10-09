@@ -8,8 +8,6 @@ import shutil
 import smtplib
 import ssl
 import tempfile
-import threading
-import time
 import uuid
 import zipfile
 from datetime import datetime, timedelta, timezone
@@ -35,8 +33,6 @@ SMTP_PASSWORD = os.getenv("LICITA_SMTP_PASSWORD", os.getenv("SMTP_PASSWORD", "")
 SMTP_SECURITY = os.getenv("LICITA_SMTP_SECURITY", os.getenv("SMTP_SECURITY", "starttls")).strip().lower()
 SMTP_FROM = os.getenv("LICITA_SMTP_FROM", os.getenv("SMTP_FROM", SMTP_USERNAME)).strip()
 
-_worker_thread: threading.Thread | None = None
-_worker_lock = threading.Lock()
 
 
 def _utc_now() -> str:
@@ -320,62 +316,3 @@ def _claim_next_job() -> tuple[Path, dict] | None:
         except (OSError, json.JSONDecodeError, ValueError):
             continue
     return None
-
-
-def _process_one_job() -> None:
-    claimed = _claim_next_job()
-    if claimed is None:
-        return
-    processing_path, job = claimed
-    job_id = job["job_id"]
-    artifact_path = _artifact_path(job_id)
-    temp_root = None
-    zip_filename = f"FasePreparatoria_{job_id[:6]}.zip"
-    try:
-        from fila_pipeline import process_pipeline
-        generated_path, zip_filename = process_pipeline(job)
-        temp_root = generated_path.parent
-        os.replace(generated_path, artifact_path)
-        _enviar_email(job["email"], artifact_path, zip_filename, job_id)
-        done_path = _job_path(job_id, ".done")
-        job.update({"status": "sent", "completed_at": _utc_now(), "current_stage": "CONCLUIDO", "result": {"filename": zip_filename, "recipient": job["email"]}})
-        _write_json(done_path, job)
-        artifact_path.unlink(missing_ok=True)
-        processing_path.unlink(missing_ok=True)
-    except Exception as exc:
-        attempts = int(job.get("attempts", 1))
-        job["last_error"] = str(exc)
-        job["last_error_at"] = _utc_now()
-        if attempts < MAX_ATTEMPTS:
-            job["status"] = "queued"
-            job["retry_at"] = (datetime.now(timezone.utc) + timedelta(seconds=_retry_delay_seconds(attempts))).isoformat()
-            _write_json(_job_path(job_id), job)
-            processing_path.unlink(missing_ok=True)
-        else:
-            job["status"] = "failed"
-            job.pop("retry_at", None)
-            _write_json(_job_path(job_id, ".failed"), job)
-            processing_path.unlink(missing_ok=True)
-            artifact_path.unlink(missing_ok=True)
-    finally:
-        if temp_root is not None:
-            shutil.rmtree(temp_root, ignore_errors=True)
-
-
-def _worker_loop() -> None:
-    while True:
-        try:
-            _process_one_job()
-        except Exception:
-            pass
-        time.sleep(POLL_INTERVAL_SECONDS)
-
-
-def iniciar_worker() -> None:
-    global _worker_thread
-    with _worker_lock:
-        if _worker_thread is not None and _worker_thread.is_alive():
-            return
-        _ensure_queue_dir()
-        _worker_thread = threading.Thread(target=_worker_loop, name="licita-ai-fila", daemon=True)
-        _worker_thread.start()

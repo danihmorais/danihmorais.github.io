@@ -22,8 +22,9 @@ os.environ["LICITA_UNSLOTH_KEY"] = "test-unsloth"
 from docx import Document
 
 import fila
+import fila_pipeline_unificado
 
-fila._process_one_job = lambda: None
+fila_pipeline_unificado.iniciar_worker = lambda: None
 
 from fastapi.testclient import TestClient
 import main
