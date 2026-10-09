@@ -1,4 +1,5 @@
 import { construirPrompt } from "./providers/services/geradorIA";
+import { construirPromptAuditoriaMarcas } from "./providers/services/descricaoItensIA";
 import { mapearDadosWizard } from "./utils/mapearDados";
 
 const BASE_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
@@ -44,13 +45,6 @@ export const consultarFilaFasePreparatoria = async (jobId: string, statusToken?:
   }
   return response.json();
 };
-
-function construirPromptAuditoriaMarcas(itens: any[], instrucoesUsuario: string): string {
-  const itensOriginais = (Array.isArray(itens) ? itens : [])
-    .map((item, index) => ({ numero: item?.numero ?? index + 1, nome: String(item?.descricao || "").replace(/\s+/g, " ").trim() }))
-    .filter((item) => item.nome);
-  return `Você é um auditor de contratações públicas. Sua tarefa é EXCLUSIVAMENTE revisar nomes de itens para identificar uso de marca comercial, fabricante, linha ou produto inequivocamente proprietário SEM justificativa de marca fornecida pelo usuário.\n\nREGRAS ABSOLUTAS:\n1. Analise SOMENTE os nomes dos itens recebidos e a justificativa/instruções do usuário abaixo.\n2. NÃO melhore redação, gramática, precisão técnica, completude, unidade, quantidade, medidas ou especificações.\n3. NÃO corrija um descritivo apenas porque está mal escrito ou incompleto.\n4. Se houver marca comercial sem justificativa, remova SOMENTE o(s) token(s) que identificam a marca/linha proprietária, preservando todo o restante do nome na mesma ordem.\n5. Se houver justificativa explícita e identificável para manter determinada marca, NÃO altere o item.\n6. Não substitua marca por outra marca. Não invente texto. Não acrescente características.\n7. Números de modelo, padrões, normas e códigos só devem ser removidos se forem inequivocamente parte da identificação comercial da marca/linha.\n8. Se não houver marca comercial explícita, devolva o nome exatamente como recebido.\n9. Retorne EXCLUSIVAMENTE JSON válido, sem markdown.\n\nINSTRUÇÕES/JUSTIFICATIVAS DO USUÁRIO:\n${instrucoesUsuario?.trim() || "Nenhuma justificativa específica de marca foi apresentada."}\n\nITENS:\n${JSON.stringify(itensOriginais, null, 2)}\n\nFORMATO OBRIGATÓRIO:\n{\n  "itens": [\n    {\n      "numero": 1,\n      "nome_revisado": "...",\n      "motivo": "..."\n    }\n  ]\n}`;
-}
 
 function construirPromptPagamentoEtapas(textoUsuario: string): string {
   return `Você é especialista em redação de cláusulas de pagamento de contratos administrativos regidos pela Lei Federal nº 14.133/2021.
