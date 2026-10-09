@@ -97,3 +97,66 @@ class TestPagamentoPipeline(unittest.TestCase):
                     dados_ia_final[chave] = valor
 
         self.assertEqual(dados_ia_final["PAGAMENTO"], "Pagamento revisado por etapas.")
+
+
+class TestPipelineUnificado(unittest.TestCase):
+    def test_reutiliza_modelo_resolvido_nas_etapas_seguintes(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        import fila_pipeline_unificado as pipeline
+
+        chamadas_modelo = []
+        job_id = "a" * 32
+
+        def chamar_ia(prompt, model, temperature=0.3):
+            chamadas_modelo.append(model)
+            return {"CAMPO": f"resultado de {prompt}"}, "modelo-resolvido"
+
+        with tempfile.TemporaryDirectory() as diretorio:
+            raiz = Path(diretorio)
+
+            def caminho_job(_job_id, suffix=""):
+                return raiz / f"{_job_id}{suffix}.json"
+
+            def caminho_artifact(_job_id):
+                return raiz / f"{_job_id}.artifact.zip"
+
+            def gerar_zip(_dados_usuario, _dados_ia, _session_id):
+                pasta_gerada = raiz / "gerados"
+                pasta_gerada.mkdir()
+                arquivo = pasta_gerada / "documentos.zip"
+                arquivo.write_bytes(b"zip de teste")
+                return arquivo, "documentos.zip"
+
+            job = {
+                "job_id": job_id,
+                "email": "teste@example.com",
+                "status": "processing",
+                "attempts": 1,
+                "dados_usuario": {"{{OBJETO}}": "Objeto de teste"},
+                "dados_ia": {
+                    "__LICITA_PIPELINE__": {
+                        "model": "unsloth-auto",
+                        "temperature": 0.3,
+                        "etapas": [
+                            {"id": "ETAPA_1", "tipo": "geracao_json", "prompt": "PROMPT_1"},
+                            {"id": "ETAPA_2", "tipo": "geracao_json", "prompt": "PROMPT_2"},
+                        ],
+                    }
+                },
+            }
+
+            with (
+                patch.object(pipeline, "_job_path", side_effect=caminho_job),
+                patch.object(pipeline, "_artifact_path", side_effect=caminho_artifact),
+                patch.object(pipeline, "_write_json"),
+                patch.object(pipeline, "_chamar_ia", side_effect=chamar_ia),
+                patch.object(pipeline, "gerar_zip", side_effect=gerar_zip),
+                patch.object(pipeline, "_enviar_email") as enviar_email,
+            ):
+                pipeline._process_pipeline(job)
+
+        self.assertEqual(chamadas_modelo, ["unsloth-auto", "modelo-resolvido"])
+        self.assertEqual(job["status"], "sent")
+        enviar_email.assert_called_once()
