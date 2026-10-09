@@ -1,7 +1,7 @@
 import React, { useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { calcularValorEstimadoItens } from "../../utils/regrasContratacao";
-import { melhorarDescricaoItem } from "../../providers/services/contratacaoDiretaIA";
+import { melhorarDescricaoItem } from "../../providers/services/descricaoItensIA";
 import { extrairObjetoCotacaoPdf, parseRelatorioCotacaoPdf } from "../../utils/cotacaoPdf";
 // @ts-expect-error O pacote expõe o PDF.js como default em runtime, embora os tipos declarem exports nomeados.
 import pdfjs from "@bundled-es-modules/pdfjs-dist/build/pdf.js";
