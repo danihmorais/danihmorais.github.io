@@ -114,7 +114,7 @@ export default function Step4({ dados, atualizarDados }: any) {
   return (
     <div className="step-form step-form--people" style={{ display: "flex", flexDirection: "column", gap: "32px" }}>
       
-      <div>
+      <div className="person-group person-group--managers">
         <h2 style={{ fontSize: "16px", margin: "0 0 8px 0", color: "var(--text-main)" }}>
           Gestores do Contrato <span style={{ color: "var(--btn-danger)" }}>*</span>
         </h2>
@@ -194,7 +194,7 @@ export default function Step4({ dados, atualizarDados }: any) {
         </div>
       </div>
 
-      <div>
+      <div className="person-group person-group--inspectors">
         <h2 style={{ fontSize: "16px", margin: "0 0 8px 0", color: "var(--text-main)" }}>
           Fiscais do Contrato <span style={{ color: "var(--btn-danger)" }}>*</span>
         </h2>
