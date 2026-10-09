@@ -853,9 +853,9 @@ th { font-size: 11px; font-weight: 700; letter-spacing: .055em; text-transform: 
   .step-content .item-field-unit { grid-column: 1; grid-row: 3; }
   .step-content .item-field-quantity { grid-column: 2; grid-row: 3; }
   .step-content .item-field-price { grid-column: 1 / -1; grid-row: 4; }
-  .step-content .item-line-total { grid-column: 1; grid-row: 5; display: flex; align-items: flex-start; justify-content: center; gap: 3px; text-align: left !important; }
+  .step-content .item-line-total { grid-column: 2; grid-row: 1; display: flex; align-items: flex-end; justify-content: center; gap: 3px; text-align: right !important; }
   .step-content .item-line-total strong { font-size: 12px; }
-  .step-content .item-row-actions { grid-column: 2; grid-row: 5; width: 100% !important; align-items: center; justify-content: flex-end; }
+  .step-content .item-row-actions { grid-column: 1 / -1; grid-row: 5; width: 100% !important; align-items: center; justify-content: flex-end; }
   .step-content .item-row-actions button { width: 31px !important; height: 31px !important; }
   .step-content .items-total { justify-content: space-between; gap: 10px; margin-top: 11px; padding: 13px; }
   .step-content .items-total strong { font-size: 15px; }
