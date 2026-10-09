@@ -205,6 +205,29 @@ class LicitaBackendTests(unittest.TestCase):
         self.assertNotIn("key", json.dumps(body).lower())
         self.assertNotIn("test-unsloth", json.dumps(body))
 
+    def test_gerar_ia_habilita_thinking_para_modelo_generico(self):
+        from unittest.mock import patch
+
+        captura = {}
+
+        async def mock_upstream_chat(base_url, api_key, payload):
+            captura.update(payload)
+            return {
+                "choices": [{"message": {"content": "{\\"ok\\": true}"}}],
+                "model": payload["model"],
+            }, 200
+
+        with patch.object(main, "_upstream_chat", side_effect=mock_upstream_chat):
+            with TestClient(app) as client:
+                response = client.post(
+                    "/api/ia/chat",
+                    json={"prompt": "teste", "model": "qwen-modelo-de-teste"},
+                )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(captura["enable_thinking"])
+        self.assertEqual(captura["model"], "qwen-modelo-de-teste")
+
     def test_chat_ia_rejeita_prompt_vazio(self):
         with TestClient(app) as client:
             response = client.post("/api/ia/chat", json={"prompt": "   ", "model": "unsloth-auto"})
