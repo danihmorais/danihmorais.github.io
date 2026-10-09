@@ -194,10 +194,10 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
 
   const totalGeral = calcularValorEstimadoItens(itens);
 
-  return <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+  return <div className="step-form step-form--items" style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
     <input ref={fileInputRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={importarXlsx} />
     <input ref={pdfInputRef} type="file" accept="application/pdf,.pdf" style={{ display: "none" }} onChange={importarPdf} />
-    <section>
+    <section className="step-section item-intro-section">
       <label style={{ fontWeight: 600, fontSize: 16, display: "block", marginBottom: 8 }}>Objeto da Licitação: <span style={{ color: "var(--btn-danger)" }}>*</span></label>
       <p style={{ color: "var(--text-muted)", fontSize: 13, margin: "0 0 12px" }}>Descreva brevemente o objeto licitado para direcionar a geração de especificações.</p>
       <textarea
@@ -208,29 +208,29 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
         style={{ padding: 12, borderRadius: "var(--radius-lg)", borderColor: objeto.trim() ? "var(--input-border)" : "var(--btn-danger)", resize: "none" }}
       />
     </section>
-    <section>
+    <section className="step-section item-intro-section">
       <label style={{ fontWeight: 600, fontSize: 16, display: "block", marginBottom: 8 }}>Justificativa da Demanda: <span style={{ color: "var(--btn-danger)" }}>*</span></label>
       <p style={{ color: "var(--text-muted)", fontSize: 13, margin: "0 0 12px" }}>Descreva brevemente a justificativa da demanda.</p>
       <textarea required value={necessidade} onChange={(e) => atualizarDados({ ...dados, necessidade: e.target.value })} style={{ padding: 12, borderRadius: "var(--radius-lg)", borderColor: necessidade.trim() ? "var(--input-border)" : "var(--btn-danger)", minHeight: 120, resize: "vertical" }} />
     </section>
-    <section style={{ borderTop: "1px solid var(--border)", paddingTop: 24 }}>
-      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
-        <button type="button" onClick={adicionarItem} style={{ height: 38, padding: "0 16px", background: "var(--btn-primary)", color: "var(--bg-panel)", border: 0, borderRadius: "var(--radius-lg)" }}>+ Novo Item</button>
-        <button type="button" onClick={() => fileInputRef.current?.click()} style={{ height: 38, padding: "0 16px", background: "var(--btn-primary)", color: "var(--bg-panel)", border: 0, borderRadius: "var(--radius-lg)" }}>Importar XLSX</button>
-        <button type="button" onClick={() => pdfInputRef.current?.click()} disabled={importandoPdf} style={{ height: 38, padding: "0 16px", background: "var(--btn-primary)", color: "var(--bg-panel)", border: 0, borderRadius: "var(--radius-lg)", opacity: importandoPdf ? 0.7 : 1 }}>{importandoPdf ? "Lendo PDF..." : "Importar Cotação PDF"}</button>
+    <section className="step-section items-section" style={{ borderTop: "1px solid var(--border)", paddingTop: 24 }}>
+      <div className="items-toolbar" style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
+        <button type="button" className="item-action-primary" onClick={adicionarItem} style={{ height: 38, padding: "0 16px", background: "var(--btn-primary)", color: "var(--bg-panel)", border: 0, borderRadius: "var(--radius-lg)" }}>+ Novo Item</button>
+        <button type="button" className="item-action-secondary" onClick={() => fileInputRef.current?.click()} style={{ height: 38, padding: "0 16px", background: "var(--btn-primary)", color: "var(--bg-panel)", border: 0, borderRadius: "var(--radius-lg)" }}>Importar XLSX</button>
+        <button type="button" className="item-action-secondary" onClick={() => pdfInputRef.current?.click()} disabled={importandoPdf} style={{ height: 38, padding: "0 16px", background: "var(--btn-primary)", color: "var(--bg-panel)", border: 0, borderRadius: "var(--radius-lg)", opacity: importandoPdf ? 0.7 : 1 }}>{importandoPdf ? "Lendo PDF..." : "Importar Cotação PDF"}</button>
       </div>
-      <div style={{ overflowX: "auto" }}>
-        <div style={{ minWidth: 930 }}>
-          <div style={{ background: "var(--sidebar-bg)", color: "var(--sidebar-text)", display: "flex", padding: 12, borderRadius: "var(--radius)", fontWeight: 600, fontSize: 13 }}>
+      <div className="items-table-scroll" style={{ overflowX: "auto" }}>
+        <div className="items-table" style={{ minWidth: 930 }}>
+          <div className="items-table-head" style={{ background: "var(--sidebar-bg)", color: "var(--sidebar-text)", display: "flex", padding: 12, borderRadius: "var(--radius)", fontWeight: 600, fontSize: 13 }}>
             <div style={{ width: 40 }}>#</div><div style={{ flex: 1, minWidth: 300 }}>Descrição</div><div style={{ width: 60 }}>UN</div><div style={{ width: 80 }}>Qtd</div><div style={{ width: 130 }}>Vlr Unit.</div><div style={{ width: 130 }}>Total</div><div style={{ width: 120 }} />
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+          <div className="items-table-body" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
             {itens.map((item: any, index: number) => {
               const carregando = itemEmMelhoria === item.id;
               const descricao = String(item.descricao || "");
-              return <div key={item.id} style={{ display: "flex", alignItems: "center", background: "var(--bg-subtle)", padding: "8px 12px", borderRadius: "var(--radius)", gap: 8 }}>
-                <div style={{ width: 40, fontWeight: 600 }}>{item.numero || index + 1}</div>
-                <div style={{ flex: 1, minWidth: 300, display: "flex", gap: 6, alignItems: "center" }}>
+              return <div key={item.id} className="item-row" style={{ display: "flex", alignItems: "center", background: "var(--bg-subtle)", padding: "8px 12px", borderRadius: "var(--radius)", gap: 8 }}>
+                <div className="item-number" style={{ width: 40, fontWeight: 600 }}>{item.numero || index + 1}</div>
+                <div className="item-description-cell" style={{ flex: 1, minWidth: 300, display: "flex", gap: 6, alignItems: "center" }}>
                   <textarea
                     required
                     rows={1}
@@ -240,18 +240,18 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
                   />
                   <button type="button" onClick={() => melhorarItem(item)} disabled={carregando || !descricao.trim()} title="Melhorar descrição e unidade deste item com IA" aria-label={`Melhorar descrição e unidade do item ${item.numero || index + 1} com IA`} style={{ height: 34, padding: "0 10px", border: "1px solid var(--border)", borderRadius: "var(--radius)", background: "var(--bg-panel)", color: "var(--text-main)", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }}>{carregando ? "..." : "✨ IA"}</button>
                 </div>
-                <input type="text" required value={item.un} onChange={(e) => atualizarItem(item.id, "un", e.target.value)} style={{ width: 60, padding: 8, textAlign: "center" }} />
-                <input type="number" required min="0.0001" step="any" value={item.qtd} onChange={(e) => atualizarItem(item.id, "qtd", parseFloat(e.target.value) || "")} style={{ width: 80, padding: 8, textAlign: "right" }} />
-                <input type="text" required value={formatarMoeda(Number(item.valor || 0))} onChange={(e) => atualizarItem(item.id, "valor", parseMoeda(e.target.value))} style={{ width: 130, padding: 8, textAlign: "right", fontFamily: "monospace" }} />
-                <div style={{ width: 130, textAlign: "right", fontWeight: 600 }}>{formatarMoeda(Number(item.qtd || 0) * Number(item.valor || 0))}</div>
-                <div style={{ width: 120, display: "flex", gap: 4, justifyContent: "flex-end" }}>
-                  <button type="button" onClick={() => moverItem(index, -1)} style={{ width: 28, height: 28 }}>↑</button><button type="button" onClick={() => moverItem(index, 1)} style={{ width: 28, height: 28 }}>↓</button><button type="button" onClick={() => removerItem(item.id)} style={{ width: 28, height: 28, background: "var(--btn-danger)", color: "var(--bg-panel)", border: 0 }}>X</button>
+                <label className="item-field item-field-unit"><span>Unidade</span><input className="item-unit" type="text" required value={item.un} onChange={(e) => atualizarItem(item.id, "un", e.target.value)} style={{ width: 60, padding: 8, textAlign: "center" }} /></label>
+                <label className="item-field item-field-quantity"><span>Quantidade</span><input className="item-quantity" type="number" required min="0.0001" step="any" value={item.qtd} onChange={(e) => atualizarItem(item.id, "qtd", parseFloat(e.target.value) || "")} style={{ width: 80, padding: 8, textAlign: "right" }} /></label>
+                <label className="item-field item-field-price"><span>Valor unitário</span><input className="item-price" type="text" required value={formatarMoeda(Number(item.valor || 0))} onChange={(e) => atualizarItem(item.id, "valor", parseMoeda(e.target.value))} style={{ width: 130, padding: 8, textAlign: "right", fontFamily: "monospace" }} /></label>
+                <div className="item-line-total" style={{ width: 130, textAlign: "right", fontWeight: 600 }}><span>Total do item</span><strong>{formatarMoeda(Number(item.qtd || 0) * Number(item.valor || 0))}</strong></div>
+                <div className="item-row-actions" style={{ width: 120, display: "flex", gap: 4, justifyContent: "flex-end" }}>
+                  <button type="button" className="item-move-button" aria-label="Mover item para cima" title="Mover para cima" onClick={() => moverItem(index, -1)} style={{ width: 28, height: 28 }}>↑</button><button type="button" className="item-move-button" aria-label="Mover item para baixo" title="Mover para baixo" onClick={() => moverItem(index, 1)} style={{ width: 28, height: 28 }}>↓</button><button type="button" className="item-delete-button" aria-label="Remover item" title="Remover item" onClick={() => removerItem(item.id)} style={{ width: 28, height: 28, background: "var(--btn-danger)", color: "var(--bg-panel)", border: 0 }}>×</button>
                 </div>
               </div>;
             })}
             {itens.length === 0 && <div style={{ padding: 20, textAlign: "center", color: "var(--text-muted)" }}>Nenhum item adicionado.</div>}
           </div>
-          <div style={{ textAlign: "right", marginTop: 16, fontSize: 18, fontWeight: 600 }}>TOTAL GERAL: {formatarMoeda(totalGeral)}</div>
+          <div className="items-total"> <span>Total estimado</span><strong>{formatarMoeda(totalGeral)}</strong></div>
         </div>
       </div>
     </section>

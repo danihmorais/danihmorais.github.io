@@ -2,15 +2,15 @@ import React from "react";
 
 export default function Step2({ dados, atualizarDados }: any) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-      <div>
+    <div className="step-form step-form--execution" style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+      <div className="step-section-heading">
         <h2 style={{ fontSize: "16px", margin: "0 0 8px 0", color: "var(--text-main)" }}>
           Condições de Execução e Prazos <span style={{ color: "var(--btn-danger)" }}>*</span>
         </h2>
         <p style={{ color: "var(--text-muted)", margin: 0, fontSize: "13px" }}>Informe os principais requisitos de execução, prazos e medidas de controle de qualidade.</p>
       </div>
 
-      <div style={{ display: "flex", gap: "32px", marginBottom: "8px" }}>
+      <div className="execution-options" style={{ display: "flex", gap: "32px", marginBottom: "8px" }}>
         <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "15px", color: "var(--text-main)" }}>
           <input 
             type="checkbox" 
@@ -32,7 +32,7 @@ export default function Step2({ dados, atualizarDados }: any) {
         </label>
       </div>
 
-      <div>
+      <div className="execution-description">
         <textarea 
           required
           value={dados.execucao}

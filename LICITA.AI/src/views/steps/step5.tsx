@@ -45,7 +45,7 @@ const RadioOption = ({ label, value, checked, onChange, disabled = false }: any)
 const JustificationBox = ({ label, value, onChange, errorMsg }: any) => {
   const hasError = value.trim() === "";
   return (
-    <div style={styles.justificationBox(hasError)}>
+    <div className="setting-justification" style={styles.justificationBox(hasError)}>
       <label style={styles.justificationTitle}>
         {label} <span style={styles.asterisk}>*</span>
       </label>
@@ -120,10 +120,10 @@ export default function Step5({ dados, atualizarDados }: any) {
   }, [meeppExclusivoPermitido, dados.meepp, atualizarDados]);
 
   return (
-    <div style={styles.container}>
-      <div style={styles.sectionGroup}>
+    <div className="step-form step-form--settings" style={styles.container}>
+      <div className="setting-section" style={styles.sectionGroup}>
         <h2 style={styles.title}>Tipo de Instrumento</h2>
-        <div style={styles.sectionMargin}>
+        <div className="setting-options" style={styles.sectionMargin}>
           <RadioOption 
             label="CONTRATO (Certeza da quantidade)" 
             value="CONTRATO" 
@@ -155,9 +155,9 @@ export default function Step5({ dados, atualizarDados }: any) {
         </label>
       </div>
 
-      <div style={styles.sectionGroup}>
+      <div className="setting-section" style={styles.sectionGroup}>
         <h2 style={styles.title}>Participação ME/EPP</h2>
-        <div style={styles.section}>
+        <div className="setting-options" style={styles.section}>
           <RadioOption 
             label={`Exclusiva para ME/EPP (Até ${formatarLimiteMeepp()})`} 
             value="SIM" 
@@ -179,14 +179,14 @@ export default function Step5({ dados, atualizarDados }: any) {
         </div>
       </div>
 
-      <div style={styles.sectionGroup}>
+      <div className="setting-section" style={styles.sectionGroup}>
         <h2 style={styles.titleCompact}>Critério de Julgamento</h2>
         <p style={styles.subtitle}>
           {temLote 
             ? "Foi detectado o uso de lotes na listagem de itens. Apenas a opção de julgamento por Lote está disponível." 
             : "Regra geral da Lei 14.133/21: A adjudicação deve ser preferencialmente por ITEM para ampliar a concorrência."}
         </p>
-        <div style={styles.sectionMargin}>
+        <div className="setting-options" style={styles.sectionMargin}>
           {!temLote && (
             <>
               <RadioOption label="Menor preço por item" value="ITEM" checked={dados.criterio === "ITEM"} onChange={(e: any) => atualizarDados({ criterio: e.target.value })} />
@@ -208,10 +208,10 @@ export default function Step5({ dados, atualizarDados }: any) {
         )}
       </div>
 
-      <div style={styles.sectionGroup}>
+      <div className="setting-section" style={styles.sectionGroup}>
         <h2 style={styles.titleCompact}>Modalidade</h2>
         <p style={styles.subtitle}>Regra geral da Lei 14.133/21: O Pregão Eletrônico é a modalidade obrigatória padrão.</p>
-        <div style={styles.sectionMargin}>
+        <div className="setting-options" style={styles.sectionMargin}>
           <RadioOption label="Pregão Eletrônico" value="PREGAO_ELETRONICO" checked={dados.modalidade === "PREGAO_ELETRONICO"} onChange={(e: any) => atualizarDados({ modalidade: e.target.value })} />
           <RadioOption label="Dispensa por e-mail" value="DISPENSA_EMAIL" checked={dados.modalidade === "DISPENSA_EMAIL"} onChange={(e: any) => atualizarDados({ modalidade: e.target.value })} />
           <RadioOption label="Dispensa com lances na BLL" value="DISPENSA_BLL" checked={dados.modalidade === "DISPENSA_BLL"} onChange={(e: any) => atualizarDados({ modalidade: e.target.value })} />
@@ -228,9 +228,9 @@ export default function Step5({ dados, atualizarDados }: any) {
         )}
       </div>
 
-      <div style={styles.sectionGroup}>
+      <div className="setting-section" style={styles.sectionGroup}>
         <h2 style={styles.title}>Vigência do Contrato/Ata (Máximo 1 ano)</h2>
-        <div style={styles.counterWrapper}>
+        <div className="counter-wrapper" style={styles.counterWrapper}>
           <button type="button" onClick={decrementarVigencia} style={styles.btn}>-</button>
           <input 
             type="text" 
@@ -251,7 +251,7 @@ export default function Step5({ dados, atualizarDados }: any) {
         </div>
       </div>
 
-      <div style={styles.sectionGroup}>
+      <div className="setting-section" style={styles.sectionGroup}>
         <h2 style={styles.titleCompact}>Condições de Pagamento</h2>
         <p style={styles.subtitleMargin}>
           Selecione a forma de pagamento. Nas opções padronizadas, o texto será aplicado diretamente, sem geração pela IA.
@@ -267,7 +267,7 @@ export default function Step5({ dados, atualizarDados }: any) {
         </select>
 
         {dados.pagamentoTipo === "POR_ETAPAS" ? (
-          <div style={{ ...styles.justificationBox(String(dados.pagamentoEtapas || "").trim() === ""), width: "100%", boxSizing: "border-box" }}>
+          <div className="setting-justification" style={{ ...styles.justificationBox(String(dados.pagamentoEtapas || "").trim() === ""), width: "100%", boxSizing: "border-box" }}>
             <label style={styles.justificationTitle}>
               Descreva como será o pagamento por etapas <span style={styles.asterisk}>*</span>
             </label>
@@ -298,7 +298,7 @@ export default function Step5({ dados, atualizarDados }: any) {
         )}
       </div>
 
-      <div style={styles.sectionGroup}>
+      <div className="setting-section" style={styles.sectionGroup}>
         <h2 style={styles.titleCompact}>Prazo para Refazimento</h2>
         <p style={styles.subtitleMargin}>
           Informe o prazo fixo para refazimento/correção, sempre em dias úteis. Este valor não é gerado nem alterado pela IA.
@@ -318,7 +318,7 @@ export default function Step5({ dados, atualizarDados }: any) {
           <span style={{ color: "var(--text-main)", fontSize: "14px" }}>dias úteis</span>
         </div>
       </div>
-      <div style={styles.sectionGroup}>
+      <div className="setting-section" style={styles.sectionGroup}>
         <h2 style={styles.title}>
           Dotação Orçamentária <span style={styles.asterisk}>*</span>
         </h2>
@@ -333,9 +333,9 @@ export default function Step5({ dados, atualizarDados }: any) {
         {faltaDotacao && <span style={styles.errorText}>É obrigatório preencher a dotação ou inserir uma imagem.</span>}
       </div>
 
-      <div style={styles.sectionGroup}>
+      <div className="setting-section" style={styles.sectionGroup}>
         <h2 style={styles.title}>Plano Anual de Contratações (PAC)</h2>
-        <div style={styles.sectionMargin}>
+        <div className="setting-options" style={styles.sectionMargin}>
           <RadioOption label="Sim, previsto no PAC" value="SIM" checked={dados.pac === "SIM"} onChange={(e: any) => atualizarDados({ pac: e.target.value })} />
           <RadioOption label="Não previsto no PAC" value="NAO" checked={dados.pac === "NAO"} onChange={(e: any) => atualizarDados({ pac: e.target.value })} />
         </div>
