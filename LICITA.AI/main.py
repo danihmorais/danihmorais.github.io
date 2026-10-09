@@ -41,6 +41,7 @@ class IAChatRequest(BaseModel):
 
 
 API_UNSLOTH_URL = os.getenv("LICITA_UNSLOTH_URL", os.getenv("UNSLOTH_URL", "http://127.0.0.1:8888/v1")).rstrip("/")
+IA_TIMEOUT_SECONDS = max(60, int(os.getenv("LICITA_IA_TIMEOUT", "600")))
 MAX_UPLOAD_BYTES = max(1_000_000, int(os.getenv("LICITA_DOCUMENT_MAX_BYTES", str(15 * 1024 * 1024))))
 UPLOAD_FIELDS = ("dfd", "etp", "tr", "edital")
 API_UNSLOTH_KEY = os.getenv("LICITA_UNSLOTH_KEY", os.getenv("API_UNSLOTH", "")).strip()
@@ -92,7 +93,7 @@ async def _upstream_chat(base_url: str, api_key: str, payload: dict) -> tuple[di
     headers = {"Content-Type": "application/json"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
-    async with httpx.AsyncClient(timeout=180) as client:
+    async with httpx.AsyncClient(timeout=IA_TIMEOUT_SECONDS) as client:
         response = await client.post(f"{base_url}/chat/completions", headers=headers, json=payload)
     if response.status_code >= 400:
         return {}, response.status_code
@@ -109,6 +110,7 @@ async def _gerar_ia(req: IAChatRequest) -> dict:
     payload = {
         "model": req.model,
         "temperature": float(req.temperature),
+        "enable_thinking": True,
         "messages": [{"role": "user", "content": req.prompt.strip()}],
     }
     if req.response_format is not None:
