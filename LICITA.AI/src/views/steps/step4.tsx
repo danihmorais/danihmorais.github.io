@@ -112,7 +112,7 @@ export default function Step4({ dados, atualizarDados }: any) {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "32px" }}>
+    <div className="step-form step-form--people" style={{ display: "flex", flexDirection: "column", gap: "32px" }}>
       
       <div>
         <h2 style={{ fontSize: "16px", margin: "0 0 8px 0", color: "var(--text-main)" }}>
@@ -120,8 +120,8 @@ export default function Step4({ dados, atualizarDados }: any) {
         </h2>
         <p style={{ color: "var(--text-muted)", margin: "0 0 16px 0", fontSize: "13px" }}>Adicione pelo menos um responsável pelo contrato.</p>
         
-        <div style={{ background: "var(--bg-subtle)", border: dados.gestores.length === 0 ? "1px solid var(--btn-danger)" : "1px solid var(--border)", borderRadius: "var(--radius-xl)", padding: "20px" }}>
-          <div style={{ display: "flex", gap: "12px", marginBottom: "20px", alignItems: "flex-end" }}>
+        <div className="person-section" style={{ background: "var(--bg-subtle)", border: dados.gestores.length === 0 ? "1px solid var(--btn-danger)" : "1px solid var(--border)", borderRadius: "var(--radius-xl)", padding: "20px" }}>
+          <div className="person-entry-form" style={{ display: "flex", gap: "12px", marginBottom: "20px", alignItems: "flex-end" }}>
             <div style={{ flex: 1 }}>
               <label style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-main)", display: "block", marginBottom: "6px" }}>Nome</label>
               <input 
@@ -157,12 +157,12 @@ export default function Step4({ dados, atualizarDados }: any) {
             </div>
           </div>
 
-          <div style={{ background: "var(--bg-panel)", borderRadius: "var(--radius)", border: "1px solid var(--border)", minHeight: "80px", maxHeight: "150px", overflowY: "auto", padding: "8px", display: "flex", flexDirection: "column", gap: "4px" }}>
+          <div className="people-list" style={{ background: "var(--bg-panel)", borderRadius: "var(--radius)", border: "1px solid var(--border)", minHeight: "80px", maxHeight: "150px", overflowY: "auto", padding: "8px", display: "flex", flexDirection: "column", gap: "4px" }}>
             {dados.gestores.length === 0 && (
               <div style={{ padding: "20px", textAlign: "center", color: "var(--text-light)", fontSize: "13px" }}>Nenhum gestor adicionado.</div>
             )}
             {dados.gestores.map((gestor: any, index: number) => (
-              <div key={index} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--bg-subtle)", padding: "8px 16px", borderRadius: "var(--radius)", border: "1px solid var(--border)" }}>
+              <div key={index} className="person-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--bg-subtle)", padding: "8px 16px", borderRadius: "var(--radius)", border: "1px solid var(--border)" }}>
                 <span style={{ fontSize: "13px", color: "var(--text-main)", fontWeight: "500" }}>{gestor.nome} — {gestor.cargo}</span>
                 <div style={{ display: "flex", gap: "6px" }}>
                   <div style={{ display: "flex", gap: "6px" }}>
@@ -200,8 +200,8 @@ export default function Step4({ dados, atualizarDados }: any) {
         </h2>
         <p style={{ color: "var(--text-muted)", margin: "0 0 16px 0", fontSize: "13px" }}>Registre pelo menos um fiscal responsável pelo acompanhamento.</p>
         
-        <div style={{ background: "var(--bg-subtle)", border: dados.fiscais.length === 0 ? "1px solid var(--btn-danger)" : "1px solid var(--border)", borderRadius: "var(--radius-xl)", padding: "20px" }}>
-          <div style={{ display: "flex", gap: "12px", marginBottom: "20px", alignItems: "flex-end" }}>
+        <div className="person-section" style={{ background: "var(--bg-subtle)", border: dados.fiscais.length === 0 ? "1px solid var(--btn-danger)" : "1px solid var(--border)", borderRadius: "var(--radius-xl)", padding: "20px" }}>
+          <div className="person-entry-form" style={{ display: "flex", gap: "12px", marginBottom: "20px", alignItems: "flex-end" }}>
             <div style={{ flex: 1 }}>
               <label style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-main)", display: "block", marginBottom: "6px" }}>Nome</label>
               <input 
@@ -237,12 +237,12 @@ export default function Step4({ dados, atualizarDados }: any) {
             </div>
           </div>
 
-          <div style={{ background: "var(--bg-panel)", borderRadius: "var(--radius)", border: "1px solid var(--border)", minHeight: "80px", maxHeight: "150px", overflowY: "auto", padding: "8px", display: "flex", flexDirection: "column", gap: "4px" }}>
+          <div className="people-list" style={{ background: "var(--bg-panel)", borderRadius: "var(--radius)", border: "1px solid var(--border)", minHeight: "80px", maxHeight: "150px", overflowY: "auto", padding: "8px", display: "flex", flexDirection: "column", gap: "4px" }}>
             {dados.fiscais.length === 0 && (
               <div style={{ padding: "20px", textAlign: "center", color: "var(--text-light)", fontSize: "13px" }}>Nenhum fiscal adicionado.</div>
             )}
             {dados.fiscais.map((fiscal: any, index: number) => (
-              <div key={index} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--bg-subtle)", padding: "8px 16px", borderRadius: "var(--radius)", border: "1px solid var(--border)" }}>
+              <div key={index} className="person-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--bg-subtle)", padding: "8px 16px", borderRadius: "var(--radius)", border: "1px solid var(--border)" }}>
                 <span style={{ fontSize: "13px", color: "var(--text-main)", fontWeight: "500" }}>{fiscal.nome} — {fiscal.cargo}</span>
                 <div style={{ display: "flex", gap: "6px" }}>
                   <div style={{ display: "flex", gap: "6px" }}>
@@ -275,8 +275,8 @@ export default function Step4({ dados, atualizarDados }: any) {
       </div>
 
       {modalGestorAberto && (
-        <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
-          <div style={{ background: "var(--bg-panel)", padding: "24px", borderRadius: "var(--radius-xl)", width: "100%", maxWidth: "450px", boxShadow: "var(--shadow-lg)" }}>
+        <div className="step-modal-overlay" style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
+          <div className="step-modal" style={{ background: "var(--bg-panel)", padding: "24px", borderRadius: "var(--radius-xl)", width: "100%", maxWidth: "450px", boxShadow: "var(--shadow-lg)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
               <h3 style={{ margin: 0, color: "var(--text-main)", fontSize: "18px" }}>Gestores Salvos</h3>
               <button onClick={() => setModalGestorAberto(false)} style={{ background: "none", border: "none", fontSize: "20px", color: "var(--text-muted)" }}>×</button>
@@ -317,8 +317,8 @@ export default function Step4({ dados, atualizarDados }: any) {
       )}
 
       {modalFiscalAberto && (
-        <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
-          <div style={{ background: "var(--bg-panel)", padding: "24px", borderRadius: "var(--radius-xl)", width: "100%", maxWidth: "450px", boxShadow: "var(--shadow-lg)" }}>
+        <div className="step-modal-overlay" style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
+          <div className="step-modal" style={{ background: "var(--bg-panel)", padding: "24px", borderRadius: "var(--radius-xl)", width: "100%", maxWidth: "450px", boxShadow: "var(--shadow-lg)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
               <h3 style={{ margin: 0, color: "var(--text-main)", fontSize: "18px" }}>Fiscais Salvos</h3>
               <button onClick={() => setModalFiscalAberto(false)} style={{ background: "none", border: "none", fontSize: "20px", color: "var(--text-muted)" }}>×</button>
