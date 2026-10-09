@@ -162,6 +162,33 @@ class TestPipelineUnificado(unittest.TestCase):
         enviar_email.assert_called_once()
 
 
+class TestConfiguracaoThinking(unittest.TestCase):
+    def test_chamar_ia_habilita_thinking_para_modelo_nao_gemma(self):
+        from unittest.mock import MagicMock, patch
+        import fila_pipeline as pipeline
+
+        resposta = MagicMock()
+        resposta.status_code = 200
+        resposta.json.return_value = {
+            "choices": [{"message": {"content": "{\\"ok\\": true}"}}],
+            "model": "qwen-modelo-de-teste",
+        }
+        with (
+            patch.object(pipeline, "API_UNSLOTH_URL", "http://unsloth.test/v1"),
+            patch.object(pipeline, "API_UNSLOTH_KEY", "chave-de-teste"),
+            patch.object(pipeline.httpx, "Client") as cliente_http,
+        ):
+            cliente = cliente_http.return_value.__enter__.return_value
+            cliente.post.return_value = resposta
+            resultado, modelo = pipeline._chamar_ia("prompt de teste", "qwen-modelo-de-teste")
+
+        payload = cliente.post.call_args.kwargs["json"]
+        self.assertTrue(payload["enable_thinking"])
+        self.assertEqual(payload["model"], "qwen-modelo-de-teste")
+        self.assertEqual(resultado, {"ok": True})
+        self.assertEqual(modelo, "qwen-modelo-de-teste")
+
+
 class TestNotificacaoFalhaFila(unittest.TestCase):
     def test_notifica_apenas_apos_esgotar_tentativas(self):
         import tempfile
