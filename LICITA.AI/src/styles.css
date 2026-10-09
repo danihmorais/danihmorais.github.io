@@ -774,10 +774,9 @@ th { font-size: 11px; font-weight: 700; letter-spacing: .055em; text-transform: 
 .step-content .step-form--settings .setting-options input { width: 16px !important; min-width: 16px; height: 16px !important; padding: 0 !important; }
 .step-content .step-form--settings .setting-options > span { grid-column: 1 / -1; }
 .step-content .step-form--settings .setting-section > label { display: inline-flex !important; align-items: center; width: fit-content !important; min-height: 37px; gap: 8px !important; margin-top: 3px !important; padding: 8px 11px !important; border: 1px solid var(--border); border-radius: 9px; background: var(--bg-subtle); font-size: 11px !important; }
-.step-content .step-form--settings .counterWrapper,
-.step-content .step-form--settings [style*="counterWrapper"] { display: flex; align-items: center; gap: 7px; }
-.step-content .step-form--settings [style*="counterWrapper"] button { width: 36px !important; height: 36px !important; min-height: 36px !important; border: 1px solid var(--border) !important; border-radius: 9px !important; background: var(--bg-subtle) !important; color: var(--text-main) !important; font-size: 17px !important; }
-.step-content .step-form--settings [style*="counterWrapper"] input { width: 64px !important; min-height: 36px !important; text-align: center !important; font-weight: 700 !important; }
+.step-content .step-form--settings .counter-wrapper { display: flex; align-items: center; gap: 7px; }
+.step-content .step-form--settings .counter-wrapper button { width: 36px !important; height: 36px !important; min-height: 36px !important; border: 1px solid var(--border) !important; border-radius: 9px !important; background: var(--bg-subtle) !important; color: var(--text-main) !important; font-size: 17px !important; }
+.step-content .step-form--settings .counter-wrapper input { width: 64px !important; min-height: 36px !important; text-align: center !important; font-weight: 700 !important; }
 .step-content .step-form--settings .setting-section > select { width: min(100%, 360px) !important; min-height: 40px !important; }
 .step-content .step-form--settings .setting-justification {
   display: flex !important;
