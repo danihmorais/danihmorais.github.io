@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useToast } from "../../components/toast";
 import { lerDadosUsuario, salvarDadosUsuario } from "../../utils/storageLocal";
 
 const SECRETARIAS_DEFAULT = [
@@ -17,6 +18,7 @@ export default function Step3({ dados = { secretarias: [], contatosSecretarias: 
   const [telsTemp, setTelsTemp] = useState<Record<string, string>>({});
   const [contatosSalvos, setContatosSalvos] = useState<any[]>([]);
   const [modalSecAberto, setModalSecAberto] = useState<string | null>(null);
+  const { showToast } = useToast();
 
   const secretarias = dados.secretarias || [];
   const contatosSecretarias = dados.contatosSecretarias || {};
@@ -91,14 +93,14 @@ export default function Step3({ dados = { secretarias: [], contatosSecretarias: 
     const jaExiste = contatosSalvos.some(c => c.email === contato.email && c.tel === contato.tel);
     
     if (jaExiste) {
-      alert("Este contato já está salvo na sua lista.");
+      showToast("Este contato já está salvo na sua lista.", "warning");
       return;
     }
 
     const novosSalvos = [...contatosSalvos, contato];
     setContatosSalvos(novosSalvos);
     salvarContatosNoBackend(novosSalvos);
-    alert("Contato salvo com sucesso!");
+    showToast("Contato salvo com sucesso!", "success");
   };
 
   const handleUsarContatoSalvo = (sec: string, contato: any) => {

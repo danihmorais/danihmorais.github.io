@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
+import { useToast } from "../../components/toast";
 import { lerDadosUsuario, salvarDadosUsuario } from "../../utils/storageLocal";
 
 export default function Step4({ dados, atualizarDados }: any) {
+  const { showToast } = useToast();
   const [gestorNome, setGestorNome] = useState("");
   const [gestorCargo, setGestorCargo] = useState("");
   const [fiscalNome, setFiscalNome] = useState("");
@@ -68,25 +70,25 @@ export default function Step4({ dados, atualizarDados }: any) {
   const handleSalvarGestor = (gestor: any) => {
     const jaExiste = gestoresSalvos.some(g => g.nome === gestor.nome && g.cargo === gestor.cargo);
     if (jaExiste) {
-      alert("Este gestor já está salvo na sua lista.");
+      showToast("Este gestor já está salvo na sua lista.", "warning");
       return;
     }
     const novosSalvos = [...gestoresSalvos, gestor];
     setGestoresSalvos(novosSalvos);
     salvarGestoresNoBackend(novosSalvos);
-    alert("Gestor salvo com sucesso!");
+    showToast("Gestor salvo com sucesso!", "success");
   };
 
   const handleSalvarFiscal = (fiscal: any) => {
     const jaExiste = fiscaisSalvos.some(f => f.nome === fiscal.nome && f.cargo === fiscal.cargo);
     if (jaExiste) {
-      alert("Este fiscal já está salvo na sua lista.");
+      showToast("Este fiscal já está salvo na sua lista.", "warning");
       return;
     }
     const novosSalvos = [...fiscaisSalvos, fiscal];
     setFiscaisSalvos(novosSalvos);
     salvarFiscaisNoBackend(novosSalvos);
-    alert("Fiscal salvo com sucesso!");
+    showToast("Fiscal salvo com sucesso!", "success");
   };
 
   const handleUsarGestorSalvo = (gestor: any) => {
