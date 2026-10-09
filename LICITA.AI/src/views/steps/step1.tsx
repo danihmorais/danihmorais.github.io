@@ -1,4 +1,5 @@
 import React, { useRef, useState } from "react";
+import { useToast } from "../../components/toast";
 import * as XLSX from "xlsx";
 import { calcularValorEstimadoItens } from "../../utils/regrasContratacao";
 import { melhorarDescricaoItem } from "../../providers/services/descricaoItensIA";
@@ -12,6 +13,7 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const [importandoPdf, setImportandoPdf] = useState(false);
   const [itemEmMelhoria, setItemEmMelhoria] = useState<number | string | null>(null);
+  const { showToast } = useToast();
   const itens = dados.itens || [];
   const objeto = dados.objeto || "";
   const necessidade = dados.necessidade || "";
@@ -68,7 +70,7 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
       });
     } catch (erro: any) {
       console.error("Erro ao melhorar descrição:", erro);
-      alert(erro?.message || "Não foi possível melhorar a descrição e a unidade deste item.");
+      showToast(erro?.message || "Não foi possível melhorar a descrição e a unidade deste item.", "error");
     } finally {
       setItemEmMelhoria(null);
     }
@@ -113,9 +115,9 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
           valor: cValor >= 0 ? extrairNumero(linha[cValor]) : 0,
         })).filter((item) => item.descricao);
         atualizarDados({ ...dados, itens: importados });
-        alert(`Planilha importada com sucesso: ${importados.length} itens.`);
+        showToast(`Planilha importada com sucesso: ${importados.length} itens.`, "success");
       } catch (erro: any) {
-        alert(`Erro ao importar: ${erro.message}`);
+        showToast(`Erro ao importar: ${erro.message}`, "error");
       } finally {
         if (fileInputRef.current) fileInputRef.current.value = "";
       }
@@ -182,10 +184,10 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
         ...(objetoAtual ? {} : (objetoPdf ? { objeto: objetoPdf } : {})),
       });
 
-      alert(`Cotação PDF importada com sucesso: ${importados.length} itens.`);
+      showToast(`Cotação PDF importada com sucesso: ${importados.length} itens.`, "success");
     } catch (erro: any) {
       console.error("Erro ao importar cotação PDF:", erro);
-      alert(`Erro ao importar cotação PDF: ${erro?.message || "arquivo inválido"}`);
+      showToast(`Erro ao importar cotação PDF: ${erro?.message || "arquivo inválido"}`, "error");
     } finally {
       setImportandoPdf(false);
       if (pdfInputRef.current) pdfInputRef.current.value = "";
