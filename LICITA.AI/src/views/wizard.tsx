@@ -10,11 +10,11 @@ import { gerarFasePreparatoria, type DocumentosReferenciaUpload } from "../api";
 import { criarDadosTeste, TipoTesteContratacao } from "../utils/dadosTeste";
 
 const etapas = [
-  { titulo: "Objeto e justificativa", navTitle: "Objeto e justificativa", descricao: "Defina o que será contratado, a necessidade pública e os itens que compõem a demanda.", apoio: "Identificação da necessidade" },
-  { titulo: "Condições de execução", navTitle: "Condições de execução", descricao: "Registre os requisitos de entrega, execução e controle de qualidade.", apoio: "Requisitos da contratação" },
-  { titulo: "Unidade demandante", navTitle: "Unidade demandante", descricao: "Selecione as unidades envolvidas e informe os contatos responsáveis por cada uma.", apoio: "Origem e comunicação da demanda" },
-  { titulo: "Equipe de planejamento", navTitle: "Equipe de planejamento", descricao: "Identifique gestores e fiscais que participarão do acompanhamento contratual.", apoio: "Responsáveis pelo processo" },
-  { titulo: "Definição do instrumento", navTitle: "Instrumento e regras", descricao: "Consolide as escolhas administrativas, as condições de pagamento e a dotação orçamentária.", apoio: "Parâmetros finais" },
+  { titulo: "Objeto e itens", descricao: "Informe o objeto da contratação, a justificativa da demanda e os itens." },
+  { titulo: "Execução", descricao: "Defina as condições de execução, os prazos e os requisitos de qualidade." },
+  { titulo: "Unidades", descricao: "Selecione as unidades demandantes e cadastre seus contatos." },
+  { titulo: "Responsáveis", descricao: "Informe os gestores e fiscais do contrato." },
+  { titulo: "Configurações finais", descricao: "Revise as regras da contratação, o pagamento e a dotação orçamentária." },
 ];
 
 export default function Wizard() {
@@ -158,60 +158,42 @@ export default function Wizard() {
 
   if (carregando || erroMsg || geracaoSucesso) {
     return (
-      <div className="state-page">
-        <div className="state-card">
-          <div className="state-brand">
-            <span className="brand-mark brand-mark-small">LA</span>
-            <span>LICITA.AI <small>FASE PREPARATÓRIA</small></span>
-          </div>
-
-          {carregando && !erroMsg && !geracaoSucesso && (
-            <div className="state-content">
-              <div className="state-icon state-icon-loading"><span className="loading-spinner" /></div>
-              <span className="state-eyebrow">SOLICITAÇÃO EM ANDAMENTO</span>
-              <h1>Preparando sua solicitação</h1>
-              <p>{statusTexto}</p>
-              <div className="state-progress"><span /></div>
-              <p className="state-footnote">Mantenha esta janela aberta até a solicitação ser registrada.</p>
-            </div>
-          )}
-
-          {erroMsg && (
-            <div className="state-content">
-              <div className="state-icon state-icon-error">!</div>
-              <span className="state-eyebrow">NÃO FOI POSSÍVEL CONTINUAR</span>
-              <h1>Não foi possível agendar</h1>
-              <p>Confira os detalhes abaixo. Seus dados preenchidos continuam disponíveis nesta sessão.</p>
-              <div className="state-error-detail">
-                <pre>{erroMsg}</pre>
-              </div>
-              <button className="btn btn-primary state-action" onClick={() => { setErroMsg(null); setCarregando(false); }}>
-                <span aria-hidden="true">←</span> Voltar e tentar novamente
-              </button>
-            </div>
-          )}
-
-          {geracaoSucesso && !erroMsg && (
-            <div className="state-content">
-              <div className="state-icon state-icon-success"><span>✓</span></div>
-              <span className="state-eyebrow">SOLICITAÇÃO REGISTRADA</span>
-              <h1>Você já pode seguir em frente</h1>
-              <p>Os documentos serão gerados em segundo plano. Quando o processamento terminar, o arquivo ZIP será enviado automaticamente para o e-mail informado.</p>
-              {jobAgendado && (
-                <div className="job-summary">
-                  <div className="job-summary-row"><span>E-mail para recebimento</span><strong>{jobAgendado.email}</strong></div>
-                  {typeof jobAgendado.fila_posicao === "number" && <div className="job-summary-row"><span>Posição aproximada na fila</span><strong>{jobAgendado.fila_posicao}º</strong></div>}
-                  <div className="job-summary-row job-id-row"><span>Identificador da solicitação</span><code>{jobAgendado.job_id}</code></div>
-                </div>
-              )}
-              <button className="btn btn-success state-action" onClick={() => { setGeracaoSucesso(false); setJobAgendado(null); setStatusTexto("Iniciando..."); }}>
-                Concluir <span aria-hidden="true">→</span>
-              </button>
-            </div>
-          )}
-        </div>
-        <div className="state-footer">LICITA.AI <span>·</span> Apoio à fase preparatória das contratações públicas</div>
-      </div>
+      <main className="status-page">
+        <div className="status-brand">LICITA.AI</div>
+        {carregando && !erroMsg && !geracaoSucesso && (
+          <section className="status-content" aria-live="polite">
+            <span className="status-spinner" aria-hidden="true" />
+            <h1>Registrando solicitação</h1>
+            <p>{statusTexto}</p>
+          </section>
+        )}
+        {erroMsg && (
+          <section className="status-content status-content-error" role="alert">
+            <h1>Não foi possível agendar</h1>
+            <p>Confira o erro abaixo e tente novamente. Seus dados preenchidos continuam disponíveis.</p>
+            <pre className="status-error-detail">{erroMsg}</pre>
+            <button className="button button-primary" onClick={() => { setErroMsg(null); setCarregando(false); }}>
+              Voltar e tentar novamente
+            </button>
+          </section>
+        )}
+        {geracaoSucesso && !erroMsg && (
+          <section className="status-content" aria-live="polite">
+            <h1>Solicitação colocada na fila</h1>
+            <p>Os documentos serão gerados em segundo plano e enviados em um arquivo ZIP para o e-mail informado.</p>
+            {jobAgendado && (
+              <dl className="job-details">
+                <div><dt>E-mail</dt><dd>{jobAgendado.email}</dd></div>
+                {typeof jobAgendado.fila_posicao === "number" && <div><dt>Posição aproximada</dt><dd>{jobAgendado.fila_posicao}º</dd></div>}
+                <div><dt>ID da solicitação</dt><dd><code>{jobAgendado.job_id}</code></dd></div>
+              </dl>
+            )}
+            <button className="button button-primary" onClick={() => { setGeracaoSucesso(false); setJobAgendado(null); setStatusTexto("Iniciando..."); }}>
+              Concluir
+            </button>
+          </section>
+        )}
+      </main>
     );
   }
 
@@ -219,120 +201,75 @@ export default function Wizard() {
   const etapa = etapas[etapaAtual];
 
   return (
-    <div className="app-shell">
-      <aside className="app-sidebar">
-        <div className="brand-block">
-          <div className="brand-mark">LA</div>
-          <div className="brand-copy">
-            <span className="brand-name">LICITA<span className="brand-dot">.</span>AI</span>
-            <span className="brand-caption">PLANEJAMENTO PÚBLICO</span>
-          </div>
-        </div>
-
-        <div className="sidebar-workspace">
-          <span className="workspace-icon" aria-hidden="true">▦</span>
-          <div><span className="workspace-label">ESPAÇO DE TRABALHO</span><strong>Fase preparatória</strong></div>
-        </div>
-
-        <div className="sidebar-section-label">SEU PROCESSO</div>
-        <nav className="step-nav" aria-label="Etapas do processo">
-          {etapas.map((item, index) => (
-            <div
-              key={item.navTitle}
-              className={"step-nav-item" + (etapaAtual === index ? " is-active" : "") + (etapaAtual > index ? " is-complete" : "")}
-              aria-current={etapaAtual === index ? "step" : undefined}
+    <div className="wizard-app">
+      <header className="wizard-header">
+        <a className="wizard-brand" href="/" aria-label="LICITA.AI — página inicial">LICITA<span>.</span>AI</a>
+        <div className="wizard-header-actions">
+          <div className="test-menu-wrap">
+            <button
+              type="button"
+              className="button button-quiet test-menu-trigger"
+              onClick={() => setMostrarTestes(v => !v)}
+              aria-expanded={mostrarTestes}
+              aria-haspopup="menu"
             >
-              <span className="step-nav-marker">{etapaAtual > index ? "✓" : String(index + 1).padStart(2, "0")}</span>
-              <span className="step-nav-copy">
-                <strong>{item.navTitle}</strong>
-                <small>{["Objeto e itens", "Requisitos e prazos", "Unidades e contatos", "Gestores e fiscais", "Regras e orçamento"][index]}</small>
-              </span>
-              {etapaAtual === index && <span className="step-nav-current" aria-hidden="true">›</span>}
-            </div>
-          ))}
+              Dados de teste <span aria-hidden="true">⌄</span>
+            </button>
+            {mostrarTestes && (
+              <div className="test-menu" role="menu">
+                <button type="button" role="menuitem" onClick={() => carregarTeste("normal")}>Carregar contratação normal</button>
+                <button type="button" role="menuitem" onClick={() => carregarTeste("direta")}>Carregar contratação direta</button>
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            className="button button-quiet theme-toggle"
+            onClick={toggleTheme}
+            title={isDark ? "Ativar tema claro" : "Ativar tema escuro"}
+            aria-label={isDark ? "Ativar tema claro" : "Ativar tema escuro"}
+          >{isDark ? "Claro" : "Escuro"}</button>
+        </div>
+      </header>
+
+      <main className="wizard-main">
+        <nav className="wizard-stepper" aria-label="Etapas da contratação">
+          <ol>
+            {etapas.map((item, index) => (
+              <li
+                key={item.titulo}
+                className={index === etapaAtual ? "current" : index < etapaAtual ? "completed" : ""}
+                aria-current={index === etapaAtual ? "step" : undefined}
+              >
+                <span className="stepper-number">{index < etapaAtual ? "✓" : index + 1}</span>
+                <span className="stepper-label">{item.titulo}</span>
+              </li>
+            ))}
+          </ol>
         </nav>
 
-        <div className="sidebar-bottom">
-          <div className="sidebar-tip-icon" aria-hidden="true">✦</div>
-          <div>
-            <strong>Um passo de cada vez</strong>
-            <p>Revise as informações antes de avançar. Os campos obrigatórios ajudam a manter os dados completos.</p>
-          </div>
-          <div className="sidebar-version"><span className="status-dot" /> Ambiente de trabalho</div>
-        </div>
-      </aside>
-
-      <div className="workspace">
-        <header className="topbar">
-          <div className="topbar-context">
-            <span className="topbar-overline">FASE PREPARATÓRIA <span>/</span> NOVA SOLICITAÇÃO</span>
-            <span className="topbar-title">Estruturação da contratação</span>
+        <section className="wizard-section" aria-labelledby="wizard-step-title">
+          <div className="wizard-heading">
+            <span className="wizard-step-count">Etapa {etapaAtual + 1} de {etapas.length}</span>
+            <h1 id="wizard-step-title">{etapa.titulo}</h1>
+            <p>{etapa.descricao}</p>
           </div>
 
-          <div className="topbar-actions">
-            <div className="test-menu-wrap">
-              <button
-                type="button"
-                className={"btn btn-secondary test-menu-trigger" + (mostrarTestes ? " is-open" : "")}
-                onClick={() => setMostrarTestes(v => !v)}
-                aria-expanded={mostrarTestes}
-                aria-haspopup="menu"
-              >
-                <span className="button-symbol" aria-hidden="true">⚗</span>
-                <span>Dados de teste</span>
-                <span className="chevron" aria-hidden="true">⌄</span>
-              </button>
-              {mostrarTestes && (
-                <div className="test-menu" role="menu">
-                  <div className="test-menu-heading">Preencher com exemplo</div>
-                  <button type="button" role="menuitem" onClick={() => carregarTeste("normal")}><span className="test-option-icon">01</span><span><strong>Contratação normal</strong><small>Exemplo completo de processo</small></span></button>
-                  <button type="button" role="menuitem" onClick={() => carregarTeste("direta")}><span className="test-option-icon">02</span><span><strong>Contratação direta</strong><small>Exemplo de contratação direta</small></span></button>
-                </div>
-              )}
-            </div>
-            <span className="topbar-separator" aria-hidden="true" />
-            <button type="button" className="btn btn-theme" onClick={toggleTheme} title={isDark ? "Ativar tema claro" : "Ativar tema escuro"} aria-label={isDark ? "Ativar tema claro" : "Ativar tema escuro"}>
-              <span aria-hidden="true">{isDark ? "☼" : "☾"}</span>
+          <div ref={scrollRef} className="wizard-form-content">
+            {renderizarEtapa()}
+          </div>
+
+          <footer className="wizard-navigation">
+            <button type="button" className="button button-secondary" onClick={voltar}>
+              {etapaAtual === 0 ? "Sair" : "Voltar"}
             </button>
-          </div>
-        </header>
-
-        <main className="app-main">
-          <div className="page-heading">
-            <div className="page-heading-copy">
-              <div className="step-kicker"><span>ETAPA {String(etapaAtual + 1).padStart(2, "0")}</span><span className="kicker-divider">/</span> {etapa.apoio}</div>
-              <h1>{etapa.titulo}</h1>
-              <p>{etapa.descricao}</p>
-            </div>
-            <div className="progress-summary">
-              <div className="progress-label"><span>Progresso</span><strong>{Math.round(((etapaAtual + 1) / etapas.length) * 100)}%</strong></div>
-              <div className="progress-track"><span style={{ width: ((etapaAtual + 1) / etapas.length) * 100 + "%" }} /></div>
-              <div className="progress-caption">Etapa {etapaAtual + 1} de {etapas.length}</div>
-            </div>
-          </div>
-
-          <div className="mobile-step-strip" aria-label={"Etapa " + (etapaAtual + 1) + " de " + etapas.length}>
-            <span className="mobile-step-count">0{etapaAtual + 1}</span>
-            <span className="mobile-step-name">{etapa.titulo}</span>
-            <span className="mobile-step-total">de 05</span>
-          </div>
-
-          <section className="content-panel" aria-label={etapa.titulo}>
-            <div className="panel-topline"><span className="panel-indicator" /><span>{etapa.apoio}</span><span className="panel-topline-spacer" /><span className="required-note"><i aria-hidden="true">*</i> Campos obrigatórios</span></div>
-            <div ref={scrollRef} className="step-content">{renderizarEtapa()}</div>
-          </section>
-
-          <footer className="wizard-footer">
-            <div className="footer-assurance"><span className="footer-check" aria-hidden="true">✓</span><span>Seus dados são mantidos durante o preenchimento desta solicitação.</span></div>
-            <div className="footer-controls">
-              <button type="button" className="btn btn-ghost" onClick={voltar}><span aria-hidden="true">←</span> Voltar</button>
-              <button type="button" className={"btn btn-primary btn-next" + (etapaAtual === 4 ? " btn-finish" : "")} onClick={avancar} disabled={!podeAvancar}>
-                {etapaAtual === 4 ? "Confeccionar documentos" : "Continuar"} <span aria-hidden="true">{etapaAtual === 4 ? "✓" : "→"}</span>
-              </button>
-            </div>
+            <button type="button" className="button button-primary" onClick={avancar} disabled={!podeAvancar}>
+              {etapaAtual === 4 ? "Confeccionar documentos" : "Próxima etapa"}
+              {etapaAtual !== 4 && <span aria-hidden="true">→</span>}
+            </button>
           </footer>
-        </main>
-      </div>
+        </section>
+      </main>
 
       <PromptModal isOpen={mostrarPromptModal} onClose={() => setMostrarPromptModal(false)} onConfirm={confeccionarDocumentos} />
     </div>
