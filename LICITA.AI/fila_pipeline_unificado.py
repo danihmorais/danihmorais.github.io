@@ -6,7 +6,7 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 
-from fila import ALERT_EMAIL, MAX_ATTEMPTS, POLL_INTERVAL_SECONDS, QUEUE_DIR, RETRY_BASE_SECONDS, RETRY_MAX_SECONDS, _artifact_path, _claim_next_job, _enviar_email, _enviar_email_alerta_falha, _job_path, _write_json, gerar_zip
+from fila import MAX_ATTEMPTS, POLL_INTERVAL_SECONDS, QUEUE_DIR, RETRY_BASE_SECONDS, RETRY_MAX_SECONDS, SMTP_FROM, SMTP_USERNAME, _artifact_path, _claim_next_job, _enviar_email, _enviar_email_alerta_falha, _job_path, _write_json, gerar_zip
 from fila_pipeline import _aplicar_auditoria_marcas, _chamar_ia as _chamar_ia_primaria, _substituir_contextos, _validar_json_geracao
 
 
@@ -194,23 +194,24 @@ def _process_one_job() -> None:
             job["status"] = "failed"
             job.pop("retry_at", None)
             _remover_documentos_de_referencia(job)
+            destinatario_alerta = SMTP_FROM or SMTP_USERNAME
             try:
                 _enviar_email_alerta_falha(job, str(exc))
                 job["failure_notification"] = {
                     "status": "sent",
-                    "recipient": ALERT_EMAIL,
+                    "recipient": destinatario_alerta,
                     "sent_at": _utc_now(),
                 }
             except Exception as alert_exc:
                 job["failure_notification"] = {
                     "status": "failed",
-                    "recipient": ALERT_EMAIL,
+                    "recipient": destinatario_alerta,
                     "attempted_at": _utc_now(),
                     "error": str(alert_exc)[:1000],
                 }
                 print(
                     f"[LICITA.AI] Não foi possível enviar o alerta da solicitação "
-                    f"{job.get('job_id', 'desconhecida')} para {ALERT_EMAIL}: {alert_exc}",
+                    f"{job.get('job_id', 'desconhecida')} para {destinatario_alerta}: {alert_exc}",
                     flush=True,
                 )
             _write_json(_job_path(job["job_id"], ".failed"), job)
