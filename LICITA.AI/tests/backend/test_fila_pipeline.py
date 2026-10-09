@@ -160,3 +160,50 @@ class TestPipelineUnificado(unittest.TestCase):
         self.assertEqual(chamadas_modelo, ["unsloth-auto", "modelo-resolvido"])
         self.assertEqual(job["status"], "sent")
         enviar_email.assert_called_once()
+
+
+class TestNotificacaoFalhaFila(unittest.TestCase):
+    def test_notifica_apenas_apos_esgotar_tentativas(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        import fila_pipeline_unificado as pipeline
+        from fila import MAX_ATTEMPTS, ALERT_EMAIL
+
+        job_id = "c" * 32
+
+        for tentativas, deve_notificar in ((1, False), (MAX_ATTEMPTS, True)):
+            with self.subTest(tentativas=tentativas), tempfile.TemporaryDirectory() as diretorio:
+                raiz = Path(diretorio)
+                processamento = raiz / f"{job_id}.processing.json"
+                processamento.write_text("{}", encoding="utf-8")
+                job = {
+                    "job_id": job_id,
+                    "status": "processing",
+                    "attempts": tentativas,
+                    "email": "destinatario@example.com",
+                    "current_stage": "ENVIO_EMAIL",
+                    "dados_usuario": {},
+                }
+
+                def caminho_job(_job_id, suffix=""):
+                    return raiz / f"{_job_id}{suffix}.json"
+
+                with (
+                    patch.object(pipeline, "_claim_next_job", return_value=(processamento, job)),
+                    patch.object(pipeline, "_process_pipeline", side_effect=RuntimeError("falha simulada")),
+                    patch.object(pipeline, "_job_path", side_effect=caminho_job),
+                    patch.object(pipeline, "_artifact_path", side_effect=lambda _job_id: raiz / f"{_job_id}.artifact.zip"),
+                    patch.object(pipeline, "_write_json"),
+                    patch.object(pipeline, "_enviar_email_alerta_falha") as alertar,
+                ):
+                    pipeline._process_one_job()
+
+                if deve_notificar:
+                    alertar.assert_called_once_with(job, "falha simulada")
+                    self.assertEqual(job["status"], "failed")
+                    self.assertEqual(job["failure_notification"]["status"], "sent")
+                    self.assertEqual(job["failure_notification"]["recipient"], ALERT_EMAIL)
+                else:
+                    alertar.assert_not_called()
+                    self.assertEqual(job["status"], "queued")
