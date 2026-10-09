@@ -9,6 +9,14 @@ import { ThemeContext } from "../context/ThemeContext";
 import { gerarFasePreparatoria, type DocumentosReferenciaUpload } from "../api";
 import { criarDadosTeste, TipoTesteContratacao } from "../utils/dadosTeste";
 
+const etapas = [
+  { titulo: "Objeto e justificativa", navTitle: "Objeto e justificativa", descricao: "Defina o que será contratado, a necessidade pública e os itens que compõem a demanda.", apoio: "Identificação da necessidade" },
+  { titulo: "Condições de execução", navTitle: "Condições de execução", descricao: "Registre os requisitos de entrega, execução e controle de qualidade.", apoio: "Requisitos da contratação" },
+  { titulo: "Unidade demandante", navTitle: "Unidade demandante", descricao: "Selecione as unidades envolvidas e informe os contatos responsáveis por cada uma.", apoio: "Origem e comunicação da demanda" },
+  { titulo: "Equipe de planejamento", navTitle: "Equipe de planejamento", descricao: "Identifique gestores e fiscais que participarão do acompanhamento contratual.", apoio: "Responsáveis pelo processo" },
+  { titulo: "Definição do instrumento", navTitle: "Instrumento e regras", descricao: "Consolide as escolhas administrativas, as condições de pagamento e a dotação orçamentária.", apoio: "Parâmetros finais" },
+];
+
 export default function Wizard() {
   const [etapaAtual, setEtapaAtual] = useState(0);
   const [dados, setDados] = useState({
@@ -150,88 +158,180 @@ export default function Wizard() {
 
   if (carregando || erroMsg || geracaoSucesso) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", backgroundColor: "var(--bg-base)", padding: "24px", boxSizing: "border-box" }}>
-        <div style={{ background: "var(--bg-panel)", padding: "40px", borderRadius: "24px", boxShadow: "var(--shadow-lg)", textAlign: "center", width: "100%", maxWidth: "620px" }}>
+      <div className="state-page">
+        <div className="state-card">
+          <div className="state-brand">
+            <span className="brand-mark brand-mark-small">LA</span>
+            <span>LICITA.AI <small>FASE PREPARATÓRIA</small></span>
+          </div>
+
           {carregando && !erroMsg && !geracaoSucesso && (
-            <>
-              <div style={{ fontSize: "44px", marginBottom: "12px" }}>⏳</div>
-              <h2 style={{ margin: "0 0 16px", color: "var(--text-main)", fontSize: "22px" }}>Registrando solicitação</h2>
-              <p style={{ color: "var(--text-muted)", margin: 0 }}>{statusTexto}</p>
-            </>
+            <div className="state-content">
+              <div className="state-icon state-icon-loading"><span className="loading-spinner" /></div>
+              <span className="state-eyebrow">SOLICITAÇÃO EM ANDAMENTO</span>
+              <h1>Preparando sua solicitação</h1>
+              <p>{statusTexto}</p>
+              <div className="state-progress"><span /></div>
+              <p className="state-footnote">Mantenha esta janela aberta até a solicitação ser registrada.</p>
+            </div>
           )}
 
           {erroMsg && (
-            <>
-              <div style={{ fontSize: "44px", marginBottom: "12px" }}>⚠️</div>
-              <h2 style={{ margin: "0 0 16px", color: "var(--btn-danger)", fontSize: "22px" }}>Não foi possível agendar</h2>
-              <div style={{ background: "var(--bg-subtle)", border: "1px solid var(--btn-danger)", borderRadius: "10px", padding: "16px", marginBottom: "24px", textAlign: "left", maxHeight: "260px", overflowY: "auto" }}>
-                <pre style={{ color: "var(--btn-danger)", fontSize: "13px", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "inherit" }}>{erroMsg}</pre>
+            <div className="state-content">
+              <div className="state-icon state-icon-error">!</div>
+              <span className="state-eyebrow">NÃO FOI POSSÍVEL CONTINUAR</span>
+              <h1>Não foi possível agendar</h1>
+              <p>Confira os detalhes abaixo. Seus dados preenchidos continuam disponíveis nesta sessão.</p>
+              <div className="state-error-detail">
+                <pre>{erroMsg}</pre>
               </div>
-              <button onClick={() => { setErroMsg(null); setCarregando(false); }} style={{ padding: "12px 32px", background: "var(--btn-primary)", color: "#fff", border: "none", borderRadius: "12px", fontWeight: "bold", cursor: "pointer" }}>← Voltar e tentar novamente</button>
-            </>
+              <button className="btn btn-primary state-action" onClick={() => { setErroMsg(null); setCarregando(false); }}>
+                <span aria-hidden="true">←</span> Voltar e tentar novamente
+              </button>
+            </div>
           )}
 
           {geracaoSucesso && !erroMsg && (
-            <>
-              <div style={{ fontSize: "44px", marginBottom: "12px" }}>✅</div>
-              <h2 style={{ margin: "0 0 16px", color: "var(--btn-success)", fontSize: "22px" }}>Solicitação colocada na fila!</h2>
-              <p style={{ color: "var(--text-muted)", margin: "0 0 18px", fontSize: "14px" }}>
-                Você não precisa permanecer nesta tela. A IA vai gerar os documentos em segundo plano e, quando terminar, o ZIP será enviado automaticamente para o e-mail informado.
-              </p>
+            <div className="state-content">
+              <div className="state-icon state-icon-success"><span>✓</span></div>
+              <span className="state-eyebrow">SOLICITAÇÃO REGISTRADA</span>
+              <h1>Você já pode seguir em frente</h1>
+              <p>Os documentos serão gerados em segundo plano. Quando o processamento terminar, o arquivo ZIP será enviado automaticamente para o e-mail informado.</p>
               {jobAgendado && (
-                <div style={{ background: "var(--bg-subtle)", border: "1px solid var(--border)", borderRadius: "12px", padding: "14px 16px", marginBottom: "24px", textAlign: "left", color: "var(--text-main)", fontSize: "13px" }}>
-                  <div><strong>E-mail:</strong> {jobAgendado.email}</div>
-                  {typeof jobAgendado.fila_posicao === "number" && <div style={{ marginTop: "6px" }}><strong>Posição aproximada:</strong> {jobAgendado.fila_posicao}º</div>}
-                  <div style={{ marginTop: "6px", wordBreak: "break-all" }}><strong>ID:</strong> {jobAgendado.job_id}</div>
+                <div className="job-summary">
+                  <div className="job-summary-row"><span>E-mail para recebimento</span><strong>{jobAgendado.email}</strong></div>
+                  {typeof jobAgendado.fila_posicao === "number" && <div className="job-summary-row"><span>Posição aproximada na fila</span><strong>{jobAgendado.fila_posicao}º</strong></div>}
+                  <div className="job-summary-row job-id-row"><span>Identificador da solicitação</span><code>{jobAgendado.job_id}</code></div>
                 </div>
               )}
-              <button onClick={() => { setGeracaoSucesso(false); setJobAgendado(null); setStatusTexto("Iniciando..."); }} style={{ padding: "12px 32px", background: "var(--btn-success)", color: "#fff", border: "none", borderRadius: "12px", fontWeight: "bold", cursor: "pointer" }}>✓ Concluir</button>
-            </>
+              <button className="btn btn-success state-action" onClick={() => { setGeracaoSucesso(false); setJobAgendado(null); setStatusTexto("Iniciando..."); }}>
+                Concluir <span aria-hidden="true">→</span>
+              </button>
+            </div>
           )}
         </div>
+        <div className="state-footer">LICITA.AI <span>·</span> Apoio à fase preparatória das contratações públicas</div>
       </div>
     );
   }
 
   const podeAvancar = validarEtapa();
+  const etapa = etapas[etapaAtual];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", backgroundColor: "var(--bg-base)", fontFamily: "sans-serif" }}>
-      <div style={{ padding: "24px 40px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: "22px", color: "var(--text-main)" }}>
-            {etapaAtual === 0 && "Etapa 1: Objeto e Justificativa"}
-            {etapaAtual === 1 && "Etapa 2: Condições de Execução"}
-            {etapaAtual === 2 && "Etapa 3: Unidade Demandante"}
-            {etapaAtual === 3 && "Etapa 4: Equipe de Planejamento"}
-            {etapaAtual === 4 && "Etapa 5: Definição do Instrumento"}
-          </h1>
-          <p style={{ margin: "4px 0 0", color: "var(--text-muted)", fontSize: "14px" }}>Forneça os dados do processo com clareza para gerar os artefatos corretamente.</p>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <span style={{ color: "var(--text-muted)", fontWeight: "bold", fontSize: "14px" }}>Passo {etapaAtual + 1} de 5</span>
-          <div style={{ position: "relative" }}>
-            <button onClick={() => setMostrarTestes(v => !v)} style={{ height: "44px", padding: "0 14px", borderRadius: "8px", border: "1px solid var(--border)", cursor: "pointer", background: "var(--bg-panel)", color: "var(--text-main)", fontWeight: 600, boxShadow: "var(--shadow-sm)" }}>🧪 Testes</button>
-            {mostrarTestes && (
-              <div style={{ position: "absolute", top: "52px", right: 0, minWidth: "240px", padding: "8px", background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: "12px", boxShadow: "var(--shadow-lg)", zIndex: 1100 }}>
-                <button onClick={() => carregarTeste("normal")} style={{ width: "100%", padding: "11px 12px", textAlign: "left", border: "none", borderRadius: "8px", background: "transparent", color: "var(--text-main)", cursor: "pointer" }}>📋 Contratação normal</button>
-                <button onClick={() => carregarTeste("direta")} style={{ width: "100%", padding: "11px 12px", textAlign: "left", border: "none", borderRadius: "8px", background: "transparent", color: "var(--text-main)", cursor: "pointer" }}>⚡ Contratação direta</button>
-              </div>
-            )}
+    <div className="app-shell">
+      <aside className="app-sidebar">
+        <div className="brand-block">
+          <div className="brand-mark">LA</div>
+          <div className="brand-copy">
+            <span className="brand-name">LICITA<span className="brand-dot">.</span>AI</span>
+            <span className="brand-caption">PLANEJAMENTO PÚBLICO</span>
           </div>
-          <button onClick={toggleTheme} style={{ width: "44px", height: "44px", borderRadius: "8px", border: "none", cursor: "pointer", background: "var(--bg-subtle)", color: "var(--text-main)" }}>{isDark ? "☀️" : "🌙"}</button>
         </div>
-      </div>
 
-      <div style={{ flex: 1, padding: "0 40px", overflow: "hidden" }}>
-        <div style={{ height: "100%", background: "var(--bg-panel)", borderRadius: "24px", boxShadow: "var(--shadow-md)", border: "1px solid var(--border)", padding: "16px" }}>
-          <div ref={scrollRef} style={{ height: "100%", overflowY: "auto", padding: "16px" }}>{renderizarEtapa()}</div>
+        <div className="sidebar-workspace">
+          <span className="workspace-icon" aria-hidden="true">▦</span>
+          <div><span className="workspace-label">ESPAÇO DE TRABALHO</span><strong>Fase preparatória</strong></div>
         </div>
-      </div>
 
-      <div style={{ padding: "24px 40px", display: "flex", justifyContent: "space-between" }}>
-        <button onClick={voltar} style={{ width: "140px", height: "44px", borderRadius: "12px", border: "2px solid var(--border)", background: "transparent", color: "var(--text-main)", fontWeight: "bold", fontSize: "14px", opacity: etapaAtual === 0 ? 0.5 : 1 }}>Voltar</button>
-        <button onClick={avancar} disabled={!podeAvancar} style={{ width: "140px", height: "44px", borderRadius: "12px", border: "none", background: !podeAvancar ? "var(--text-light)" : etapaAtual === 4 ? "var(--btn-success)" : "var(--btn-primary)", color: "#fff", fontWeight: "bold", fontSize: "14px", cursor: !podeAvancar ? "not-allowed" : "pointer" }}>{etapaAtual === 4 ? "Confeccionar" : "Avançar"}</button>
+        <div className="sidebar-section-label">SEU PROCESSO</div>
+        <nav className="step-nav" aria-label="Etapas do processo">
+          {etapas.map((item, index) => (
+            <div
+              key={item.navTitle}
+              className={"step-nav-item" + (etapaAtual === index ? " is-active" : "") + (etapaAtual > index ? " is-complete" : "")}
+              aria-current={etapaAtual === index ? "step" : undefined}
+            >
+              <span className="step-nav-marker">{etapaAtual > index ? "✓" : String(index + 1).padStart(2, "0")}</span>
+              <span className="step-nav-copy">
+                <strong>{item.navTitle}</strong>
+                <small>{["Objeto e itens", "Requisitos e prazos", "Unidades e contatos", "Gestores e fiscais", "Regras e orçamento"][index]}</small>
+              </span>
+              {etapaAtual === index && <span className="step-nav-current" aria-hidden="true">›</span>}
+            </div>
+          ))}
+        </nav>
+
+        <div className="sidebar-bottom">
+          <div className="sidebar-tip-icon" aria-hidden="true">✦</div>
+          <div>
+            <strong>Um passo de cada vez</strong>
+            <p>Revise as informações antes de avançar. Os campos obrigatórios ajudam a manter os dados completos.</p>
+          </div>
+          <div className="sidebar-version"><span className="status-dot" /> Ambiente de trabalho</div>
+        </div>
+      </aside>
+
+      <div className="workspace">
+        <header className="topbar">
+          <div className="topbar-context">
+            <span className="topbar-overline">FASE PREPARATÓRIA <span>/</span> NOVA SOLICITAÇÃO</span>
+            <span className="topbar-title">Estruturação da contratação</span>
+          </div>
+
+          <div className="topbar-actions">
+            <div className="test-menu-wrap">
+              <button
+                type="button"
+                className={"btn btn-secondary test-menu-trigger" + (mostrarTestes ? " is-open" : "")}
+                onClick={() => setMostrarTestes(v => !v)}
+                aria-expanded={mostrarTestes}
+                aria-haspopup="menu"
+              >
+                <span className="button-symbol" aria-hidden="true">⚗</span>
+                <span>Dados de teste</span>
+                <span className="chevron" aria-hidden="true">⌄</span>
+              </button>
+              {mostrarTestes && (
+                <div className="test-menu" role="menu">
+                  <div className="test-menu-heading">Preencher com exemplo</div>
+                  <button type="button" role="menuitem" onClick={() => carregarTeste("normal")}><span className="test-option-icon">01</span><span><strong>Contratação normal</strong><small>Exemplo completo de processo</small></span></button>
+                  <button type="button" role="menuitem" onClick={() => carregarTeste("direta")}><span className="test-option-icon">02</span><span><strong>Contratação direta</strong><small>Exemplo de contratação direta</small></span></button>
+                </div>
+              )}
+            </div>
+            <span className="topbar-separator" aria-hidden="true" />
+            <button type="button" className="btn btn-theme" onClick={toggleTheme} title={isDark ? "Ativar tema claro" : "Ativar tema escuro"} aria-label={isDark ? "Ativar tema claro" : "Ativar tema escuro"}>
+              <span aria-hidden="true">{isDark ? "☼" : "☾"}</span>
+            </button>
+          </div>
+        </header>
+
+        <main className="app-main">
+          <div className="page-heading">
+            <div className="page-heading-copy">
+              <div className="step-kicker"><span>ETAPA {String(etapaAtual + 1).padStart(2, "0")}</span><span className="kicker-divider">/</span> {etapa.apoio}</div>
+              <h1>{etapa.titulo}</h1>
+              <p>{etapa.descricao}</p>
+            </div>
+            <div className="progress-summary">
+              <div className="progress-label"><span>Progresso</span><strong>{Math.round(((etapaAtual + 1) / etapas.length) * 100)}%</strong></div>
+              <div className="progress-track"><span style={{ width: ((etapaAtual + 1) / etapas.length) * 100 + "%" }} /></div>
+              <div className="progress-caption">Etapa {etapaAtual + 1} de {etapas.length}</div>
+            </div>
+          </div>
+
+          <div className="mobile-step-strip" aria-label={"Etapa " + (etapaAtual + 1) + " de " + etapas.length}>
+            <span className="mobile-step-count">0{etapaAtual + 1}</span>
+            <span className="mobile-step-name">{etapa.titulo}</span>
+            <span className="mobile-step-total">de 05</span>
+          </div>
+
+          <section className="content-panel" aria-label={etapa.titulo}>
+            <div className="panel-topline"><span className="panel-indicator" /><span>{etapa.apoio}</span><span className="panel-topline-spacer" /><span className="required-note"><i aria-hidden="true">*</i> Campos obrigatórios</span></div>
+            <div ref={scrollRef} className="step-content">{renderizarEtapa()}</div>
+          </section>
+
+          <footer className="wizard-footer">
+            <div className="footer-assurance"><span className="footer-check" aria-hidden="true">✓</span><span>Seus dados são mantidos durante o preenchimento desta solicitação.</span></div>
+            <div className="footer-controls">
+              <button type="button" className="btn btn-ghost" onClick={voltar}><span aria-hidden="true">←</span> Voltar</button>
+              <button type="button" className={"btn btn-primary btn-next" + (etapaAtual === 4 ? " btn-finish" : "")} onClick={avancar} disabled={!podeAvancar}>
+                {etapaAtual === 4 ? "Confeccionar documentos" : "Continuar"} <span aria-hidden="true">{etapaAtual === 4 ? "✓" : "→"}</span>
+              </button>
+            </div>
+          </footer>
+        </main>
       </div>
 
       <PromptModal isOpen={mostrarPromptModal} onClose={() => setMostrarPromptModal(false)} onConfirm={confeccionarDocumentos} />
