@@ -230,7 +230,7 @@ export default function Step5({ dados, atualizarDados }: any) {
 
       <div className="setting-section" style={styles.sectionGroup}>
         <h2 style={styles.title}>Vigência do Contrato/Ata (Máximo 1 ano)</h2>
-        <div style={styles.counterWrapper}>
+        <div className="counter-wrapper" style={styles.counterWrapper}>
           <button type="button" onClick={decrementarVigencia} style={styles.btn}>-</button>
           <input 
             type="text" 
