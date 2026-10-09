@@ -168,11 +168,11 @@ class TestNotificacaoFalhaFila(unittest.TestCase):
         from pathlib import Path
         from unittest.mock import patch
         import fila_pipeline_unificado as pipeline
-        from fila import MAX_ATTEMPTS, ALERT_EMAIL
+        from fila import ALERT_EMAIL
 
         job_id = "c" * 32
 
-        for tentativas, deve_notificar in ((1, False), (MAX_ATTEMPTS, True)):
+        for tentativas, deve_notificar in ((1, False), (3, True)):
             with self.subTest(tentativas=tentativas), tempfile.TemporaryDirectory() as diretorio:
                 raiz = Path(diretorio)
                 processamento = raiz / f"{job_id}.processing.json"
@@ -190,6 +190,7 @@ class TestNotificacaoFalhaFila(unittest.TestCase):
                     return raiz / f"{_job_id}{suffix}.json"
 
                 with (
+                    patch.object(pipeline, "MAX_ATTEMPTS", 3),
                     patch.object(pipeline, "_claim_next_job", return_value=(processamento, job)),
                     patch.object(pipeline, "_process_pipeline", side_effect=RuntimeError("falha simulada")),
                     patch.object(pipeline, "_job_path", side_effect=caminho_job),
