@@ -114,8 +114,8 @@ export default function PromptModal({ isOpen, onClose, onConfirm }: PromptModalP
         </label>
 
         <div className="prompt-actions">
-          <button type="button" className="btn btn-ghost" onClick={handleCancelar}>Cancelar</button>
-          <button type="button" className="btn btn-primary" onClick={handleConfirmar} disabled={!emailValido}>
+          <button type="button" className="button button-secondary" onClick={handleCancelar}>Cancelar</button>
+          <button type="button" className="button button-primary" onClick={handleConfirmar} disabled={!emailValido}>
             Colocar na fila <span aria-hidden="true">→</span>
           </button>
         </div>
