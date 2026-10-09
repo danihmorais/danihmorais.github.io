@@ -20,7 +20,7 @@ test("mapearDadosWizard envia os nomes de todos os itens para a auditoria", () =
 });
 
 test("auditoria de marcas remove somente marca sem reescrever o descritivo", async () => {
-  const modulo = loadTsModule("src/providers/services/contratacaoDiretaIA.ts", {
+  const modulo = loadTsModule("src/providers/services/descricaoItensIA.ts", {
     replacements: [
       [
         'import { gerarTextoIA } from "../llm";',
@@ -64,7 +64,7 @@ test("auditoria de marcas remove somente marca sem reescrever o descritivo", asy
 });
 
 test("auditoria rejeita uma reescrita que não seja mera remoção de marca", async () => {
-  const modulo = loadTsModule("src/providers/services/contratacaoDiretaIA.ts", {
+  const modulo = loadTsModule("src/providers/services/descricaoItensIA.ts", {
     replacements: [
       [
         'import { gerarTextoIA } from "../llm";',
@@ -100,7 +100,7 @@ test("auditoria rejeita uma reescrita que não seja mera remoção de marca", as
 
 test("melhorarDescricaoItem trabalha somente com um item", async () => {
   let prompt = "";
-  const modulo = loadTsModule("src/providers/services/contratacaoDiretaIA.ts", {
+  const modulo = loadTsModule("src/providers/services/descricaoItensIA.ts", {
     replacements: [
       [
         'import { gerarTextoIA } from "../llm";',
