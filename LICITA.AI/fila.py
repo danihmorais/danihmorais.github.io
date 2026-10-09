@@ -32,6 +32,8 @@ SMTP_USERNAME = os.getenv("LICITA_SMTP_USERNAME", os.getenv("SMTP_USERNAME", "")
 SMTP_PASSWORD = os.getenv("LICITA_SMTP_PASSWORD", os.getenv("SMTP_PASSWORD", ""))
 SMTP_SECURITY = os.getenv("LICITA_SMTP_SECURITY", os.getenv("SMTP_SECURITY", "starttls")).strip().lower()
 SMTP_FROM = os.getenv("LICITA_SMTP_FROM", os.getenv("SMTP_FROM", SMTP_USERNAME)).strip()
+ALERT_EMAIL_DEFAULT = "licitacao@saofrancisco.sp.gov.br"
+ALERT_EMAIL = os.getenv("LICITA_FAILURE_ALERT_EMAIL", ALERT_EMAIL_DEFAULT).strip() or ALERT_EMAIL_DEFAULT
 
 
 
@@ -259,6 +261,53 @@ def _enviar_email(recipient: str, zip_path: Path, filename: str, job_id: str) ->
     message.set_content("Prezados,\n\nA solicitação realizada pelo Licita.AI foi processada com sucesso.\n\n" + f"Identificador da solicitação: {job_id}\n" + "Os documentos da fase preparatória seguem anexados neste e-mail.\n\nAtenciosamente,\nLicita.AI")
     with zip_path.open("rb") as handle:
         message.add_attachment(handle.read(), maintype="application", subtype="zip", filename=filename)
+    with _smtp_client() as client:
+        client.login(SMTP_USERNAME, SMTP_PASSWORD)
+        client.send_message(message)
+
+
+
+def _enviar_email_alerta_falha(job: dict, erro: str) -> None:
+    """Avisa Licitações quando uma solicitação esgota as tentativas de processamento."""
+    if not EMAIL_RE.fullmatch(ALERT_EMAIL):
+        raise RuntimeError("O destinatário do alerta de falha do Licita.AI é inválido.")
+
+    job_id = str(job.get("job_id") or "não informado")
+    etapa = str(job.get("current_stage") or "PROCESSAMENTO").strip()
+    tipo_falha = (
+        "envio do e-mail ao destinatário"
+        if etapa.upper() == "ENVIO_EMAIL"
+        else "geração/processamento dos documentos"
+    )
+    dados_usuario = job.get("dados_usuario")
+    if not isinstance(dados_usuario, dict):
+        dados_usuario = job.get("pipeline_dados_usuario")
+    if not isinstance(dados_usuario, dict):
+        dados_usuario = {}
+    objeto = str(dados_usuario.get("{{OBJETO}}") or dados_usuario.get("OBJETO") or "Não informado").strip()
+    objeto = objeto[:500]
+    destinatario = str(job.get("email") or "Não informado")
+    erro_resumido = str(erro or "Erro não informado").strip()[:2500]
+    tentativas = int(job.get("attempts", 0) or 0)
+
+    message = EmailMessage()
+    message["From"] = SMTP_FROM or SMTP_USERNAME
+    message["To"] = ALERT_EMAIL
+    message["Subject"] = f"LICITA.AI — Falha na solicitação {job_id[:8]}"
+    message.set_content(
+        "O LICITA.AI não conseguiu concluir uma solicitação após esgotar as tentativas automáticas.\n\n"
+        f"Identificador: {job_id}\n"
+        f"Etapa: {etapa}\n"
+        f"Ocorrência: {tipo_falha}\n"
+        f"Destinatário pretendido: {destinatario}\n"
+        f"Objeto: {objeto}\n"
+        f"Tentativas realizadas: {tentativas}\n"
+        f"Data/hora (UTC): {_utc_now()}\n\n"
+        f"Erro registrado:\n{erro_resumido}\n\n"
+        "A solicitação foi marcada como falha na fila. Verifique o erro e, após corrigir a causa, "
+        "oriente o usuário a realizar uma nova solicitação.\n\n"
+        "Mensagem automática do LICITA.AI."
+    )
     with _smtp_client() as client:
         client.login(SMTP_USERNAME, SMTP_PASSWORD)
         client.send_message(message)
