@@ -170,7 +170,7 @@ class TestConfiguracaoThinking(unittest.TestCase):
         resposta = MagicMock()
         resposta.status_code = 200
         resposta.json.return_value = {
-            "choices": [{"message": {"content": "{\\"ok\\": true}"}}],
+                "choices": [{"message": {"content": json.dumps({"ok": True})}}],
             "model": "qwen-modelo-de-teste",
         }
         with (
