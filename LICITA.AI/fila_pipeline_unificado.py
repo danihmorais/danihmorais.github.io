@@ -111,6 +111,7 @@ def _process_pipeline(job: dict) -> None:
 
         resultado, modelo_resolvido = _chamar_ia(prompt_processado, modelo, temperatura)
         if modelo_resolvido:
+            modelo = modelo_resolvido
             job["resolved_model"] = modelo_resolvido
 
         if etapa_tipo == "auditoria_marcas":
