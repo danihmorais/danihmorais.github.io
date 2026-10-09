@@ -213,7 +213,7 @@ class LicitaBackendTests(unittest.TestCase):
         async def mock_upstream_chat(base_url, api_key, payload):
             captura.update(payload)
             return {
-                "choices": [{"message": {"content": "{\\"ok\\": true}"}}],
+                "choices": [{"message": {"content": json.dumps({"ok": True})}}],
                 "model": payload["model"],
             }, 200
 
