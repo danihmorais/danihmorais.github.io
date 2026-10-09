@@ -168,7 +168,6 @@ class TestNotificacaoFalhaFila(unittest.TestCase):
         from pathlib import Path
         from unittest.mock import patch
         import fila_pipeline_unificado as pipeline
-        from fila import ALERT_EMAIL
 
         job_id = "c" * 32
 
@@ -191,6 +190,8 @@ class TestNotificacaoFalhaFila(unittest.TestCase):
 
                 with (
                     patch.object(pipeline, "MAX_ATTEMPTS", 3),
+                    patch.object(pipeline, "SMTP_FROM", "licitacao@example.gov.br"),
+                    patch.object(pipeline, "SMTP_USERNAME", "smtp@example.gov.br"),
                     patch.object(pipeline, "_claim_next_job", return_value=(processamento, job)),
                     patch.object(pipeline, "_process_pipeline", side_effect=RuntimeError("falha simulada")),
                     patch.object(pipeline, "_job_path", side_effect=caminho_job),
@@ -204,7 +205,7 @@ class TestNotificacaoFalhaFila(unittest.TestCase):
                     alertar.assert_called_once_with(job, "falha simulada")
                     self.assertEqual(job["status"], "failed")
                     self.assertEqual(job["failure_notification"]["status"], "sent")
-                    self.assertEqual(job["failure_notification"]["recipient"], ALERT_EMAIL)
+                    self.assertEqual(job["failure_notification"]["recipient"], "licitacao@example.gov.br")
                 else:
                     alertar.assert_not_called()
                     self.assertEqual(job["status"], "queued")
