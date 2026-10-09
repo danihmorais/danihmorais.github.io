@@ -9,7 +9,7 @@ import httpx
 
 API_UNSLOTH_URL = os.getenv("LICITA_UNSLOTH_URL", os.getenv("UNSLOTH_URL", "http://127.0.0.1:8888/v1")).rstrip("/")
 API_UNSLOTH_KEY = os.getenv("LICITA_UNSLOTH_KEY", os.getenv("API_UNSLOTH", "")).strip()
-AI_TIMEOUT_SECONDS = max(60, int(os.getenv("LICITA_QUEUE_AI_TIMEOUT", "600")))
+AI_TIMEOUT_SECONDS = max(60, int(os.getenv("LICITA_QUEUE_AI_TIMEOUT", os.getenv("LICITA_IA_TIMEOUT", "600"))))
 
 _PIPE_DFD = "__LICITA_PIPE_DFD__"
 _PIPE_ETP = "__LICITA_PIPE_ETP__"
@@ -176,8 +176,9 @@ def _chamar_ia(prompt: str, model: str, temperature: float = 0.3) -> tuple[dict,
         "messages": [{"role": "user", "content": prompt}],
         "response_format": {"type": "json_object"},
     }
-    if "gemma-4" in modelo.lower() and (modelo == "unsloth-auto" or modelo.startswith("unsloth") or "127.0.0.1" in base_url or "localhost" in base_url):
-        payload["enable_thinking"] = True
+    # O Unsloth aplica o modo de raciocínio quando suportado pelo modelo/template ativo.
+    # Enviar em todas as chamadas evita acoplar esse comportamento ao nome de uma família específica.
+    payload["enable_thinking"] = True
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
     with httpx.Client(timeout=AI_TIMEOUT_SECONDS) as client:
         response = client.post(f"{base_url}/chat/completions", headers=headers, json=payload)
