@@ -63,7 +63,7 @@ class FilaTests(unittest.TestCase):
         }
 
         with (
-            patch.object(fila, "ALERT_EMAIL", "licitacao@example.gov.br"),
+            patch.object(fila, "SMTP_FROM", "licitacao@example.gov.br"),
             patch.object(fila, "SMTP_USERNAME", "smtp@example.gov.br"),
             patch.object(fila, "SMTP_PASSWORD", "senha-de-teste"),
             patch.object(fila, "_smtp_client", return_value=cliente),
@@ -93,7 +93,7 @@ class FilaTests(unittest.TestCase):
         }
 
         with (
-            patch.object(fila, "ALERT_EMAIL", "licitacao@example.gov.br"),
+            patch.object(fila, "SMTP_FROM", "licitacao@example.gov.br"),
             patch.object(fila, "_smtp_client", return_value=cliente),
         ):
             fila._enviar_email_alerta_falha(job, "Erro ao gerar DOCX")
