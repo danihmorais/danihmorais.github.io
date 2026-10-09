@@ -115,8 +115,8 @@ export default function Step3({ dados = { secretarias: [], contatosSecretarias: 
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-      <div>
+    <div className="step-form step-form--departments" style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+      <div className="step-section-heading">
         <h2 style={{ fontSize: "16px", margin: "0 0 8px 0", color: "var(--text-main)" }}>
           Secretarias Demandantes <span style={{ color: "var(--btn-danger)" }}>*</span>
         </h2>
@@ -124,9 +124,9 @@ export default function Step3({ dados = { secretarias: [], contatosSecretarias: 
         {secretarias.length === 0 && <span style={{ color: "var(--btn-danger)", fontSize: "12px", display: "block", marginTop: "4px", fontWeight: "600" }}>Selecione pelo menos uma secretaria.</span>}
       </div>
 
-      <div style={{ background: "var(--bg-subtle)", border: secretarias.length === 0 ? "1px solid var(--btn-danger)" : "1px solid var(--border)", borderRadius: "var(--radius-xl)", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+      <div className="department-selector" style={{ background: "var(--bg-subtle)", border: secretarias.length === 0 ? "1px solid var(--btn-danger)" : "1px solid var(--border)", borderRadius: "var(--radius-xl)", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
         {SECRETARIAS_DEFAULT.map((sec) => (
-          <label key={sec} style={{ display: "flex", alignItems: "center", gap: "12px", cursor: "pointer", fontSize: "14px", color: "var(--text-main)" }}>
+          <label key={sec} className="department-option" style={{ display: "flex", alignItems: "center", gap: "12px", cursor: "pointer", fontSize: "14px", color: "var(--text-main)" }}>
             <input 
               type="checkbox" 
               checked={secretarias.includes(sec)} 
@@ -147,8 +147,8 @@ export default function Step3({ dados = { secretarias: [], contatosSecretarias: 
               const faltaContato = contatos.length === 0;
 
               return (
-                <div key={sec} style={{ background: "var(--bg-panel)", border: faltaContato ? "1px solid var(--btn-danger)" : "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "16px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
+                <div key={sec} className="department-contact-card" style={{ background: "var(--bg-panel)", border: faltaContato ? "1px solid var(--btn-danger)" : "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "16px" }}>
+                  <div className="department-contact-form" style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
                     <strong style={{ fontSize: "14px", color: "var(--text-main)", minWidth: "150px" }}>{sec}</strong>
                     <input 
                       type="email" 
@@ -181,14 +181,14 @@ export default function Step3({ dados = { secretarias: [], contatosSecretarias: 
                     </div>
                   </div>
 
-                  <div style={{ background: "var(--bg-base)", borderRadius: "var(--radius)", border: "1px solid var(--border)", padding: "8px", minHeight: "60px", maxHeight: "120px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "4px" }}>
+                  <div className="department-contact-list" style={{ background: "var(--bg-base)", borderRadius: "var(--radius)", border: "1px solid var(--border)", padding: "8px", minHeight: "60px", maxHeight: "120px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "4px" }}>
                     {faltaContato && (
                       <div style={{ fontSize: "12px", color: "var(--btn-danger)", textAlign: "center", padding: "8px", fontWeight: "600" }}>
                         Obrigatório adicionar pelo menos um contato
                       </div>
                     )}
                     {contatos.map((contato: any, idx: number) => (
-                      <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--bg-panel)", padding: "6px 12px", borderRadius: "var(--radius)", border: "1px solid var(--border)" }}>
+                      <div key={idx} className="department-contact-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--bg-panel)", padding: "6px 12px", borderRadius: "var(--radius)", border: "1px solid var(--border)" }}>
                         <span style={{ fontSize: "12px", color: "var(--text-main)" }}>{contato.email || "—"} | {contato.tel || "—"}</span>
                         <div style={{ display: "flex", gap: "6px" }}>
                           <div style={{ display: "flex", gap: "6px" }}>
@@ -225,8 +225,8 @@ export default function Step3({ dados = { secretarias: [], contatosSecretarias: 
       )}
 
       {modalSecAberto && (
-        <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
-          <div style={{ background: "var(--bg-panel)", padding: "24px", borderRadius: "var(--radius-xl)", width: "100%", maxWidth: "450px", boxShadow: "var(--shadow-lg)" }}>
+        <div className="step-modal-overlay" style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
+          <div className="step-modal" style={{ background: "var(--bg-panel)", padding: "24px", borderRadius: "var(--radius-xl)", width: "100%", maxWidth: "450px", boxShadow: "var(--shadow-lg)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
               <h3 style={{ margin: 0, color: "var(--text-main)", fontSize: "18px" }}>Contatos Salvos</h3>
               <button onClick={() => setModalSecAberto(null)} style={{ background: "none", border: "none", fontSize: "20px", color: "var(--text-muted)" }}>×</button>
