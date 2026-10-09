@@ -49,5 +49,60 @@ class FilaTests(unittest.TestCase):
         self.assertTrue(fila._retry_is_ready({}))
 
 
+    def test_alerta_de_falha_identifica_envio_e_destinatario(self):
+        from unittest.mock import MagicMock, patch
+
+        cliente = MagicMock()
+        cliente.__enter__.return_value = cliente
+        job = {
+            "job_id": "a" * 32,
+            "attempts": 3,
+            "email": "destinatario@example.com",
+            "current_stage": "ENVIO_EMAIL",
+            "dados_usuario": {"{{OBJETO}}": "Aquisição de materiais"},
+        }
+
+        with (
+            patch.object(fila, "ALERT_EMAIL", "licitacao@example.gov.br"),
+            patch.object(fila, "SMTP_USERNAME", "smtp@example.gov.br"),
+            patch.object(fila, "SMTP_PASSWORD", "senha-de-teste"),
+            patch.object(fila, "_smtp_client", return_value=cliente),
+        ):
+            fila._enviar_email_alerta_falha(job, "Falha SMTP simulada")
+
+        mensagem = cliente.send_message.call_args.args[0]
+        self.assertEqual(mensagem["To"], "licitacao@example.gov.br")
+        self.assertIn("LICITA.AI", mensagem["Subject"])
+        texto = mensagem.get_content()
+        self.assertIn("envio do e-mail ao destinatário", texto)
+        self.assertIn("destinatario@example.com", texto)
+        self.assertIn("Falha SMTP simulada", texto)
+        cliente.login.assert_called_once_with("smtp@example.gov.br", "senha-de-teste")
+
+    def test_alerta_de_falha_identifica_erro_de_geracao(self):
+        from unittest.mock import MagicMock, patch
+
+        cliente = MagicMock()
+        cliente.__enter__.return_value = cliente
+        job = {
+            "job_id": "b" * 32,
+            "attempts": 3,
+            "email": "destinatario@example.com",
+            "current_stage": "FASE_PREPARATORIA",
+            "dados_usuario": {},
+        }
+
+        with (
+            patch.object(fila, "ALERT_EMAIL", "licitacao@example.gov.br"),
+            patch.object(fila, "_smtp_client", return_value=cliente),
+        ):
+            fila._enviar_email_alerta_falha(job, "Erro ao gerar DOCX")
+
+        texto = cliente.send_message.call_args.args[0].get_content()
+        self.assertIn("geração/processamento dos documentos", texto)
+        self.assertIn("Erro ao gerar DOCX", texto)
+
+
+
 if __name__ == "__main__":
     unittest.main()
