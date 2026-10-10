@@ -186,6 +186,8 @@ export default function AdminPedidosModal({ onClose }: AdminPedidosModalProps) {
     setAviso(null);
   };
 
+  const historicoEtapas = pedidoSelecionado?.stage_history ?? [];
+
   return (
     <div
       className="admin-pedidos-overlay"
@@ -370,11 +372,11 @@ export default function AdminPedidosModal({ onClose }: AdminPedidosModalProps) {
                     <p className="admin-detail-text">{pedidoSelecionado.etapas_planejadas.join(" · ")}</p>
                   </div>
                 )}
-                {pedidoSelecionado.stage_history?.length > 0 && (
+                {historicoEtapas.length > 0 && (
                   <div className="admin-detail-section">
                     <h4>Histórico das etapas</h4>
                     <div className="admin-history-list">
-                      {pedidoSelecionado.stage_history.map((etapa, indice) => (
+                      {historicoEtapas.map((etapa, indice) => (
                         <div className="admin-history-row" key={String(etapa.stage) + "-" + indice}>
                           <div>
                             <strong>{String(etapa.stage || "Etapa")}</strong>
