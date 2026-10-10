@@ -5,6 +5,7 @@ import Step3 from "./steps/step3";
 import Step4 from "./steps/step4";
 import Step5 from "./steps/step5";
 import PromptModal from "../components/promptModal";
+import AdminPedidosModal from "../components/AdminPedidosModal";
 import { ThemeContext } from "../context/ThemeContext";
 import { gerarFasePreparatoria, type DocumentosReferenciaUpload } from "../api";
 import { criarDadosTeste, TipoTesteContratacao } from "../utils/dadosTeste";
@@ -55,6 +56,7 @@ export default function Wizard() {
   const [jobAgendado, setJobAgendado] = useState<{ job_id: string; status: string; email: string; message: string; fila_posicao?: number; solicitacoes_a_frente?: number } | null>(null);
   const [mostrarTestes, setMostrarTestes] = useState(false);
   const [mostrarPromptModal, setMostrarPromptModal] = useState(false);
+  const [mostrarAdminPedidos, setMostrarAdminPedidos] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { theme, toggleTheme } = useContext(ThemeContext);
   const isDark = theme === "dark";
@@ -224,6 +226,12 @@ export default function Wizard() {
           </div>
           <button
             type="button"
+            className="button button-quiet admin-pedidos-trigger"
+            onClick={() => setMostrarAdminPedidos(true)}
+            aria-label="Abrir painel administrativo de pedidos"
+          >Pedidos <span aria-hidden="true">↗</span></button>
+          <button
+            type="button"
             className="button button-quiet theme-toggle"
             onClick={toggleTheme}
             title={isDark ? "Ativar tema claro" : "Ativar tema escuro"}
@@ -272,6 +280,7 @@ export default function Wizard() {
       </main>
 
       <PromptModal isOpen={mostrarPromptModal} onClose={() => setMostrarPromptModal(false)} onConfirm={confeccionarDocumentos} />
+      {mostrarAdminPedidos && <AdminPedidosModal onClose={() => setMostrarAdminPedidos(false)} />}
     </div>
   );
 }

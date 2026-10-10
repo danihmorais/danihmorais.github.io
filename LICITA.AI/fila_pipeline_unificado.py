@@ -6,7 +6,7 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 
-from fila import MAX_ATTEMPTS, POLL_INTERVAL_SECONDS, QUEUE_DIR, RETRY_BASE_SECONDS, RETRY_MAX_SECONDS, SMTP_FROM, SMTP_USERNAME, _artifact_path, _claim_next_job, _enviar_email, _enviar_email_alerta_falha, _job_path, _write_json, gerar_zip
+from fila import MAX_ATTEMPTS, POLL_INTERVAL_SECONDS, QUEUE_DIR, RETRY_BASE_SECONDS, RETRY_MAX_SECONDS, SMTP_FROM, SMTP_USERNAME, _artifact_path, _claim_next_job, _enviar_email, _enviar_email_alerta_falha, _finalizar_etapa, _finalizar_tentativa, _iniciar_etapa, _job_path, _write_json, gerar_zip
 from fila_pipeline import _aplicar_auditoria_marcas, _chamar_ia as _chamar_ia_primaria, _substituir_contextos, _validar_json_geracao
 
 
@@ -70,6 +70,10 @@ def _remover_documentos_de_referencia(job: dict) -> None:
 
 
 def _process_pipeline(job: dict) -> None:
+    if job.get("retry_mode") == "email_only":
+        _process_email_only_retry(job)
+        return
+
     container = job.get("dados_ia") if isinstance(job.get("dados_ia"), dict) else {}
     pipeline = container.get("__LICITA_PIPELINE__")
     if not isinstance(pipeline, dict):
@@ -97,8 +101,7 @@ def _process_pipeline(job: dict) -> None:
         if etapa_id in completed and etapa_id in resultados:
             continue
 
-        job["current_stage"] = etapa_id
-        job["current_stage_started_at"] = _utc_now()
+        _iniciar_etapa(job, etapa_id)
         job["status"] = "processing"
         _write_json(_job_path(job["job_id"], ".processing"), job)
 
@@ -135,6 +138,7 @@ def _process_pipeline(job: dict) -> None:
         job["pipeline_results"] = resultados
         job["pipeline_dados_usuario"] = dados_usuario
         job["completed_stages"] = sorted(completed)
+        _finalizar_etapa(job, etapa_id, "completed")
         _write_json(_job_path(job["job_id"], ".processing"), job)
 
     dados_ia_final: dict = {}
@@ -150,6 +154,8 @@ def _process_pipeline(job: dict) -> None:
                     continue
                 dados_ia_final[chave] = valor
 
+    _iniciar_etapa(job, "GERACAO_DOCUMENTOS")
+    _write_json(_job_path(job["job_id"], ".processing"), job)
     generated_path, zip_filename = gerar_zip(dados_usuario, dados_ia_final, job["job_id"])
     temp_root = generated_path.parent
     artifact_path = _artifact_path(job["job_id"])
@@ -159,15 +165,58 @@ def _process_pipeline(job: dict) -> None:
     finally:
         shutil.rmtree(temp_root, ignore_errors=True)
 
+    _finalizar_etapa(job, "GERACAO_DOCUMENTOS", "completed")
     job["dados_usuario_processados"] = dados_usuario
-    job["dados_ia"] = dados_ia_final
-    job["current_stage"] = "ENVIO_EMAIL"
+    _iniciar_etapa(job, "ENVIO_EMAIL")
     job["email_started_at"] = _utc_now()
     _write_json(_job_path(job["job_id"], ".processing"), job)
 
     _enviar_email(job["email"], artifact_path, zip_filename, job["job_id"])
 
+    # Só substitui a entrada do pipeline pelos resultados depois do envio bem-sucedido.
+    # Assim, se o SMTP falhar, o JSON de falha ainda terá os dados necessários para refazer.
+    job["dados_ia"] = dados_ia_final
+    _finalizar_etapa(job, "ENVIO_EMAIL", "completed")
+    _finalizar_tentativa(job, "sent")
     job.update({"status": "sent", "completed_at": _utc_now(), "current_stage": "CONCLUIDO", "result": {"filename": zip_filename, "recipient": job["email"]}})
+    _write_json(_job_path(job["job_id"], ".done"), job)
+    artifact_path.unlink(missing_ok=True)
+    _job_path(job["job_id"], ".processing").unlink(missing_ok=True)
+
+
+
+def _process_email_only_retry(job: dict) -> None:
+    """Reenvia arquivos já gerados em registros antigos cuja falha ocorreu apenas no SMTP."""
+    dados_usuario = job.get("dados_usuario_processados")
+    dados_ia = job.get("dados_ia")
+    if not isinstance(dados_usuario, dict) or not isinstance(dados_ia, dict) or not dados_ia:
+        raise RuntimeError("Não há documentos gerados suficientes para refazer somente o envio de e-mail.")
+
+    _iniciar_etapa(job, "GERACAO_DOCUMENTOS")
+    _write_json(_job_path(job["job_id"], ".processing"), job)
+    generated_path, zip_filename = gerar_zip(dados_usuario, dados_ia, job["job_id"])
+    temp_root = generated_path.parent
+    artifact_path = _artifact_path(job["job_id"])
+    try:
+        artifact_path.unlink(missing_ok=True)
+        shutil.move(str(generated_path), str(artifact_path))
+    finally:
+        shutil.rmtree(temp_root, ignore_errors=True)
+
+    _finalizar_etapa(job, "GERACAO_DOCUMENTOS", "completed")
+    _iniciar_etapa(job, "ENVIO_EMAIL")
+    job["email_started_at"] = _utc_now()
+    _write_json(_job_path(job["job_id"], ".processing"), job)
+    _enviar_email(job["email"], artifact_path, zip_filename, job["job_id"])
+
+    _finalizar_etapa(job, "ENVIO_EMAIL", "completed")
+    _finalizar_tentativa(job, "sent")
+    job.update({
+        "status": "sent",
+        "completed_at": _utc_now(),
+        "current_stage": "CONCLUIDO",
+        "result": {"filename": zip_filename, "recipient": job["email"]},
+    })
     _write_json(_job_path(job["job_id"], ".done"), job)
     artifact_path.unlink(missing_ok=True)
     _job_path(job["job_id"], ".processing").unlink(missing_ok=True)
@@ -182,18 +231,20 @@ def _process_one_job() -> None:
         _process_pipeline(job)
     except Exception as exc:
         attempts = int(job.get("attempts", 1))
+        _finalizar_etapa(job, str(job.get("current_stage") or "PROCESSAMENTO"), "failed", str(exc))
         job["last_error"] = str(exc)
         job["last_error_at"] = _utc_now()
         job["current_stage"] = job.get("current_stage") or "PROCESSAMENTO"
         if attempts < MAX_ATTEMPTS:
+            _finalizar_tentativa(job, "retrying", str(exc))
             job["status"] = "queued"
             job["retry_at"] = (datetime.now(timezone.utc) + timedelta(seconds=_delay(attempts))).isoformat()
             _write_json(_job_path(job["job_id"]), job)
             processing_path.unlink(missing_ok=True)
         else:
+            _finalizar_tentativa(job, "failed", str(exc))
             job["status"] = "failed"
             job.pop("retry_at", None)
-            _remover_documentos_de_referencia(job)
             destinatario_alerta = SMTP_FROM or SMTP_USERNAME
             try:
                 _enviar_email_alerta_falha(job, str(exc))

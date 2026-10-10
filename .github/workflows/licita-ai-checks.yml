@@ -1,0 +1,57 @@
+name: LICITA.AI checks
+
+on:
+  pull_request:
+    paths:
+      - "LICITA.AI/**"
+      - ".github/workflows/licita-ai-checks.yml"
+  push:
+    branches:
+      - "feat/licita-ai-painel-pedidos"
+    paths:
+      - "LICITA.AI/**"
+      - ".github/workflows/licita-ai-checks.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install backend dependencies
+        working-directory: LICITA.AI
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Run backend tests
+        working-directory: LICITA.AI
+        run: python -m unittest discover -s tests/backend -p 'test_*.py' -v
+
+  frontend:
+    name: Frontend tests and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install frontend dependencies
+        working-directory: LICITA.AI
+        run: npm install --no-audit --no-fund
+      - name: Unit tests
+        working-directory: LICITA.AI
+        run: npm test
+      - name: TypeScript and Vite build
+        working-directory: LICITA.AI
+        env:
+          VITE_API_URL: https://example.invalid
+        run: npm run build
+      - name: Build smoke test
+        working-directory: LICITA.AI
+        run: node tests/dist-smoke.mjs

@@ -43,6 +43,7 @@ class LicitaBackendTests(unittest.TestCase):
         main._ia_rate_buckets.clear()
         main._queue_ip_rate_buckets.clear()
         main._queue_email_rate_buckets.clear()
+        main._admin_login_rate_buckets.clear()
 
     def test_endpoint_rejeita_email_invalido(self):
         with TestClient(app) as client:
@@ -289,6 +290,120 @@ class LicitaBackendTests(unittest.TestCase):
             self.assertEqual(names, expected)
         finally:
             shutil.rmtree(zip_path.parent, ignore_errors=True)
+
+
+    def _com_admin(self, callback):
+        senha_original = main.ADMIN_PASSWORD
+        main.ADMIN_PASSWORD = "senha-admin-teste"
+        try:
+            with TestClient(app) as client:
+                login = client.post("/api/admin/login", json={"password": "senha-admin-teste"})
+                self.assertEqual(login.status_code, 200, login.text)
+                token = login.json()["token"]
+                return callback(client, token)
+        finally:
+            main.ADMIN_PASSWORD = senha_original
+
+    def test_painel_admin_exige_token_e_lista_pedidos(self):
+        def executar(client, token):
+            dados_ia = {
+                "__LICITA_PIPELINE__": {
+                    "version": 4,
+                    "model": "unsloth-auto",
+                    "temperature": 0.3,
+                    "etapas": [{"id": "FASE_PREPARATORIA", "tipo": "geracao_unificada", "prompt": "prompt de teste"}],
+                }
+            }
+            job = fila.enqueue_job(
+                email="admin-pedidos@example.com",
+                dados_usuario={"{{OBJETO}}": "Aquisição para teste do painel"},
+                dados_ia=dados_ia,
+                instrucoes="Instrução para teste",
+            )
+
+            sem_token = client.get("/api/admin/jobs")
+            self.assertEqual(sem_token.status_code, 401)
+
+            resposta = client.get("/api/admin/jobs", headers={"Authorization": "Bearer " + token})
+            self.assertEqual(resposta.status_code, 200, resposta.text)
+            itens = resposta.json()["items"]
+            encontrado = next((item for item in itens if item["job_id"] == job["job_id"]), None)
+            self.assertIsNotNone(encontrado)
+            self.assertEqual(encontrado["email"], "admin-pedidos@example.com")
+            self.assertEqual(encontrado["objeto"], "Aquisição para teste do painel")
+
+            detalhe = client.get(
+                "/api/admin/jobs/" + job["job_id"],
+                headers={"Authorization": "Bearer " + token},
+            )
+            self.assertEqual(detalhe.status_code, 200, detalhe.text)
+            self.assertEqual(detalhe.json()["instrucoes"], "Instrução para teste")
+            self.assertNotIn("status_token", json.dumps(detalhe.json()))
+        self._com_admin(executar)
+
+    def test_painel_admin_refaz_falha_preservando_registro_original(self):
+        def executar(client, token):
+            dados_ia = {
+                "__LICITA_PIPELINE__": {
+                    "version": 4,
+                    "model": "unsloth-auto",
+                    "temperature": 0.3,
+                    "etapas": [{"id": "FASE_PREPARATORIA", "tipo": "geracao_unificada", "prompt": "prompt original preservado"}],
+                }
+            }
+            job = fila.enqueue_job(
+                email="refazer@example.com",
+                dados_usuario={"{{OBJETO}}": "Objeto para refazer"},
+                dados_ia=dados_ia,
+                instrucoes="Não perder esta instrução",
+            )
+            caminho_pendente = fila._job_path(job["job_id"])
+            registro = json.loads(caminho_pendente.read_text(encoding="utf-8"))
+            registro["status"] = "failed"
+            registro["current_stage"] = "FASE_PREPARATORIA"
+            registro["last_error"] = "Falha simulada para teste"
+            registro["last_error_at"] = fila._utc_now()
+            fila._write_json(fila._job_path(job["job_id"], ".failed"), registro)
+            caminho_pendente.unlink(missing_ok=True)
+
+            resposta = client.post(
+                "/api/admin/jobs/" + job["job_id"] + "/retry",
+                headers={"Authorization": "Bearer " + token},
+            )
+            self.assertEqual(resposta.status_code, 200, resposta.text)
+            novo = resposta.json()
+            self.assertNotEqual(novo["job_id"], job["job_id"])
+            self.assertEqual(novo["retry_of"], job["job_id"])
+            self.assertEqual(novo["status"], "queued")
+
+            original = fila.get_job(job["job_id"])
+            self.assertEqual(original["status"], "failed")
+            self.assertIn("prompt original preservado", original["dados_ia"]["__LICITA_PIPELINE__"]["etapas"][0]["prompt"])
+            refeito = fila.get_job(novo["job_id"])
+            self.assertEqual(refeito["retry_of"], job["job_id"])
+            self.assertEqual(refeito["instrucoes"], "Não perder esta instrução")
+        self._com_admin(executar)
+
+    def test_painel_admin_recusa_refazer_pedido_que_nao_falhou(self):
+        def executar(client, token):
+            job = fila.enqueue_job(
+                email="ainda-na-fila@example.com",
+                dados_usuario={"{{OBJETO}}": "Pedido pendente"},
+                dados_ia={
+                    "__LICITA_PIPELINE__": {
+                        "version": 4,
+                        "model": "unsloth-auto",
+                        "temperature": 0.3,
+                        "etapas": [{"id": "FASE_PREPARATORIA", "tipo": "geracao_unificada", "prompt": "prompt"}],
+                    }
+                },
+            )
+            resposta = client.post(
+                "/api/admin/jobs/" + job["job_id"] + "/retry",
+                headers={"Authorization": "Bearer " + token},
+            )
+            self.assertEqual(resposta.status_code, 409)
+        self._com_admin(executar)
 
 
 if __name__ == "__main__":
