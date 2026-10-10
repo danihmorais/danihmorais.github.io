@@ -39,6 +39,64 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _segundos_entre(inicio, fim) -> int | None:
+    try:
+        a = datetime.fromisoformat(str(inicio).strip().replace("Z", "+00:00"))
+        b = datetime.fromisoformat(str(fim).strip().replace("Z", "+00:00"))
+        if a.tzinfo is None:
+            a = a.replace(tzinfo=timezone.utc)
+        if b.tzinfo is None:
+            b = b.replace(tzinfo=timezone.utc)
+        return max(0, int((b - a).total_seconds()))
+    except (TypeError, ValueError):
+        return None
+
+
+def _iniciar_etapa(job: dict, etapa: str) -> None:
+    inicio = _utc_now()
+    historico = job.setdefault("stage_history", [])
+    if not isinstance(historico, list):
+        historico = []
+        job["stage_history"] = historico
+    historico.append({"stage": etapa, "started_at": inicio, "status": "processing"})
+    job["current_stage"] = etapa
+    job["current_stage_started_at"] = inicio
+
+
+def _finalizar_etapa(job: dict, etapa: str, status: str, erro: str | None = None) -> None:
+    historico = job.get("stage_history")
+    if not isinstance(historico, list):
+        return
+    fim = _utc_now()
+    for item in reversed(historico):
+        if not isinstance(item, dict) or str(item.get("stage", "")).upper() != str(etapa).upper():
+            continue
+        if item.get("status") != "processing" or item.get("ended_at"):
+            continue
+        item["ended_at"] = fim
+        item["duration_seconds"] = _segundos_entre(item.get("started_at"), fim) or 0
+        item["status"] = status
+        if erro:
+            item["error"] = str(erro)[:2500]
+        return
+
+
+def _finalizar_tentativa(job: dict, status: str, erro: str | None = None) -> None:
+    historico = job.get("attempt_history")
+    if not isinstance(historico, list):
+        return
+    fim = _utc_now()
+    for item in reversed(historico):
+        if not isinstance(item, dict) or item.get("status") != "processing" or item.get("ended_at"):
+            continue
+        item["ended_at"] = fim
+        item["duration_seconds"] = _segundos_entre(item.get("started_at"), fim) or 0
+        item["status"] = status
+        if erro:
+            item["error"] = str(erro)[:2500]
+        return
+
+
 def _ensure_queue_dir() -> None:
     QUEUE_DIR.mkdir(parents=True, exist_ok=True)
     try:
@@ -312,7 +370,15 @@ def _enviar_email_alerta_falha(job: dict, erro: str) -> None:
         client.send_message(message)
 
 
-def enqueue_job(email: str, dados_usuario: dict, dados_ia: dict, instrucoes: str = "") -> dict:
+def enqueue_job(
+    email: str,
+    dados_usuario: dict,
+    dados_ia: dict,
+    instrucoes: str = "",
+    retry_of: str | None = None,
+    retry_mode: str | None = None,
+    dados_usuario_processados: dict | None = None,
+) -> dict:
     email = email.strip()
     if not EMAIL_RE.fullmatch(email):
         raise ValueError("Informe um e-mail válido para receber os documentos.")
@@ -321,6 +387,12 @@ def enqueue_job(email: str, dados_usuario: dict, dados_ia: dict, instrucoes: str
     job_id = uuid.uuid4().hex
     status_token = secrets.token_urlsafe(32)
     job = {"version": 3, "job_id": job_id, "status": "queued", "created_at": _utc_now(), "attempts": 0, "email": email, "status_token": status_token, "instrucoes": instrucoes.strip(), "dados_usuario": dados_usuario, "dados_ia": dados_ia}
+    if retry_of:
+        job["retry_of"] = retry_of
+    if retry_mode:
+        job["retry_mode"] = retry_mode
+    if isinstance(dados_usuario_processados, dict):
+        job["dados_usuario_processados"] = dados_usuario_processados
     _write_json(_job_path(job_id), job)
     return {"job_id": job_id, "status": "queued", "email": email, "status_token": status_token, "message": "Solicitação registrada na fila. O processamento da IA e o envio por e-mail ocorrerão em segundo plano."}
 
@@ -356,8 +428,15 @@ def _claim_next_job() -> tuple[Path, dict] | None:
             except FileNotFoundError:
                 continue
             job["status"] = "processing"
-            job["started_at"] = _utc_now()
+            agora = _utc_now()
+            job.setdefault("started_at", agora)
+            job["last_attempt_started_at"] = agora
             job["attempts"] = int(job.get("attempts", 0)) + 1
+            tentativas = job.setdefault("attempt_history", [])
+            if not isinstance(tentativas, list):
+                tentativas = []
+                job["attempt_history"] = tentativas
+            tentativas.append({"attempt": job["attempts"], "started_at": agora, "status": "processing"})
             job.pop("retry_at", None)
             _write_json(processing_path, job)
             return processing_path, job
