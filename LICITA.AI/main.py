@@ -384,6 +384,23 @@ def _segundos_entre_admin(inicio, fim) -> int | None:
     return max(0, int((b - a).total_seconds()))
 
 
+def _sanitizar_dados_admin(valor, chave: str = ""):
+    if isinstance(valor, dict):
+        return {str(k): _sanitizar_dados_admin(v, str(k)) for k, v in valor.items()}
+    if isinstance(valor, list):
+        return [_sanitizar_dados_admin(item, chave) for item in valor]
+    if isinstance(valor, str):
+        chave_lower = chave.casefold()
+        texto = valor.strip()
+        if "base64" in chave_lower or texto.startswith("data:image/") or (
+            "imagem" in chave_lower and len(valor) > 1200
+        ):
+            return "[conteúdo de imagem omitido do painel]"
+        if len(valor) > 2500:
+            return valor[:2500] + "… [conteúdo abreviado]"
+    return valor
+
+
 def _resumo_job_admin(job: dict, incluir_detalhes: bool = False) -> dict:
     job_id = str(job.get("job_id", ""))
     status = str(job.get("status", "desconhecido"))
@@ -453,9 +470,9 @@ def _resumo_job_admin(job: dict, incluir_detalhes: bool = False) -> dict:
         "elapsed_seconds": _segundos_entre_admin(criado, finalizado_para_tempo),
     }
     if incluir_detalhes:
-        resumo["instrucoes"] = str(job.get("instrucoes") or "")
-        resumo["dados_usuario"] = dados_usuario
-        resumo["dados_usuario_processados"] = dados_processados
+        resumo["instrucoes"] = str(job.get("instrucoes") or "")[:8000]
+        resumo["dados_usuario"] = _sanitizar_dados_admin(dados_usuario)
+        resumo["dados_usuario_processados"] = _sanitizar_dados_admin(dados_processados)
         container = job.get("dados_ia")
         pipeline = container.get("__LICITA_PIPELINE__") if isinstance(container, dict) else None
         resumo["etapas_planejadas"] = [
@@ -530,7 +547,10 @@ async def listar_pedidos_admin(
     if termo:
         def corresponde(job: dict) -> bool:
             dados = job.get("dados_usuario") if isinstance(job.get("dados_usuario"), dict) else {}
-            objeto = dados.get("{{OBJETO}}") or dados.get("OBJETO") or ""
+            processados = job.get("dados_usuario_processados") or job.get("pipeline_dados_usuario") or {}
+            if not isinstance(processados, dict):
+                processados = {}
+            objeto = dados.get("{{OBJETO}}") or dados.get("OBJETO") or processados.get("{{OBJETO}}") or processados.get("OBJETO") or ""
             return termo in " ".join((
                 str(job.get("job_id", "")),
                 str(job.get("email", "")),
