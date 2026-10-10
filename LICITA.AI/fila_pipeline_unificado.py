@@ -154,6 +154,8 @@ def _process_pipeline(job: dict) -> None:
                     continue
                 dados_ia_final[chave] = valor
 
+    _iniciar_etapa(job, "GERACAO_DOCUMENTOS")
+    _write_json(_job_path(job["job_id"], ".processing"), job)
     generated_path, zip_filename = gerar_zip(dados_usuario, dados_ia_final, job["job_id"])
     temp_root = generated_path.parent
     artifact_path = _artifact_path(job["job_id"])
@@ -163,6 +165,7 @@ def _process_pipeline(job: dict) -> None:
     finally:
         shutil.rmtree(temp_root, ignore_errors=True)
 
+    _finalizar_etapa(job, "GERACAO_DOCUMENTOS", "completed")
     job["dados_usuario_processados"] = dados_usuario
     _iniciar_etapa(job, "ENVIO_EMAIL")
     job["email_started_at"] = _utc_now()
@@ -189,6 +192,8 @@ def _process_email_only_retry(job: dict) -> None:
     if not isinstance(dados_usuario, dict) or not isinstance(dados_ia, dict) or not dados_ia:
         raise RuntimeError("Não há documentos gerados suficientes para refazer somente o envio de e-mail.")
 
+    _iniciar_etapa(job, "GERACAO_DOCUMENTOS")
+    _write_json(_job_path(job["job_id"], ".processing"), job)
     generated_path, zip_filename = gerar_zip(dados_usuario, dados_ia, job["job_id"])
     temp_root = generated_path.parent
     artifact_path = _artifact_path(job["job_id"])
@@ -198,6 +203,7 @@ def _process_email_only_retry(job: dict) -> None:
     finally:
         shutil.rmtree(temp_root, ignore_errors=True)
 
+    _finalizar_etapa(job, "GERACAO_DOCUMENTOS", "completed")
     _iniciar_etapa(job, "ENVIO_EMAIL")
     job["email_started_at"] = _utc_now()
     _write_json(_job_path(job["job_id"], ".processing"), job)
