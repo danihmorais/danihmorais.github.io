@@ -232,7 +232,7 @@ export async function autenticarAdminPedidos(password: string): Promise<{ token:
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ password }),
   });
-  return respostaAdmin(response);
+  return respostaAdmin<{ token: string; expires_in: number }>(response);
 }
 
 export async function listarAdminPedidos(
