@@ -38,7 +38,8 @@ function rotuloStatus(status: string): string {
   switch (status) {
     case "queued": return "Na fila";
     case "processing": return "Processando";
-    case "sent": return "Concluído";
+    case "sent":
+    case "completed": return "Concluído";
     case "failed": return "Falha";
     default: return status || "Desconhecido";
   }
@@ -57,7 +58,7 @@ function formatarNomeCampo(chave: string): string {
 function resumirValor(valor: unknown): string {
   if (valor === null || valor === undefined || valor === "") return "—";
   if (typeof valor === "boolean") return valor ? "Sim" : "Não";
-  if (typeof valor === "object") return JSON.stringify(valor);
+  if (typeof valor === "object") return JSON.stringify(valor) || "[dados estruturados]";
   const texto = String(valor);
   return texto.length > 700 ? texto.slice(0, 700) + "… [conteúdo abreviado]" : texto;
 }
@@ -158,7 +159,9 @@ export default function AdminPedidosModal({ onClose }: AdminPedidosModalProps) {
       setBusca("");
       setBuscaDigitada("");
       setAviso("Nova execução criada: " + novo.job_id.slice(0, 8) + ". O registro da falha original foi preservado.");
-      await carregarPedidos(token);
+      const atualizados = await listarAdminPedidos(token, "todos", "");
+      setItens(atualizados.items);
+      setTotal(atualizados.total);
     } catch (falha: unknown) {
       const mensagem = falha instanceof Error ? falha.message : "Não foi possível refazer o pedido.";
       setErro(mensagem);
