@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
 import os
+import re
+import secrets
 import threading
 import time
 from collections import deque
+from datetime import datetime, timezone
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
@@ -22,7 +28,7 @@ app.add_middleware(
     allow_origins=["https://danihmorais.github.io"],
     allow_credentials=True,
     allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 
@@ -38,6 +44,10 @@ class IAChatRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=120_000)
     temperature: float = Field(default=0.3, ge=0, le=1.5)
     response_format: dict | None = None
+
+
+class AdminLoginRequest(BaseModel):
+    password: str = Field(min_length=1, max_length=1024)
 
 
 API_UNSLOTH_URL = os.getenv("LICITA_UNSLOTH_URL", os.getenv("UNSLOTH_URL", "http://127.0.0.1:8888/v1")).rstrip("/")
@@ -56,6 +66,14 @@ QUEUE_EMAIL_RATE_LIMIT = max(1, int(os.getenv("LICITA_QUEUE_EMAIL_RATE_LIMIT", "
 _queue_rate_lock = threading.Lock()
 _queue_ip_rate_buckets: dict[str, deque[float]] = {}
 _queue_email_rate_buckets: dict[str, deque[float]] = {}
+
+# O painel administrativo fica desativado até que a senha seja configurada no ambiente do servidor.
+ADMIN_PASSWORD = os.getenv("LICITA_ADMIN_PASSWORD", "")
+ADMIN_SESSION_TTL_SECONDS = max(300, int(os.getenv("LICITA_ADMIN_SESSION_TTL", "1800")))
+ADMIN_LOGIN_RATE_WINDOW_SECONDS = max(60, int(os.getenv("LICITA_ADMIN_LOGIN_RATE_WINDOW", "900")))
+ADMIN_LOGIN_RATE_LIMIT = max(1, int(os.getenv("LICITA_ADMIN_LOGIN_RATE_LIMIT", "8")))
+_admin_login_rate_buckets: dict[str, deque[float]] = {}
+_admin_login_rate_lock = threading.Lock()
 
 
 def _client_identity(request: Request) -> str:
@@ -299,6 +317,295 @@ async def consultar_fila(job_id: str, token: str | None = None):
         "last_error": job.get("last_error"),
         "result": job.get("result"),
     }
+
+
+
+def _admin_token_secret() -> str:
+    return os.getenv("LICITA_ADMIN_TOKEN_SECRET", "") or ADMIN_PASSWORD
+
+
+def _criar_token_admin() -> str:
+    secret = _admin_token_secret()
+    if not secret:
+        raise HTTPException(status_code=503, detail="Painel administrativo não configurado no servidor.")
+    expira = int(time.time()) + ADMIN_SESSION_TTL_SECONDS
+    payload = f"{expira}.{secrets.token_urlsafe(18)}"
+    assinatura = hmac.new(secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).digest()
+    assinatura_b64 = base64.urlsafe_b64encode(assinatura).decode("ascii").rstrip("=")
+    return f"{payload}.{assinatura_b64}"
+
+
+def _validar_token_admin(token: str) -> bool:
+    secret = _admin_token_secret()
+    if not secret or not token:
+        return False
+    partes = token.split(".")
+    if len(partes) != 3:
+        return False
+    expira_texto, nonce, assinatura_recebida = partes
+    if not expira_texto.isdigit() or not nonce or not assinatura_recebida:
+        return False
+    expira = int(expira_texto)
+    agora = int(time.time())
+    if expira <= agora or expira > agora + ADMIN_SESSION_TTL_SECONDS + 60:
+        return False
+    payload = f"{expira_texto}.{nonce}"
+    assinatura = hmac.new(secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).digest()
+    esperada = base64.urlsafe_b64encode(assinatura).decode("ascii").rstrip("=")
+    return hmac.compare_digest(esperada, assinatura_recebida)
+
+
+def _exigir_admin(request: Request) -> None:
+    if not ADMIN_PASSWORD.strip() or not _admin_token_secret():
+        raise HTTPException(status_code=503, detail="Painel administrativo não configurado no servidor.")
+    esquema, _, token = request.headers.get("authorization", "").partition(" ")
+    if esquema.lower() != "bearer" or not _validar_token_admin(token.strip()):
+        raise HTTPException(status_code=401, detail="Sessão administrativa inválida ou expirada.")
+
+
+def _parse_data_admin(valor) -> datetime | None:
+    if not valor:
+        return None
+    try:
+        texto = str(valor).strip().replace("Z", "+00:00")
+        data = datetime.fromisoformat(texto)
+        if data.tzinfo is None:
+            data = data.replace(tzinfo=timezone.utc)
+        return data.astimezone(timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
+def _segundos_entre_admin(inicio, fim) -> int | None:
+    a = _parse_data_admin(inicio)
+    b = _parse_data_admin(fim)
+    if a is None or b is None:
+        return None
+    return max(0, int((b - a).total_seconds()))
+
+
+def _resumo_job_admin(job: dict, incluir_detalhes: bool = False) -> dict:
+    job_id = str(job.get("job_id", ""))
+    status = str(job.get("status", "desconhecido"))
+    criado = job.get("created_at")
+    finalizado = job.get("completed_at") or job.get("last_error_at")
+    if status in {"queued", "processing"} or not finalizado:
+        finalizado_para_tempo = datetime.now(timezone.utc).isoformat()
+    else:
+        finalizado_para_tempo = finalizado
+
+    dados_usuario = job.get("dados_usuario")
+    if not isinstance(dados_usuario, dict):
+        dados_usuario = {}
+    dados_processados = job.get("dados_usuario_processados")
+    if not isinstance(dados_processados, dict):
+        dados_processados = job.get("pipeline_dados_usuario")
+    if not isinstance(dados_processados, dict):
+        dados_processados = {}
+    objeto = (
+        dados_usuario.get("{{OBJETO}}")
+        or dados_usuario.get("OBJETO")
+        or dados_processados.get("{{OBJETO}}")
+        or dados_processados.get("OBJETO")
+        or "Objeto não informado"
+    )
+    tentativas = job.get("attempt_history")
+    if not isinstance(tentativas, list):
+        tentativas = []
+    historico_etapas = job.get("stage_history")
+    if not isinstance(historico_etapas, list):
+        historico_etapas = []
+    processamento = sum(
+        max(0, int(item.get("duration_seconds", 0) or 0))
+        for item in tentativas
+        if isinstance(item, dict)
+    )
+    if not tentativas:
+        processamento = _segundos_entre_admin(job.get("started_at"), finalizado_para_tempo) or 0
+    else:
+        for item in tentativas:
+            if isinstance(item, dict) and item.get("status") == "processing" and not item.get("ended_at"):
+                processamento += _segundos_entre_admin(item.get("started_at"), datetime.now(timezone.utc).isoformat()) or 0
+
+    resumo = {
+        "job_id": job_id,
+        "status": status,
+        "email": str(job.get("email") or ""),
+        "objeto": str(objeto)[:500],
+        "created_at": criado,
+        "started_at": job.get("started_at"),
+        "last_attempt_started_at": job.get("last_attempt_started_at"),
+        "completed_at": job.get("completed_at"),
+        "last_error_at": job.get("last_error_at"),
+        "current_stage": job.get("current_stage"),
+        "attempts": int(job.get("attempts", 0) or 0),
+        "resolved_model": job.get("resolved_model"),
+        "completed_stages": job.get("completed_stages", []),
+        "retry_at": job.get("retry_at"),
+        "retry_of": job.get("retry_of"),
+        "last_error": str(job.get("last_error") or "")[:4000],
+        "result": job.get("result"),
+        "failure_notification": job.get("failure_notification"),
+        "attempt_history": tentativas,
+        "stage_history": historico_etapas,
+        "queue_wait_seconds": _segundos_entre_admin(criado, job.get("started_at")),
+        "processing_seconds": processamento,
+        "elapsed_seconds": _segundos_entre_admin(criado, finalizado_para_tempo),
+    }
+    if incluir_detalhes:
+        resumo["instrucoes"] = str(job.get("instrucoes") or "")
+        resumo["dados_usuario"] = dados_usuario
+        resumo["dados_usuario_processados"] = dados_processados
+        container = job.get("dados_ia")
+        pipeline = container.get("__LICITA_PIPELINE__") if isinstance(container, dict) else None
+        resumo["etapas_planejadas"] = [
+            str(etapa.get("id", ""))
+            for etapa in (pipeline.get("etapas", []) if isinstance(pipeline, dict) else [])
+            if isinstance(etapa, dict)
+        ]
+    return resumo
+
+
+def _listar_jobs_admin() -> list[dict]:
+    if not QUEUE_DIR.exists():
+        return []
+    registros: dict[str, tuple[float, dict]] = {}
+    sufixos = (".processing", ".done", ".failed")
+    for caminho in QUEUE_DIR.glob("[0-9a-f]*.json"):
+        nome = caminho.name[:-5] if caminho.name.endswith(".json") else caminho.name
+        for sufixo in sufixos:
+            if nome.endswith(sufixo):
+                nome = nome[:-len(sufixo)]
+                break
+        if not re.fullmatch(r"[0-9a-f]{32}", nome, re.IGNORECASE):
+            continue
+        try:
+            job = __import__("json").loads(caminho.read_text(encoding="utf-8"))
+            if not isinstance(job, dict) or str(job.get("job_id", "")).lower() != nome.lower():
+                continue
+            mtime = caminho.stat().st_mtime
+        except (OSError, ValueError):
+            continue
+        anterior = registros.get(nome.lower())
+        if anterior is None or mtime >= anterior[0]:
+            registros[nome.lower()] = (mtime, job)
+    return [registro[1] for registro in registros.values()]
+
+
+@app.post("/api/admin/login")
+async def login_admin(request: Request, req: AdminLoginRequest):
+    if not ADMIN_PASSWORD.strip() or not _admin_token_secret():
+        raise HTTPException(status_code=503, detail="Painel administrativo não configurado no servidor.")
+    _check_rate_limit(
+        _admin_login_rate_buckets,
+        _admin_login_rate_lock,
+        _client_identity(request),
+        ADMIN_LOGIN_RATE_LIMIT,
+        ADMIN_LOGIN_RATE_WINDOW_SECONDS,
+        "Muitas tentativas de acesso ao painel. Aguarde antes de tentar novamente.",
+    )
+    if not hmac.compare_digest(req.password, ADMIN_PASSWORD):
+        raise HTTPException(status_code=401, detail="Senha administrativa incorreta.")
+    return {"token": _criar_token_admin(), "expires_in": ADMIN_SESSION_TTL_SECONDS}
+
+
+@app.get("/api/admin/jobs")
+async def listar_pedidos_admin(
+    request: Request,
+    status: str | None = None,
+    q: str | None = None,
+    limit: int = 200,
+):
+    _exigir_admin(request)
+    if limit < 1 or limit > 500:
+        raise HTTPException(status_code=400, detail="O limite deve ficar entre 1 e 500.")
+    status_filtro = (status or "todos").strip().lower()
+    status_validos = {"todos", "queued", "processing", "sent", "failed"}
+    if status_filtro not in status_validos:
+        raise HTTPException(status_code=400, detail="Filtro de status inválido.")
+    termo = (q or "").strip().casefold()
+    jobs = _listar_jobs_admin()
+    if status_filtro != "todos":
+        jobs = [job for job in jobs if str(job.get("status", "")).casefold() == status_filtro]
+    if termo:
+        def corresponde(job: dict) -> bool:
+            dados = job.get("dados_usuario") if isinstance(job.get("dados_usuario"), dict) else {}
+            objeto = dados.get("{{OBJETO}}") or dados.get("OBJETO") or ""
+            return termo in " ".join((
+                str(job.get("job_id", "")),
+                str(job.get("email", "")),
+                str(objeto),
+                str(job.get("current_stage", "")),
+                str(job.get("last_error", "")),
+            )).casefold()
+        jobs = [job for job in jobs if corresponde(job)]
+    jobs.sort(key=lambda job: str(job.get("created_at") or ""), reverse=True)
+    total = len(jobs)
+    return {
+        "items": [_resumo_job_admin(job) for job in jobs[:limit]],
+        "total": total,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@app.get("/api/admin/jobs/{job_id}")
+async def detalhar_pedido_admin(job_id: str, request: Request):
+    _exigir_admin(request)
+    job = get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Solicitação não encontrada ou já removida pela retenção.")
+    return _resumo_job_admin(job, incluir_detalhes=True)
+
+
+@app.post("/api/admin/jobs/{job_id}/retry")
+async def refazer_pedido_admin(job_id: str, request: Request):
+    _exigir_admin(request)
+    job = get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Solicitação não encontrada ou já removida pela retenção.")
+    if str(job.get("status", "")).lower() != "failed":
+        raise HTTPException(status_code=409, detail="Só é possível refazer solicitações marcadas como falha.")
+
+    email = str(job.get("email") or "").strip()
+    dados_usuario = job.get("dados_usuario")
+    dados_ia = job.get("dados_ia")
+    if not isinstance(dados_usuario, dict):
+        dados_usuario = {}
+    if not isinstance(dados_ia, dict):
+        dados_ia = {}
+
+    pipeline = dados_ia.get("__LICITA_PIPELINE__")
+    retry_mode = None
+    dados_processados = job.get("dados_usuario_processados")
+    if not (isinstance(pipeline, dict) and isinstance(pipeline.get("etapas"), list) and pipeline.get("etapas")):
+        # Compatibilidade com falhas antigas no envio SMTP: os documentos já haviam sido gerados.
+        if (
+            str(job.get("current_stage", "")).upper() == "ENVIO_EMAIL"
+            and isinstance(dados_processados, dict)
+            and dados_ia
+        ):
+            retry_mode = "email_only"
+        else:
+            raise HTTPException(
+                status_code=409,
+                detail="Este registro antigo não contém os dados necessários para refazer a geração. Envie uma nova solicitação pelo formulário.",
+            )
+
+    try:
+        novo = enqueue_job(
+            email=email,
+            dados_usuario=dados_usuario,
+            dados_ia=dados_ia,
+            instrucoes=str(job.get("instrucoes") or ""),
+            retry_of=job_id,
+            retry_mode=retry_mode,
+            dados_usuario_processados=dados_processados if retry_mode == "email_only" else None,
+        )
+        novo["retry_of"] = job_id
+        return novo
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
 
 
 RETENTION_DAYS = max(1, int(os.getenv("LICITA_QUEUE_RETENTION_DAYS", "7")))
