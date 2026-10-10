@@ -178,3 +178,91 @@ export const gerarFasePreparatoria = async (dados: any, arquivos?: DocumentosRef
 
   return response.json();
 };
+
+export interface AdminJob {
+  job_id: string;
+  status: "queued" | "processing" | "sent" | "failed" | string;
+  email: string;
+  objeto: string;
+  created_at?: string | null;
+  started_at?: string | null;
+  last_attempt_started_at?: string | null;
+  completed_at?: string | null;
+  last_error_at?: string | null;
+  current_stage?: string | null;
+  attempts: number;
+  resolved_model?: string | null;
+  completed_stages?: string[];
+  retry_at?: string | null;
+  retry_of?: string | null;
+  last_error?: string;
+  result?: { filename?: string; recipient?: string } | null;
+  queue_wait_seconds?: number | null;
+  processing_seconds?: number | null;
+  elapsed_seconds?: number | null;
+  attempt_history?: Array<Record<string, any>>;
+  stage_history?: Array<Record<string, any>>;
+  failure_notification?: Record<string, any> | null;
+}
+
+export interface AdminJobDetails extends AdminJob {
+  instrucoes: string;
+  dados_usuario: Record<string, unknown>;
+  dados_usuario_processados: Record<string, unknown>;
+  etapas_planejadas: string[];
+}
+
+async function respostaAdmin<T>(response: Response): Promise<T> {
+  let payload: any = {};
+  try {
+    payload = await response.json();
+  } catch {
+    payload = {};
+  }
+  if (!response.ok) {
+    throw new Error(payload?.detail || "Não foi possível concluir a operação administrativa.");
+  }
+  return payload as T;
+}
+
+export async function autenticarAdminPedidos(password: string): Promise<{ token: string; expires_in: number }> {
+  if (!BASE_URL) throw new Error("API do Licita.AI não configurada.");
+  const response = await fetch(BASE_URL + "/licita/api/admin/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
+  return respostaAdmin(response);
+}
+
+export async function listarAdminPedidos(
+  token: string,
+  status = "todos",
+  q = "",
+): Promise<{ items: AdminJob[]; total: number; generated_at: string }> {
+  const params = new URLSearchParams({ status, limit: "300" });
+  if (q.trim()) params.set("q", q.trim());
+  const response = await fetch(BASE_URL + "/licita/api/admin/jobs?" + params.toString(), {
+    headers: { Authorization: "Bearer " + token },
+  });
+  return respostaAdmin(response);
+}
+
+export async function detalharAdminPedido(token: string, jobId: string): Promise<AdminJobDetails> {
+  const response = await fetch(BASE_URL + "/licita/api/admin/jobs/" + encodeURIComponent(jobId), {
+    headers: { Authorization: "Bearer " + token },
+  });
+  return respostaAdmin(response);
+}
+
+export async function refazerAdminPedido(
+  token: string,
+  jobId: string,
+): Promise<{ job_id: string; status: string; email: string; message: string; retry_of?: string }> {
+  const response = await fetch(BASE_URL + "/licita/api/admin/jobs/" + encodeURIComponent(jobId) + "/retry", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + token },
+  });
+  return respostaAdmin(response);
+}
+
