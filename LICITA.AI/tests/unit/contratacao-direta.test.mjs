@@ -70,7 +70,7 @@ test("fila normal envia uma única etapa de IA para DFD, ETP e TR", async () => 
     ],
     globals: {
       __injected_gerador: {
-        construirPrompt: (_dados, _meepp, etapa) => `PROMPT_${etapa}`,
+        construirPrompt: (_dados, _meepp, etapa) => `PROMPT_${etapa}\nESTRUTURA JSON OBRIGATÓRIA:`,
       },
       fetch: async (url, options) => {
         chamada = { url, options };
