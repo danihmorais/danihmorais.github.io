@@ -43,6 +43,26 @@ function rotuloStatusPedido(status?: string, cancelRequested = false): string {
   return nomes[String(status || "").toLowerCase()] || "Status desconhecido";
 }
 
+function pendenciasEtapa(indice: number, dados: any): string[] {
+  switch (indice) {
+    case 0: {
+      const faltas: string[] = [];
+      if (!String(dados.objeto || "").trim()) faltas.push("objeto da contratação");
+      if (!String(dados.necessidade || "").trim()) faltas.push("justificativa da demanda");
+      if (!Array.isArray(dados.itens) || !dados.itens.length) faltas.push("ao menos um item");
+      else if (dados.itens.some((item: any) => !String(item?.descricao || "").trim() || !String(item?.un || "").trim() || !(Number(item.qtd) > 0) || !(Number(item.valor) > 0))) faltas.push("descrição, unidade, quantidade e valor positivo de todos os itens");
+      return faltas;
+    }
+    case 1: return String(dados.execucao || "").trim() ? [] : ["condições de execução"];
+    case 2:
+      return (Array.isArray(dados.secretarias) && dados.secretarias.length && dados.secretarias.every((secretaria: string) => Array.isArray(dados.contatosSecretarias?.[secretaria]) && dados.contatosSecretarias[secretaria].length))
+        ? [] : ["ao menos uma unidade e seus contatos"];
+    case 3: return (Array.isArray(dados.gestores) && dados.gestores.length && Array.isArray(dados.fiscais) && dados.fiscais.length) ? [] : ["gestores e fiscais"];
+    case 4: return etapaValida(4, dados) ? [] : ["configurações obrigatórias, dotação, pagamento ou vigência de até 365 dias"];
+    default: return ["campos obrigatórios"];
+  }
+}
+
 const etapas = [
   { titulo: "Objeto e itens", descricao: "Informe o objeto da contratação, a justificativa da demanda e os itens." },
   { titulo: "Execução", descricao: "Defina as condições de execução, os prazos e os requisitos de qualidade." },
@@ -487,6 +507,7 @@ export default function Wizard() {
       <header className="wizard-header">
         <a className="wizard-brand" href="/" aria-label="LICITA.AI — página inicial">LICITA<span>.</span>AI</a>
         <div className="wizard-header-actions">
+          {habilitarDadosTeste && (
           <div className="test-menu-wrap">
             <button
               type="button"
@@ -504,12 +525,7 @@ export default function Wizard() {
               </div>
             )}
           </div>
-          <button
-            type="button"
-            className="button button-quiet admin-pedidos-trigger"
-            onClick={() => setMostrarAdminPedidos(true)}
-            aria-label="Abrir painel administrativo de pedidos"
-          >Pedidos <span aria-hidden="true">↗</span></button>
+          )}
           <button
             type="button"
             className="button button-quiet theme-toggle"
@@ -521,25 +537,45 @@ export default function Wizard() {
       </header>
 
       <main className="wizard-main">
+        {rascunhoDisponivel && (
+          <div className="draft-banner" role="status">
+            <p><strong>Há um rascunho salvo.</strong> Ele não inclui imagens de dotação; anexos precisam ser enviados novamente.</p>
+            <div>
+              <button type="button" className="button button-secondary" onClick={restaurarRascunho}>Retomar rascunho</button>
+              <button type="button" className="button button-quiet" onClick={descartarRascunho}>Descartar</button>
+            </div>
+          </div>
+        )}
         <nav className="wizard-stepper" aria-label="Etapas da contratação">
           <ol>
-            {etapas.map((item, index) => (
-              <li
-                key={item.titulo}
-                className={index === etapaAtual ? "current" : index < etapaAtual ? "completed" : ""}
-                aria-current={index === etapaAtual ? "step" : undefined}
-              >
-                <span className="stepper-number">{index < etapaAtual ? "✓" : index + 1}</span>
-                <span className="stepper-label">{item.titulo}</span>
-              </li>
-            ))}
+            {etapas.map((item, index) => {
+              const bloqueada = index > etapaAtual && !validas.slice(0, index).every(Boolean);
+              const pendente = index <= maiorEtapaAlcancada && !validas[index];
+              const classe = index === etapaAtual ? "current" : validas[index] ? "completed" : bloqueada ? "locked" : pendente ? "needs-attention" : "";
+              return (
+                <li key={item.titulo} className={classe}>
+                  <button
+                    type="button"
+                    className="stepper-button"
+                    onClick={() => irParaEtapa(index)}
+                    aria-current={index === etapaAtual ? "step" : undefined}
+                    aria-disabled={bloqueada}
+                    aria-label={`Etapa ${index + 1}: ${item.titulo}${validas[index] ? ", válida" : bloqueada ? ", bloqueada" : ", pendente"}`}
+                    title={item.titulo}
+                  >
+                    <span className="stepper-number">{validas[index] && index !== etapaAtual ? "✓" : pendente ? "!" : index + 1}</span>
+                    <span className="stepper-label">{item.titulo}</span>
+                  </button>
+                </li>
+              );
+            })}
           </ol>
         </nav>
 
         <section className="wizard-section" aria-labelledby="wizard-step-title">
           <div className="wizard-heading">
             <span className="wizard-step-count">Etapa {etapaAtual + 1} de {etapas.length}</span>
-            <h1 id="wizard-step-title">{etapa.titulo}</h1>
+            <h1 id="wizard-step-title" tabIndex={-1}>{etapa.titulo}</h1>
             <p>{etapa.descricao}</p>
           </div>
 
@@ -547,11 +583,14 @@ export default function Wizard() {
             {renderizarEtapa()}
           </div>
 
+          {tentouAvancar && !podeAvancar && (
+            <p className="wizard-validation-hint" role="status">Faltam: {pendenciasEtapa(etapaAtual, dados).join("; ")}.</p>
+          )}
           <footer className="wizard-navigation">
             <button type="button" className="button button-secondary" onClick={voltar}>
               {etapaAtual === 0 ? "Sair" : "Voltar"}
             </button>
-            <button type="button" className="button button-primary" onClick={avancar} disabled={!podeAvancar}>
+            <button type="button" className="button button-primary" onClick={avancar} aria-disabled={!podeAvancar}>
               {etapaAtual === 4 ? "Confeccionar documentos" : "Próxima etapa"}
               {etapaAtual !== 4 && <span aria-hidden="true">→</span>}
             </button>
@@ -559,8 +598,24 @@ export default function Wizard() {
         </section>
       </main>
 
-      <PromptModal isOpen={mostrarPromptModal} onClose={() => setMostrarPromptModal(false)} onConfirm={confeccionarDocumentos} />
-      {mostrarAdminPedidos && <AdminPedidosModal onClose={() => setMostrarAdminPedidos(false)} />}
+      <PromptModal
+        isOpen={mostrarPromptModal}
+        onClose={() => setMostrarPromptModal(false)}
+        onConfirm={confeccionarDocumentos}
+        texto={instrucoesEnvio}
+        onTextoChange={setInstrucoesEnvio}
+        email={emailEnvio}
+        onEmailChange={setEmailEnvio}
+        arquivos={arquivosEnvio}
+        onArquivosChange={setArquivosEnvio}
+      />
+      {mostrarAdminPedidos && (
+        <AdminPedidosModal
+          onClose={() => setMostrarAdminPedidos(false)}
+          sessaoInicial={adminSessao}
+          onSessaoChange={setAdminSessao}
+        />
+      )}
     </div>
   );
 }
