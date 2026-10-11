@@ -81,6 +81,78 @@ class TestFilaPipeline(unittest.TestCase):
         self.assertTrue(auditoria["itens"][0]["alterado"])
 
 
+class TestAutomaticModelResolution(unittest.TestCase):
+    def test_auto_model_falls_back_to_first_model_reported_by_unsloth(self):
+        from unittest.mock import MagicMock, patch
+        import fila_pipeline as pipeline
+
+        not_found = MagicMock()
+        not_found.status_code = 404
+        not_found.text = '{"error":"model not downloaded"}'
+
+        model_list = MagicMock()
+        model_list.status_code = 200
+        model_list.json.return_value = {"data": [{"id": "gemma-loaded-model"}]}
+
+        completion = MagicMock()
+        completion.status_code = 200
+        completion.json.return_value = {
+            "choices": [{"message": {"content": '{"ok": true}'}}],
+            "model": "gemma-loaded-model",
+        }
+
+        with (
+            patch.object(pipeline, "API_UNSLOTH_URL", "http://unsloth.test/v1"),
+            patch.object(pipeline, "API_UNSLOTH_KEY", "chave-de-teste"),
+            patch.object(pipeline.httpx, "Client") as cliente_http,
+        ):
+            cliente = cliente_http.return_value.__enter__.return_value
+            cliente.post.side_effect = [not_found, completion]
+            cliente.get.return_value = model_list
+            resultado, modelo = pipeline._chamar_ia("prompt de teste", "unsloth-auto")
+
+        self.assertEqual(resultado, {"ok": True})
+        self.assertEqual(modelo, "gemma-loaded-model")
+        self.assertEqual(cliente.post.call_count, 2)
+        self.assertEqual(cliente.post.call_args_list[1].kwargs["json"]["model"], "gemma-loaded-model")
+        cliente.get.assert_called_once_with("http://unsloth.test/v1/models", headers={
+            "Content-Type": "application/json", "Authorization": "Bearer chave-de-teste"
+        })
+
+
+class TestStaleQueueCancellation(unittest.TestCase):
+    def test_cancel_finishes_abandoned_processing_job_instead_of_leaving_cancelling_forever(self):
+        import json
+        import tempfile
+        from datetime import datetime, timedelta, timezone
+        from pathlib import Path
+        from unittest.mock import patch
+        import fila
+
+        job_id = "d" * 32
+        with tempfile.TemporaryDirectory() as directorio:
+            raiz = Path(directorio)
+            antigo = (datetime.now(timezone.utc) - timedelta(hours=614)).isoformat()
+            job = {
+                "job_id": job_id,
+                "status": "processing",
+                "created_at": antigo,
+                "started_at": antigo,
+                "last_attempt_started_at": antigo,
+                "current_stage_started_at": antigo,
+                "email": "teste@example.com",
+            }
+            with patch.object(fila, "QUEUE_DIR", raiz):
+                fila._write_json(fila._job_path(job_id, ".processing"), job)
+                estado = fila.cancel_job(job_id, "admin")
+                self.assertEqual(estado, "cancelled")
+                cancelado = json.loads(fila._job_path(job_id, ".cancelled").read_text(encoding="utf-8"))
+                self.assertEqual(cancelado["status"], "cancelled")
+                self.assertEqual(cancelado["cancelled_by"], "admin")
+                self.assertTrue((raiz / f"{job_id}.cancel").exists())
+                self.assertFalse(fila._job_path(job_id, ".processing").exists())
+
+
 if __name__ == "__main__":
     unittest.main()
 
