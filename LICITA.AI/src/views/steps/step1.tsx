@@ -1,5 +1,6 @@
 import React, { useRef, useState } from "react";
 import { useToast } from "../../components/toast";
+import ConfirmDialog from "../../components/ConfirmDialog";
 
 import { calcularValorEstimadoItens } from "../../utils/regrasContratacao";
 import { melhorarDescricaoItem } from "../../providers/services/descricaoItensIA";
@@ -11,6 +12,7 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
   const [importandoPdf, setImportandoPdf] = useState(false);
   const [importandoXlsx, setImportandoXlsx] = useState(false);
   const [itemEmMelhoria, setItemEmMelhoria] = useState<number | string | null>(null);
+  const [importacaoPendente, setImportacaoPendente] = useState<any[] | null>(null);
   const { showToast } = useToast();
   const itens = dados.itens || [];
   const itensRef = useRef<any[]>(itens);
@@ -54,14 +56,23 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
     return { itens: renumerarItens(novosItens) };
   });
 
-  const decidirImportacaoItens = (importados: any[]) => {
+  const aplicarImportacaoItens = (importados: any[], anexar: boolean) => {
     const atuais = itensRef.current;
-    const anexar = atuais.length > 0 && !window.confirm(
-      "Já existem itens no formulário. OK = substituir a lista atual pelos itens importados. Cancelar = acrescentar os itens importados ao final."
-    );
     const resultado = anexar ? [...atuais, ...importados] : importados;
     atualizarDados((anterior: any) => ({ itens: renumerarItens(resultado) }));
-    return { quantidade: importados.length, anexados: anexar, total: resultado.length };
+    setImportacaoPendente(null);
+    showToast(
+      `${importados.length} itens ${anexar ? "acrescentados ao final" : "importados"}; total atual: ${resultado.length}.`,
+      "success"
+    );
+  };
+
+  const decidirImportacaoItens = (importados: any[]) => {
+    if (itensRef.current.length > 0) {
+      setImportacaoPendente(importados);
+      return;
+    }
+    aplicarImportacaoItens(importados, false);
   };
 
   const melhorarItem = async (item: any) => {
@@ -131,8 +142,7 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
           un: String(linha[cUn] || "UN").trim(),
           valor: cValor >= 0 ? extrairNumero(linha[cValor]) : 0,
         })).filter((item) => item.descricao);
-        const acao = decidirImportacaoItens(importados);
-        showToast(`Planilha importada: ${importados.length} itens ${acao.anexados ? "acrescentados" : "importados"}; total atual: ${acao.total}.`, "success");
+        decidirImportacaoItens(importados);
       } catch (erro: any) {
         showToast(`Erro ao importar: ${erro.message}`, "error");
       } finally {
@@ -204,9 +214,8 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
         numero: index + 1,
         id: Date.now() + Math.random() + index,
       }));
-      const acao = decidirImportacaoItens(itensImportados);
+      decidirImportacaoItens(itensImportados);
       if (!objetoAtual && objetoPdf) atualizarDados((anterior: any) => ({ objeto: anterior.objeto?.trim() ? anterior.objeto : objetoPdf }));
-      showToast(`Cotação PDF: ${importados.length} itens ${acao.anexados ? "acrescentados" : "importados"}; total atual: ${acao.total}.`, "success");
     } catch (erro: any) {
       console.error("Erro ao importar cotação PDF:", erro);
       showToast(`Erro ao importar cotação PDF: ${erro?.message || "arquivo inválido"}`, "error");
@@ -288,5 +297,17 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
         </div>
       </div>
     </section>
+    {importacaoPendente && (
+      <ConfirmDialog
+        title="Como deseja importar os itens?"
+        message="Já existem itens no formulário. Você pode substituir a lista atual ou acrescentar os itens importados ao final."
+        confirmLabel="Substituir lista atual"
+        cancelLabel="Acrescentar ao final"
+        variant="danger"
+        onConfirm={() => aplicarImportacaoItens(importacaoPendente, false)}
+        onCancel={() => aplicarImportacaoItens(importacaoPendente, true)}
+        onDismiss={() => setImportacaoPendente(null)}
+      />
+    )}
   </div>;
 }
