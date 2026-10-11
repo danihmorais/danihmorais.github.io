@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useToast } from "./toast";
 import type { TipoTesteContratacao } from "../utils/dadosTeste";
 import {
   autenticarAdminPedidos,
@@ -129,6 +130,7 @@ function MensagemEstado({ texto }: { texto: string }) {
 }
 
 export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChange, onLoadTestData }: AdminPedidosModalProps) {
+  const { showToast } = useToast();
   const sessaoValida = Boolean(sessaoInicial?.token && sessaoInicial.expiraEm > Date.now());
   const [senha, setSenha] = useState("");
   const [token, setToken] = useState(sessaoValida ? sessaoInicial!.token : "");
@@ -153,6 +155,18 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
   const [excluindo, setExcluindo] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!token || !erro) return;
+    showToast(erro, "error");
+    setErro(null);
+  }, [erro, token, showToast]);
+
+  useEffect(() => {
+    if (!aviso) return;
+    showToast(aviso, "success");
+    setAviso(null);
+  }, [aviso, showToast]);
 
   const carregarPedidos = useCallback(async (sessao: string) => {
     setCarregando(true);
@@ -560,9 +574,6 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
             </div>
 
             <div className="admin-body">
-            {erro && <p className="admin-feedback admin-feedback-error" role="alert">{erro}</p>}
-            {aviso && <p className="admin-feedback admin-feedback-success" role="status">{aviso}</p>}
-
             <div className="admin-list-summary">
               <span>{total} {total === 1 ? "pedido encontrado" : "pedidos encontrados"}</span>
               <span>{atualizadoEm ? "Atualizado às " + new Date(atualizadoEm).toLocaleTimeString("pt-BR") : "Até 300 registros por consulta"} · horários no fuso local do navegador</span>
@@ -581,7 +592,7 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
                         <span className={"admin-status-pill admin-status-" + pedido.status}>{rotuloStatus(pedido.status)}</span>
                         <span className="admin-job-id" title={pedido.job_id}>{pedido.job_id.slice(0, 8)}</span>
                         <button type="button" className="admin-copy-button" title="Copiar ID completo" aria-label={"Copiar ID completo " + pedido.job_id} onClick={() => void navigator.clipboard.writeText(pedido.job_id).then(() => setAviso("ID completo copiado.")).catch(() => setErro("Não foi possível copiar o ID."))}>Copiar ID</button>
-                        {pedido.cancel_requested && <span className="admin-status-pill admin-status-cancelling">Cancelamento solicitado</span>}
+                        {pedido.cancel_requested && pedido.status !== "cancelled" && <span className="admin-status-pill admin-status-cancelling">Cancelamento solicitado</span>}
                       </div>
                       <h3>{pedido.objeto || "Objeto não informado"}</h3>
                       <p className="admin-job-email">{pedido.email || "Destinatário não registrado"}</p>

@@ -33,6 +33,9 @@ function testRequire(request) {
   if (request === "./utils/mapearDados") {
     return { mapearDadosWizard: (dados) => ({ ...dados }) };
   }
+  if (request === "./utils/apiBase" || request === "../utils/apiBase") {
+    return { getApiBaseUrl: () => process.env.TEST_API_URL || "https://api.example.test" };
+  }
   throw new Error(`Unsupported test require: ${request}`);
 }
 

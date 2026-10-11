@@ -120,6 +120,41 @@ async def _upstream_chat(base_url: str, api_key: str, payload: dict) -> tuple[di
         return {}, 502
 
 
+def _modelo_automatico(modelo: str) -> bool:
+    return str(modelo or "").strip().casefold() in {"", "auto", "unsloth-auto"}
+
+
+async def _listar_modelo_disponivel() -> str:
+    """Resolve o alias automático para um identificador real exposto pelo Unsloth."""
+    headers = {"Content-Type": "application/json"}
+    if API_UNSLOTH_KEY:
+        headers["Authorization"] = f"Bearer {API_UNSLOTH_KEY}"
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.get(f"{API_UNSLOTH_URL}/models", headers=headers)
+        if response.status_code >= 400:
+            raise RuntimeError(f"HTTP {response.status_code}")
+        payload = response.json()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Não foi possível descobrir o modelo carregado no Unsloth. Confira se há um modelo carregado no Studio.",
+        ) from exc
+
+    modelos = payload.get("data", []) if isinstance(payload, dict) else []
+    identificadores = [
+        str(item.get("id", "")).strip()
+        for item in modelos
+        if isinstance(item, dict) and str(item.get("id", "")).strip()
+    ] if isinstance(modelos, list) else []
+    if not identificadores:
+        raise HTTPException(
+            status_code=503,
+            detail="O Unsloth não informou modelos disponíveis. Carregue um modelo no Unsloth Studio e tente novamente.",
+        )
+    return identificadores[0]
+
+
 async def _gerar_ia(req: IAChatRequest) -> dict:
     if not API_UNSLOTH_URL or not API_UNSLOTH_KEY:
         raise HTTPException(status_code=503, detail="Unsloth local não está configurado no backend.")
@@ -134,6 +169,10 @@ async def _gerar_ia(req: IAChatRequest) -> dict:
         payload["response_format"] = req.response_format
 
     data, status = await _upstream_chat(API_UNSLOTH_URL, API_UNSLOTH_KEY, payload)
+    modelo_solicitado = str(req.model or "").strip()
+    if status == 404 and _modelo_automatico(modelo_solicitado):
+        payload["model"] = await _listar_modelo_disponivel()
+        data, status = await _upstream_chat(API_UNSLOTH_URL, API_UNSLOTH_KEY, payload)
     if status >= 400:
         if status == 429:
             raise HTTPException(status_code=429, detail="O Unsloth local está limitando as requisições no momento.")
@@ -141,7 +180,7 @@ async def _gerar_ia(req: IAChatRequest) -> dict:
 
     choice = (data.get("choices") or [None])[0]
     content = ((choice or {}).get("message") or {}).get("content")
-    model = data.get("model") or req.model
+    model = data.get("model") or payload["model"]
     if not content:
         raise HTTPException(status_code=502, detail="O Unsloth local retornou uma resposta vazia.")
     return {"content": content, "model": model, "provider": "unsloth"}

@@ -6,6 +6,7 @@ import Step3 from "./steps/step3";
 import Step4 from "./steps/step4";
 import Step5 from "./steps/step5";
 import PromptModal from "../components/promptModal";
+import ConfirmDialog from "../components/ConfirmDialog";
 import AdminPedidosModal from "../components/AdminPedidosModal";
 import { ThemeContext } from "../context/ThemeContext";
 import { cancelarFilaFasePreparatoria, consultarFilaFasePreparatoria, gerarFasePreparatoria, type DocumentosReferenciaUpload, type FasePreparatoriaJob } from "../api";
@@ -155,6 +156,7 @@ export default function Wizard() {
   const [rascunhoInicializado, setRascunhoInicializado] = useState(false);
   const [mostrarPromptModal, setMostrarPromptModal] = useState(false);
   const [mostrarAdminPedidos, setMostrarAdminPedidos] = useState(false);
+  const [confirmacaoWizard, setConfirmacaoWizard] = useState<{ title: string; message: string; confirmLabel: string; cancelLabel?: string; variant?: "primary" | "danger"; onConfirm: () => void } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { theme, toggleTheme } = useContext(ThemeContext);
   const isDark = theme === "dark";
@@ -194,10 +196,23 @@ export default function Wizard() {
   };
 
   const carregarTestePeloAdmin = (tipo: TipoTesteContratacao) => {
-    if (dadosPreenchidos && !window.confirm("Carregar dados de teste substituirá os dados atualmente preenchidos no formulário. Continuar?")) return;
-    carregarTeste(tipo);
-    setMostrarAdminPedidos(false);
-    showToast(tipo === "direta" ? "Dados de teste de contratação direta carregados." : "Dados de teste de contratação normal carregados.", "info");
+    const carregar = () => {
+      carregarTeste(tipo);
+      setMostrarAdminPedidos(false);
+      showToast(tipo === "direta" ? "Dados de teste de contratação direta carregados." : "Dados de teste de contratação normal carregados.", "info");
+    };
+    if (!dadosPreenchidos) {
+      carregar();
+      return;
+    }
+    setConfirmacaoWizard({
+      title: "Substituir os dados atuais?",
+      message: "Carregar dados de teste substituirá o conteúdo preenchido no formulário.",
+      confirmLabel: "Carregar dados de teste",
+      cancelLabel: "Manter meus dados",
+      variant: "danger",
+      onConfirm: carregar,
+    });
   };
 
   useEffect(() => {
@@ -344,8 +359,19 @@ export default function Wizard() {
       setEtapaAtual(etapaAtual - 1);
       return;
     }
-    if (dadosPreenchidos && !window.confirm("Há dados preenchidos. Sair desta página? O rascunho será salvo sem as imagens de dotação.")) return;
-    window.location.href = "/";
+    const sair = () => { window.location.href = "/"; };
+    if (dadosPreenchidos) {
+      setConfirmacaoWizard({
+        title: "Sair do formulário?",
+        message: "Há dados preenchidos. O rascunho será salvo, mas não incluirá as imagens de dotação.",
+        confirmLabel: "Sair",
+        cancelLabel: "Continuar preenchendo",
+        variant: "danger",
+        onConfirm: sair,
+      });
+      return;
+    }
+    sair();
   };
 
   const confeccionarDocumentos = async ({ instrucoes, email, arquivos }: { instrucoes: string; email: string; arquivos: DocumentosReferenciaUpload }) => {
@@ -380,14 +406,8 @@ export default function Wizard() {
     }
   };
 
-  const cancelarSolicitacao = async () => {
+  const executarCancelamentoSolicitacao = async () => {
     if (!jobAgendado || !jobAgendado.status_token) return;
-    const status = jobDetalhe?.status || jobAgendado.status;
-    const emAndamento = status === "processing" || status === "cancelling";
-    const pergunta = emAndamento
-      ? "A IA não pode ser interrompida no meio de uma etapa. Solicitar o cancelamento ao fim da etapa atual? Nenhum e-mail será enviado."
-      : "Cancelar esta solicitação da fila? Nenhum e-mail será enviado.";
-    if (!window.confirm(pergunta)) return;
     setCancelandoJob(true);
     setErroConsultaJob(null);
     try {
@@ -403,6 +423,22 @@ export default function Wizard() {
     }
   };
 
+  const solicitarCancelamento = () => {
+    if (!jobAgendado || !jobAgendado.status_token) return;
+    const status = jobDetalhe?.status || jobAgendado.status;
+    const emAndamento = status === "processing" || status === "cancelling";
+    setConfirmacaoWizard({
+      title: "Cancelar solicitação?",
+      message: emAndamento
+        ? "A IA não pode ser interrompida no meio de uma etapa. O cancelamento será aplicado ao final da etapa atual e nenhum e-mail será enviado."
+        : "O pedido será removido da fila. Nenhum e-mail será enviado.",
+      confirmLabel: "Cancelar solicitação",
+      cancelLabel: "Continuar processamento",
+      variant: "danger",
+      onConfirm: () => { void executarCancelamentoSolicitacao(); },
+    });
+  };
+
   const voltarAoFormulario = () => {
     setGeracaoSucesso(false);
     setJobAgendado(null);
@@ -413,8 +449,7 @@ export default function Wizard() {
     setMostrarPromptModal(false);
   };
 
-  const novaSolicitacao = () => {
-    if (!window.confirm("Iniciar uma nova solicitação e limpar os dados atuais do formulário?")) return;
+  const limparParaNovaSolicitacao = () => {
     localStorage.removeItem("licita-ai-rascunho-v1");
     setRascunhoDisponivel(false);
     setDados({
@@ -439,6 +474,17 @@ export default function Wizard() {
     setGeracaoSucesso(false);
     setMostrarPromptModal(false);
     showToast("Formulário limpo para uma nova solicitação.", "success");
+  };
+
+  const novaSolicitacao = () => {
+    setConfirmacaoWizard({
+      title: "Iniciar nova solicitação?",
+      message: "Os dados atuais serão apagados para começar um formulário em branco.",
+      confirmLabel: "Limpar e começar",
+      cancelLabel: "Manter solicitação atual",
+      variant: "danger",
+      onConfirm: limparParaNovaSolicitacao,
+    });
   };
 
   const renderizarEtapa = () => {
@@ -488,7 +534,7 @@ export default function Wizard() {
               <div className="status-actions">
                 <button className="button button-secondary" onClick={() => void navigator.clipboard.writeText(jobAgendado.job_id).then(() => showToast("ID copiado.", "success")).catch(() => showToast("Não foi possível copiar o ID.", "error"))}>Copiar ID</button>
                 {pedidoAindaAtivo && (
-                  <button className="button button-secondary button-danger-outline" onClick={() => void cancelarSolicitacao()} disabled={cancelandoJob || cancelamentoSolicitado}>
+                  <button className="button button-secondary button-danger-outline" onClick={solicitarCancelamento} disabled={cancelandoJob || cancelamentoSolicitado}>
                     {cancelandoJob ? "Cancelando…" : cancelamentoSolicitado ? "Cancelamento solicitado" : "Cancelar solicitação"}
                   </button>
                 )}
@@ -609,6 +655,22 @@ export default function Wizard() {
           sessaoInicial={adminSessao}
           onSessaoChange={setAdminSessao}
           onLoadTestData={carregarTestePeloAdmin}
+        />
+      )}
+      {confirmacaoWizard && (
+        <ConfirmDialog
+          title={confirmacaoWizard.title}
+          message={confirmacaoWizard.message}
+          confirmLabel={confirmacaoWizard.confirmLabel}
+          cancelLabel={confirmacaoWizard.cancelLabel}
+          variant={confirmacaoWizard.variant}
+          onCancel={() => setConfirmacaoWizard(null)}
+          onDismiss={() => setConfirmacaoWizard(null)}
+          onConfirm={() => {
+            const confirmar = confirmacaoWizard.onConfirm;
+            setConfirmacaoWizard(null);
+            confirmar();
+          }}
         />
       )}
     </div>

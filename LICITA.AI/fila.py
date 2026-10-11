@@ -418,6 +418,46 @@ def cancel_job(job_id: str, origem: str) -> str:
                 json.dump({"requested_at": _utc_now(), "requested_by": origem}, handle)
         except FileExistsError:
             pass
+
+        # Se o worker caiu ou ficou abandonado, não deixe o pedido eternamente em
+        # "cancelling". O marcador permanece para que um worker ainda vivo também
+        # pare antes de gerar/enviar os documentos.
+        try:
+            job_em_execucao = json.loads(processing_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            job_em_execucao = {}
+        marco = (
+            job_em_execucao.get("current_stage_started_at")
+            or job_em_execucao.get("last_attempt_started_at")
+            or job_em_execucao.get("started_at")
+        )
+        idade_segundos = 0
+        try:
+            data_marco = datetime.fromisoformat(str(marco).strip().replace("Z", "+00:00"))
+            if data_marco.tzinfo is None:
+                data_marco = data_marco.replace(tzinfo=timezone.utc)
+            idade_segundos = max(0, int((datetime.now(timezone.utc) - data_marco.astimezone(timezone.utc)).total_seconds()))
+        except (TypeError, ValueError):
+            pass
+        limite_abandono = max(60, int(os.getenv("LICITA_QUEUE_STALE_CANCEL_SECONDS", "900")))
+        if idade_segundos >= limite_abandono:
+            try:
+                os.replace(processing_path, cancelled_path)
+            except FileNotFoundError:
+                # O worker terminou entre a leitura e a troca atômica.
+                raise ValueError("O pedido terminou antes de o cancelamento ser aplicado.")
+            job_em_execucao.update({
+                "status": "cancelled",
+                "cancel_requested": True,
+                "cancelled_at": _utc_now(),
+                "cancelled_by": origem,
+            })
+            job_em_execucao.pop("retry_at", None)
+            _write_json(cancelled_path, job_em_execucao)
+            _artifact_path(job_id).unlink(missing_ok=True)
+            # Não removemos o marcador aqui: caso a chamada de IA ainda esteja viva,
+            # ela o encontrará ao retornar e interromperá o restante do pipeline.
+            return "cancelled"
         return "cancelling"
 
     try:
