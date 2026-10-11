@@ -221,7 +221,7 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
     setErro(null);
     try {
       const resposta = await autenticarAdminPedidos(senha);
-      const expiracao = Date.now() + Math.max(60, Number(resposta.expires_in) || 1800) * 1000;
+      const expiracao = Date.now() + Math.max(1, Number(resposta.expires_in) || 1800) * 1000;
       setSenha("");
       setToken(resposta.token);
       setExpiraEm(expiracao);
