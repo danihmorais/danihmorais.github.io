@@ -266,13 +266,14 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
     setAviso(null);
     try {
       const novo = await refazerAdminPedido(token, pedido.job_id);
+      const filtrosJaPadrao = statusFiltro === "todos" && !busca;
       setConfirmacao(null);
       setPedidoSelecionado(null);
       setStatusFiltro("todos");
       setBusca("");
       setBuscaDigitada("");
       setAviso("Nova execução criada: " + novo.job_id.slice(0, 8) + ". O registro da falha original foi preservado.");
-      setRefreshNonce((valor) => valor + 1);
+      if (filtrosJaPadrao) setRefreshNonce((valor) => valor + 1);
     } catch (falha: unknown) {
       const mensagem = falha instanceof Error ? falha.message : "Não foi possível refazer o pedido.";
       setErro(mensagem);
@@ -372,7 +373,7 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
                 <div><dt>Conclusão</dt><dd>{formatarData(pedidoSelecionado.completed_at || pedidoSelecionado.last_error_at)}</dd></div>
                 <div><dt>Tempo total</dt><dd>{formatarDuracao(pedidoSelecionado.elapsed_seconds)}</dd></div>
                 <div><dt>Tempo processando</dt><dd>{formatarDuracao(pedidoSelecionado.processing_seconds)}</dd></div>
-                <div><dt>Etapa atual/final</dt><dd>{pedidoSelecionado.current_stage || "—"}</dd></div>
+                <div><dt>Etapa atual/final</dt><dd>{rotuloEtapa(pedidoSelecionado.current_stage)}</dd></div>
                 <div><dt>Modelo resolvido</dt><dd>{pedidoSelecionado.resolved_model || "Não registrado"}</dd></div>
                 <div><dt>Refaz pedido</dt><dd>{pedidoSelecionado.retry_of || "Solicitação original"}</dd></div>
                 <div><dt>Documento enviado</dt><dd>{pedidoSelecionado.result?.filename || "—"}</dd></div>
@@ -381,6 +382,7 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
               {pedidoSelecionado.last_error && (
                 <div className="admin-detail-section">
                   <h4>Último erro</h4>
+                  <button type="button" className="admin-copy-button" onClick={() => void navigator.clipboard.writeText(pedidoSelecionado.last_error || "").then(() => setAviso("Último erro copiado.")).catch(() => setErro("Não foi possível copiar o erro."))}>Copiar erro completo</button>
                   <pre className="admin-json-block admin-error-block">{pedidoSelecionado.last_error}</pre>
                 </div>
               )}
@@ -403,7 +405,7 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
                     {historicoEtapas.map((etapa, indice) => (
                       <div className="admin-history-row" key={String(etapa.stage) + "-" + indice}>
                         <div>
-                          <strong>{String(etapa.stage || "Etapa")}</strong>
+                          <strong>{rotuloEtapa(String(etapa.stage || "Etapa"))}</strong>
                           <span>{formatarData(etapa.started_at)} → {formatarData(etapa.ended_at)}</span>
                         </div>
                         <span className={"admin-status-pill admin-status-" + String(etapa.status || "unknown")}>{rotuloStatus(String(etapa.status || "desconhecido"))}</span>
@@ -505,6 +507,7 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
                   <option value="processing">Processando</option>
                   <option value="sent">Concluídos</option>
                   <option value="failed">Com falha</option>
+                  <option value="cancelled">Cancelados</option>
                   <option value="cancelled">Cancelados</option>
                 </select>
                 <button type="button" className="button button-secondary" onClick={() => void carregarPedidos(token)} disabled={carregando}>
