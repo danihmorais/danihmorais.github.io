@@ -46,6 +46,45 @@ export const consultarFilaFasePreparatoria = async (jobId: string, statusToken?:
   return response.json();
 };
 
+export async function cancelarFilaFasePreparatoria(jobId: string, statusToken: string): Promise<{ job_id: string; status: string; message: string }> {
+  const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}/cancelar?token=${encodeURIComponent(statusToken)}`, { method: "POST" });
+  let payload: any = {};
+  try { payload = await response.json(); } catch {}
+  if (!response.ok) throw new Error(payload?.detail || "Não foi possível cancelar a solicitação.");
+  return payload;
+}
+
+export async function cancelarAdminPedido(token: string, jobId: string): Promise<{ job_id: string; status: string; message: string }> {
+  const response = await fetch(BASE_URL + "/licita/api/admin/jobs/" + encodeURIComponent(jobId) + "/cancel", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + token },
+  });
+  return respostaAdmin(response);
+}
+
+export function dadosParaPrompt(dados: Record<string, any>): Record<string, any> {
+  const resultado: Record<string, any> = { ...dados };
+  const dotacaoBruta = String(dados["{{DOTACAO}}"] || "");
+  const caminhoImagem = String(dados["{{CAMINHO_IMAGEM_DOTACAO}}"] || "");
+  const linhasTexto = dotacaoBruta.split(/\r?\n/).filter((linha) => linha.trim() && !linha.trim().startsWith("__IMG__") && !linha.trim().startsWith("data:image/"));
+  const imagens = (dotacaoBruta.match(/__IMG__/g) || []).length + (caminhoImagem ? 1 : 0);
+  const textoDotacao = linhasTexto.join("\n").trim();
+  resultado["{{DOTACAO}}"] = imagens
+    ? ["Dotação informada (" + imagens + " imagem(ns)" + (textoDotacao ? " e texto" : "") + ").", textoDotacao].filter(Boolean).join("\n")
+    : (textoDotacao || dotacaoBruta.replace(/data:image\/[^;]+;base64,[^\s]+/g, "[imagem omitida]"));
+  for (const chave of ["{{CAMINHO_IMAGEM_DOTACAO}}", "{{CONTATOS_SECRETARIAS}}", "ITENS_NOMES", "PAGAMENTO_ETAPAS_RAW", "INSTRUCOES_EXTRAS", "RAW_EXECUCAO", "RAW_MOTIVO_CRITERIO", "RAW_MOTIVO_MODALIDADE", "RAW_PAC", "REQUISITOS_ETP_ANTERIOR"]) delete resultado[chave];
+  const limpar = (valor: any): any => {
+    if (Array.isArray(valor)) return valor.map(limpar);
+    if (valor && typeof valor === "object") return Object.fromEntries(Object.entries(valor).map(([chave, item]) => [chave, limpar(item)]));
+    if (typeof valor === "string") {
+      if (valor.startsWith("__IMG__") || valor.startsWith("data:image/")) return "[imagem omitida do prompt]";
+      return valor.replace(/__IMG__[A-Za-z0-9+/=]+/g, "[imagem omitida do prompt]").replace(/data:image\/[^;]+;base64,[^\s]+/g, "[imagem omitida do prompt]");
+    }
+    return valor;
+  };
+  return limpar(resultado);
+}
+
 function construirPromptPagamentoEtapas(textoUsuario: string): string {
   return `Você é especialista em redação de cláusulas de pagamento de contratos administrativos regidos pela Lei Federal nº 14.133/2021.
 
@@ -71,7 +110,7 @@ O campo PAGAMENTO deve conter somente o texto final revisado sobre o pagamento p
 }
 function construirPromptContratacaoDireta(dadosUsuario: Record<string, string>, instrucoesUsuario: string, modalidade: string): string {
   const modalidadeNome = modalidade === "DISPENSA_BLL" ? "Dispensa de Licitação com lances em plataforma eletrônica (BLL)" : "Dispensa de Licitação com recebimento de propostas por e-mail";
-  return `Você é especialista sênior em contratação direta pela Lei Federal nº 14.133/2021, com experiência prática em instrução de processos municipais. Elabore o conteúdo de um Documento de Contratação Direta para o Município de São Francisco/SP.\n\nFINALIDADE:\nO documento será o documento específico da contratação direta. Não produza DFD, ETP ou TR neste fluxo. Produza texto formal, impessoal, juridicamente fundamentado, objetivo e operacional.\n\nREGRAS JURÍDICAS E DE FIDELIDADE:\n1. Use a Lei nº 14.133/2021 como referência central e considere sua redação vigente, sem inventar artigo, inciso, alínea ou limitação financeira.\n2. O FUNDAMENTO_CONTRATACAO_DIRETA deve reproduzir ou estruturar o fundamento informado pelo usuário. Se o fundamento legal não tiver sido informado, escreva exatamente: "Fundamento legal não informado no briefing; conferir e preencher antes da assinatura."\n3. NÃO invente número de processo, fornecedor, CNPJ, data, prazo de recebimento de propostas, valor contratado, cotação, pesquisa de preços, parecer, autorização ou publicação.\n4. Diferencie claramente valor estimado da contratação e eventual valor contratado.\n5. Não declare que documentos do art. 72 foram efetivamente juntados se isso não estiver nos dados. Apresente apenas uma orientação de instrução processual, identificando o que deve ser conferido.\n6. Na RAZAO/CRITERIOS de escolha do fornecedor, produza critérios e fundamentação para seleção objetiva. Não atribua a um fornecedor específico características que não foram fornecidas.\n7. Para a forma de processamento, respeite a modalidade informada: ${modalidadeNome}. Não invente regras específicas da plataforma ou prazos não fornecidos.\n8. Preserve integralmente os fatos fornecidos nas instruções do usuário.\n9. O texto deve ser específico para contratação direta; não trate o procedimento como pregão ou licitação ordinária.\n10. Retorne EXCLUSIVAMENTE um único objeto JSON válido, sem markdown ou comentários. Nenhum valor deve ser vazio.\n\nDADOS DO USUÁRIO:\n${JSON.stringify(dadosUsuario, null, 2)}\n\nINSTRUÇÕES DO USUÁRIO:\n${instrucoesUsuario?.trim() || "Nenhuma instrução adicional."}\n\nESTRUTURA JSON OBRIGATÓRIA:\n{\n  "FUNDAMENTO_CONTRATACAO_DIRETA": "",\n  "JUSTIFICATIVA_CONTRATACAO_DIRETA": "",\n  "INSTRUCAO_ART72": "",\n  "CRITERIOS_ESCOLHA_FORNECEDOR": "",\n  "CONDICOES_CONTRATACAO": "",\n  "PUBLICIDADE_TRANSPARENCIA": "",\n  "CONCLUSAO_CONTRATACAO_DIRETA": ""\n}`;
+  return `Você é especialista sênior em contratação direta pela Lei Federal nº 14.133/2021, com experiência prática em instrução de processos municipais. Elabore o conteúdo de um Documento de Contratação Direta para o Município de São Francisco/SP.\n\nFINALIDADE:\nO documento será o documento específico da contratação direta. Não produza DFD, ETP ou TR neste fluxo. Produza texto formal, impessoal, juridicamente fundamentado, objetivo e operacional.\n\nREGRAS JURÍDICAS E DE FIDELIDADE:\n1. Use a Lei nº 14.133/2021 como referência central e considere sua redação vigente, sem inventar artigo, inciso, alínea ou limitação financeira.\n2. O FUNDAMENTO_CONTRATACAO_DIRETA deve reproduzir ou estruturar o fundamento informado pelo usuário. Se o fundamento legal não tiver sido informado, escreva exatamente: "Fundamento legal não informado no briefing; conferir e preencher antes da assinatura."\n3. NÃO invente número de processo, fornecedor, CNPJ, data, prazo de recebimento de propostas, valor contratado, cotação, pesquisa de preços, parecer, autorização ou publicação.\n4. Diferencie claramente valor estimado da contratação e eventual valor contratado.\n5. Não declare que documentos do art. 72 foram efetivamente juntados se isso não estiver nos dados. Apresente apenas uma orientação de instrução processual, identificando o que deve ser conferido.\n6. Na RAZAO/CRITERIOS de escolha do fornecedor, produza critérios e fundamentação para seleção objetiva. Não atribua a um fornecedor específico características que não foram fornecidas.\n7. Para a forma de processamento, respeite a modalidade informada: ${modalidadeNome}. Não invente regras específicas da plataforma ou prazos não fornecidos.\n8. Preserve integralmente os fatos fornecidos nas instruções do usuário.\n9. O texto deve ser específico para contratação direta; não trate o procedimento como pregão ou licitação ordinária.\n10. Retorne EXCLUSIVAMENTE um único objeto JSON válido, sem markdown ou comentários. Nenhum valor deve ser vazio.\n\nDADOS DO USUÁRIO:\n${JSON.stringify(dadosParaPrompt(dadosUsuario), null, 2)}\n\nINSTRUÇÕES DO USUÁRIO (OBRIGATÓRIAS — prevalecem sobre diretrizes de estilo e tamanho, mas não sobre legalidade ou fidelidade aos fatos):\n${instrucoesUsuario?.trim() || "Nenhuma instrução adicional."}\n\nLembrete obrigatório: aplique as instruções do usuário no documento inteiro e não invente fatos.\n\nESTRUTURA JSON OBRIGATÓRIA:\n{\n  "FUNDAMENTO_CONTRATACAO_DIRETA": "",\n  "JUSTIFICATIVA_CONTRATACAO_DIRETA": "",\n  "INSTRUCAO_ART72": "",\n  "CRITERIOS_ESCOLHA_FORNECEDOR": "",\n  "CONDICOES_CONTRATACAO": "",\n  "PUBLICIDADE_TRANSPARENCIA": "",\n  "CONCLUSAO_CONTRATACAO_DIRETA": ""\n}`;
 }
 
 function prepararEspecificacao(etapa: "DFD" | "ETP" | "TR", dadosUsuario: Record<string, string>, meeppExclusivo: boolean): string {
@@ -194,6 +233,10 @@ export interface AdminJob {
   resolved_model?: string | null;
   completed_stages?: string[];
   retry_at?: string | null;
+  cancel_requested?: boolean;
+  cancelled_at?: string | null;
+  cancelled_by?: string | null;
+  max_attempts?: number;
   retry_of?: string | null;
   last_error?: string;
   result?: { filename?: string; recipient?: string } | null;
@@ -220,7 +263,9 @@ async function respostaAdmin<T>(response: Response): Promise<T> {
     payload = {};
   }
   if (!response.ok) {
-    throw new Error(payload?.detail || "Não foi possível concluir a operação administrativa.");
+    const erro = new Error(payload?.detail || "Não foi possível concluir a operação administrativa.") as Error & { status?: number };
+    erro.status = response.status;
+    throw erro;
   }
   return payload as T;
 }
