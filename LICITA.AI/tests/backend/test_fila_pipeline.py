@@ -76,8 +76,9 @@ class TestFilaPipeline(unittest.TestCase):
         self.assertEqual(resultado["unicode"], "ç")
 
     def test_extrair_json_corrige_quebras_de_linha_cruas_em_strings(self):
-        resultado = _extrair_json('{"texto":"linha
-seguinte"}')
+        bruto = """{"texto":"linha
+seguinte"}"""
+        resultado = _extrair_json(bruto)
         self.assertEqual(resultado["texto"], "linha\nseguinte")
 
     def test_valida_json(self):
