@@ -481,6 +481,7 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
         cancelLabel="Manter lote"
         variant="danger"
         onConfirm={excluirLote}
+        onCancel={() => setLoteParaExcluir(null)}
         onDismiss={() => setLoteParaExcluir(null)}
       />
     )}
