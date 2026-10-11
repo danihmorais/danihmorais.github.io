@@ -234,7 +234,9 @@ def _chamar_ia(prompt: str, model: str, temperature: float = 0.3) -> tuple[dict,
             {"role": "user", "content": prompt},
         ],
         "enable_tools": True,
-        "response_format": {"type": "json_object"},
+        # O Unsloth não aceita response_format/guided decoding junto com execução de ferramentas.
+        # Mantemos a pesquisa web e extraímos/validamos o JSON após a resposta.
+
     }
     # O Unsloth aplica o modo de raciocínio quando suportado pelo modelo/template ativo.
     # Enviar em todas as chamadas evita acoplar esse comportamento ao nome de uma família específica.
