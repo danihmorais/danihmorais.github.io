@@ -417,10 +417,10 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
                 <details className="admin-detail-section admin-data-details">
                   <summary>Dados enviados no formulário</summary>
                   <dl className="admin-user-data">
-                    {Object.entries(pedidoSelecionado.dados_usuario).map(([chave, valor]) => (
-                      <div key={chave}>
+                    {Object.entries(pedidoSelecionado.dados_usuario).filter(([chave]) => !chaveInterna(chave)).map(([chave, valor]) => (
+                      <div key={chave} className={chave.replace(/[{}]/g, "").toUpperCase() === "ITENS" ? "admin-user-data-items" : undefined}>
                         <dt>{formatarNomeCampo(chave)}</dt>
-                        <dd>{resumirValor(valor)}</dd>
+                        <dd>{renderValorFormulario(chave, valor)}</dd>
                       </div>
                     ))}
                   </dl>
