@@ -126,7 +126,7 @@ export const gerarFasePreparatoria = async (dados: any, arquivos?: DocumentosRef
   const pagamentoTipo = String(dadosOriginais?.pagamentoTipo || "CONFORME_ENTREGAS").trim().toUpperCase();
   const pagamentoEtapasRaw = String(dadosOriginais?.pagamentoEtapas || "").trim();
   const ehContratacaoDireta = ["DISPENSA_EMAIL", "DISPENSA_BLL"].includes(modalidade);
-  const etapas: Array<{ id: string; tipo: string; prompt: string }> = [];
+  const etapas: Array<{ id: string; tipo: string; prompt: string; temperature?: number }> = [];
 
   const itensJson = dadosUsuario["{{ITENS}}"];
   let itens: any[] = [];
