@@ -22,7 +22,7 @@ const REGRAS_MINIMAS_TEXTO: Record<string, string> = {
     "JUSTIFICATIVA": "Entre 4 e 6 parágrafos com no mínimo 5 linhas cada, levando em consideração os aspectos legais, técnicos e econômicos, amparados pela CF/1988, sob o prisma do interesse público envolvido.",
     "ESTIMATIVA_QUANTIDADES": "Entre 1 e 2 parágrafos com fundamentação técnica e memória metodológica. Fundamente nas quantidades informadas pela unidade demandante e no consumo/necessidade descritos; só mencione estimativa de processo anterior quando um documento de referência anexado comprovar essa informação.",
     "RESULTADOS_ESPERADOS": "Entre 3 e 4 parágrafos detalhando economicidade, eficiência, continuidade e interesse público.",
-    "REQUISITOS_ETP": "Você deve elaborar requisitos técnicos, objetivos e proporcionais, evitando exigências excessivas de qualificação técnica. Já foi informado que serão solicitados toda a habilitação jurídica; técnica; fiscal, social e trabalhista; econômico-financeira, e ainda, demais declarações previstas na Lei 14.133/21. Assim, se for o caso, se concentre primeiro em declarações excepcionais que deveriam ser solicitar, e, depois, em documentos adicionais que deveriam ser solicitados, mas que não comprometam a competitividade. Pesquise sobre documentos aplicáveis ao objeto na web. Se decidir algum, você deve justificar cada um deles, com pelo menos 1 parágrafo de fundamentação técnica, legal e administrativa para cada requisito adicional sugerido. Se não decidir por nenhum requisito adicional, você deve justificar tecnicamente a ausência de requisitos adicionais, reforçando a adequação dos requisitos previstos na Lei 14.133/21 para o caso concreto. Depois disso, deve considerar os requisitos necessários e suficientes à escolha da solução.",
+    "REQUISITOS_ETP": "Elabore requisitos técnicos objetivos, necessários e proporcionais, evitando exigências excessivas de qualificação técnica. Considere a habilitação jurídica, técnica, fiscal, social, trabalhista e econômico-financeira e as declarações previstas na Lei nº 14.133/2021. Sugira documentos adicionais somente quando forem pertinentes ao objeto e indispensáveis, justificando individualmente cada um com fundamento técnico, legal e administrativo; caso contrário, explique a suficiência dos requisitos legais gerais.",
     "SUBCONTRATACAO_ETP": "Mínimo de 1 parágrafo justificando a decisão sobre subcontratação; se vedada, declarar expressamente a vedação e justificar sua necessidade e proporcionalidade.",
     "ME_EPP_ETP": "Entre 3 e 4 parágrafos com fundamento na LC 123/2006.",
     "JUSTIFICATIVA_PAC": "Mínimo de 1 parágrafo caso estivesse previsto, caso contrário justificar excepcionalidade da contratação.",
@@ -38,7 +38,7 @@ const REGRAS_MINIMAS_TEXTO: Record<string, string> = {
     "VISTORIA_ETP": "Mínimo de 1 parágrafo, podendo ser resumido caso se trate de aquisição de bens.",
     "AMOSTRA_ETP": "Mínimo de 1 parágrafo, podendo ser resumido caso se trate de prestação de serviços. Caso se tenha optado por exigir amostra, apenas justifique a exigência, sem detalhar as características técnicas da amostra, que serão abordadas posteriormente no termo de referência.",
     "CONCLUSAO": "Entre 3 e 4 parágrafos.",
-    "REQUISITOS_TR": "Você deve apenas enumerar cada um dos documentos adicionais solicitados nos REQUISITOS_ETP, separadamente, em ordem crescente, a partir do Documento 13, sempre colocando no formato (Documento XX) Yyyyyyyyyyyyyyyyyyyyy, em que XX é o número do documento adicional sugerido, e Yyyyyyyyyyyyyyyyyyyyy é o nome do documento sugerido. Se não houver nenhum documento adicional sugerido, escreva 'Não há documentos adicionais'. Documentos sugeridos no ETP: {{REQUISITOS_ETP_ANTERIOR}}",
+    "REQUISITOS_TR": "Enumere exclusivamente os documentos adicionais indicados em REQUISITOS_ETP, separadamente e em ordem crescente, começando pelo Documento 13, no formato (Documento XX) Nome do documento. Se o ETP não tiver exigido documento adicional, escreva exatamente 'Não há documentos adicionais'. Use o contexto __LICITA_PIPE_ETP__ como fonte.",
     "OBRIGACOES_CONTRATADA": "Entre 15 e 30 obrigações separadas obrigatoriamente pelo caractere escapado de quebra de linha. Cada obrigação deve ser robusta, evitando exigências genéricas ou superficiais, e deve ser fundamentada tecnicamente, legalmente e administrativamente. As obrigações devem ser compatíveis com o objeto, a necessidade, as condições de execução, a solução adotada e demais aspectos relevantes da contratação.",
     "OBRIGACOES_CONTRANTE": "Entre 5 e 10 obrigações separadas obrigatoriamente pelo caractere escapado de quebra de linha.",
     "QUALIFICACAO_TECNICA": "Entre 3 e 4 parágrafos.",
@@ -47,7 +47,6 @@ const REGRAS_MINIMAS_TEXTO: Record<string, string> = {
     "PARCELAMENTO": "Entre 1 e 3 parágrafos. Você deve analisar a possibilidade de parcelamento da contratação, considerando aspectos como economicidade, eficiência, vantajosidade, planejamento, e jurisprudência do TCU sobre o tema. Considere a opção escolhida e detalhe a forma de parcelamento (parcelamento por item, por lote, ou outro critério), justificando tecnicamente a escolha do critério de parcelamento escolhido. Reforce os aspectos de economicidade, eficiência, vantajosidade e planejamento envolvidos, independente da opção escolhida.",
     "EXECUCAO": "Entre 4 e 6 parágrafos. Você deve aprimorar o texto base fornecido, detalhando condições de execução, prazos, cronogramas, etapas, e demais aspectos operacionais relevantes para a execução contratual. Não permita prazos de entrega inexequíveis ou condições de execução genéricas. O texto deve ser completo, detalhado e operacional, garantindo clareza e exequibilidade.",
     "PRAZO_EXEC": "Texto completo contendo prazo por extenso e em algarismos.",
-    "VALOR_ESTIMADO_APROXIMADO": "Calcule algum valor aproximado a {{VALOR_ESTIMADO}}, considerando o objeto, a necessidade, as condições de execução, o mercado, a solução adotada e demais aspectos relevantes. O valor deve ser apresentado por extenso e em algarismos, e deve ser justificado com base em dados de mercado, histórico de consumo, ou outras fontes confiáveis de informação. Deve ser informado apenas o R$ XX,XX",
     "LOCAL": "Entre 1 e 2 parágrafos completos. Sempre será em algum endereço do Município de São Francisco/SP, mas detalhe o local de entrega ou execução, considerando aspectos logísticos e operacionais relevantes para a contratação. Horário quase sempre das 08h às 11h ou das 13h às 17h, salvo se outro tiver sido informado nas condições de execução.",
     "AMOSTRA_TR": "Entre 4 e 5 parágrafos, detalhando a parte prática da exigência de amostra, como a forma de apresentação, as características técnicas a serem observadas, o processo de avaliação da amostra, e demais aspectos operacionais relacionados à exigência de amostra. Caso se trate de prestação de serviços, o texto pode ser mais resumido, mas ainda assim deve detalhar a parte prática da exigência de amostra, como a forma de apresentação, o processo de avaliação da amostra, e demais aspectos operacionais relacionados à exigência de amostra. Deve se basear mais ou menos nisso: Deverão ser entregues amostras de todos os itens pelos licitantes provisoriamente vencedores no prazo máximo de 07 (sete) dias úteis, contadas da data de convocação via e-mail, que serão testadas e avaliadas pela comissão de avaliação formalmente designada pela Administração. As amostras postadas por correio ou transportadora não serão aceitas fora do prazo, e, desta maneira, a empresa que necessitar do envio por esses meios, deve ter o cuidado de enviar em tempo hábil, vez que o prazo máximo de entrega é extremamente razoável. Os itens deverão ser entregues em sua embalagem ORIGINAL da marca que for cotada pelo licitante. As amostras deverão ser entregues, junto ao Setor de Licitação na Prefeitura Municipal, no endereço Av. Oscar Antônio da Costa, 1187, CEP 15710-011, São Francisco/SP, qual seja das 8h às 11h e 13h às 17h. A empresa participante que não realizar a entrega das amostras dentro do prazo concedido será desclassificada dos itens que necessitam de apresentação de amostra. Serão exigidos como critério de avaliação aquilo que consta do descritivo de cada item, e avaliados por comissão de avaliação, qual seja: {{FISCAL}}, {{FISCAL_CARGO}}; {{GESTOR}}, {{GESTOR_CARGO}}.",
 };
@@ -55,14 +54,12 @@ const REGRAS_MINIMAS_TEXTO: Record<string, string> = {
 function montarRegrasMinimas(chavesEtapa: string[], dadosUsuario: Record<string, string>, camposExcluidos: string[] = []): string {
     const valorOriginal = dadosUsuario["{{VALOR_ESTIMADO}}"];
     const valorEstimado = valorOriginal ? valorOriginal : "[valor não informado — estime com base no mercado]";
-    const requisitosEtpAnterior = dadosUsuario["REQUISITOS_ETP_ANTERIOR"] || "Não informados.";
 
     return chavesEtapa
         .filter(chave => REGRAS_MINIMAS_TEXTO[chave] && !camposExcluidos.includes(chave))
         .map(chave => {
             let regra = REGRAS_MINIMAS_TEXTO[chave];
             regra = regra.replace("{{VALOR_ESTIMADO}}", valorEstimado);
-            regra = regra.replace("{{REQUISITOS_ETP_ANTERIOR}}", requisitosEtpAnterior);
             return `- ${chave}: ${regra}`;
         })
         .join("\n");
@@ -147,7 +144,6 @@ A JUSTIFICATIVA deve conter motivação administrativa detalhada, demonstração
   "GARANTIAS_ETP": "",
   "VISTORIA_ETP": "",
   "AMOSTRA_ETP": "",
-  "VALOR_ESTIMADO_APROXIMADO": "",
   "PARCELAMENTO": "",
   "CONCLUSAO": ""
 }`;
