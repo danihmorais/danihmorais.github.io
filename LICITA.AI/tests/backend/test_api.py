@@ -151,6 +151,59 @@ class LicitaBackendTests(unittest.TestCase):
             self.assertNotIn("email", consulted.json())
             self.assertNotIn("status_token", consulted.json())
 
+    def test_usuario_cancela_pedido_na_fila_com_token_de_status(self):
+        payload = {
+            "email": "cancelar@example.com",
+            "instrucoes": "pedido para cancelar",
+            "dados_ia": {"__LICITA_PIPELINE__": {"model": "unsloth-auto", "etapas": []}},
+            "dados_usuario": {"{{OBJETO}}": "Objeto de teste de cancelamento"},
+        }
+        with TestClient(app) as client:
+            criado = client.post("/api/gerar-fase-preparatoria", json=payload)
+            self.assertEqual(criado.status_code, 200)
+            registro = criado.json()
+            job_id = registro["job_id"]
+            token = registro["status_token"]
+            errado = client.post(f"/api/fila/{job_id}/cancelar?token=incorreto")
+            self.assertEqual(errado.status_code, 403)
+            cancelado = client.post(f"/api/fila/{job_id}/cancelar?token={token}")
+            self.assertEqual(cancelado.status_code, 200, cancelado.text)
+            self.assertEqual(cancelado.json()["status"], "cancelled")
+            job = fila.get_job(job_id)
+            self.assertEqual(job["status"], "cancelled")
+            self.assertTrue(job["cancel_requested"])
+            self.assertIsNotNone(job["cancelled_at"])
+            status = client.get(f"/api/fila/{job_id}?token={token}")
+            self.assertEqual(status.status_code, 200)
+            self.assertEqual(status.json()["status"], "cancelled")
+            self.assertTrue(status.json()["cancel_requested"])
+
+    def test_painel_admin_cancela_pedido_pendente_e_redige_imagens(self):
+        def executar(client, token):
+            segredo = "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo="
+            job = fila.enqueue_job(
+                email="admin-cancelar@example.com",
+                dados_usuario={
+                    "{{OBJETO}}": "Objeto com dotação em imagem",
+                    "{{DOTACAO}}": "__IMG__" + segredo + "\\nFonte 123.456.789/0001-00",
+                    "{{CAMINHO_IMAGEM_DOTACAO}}": "data:image/png;base64," + segredo,
+                },
+                dados_ia={"__LICITA_PIPELINE__": {"model": "unsloth-auto", "etapas": []}},
+            )
+            headers = {"Authorization": "Bearer " + token}
+            detalhe = client.get("/api/admin/jobs/" + job["job_id"], headers=headers)
+            self.assertEqual(detalhe.status_code, 200, detalhe.text)
+            detalhes_json = json.dumps(detalhe.json())
+            self.assertNotIn(segredo, detalhes_json)
+            self.assertIn("1 imagem(ns)", detalhes_json)
+            cancelado = client.post("/api/admin/jobs/" + job["job_id"] + "/cancel", headers=headers)
+            self.assertEqual(cancelado.status_code, 200, cancelado.text)
+            self.assertEqual(cancelado.json()["status"], "cancelled")
+            original = fila.get_job(job["job_id"])
+            self.assertEqual(original["status"], "cancelled")
+            self.assertTrue(original["cancel_requested"])
+        self._com_admin(executar)
+
     def test_endpoint_aplica_rate_limit_por_ip(self):
         payload_base = {
             "dados_ia": {},
