@@ -1020,3 +1020,186 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
   .admin-job-actions { flex-wrap: wrap; }
 }
 
+
+
+/* Refinamentos do relatório: navegação do wizard e painel administrativo. */
+.prompt-eyebrow {
+  display: inline-block;
+  margin: 0 0 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: .06em;
+}
+.admin-pedidos-dialog {
+  max-height: min(92dvh, 980px);
+  overflow: hidden;
+}
+.admin-pedidos-header,
+.admin-toolbar { flex: 0 0 auto; }
+.admin-pedidos-header p,
+.admin-session-expiry { font-size: 12px; }
+.admin-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.admin-jobs-list {
+  overflow: clip;
+}
+.admin-job-card {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.admin-detail-panel {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin: 12px 0 2px;
+}
+.admin-detail-grid dt,
+.admin-user-data dt { font-size: 12px; }
+.admin-detail-grid code,
+.admin-job-id,
+.admin-job-meta,
+.admin-list-summary,
+.admin-history-row,
+.admin-json-block { font-size: 12px; }
+.admin-job-error-preview {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  text-overflow: initial;
+}
+.admin-job-error-wrap { min-width: 0; }
+.admin-job-retry-info {
+  margin: 9px 0 0;
+  color: var(--text-main);
+  font-size: 12px;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+.admin-status-cancelled {
+  color: var(--text-muted);
+  border-style: dashed;
+}
+.admin-status-cancelling {
+  color: var(--btn-danger);
+  border-style: dashed;
+}
+.admin-copy-button {
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-main);
+  background: var(--bg-panel);
+  font-size: 12px;
+  cursor: pointer;
+}
+.admin-copy-button:hover { background: var(--bg-subtle); }
+.admin-session-expiry { margin-top: 4px !important; }
+.admin-user-data-items { grid-column: 1 / -1; }
+.admin-items-table-wrap { max-width: 100%; overflow-x: auto; }
+.admin-items-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.admin-items-table th,
+.admin-items-table td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.admin-items-table th {
+  color: var(--text-muted);
+  font-weight: 650;
+  white-space: nowrap;
+}
+.admin-user-data-items dd { min-width: 0; }
+.button-danger-outline {
+  color: var(--btn-danger) !important;
+  border-color: color-mix(in srgb, var(--btn-danger) 55%, var(--border)) !important;
+}
+.button-danger-outline:hover { background: color-mix(in srgb, var(--btn-danger) 8%, var(--bg-panel)) !important; }
+.stepper-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 4px 5px 4px 0;
+  border: 0;
+  border-radius: 6px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.stepper-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.stepper-button[aria-disabled="true"] { cursor: not-allowed; }
+.wizard-stepper li.locked { opacity: .48; }
+.wizard-stepper li.needs-attention { color: var(--text-main); }
+.wizard-stepper li.needs-attention .stepper-number {
+  color: #946200;
+  border-color: #b78018;
+  background: color-mix(in srgb, #b78018 12%, var(--bg-panel));
+}
+.wizard-validation-hint {
+  margin: 0 0 12px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.wizard-navigation .button[aria-disabled="true"] { opacity: .68; }
+.draft-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg-panel);
+}
+.draft-banner p { margin: 0; color: var(--text-muted); font-size: 13px; }
+.draft-banner > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.status-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 9px; margin-top: 16px; }
+.status-actions .button { min-height: 38px; }
+.status-error-detail { max-width: 100%; overflow-wrap: anywhere; white-space: pre-wrap; }
+.prompt-dialog { max-height: min(92dvh, 900px); overflow-y: auto; }
+.prompt-close:focus-visible,
+.admin-pedidos-dialog button:focus-visible,
+.admin-pedidos-dialog input:focus-visible,
+.admin-pedidos-dialog select:focus-visible,
+.prompt-dialog button:focus-visible,
+.prompt-dialog input:focus-visible,
+.prompt-dialog textarea:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+@media (max-width: 800px) {
+  .admin-pedidos-dialog { max-height: 92dvh; }
+  .admin-pedidos-header { flex: 0 0 auto; }
+  .admin-toolbar { flex: 0 0 auto; }
+  .admin-body { min-height: 0; }
+  .admin-job-card { grid-template-columns: minmax(0, 1fr); }
+  .admin-job-actions { flex-wrap: wrap; }
+  .admin-detail-panel { margin: 12px 0 2px; padding: 13px; }
+  .admin-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .draft-banner { align-items: flex-start; flex-direction: column; }
+  .stepper-button { flex-direction: column; align-items: center; justify-content: center; padding: 2px; }
+  .stepper-label { max-width: 100%; font-size: 12px; }
+}
