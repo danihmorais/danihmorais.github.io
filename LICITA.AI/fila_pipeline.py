@@ -92,32 +92,58 @@ def _extrair_json(texto: str) -> dict:
         try:
             resultado = json.loads(texto)
         except json.JSONDecodeError:
+            # Repara strings que contêm barras invertidas sem escape válido, por exemplo
+            # caminhos Windows (C:\Licita\edital.docx), sem tocar em escapes JSON válidos.
             corrigido = []
             em_string = False
-            escapado = False
-            for char in texto:
-                if em_string:
-                    if escapado:
-                        escapado = False
-                        corrigido.append(char)
-                    elif char == "\\":
-                        escapado = True
-                        corrigido.append(char)
-                    elif char == '"':
-                        em_string = False
-                        corrigido.append(char)
-                    elif char == "\n":
-                        corrigido.append("\\n")
-                    elif char == "\r":
-                        continue
-                    elif char == "\t":
-                        corrigido.append("\\t")
-                    elif ord(char) >= 32:
-                        corrigido.append(char)
-                else:
+            indice = 0
+            hexadecimais = set("0123456789abcdefABCDEF")
+            while indice < len(texto):
+                char = texto[indice]
+                if not em_string:
                     corrigido.append(char)
                     if char == '"':
                         em_string = True
+                    indice += 1
+                    continue
+
+                if char == '"':
+                    corrigido.append(char)
+                    em_string = False
+                    indice += 1
+                    continue
+
+                if char == "\\":
+                    seguinte = texto[indice + 1] if indice + 1 < len(texto) else ""
+                    if seguinte and seguinte in '"\\/bfnrt':
+                        corrigido.extend((char, seguinte))
+                        indice += 2
+                        continue
+                    if (
+                        seguinte == "u"
+                        and indice + 5 < len(texto)
+                        and all(digito in hexadecimais for digito in texto[indice + 2:indice + 6])
+                    ):
+                        corrigido.extend(texto[indice:indice + 6])
+                        indice += 6
+                        continue
+                    # Barra inválida: codifica a barra como conteúdo literal da string.
+                    corrigido.extend(("\\", "\\"))
+                    indice += 1
+                    continue
+
+                if char == "\n":
+                    corrigido.append("\\n")
+                elif char == "\r":
+                    corrigido.append("\\r")
+                elif char == "\t":
+                    corrigido.append("\\t")
+                elif ord(char) < 32:
+                    corrigido.append("\\u%04x" % ord(char))
+                else:
+                    corrigido.append(char)
+                indice += 1
+
             texto = re.sub(r",\s*([}\]])", r"\1", "".join(corrigido))
             try:
                 resultado = json.loads(texto)
