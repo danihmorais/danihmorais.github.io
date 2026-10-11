@@ -6,9 +6,11 @@ import shutil
 import threading
 import time
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal, ROUND_CEILING, ROUND_HALF_UP
 
 from fila import MAX_ATTEMPTS, POLL_INTERVAL_SECONDS, QUEUE_DIR, RETRY_BASE_SECONDS, RETRY_MAX_SECONDS, SMTP_FROM, SMTP_USERNAME, _artifact_path, _claim_next_job, _enviar_email, _enviar_email_alerta_falha, _finalizar_etapa, _finalizar_tentativa, _iniciar_etapa, _job_path, _write_json, gerar_zip
 from fila_pipeline import _aplicar_auditoria_marcas, _chamar_ia as _chamar_ia_primaria, _substituir_contextos, _validar_json_geracao
+from montador_variaveis import calcular_valor_estimado
 
 
 class JobCancelado(Exception):
@@ -17,6 +19,32 @@ class JobCancelado(Exception):
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _calcular_valor_estimado_aproximado(dados_usuario: dict) -> str:
+    """Calcula no backend um valor redondo, cerca de 5% acima do total dos itens."""
+    try:
+        total = Decimal(str(calcular_valor_estimado(dados_usuario)))
+    except (ArithmeticError, TypeError, ValueError):
+        return ""
+
+    if not total.is_finite() or total <= 0:
+        return ""
+
+    total = total.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    alvo = total * Decimal("1.05")
+
+    # Arredonda para cima em incrementos compatíveis com a ordem de grandeza:
+    # R$ 1.296 -> dezenas; R$ 12.962 -> centenas; R$ 129.628 -> milhares.
+    expoente = alvo.adjusted()
+    passo = max(Decimal("5"), Decimal("10") ** (expoente - 2))
+    aproximado = (alvo / passo).to_integral_value(rounding=ROUND_CEILING) * passo
+    aproximado = aproximado.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    centavos = int((aproximado * 100).to_integral_value(rounding=ROUND_HALF_UP))
+    inteiro, fracao = divmod(centavos, 100)
+    inteiro_formatado = f"{inteiro:,}".replace(",", ".")
+    return f"R$ {inteiro_formatado},{fracao:02d}"
 
 
 def _marcador_cancelamento(job: dict):
@@ -204,9 +232,10 @@ def _process_pipeline(job: dict) -> None:
                     continue
                 dados_ia_final[chave] = valor
 
-    if dados_usuario.get("{{VALOR_ESTIMADO}}"):
-        # Este campo reproduz o total calculado a partir dos itens; não é estimado pela IA.
-        dados_ia_final["VALOR_ESTIMADO_APROXIMADO"] = str(dados_usuario["{{VALOR_ESTIMADO}}"])
+    valor_estimado_aproximado = _calcular_valor_estimado_aproximado(dados_usuario)
+    if valor_estimado_aproximado:
+        # O valor aproximado é derivado dos itens, com margem de 5% e arredondamento para cima.
+        dados_ia_final["VALOR_ESTIMADO_APROXIMADO"] = valor_estimado_aproximado
     _checar_cancelamento(job)
     _iniciar_etapa(job, "GERACAO_DOCUMENTOS")
     _write_json(_job_path(job["job_id"], ".processing"), job)

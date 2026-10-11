@@ -204,6 +204,28 @@ class TestPagamentoPipeline(unittest.TestCase):
 
 
 class TestPipelineUnificado(unittest.TestCase):
+    def test_calcula_valor_aproximado_redondo_acima_do_total_dos_itens(self):
+        import fila_pipeline_unificado as pipeline
+
+        dados = {
+            "{{ITENS}}": json.dumps([
+                {"numero": 1, "qtd": 2, "valor": 1234.56},
+            ]),
+            "{{VALOR_ESTIMADO}}": "R$ 2.469,12",
+        }
+        self.assertEqual(
+            pipeline._calcular_valor_estimado_aproximado(dados),
+            "R$ 2.600,00",
+        )
+
+    def test_valor_aproximado_vazio_quando_nao_ha_total_positivo(self):
+        import fila_pipeline_unificado as pipeline
+
+        self.assertEqual(
+            pipeline._calcular_valor_estimado_aproximado({"{{ITENS}}": "[]"}),
+            "",
+        )
+
     def test_reutiliza_modelo_resolvido_nas_etapas_seguintes(self):
         import tempfile
         from pathlib import Path
@@ -238,7 +260,11 @@ class TestPipelineUnificado(unittest.TestCase):
                 "email": "teste@example.com",
                 "status": "processing",
                 "attempts": 1,
-                "dados_usuario": {"{{OBJETO}}": "Objeto de teste"},
+                "dados_usuario": {
+                    "{{OBJETO}}": "Objeto de teste",
+                    "{{ITENS}}": json.dumps([{"numero": 1, "qtd": 2, "valor": 1234.56}]),
+                    "{{VALOR_ESTIMADO}}": "R$ 2.469,12",
+                },
                 "dados_ia": {
                     "__LICITA_PIPELINE__": {
                         "model": "unsloth-auto",
@@ -263,6 +289,7 @@ class TestPipelineUnificado(unittest.TestCase):
 
         self.assertEqual(chamadas_modelo, ["unsloth-auto", "modelo-resolvido"])
         self.assertEqual(job["status"], "sent")
+        self.assertEqual(job["dados_ia"]["VALOR_ESTIMADO_APROXIMADO"], "R$ 2.600,00")
         enviar_email.assert_called_once()
 
 
