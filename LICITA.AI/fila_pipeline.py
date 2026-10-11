@@ -17,9 +17,47 @@ _PIPE_DATA = "__LICITA_PIPE_DADOS_USUARIO__"
 _PIPE_STAGES = "__LICITA_PIPE_ETAPAS__"
 
 
+def _dados_para_prompt(dados_usuario: dict) -> dict:
+    """Remove imagens/base64 e campos internos antes de enviar os dados ao modelo."""
+    dados = dict(dados_usuario or {})
+    dotacao = str(dados.get("{{DOTACAO}}") or "")
+    caminho_imagem = str(dados.get("{{CAMINHO_IMAGEM_DOTACAO}}") or "")
+    imagens = dotacao.count("__IMG__") + (1 if caminho_imagem else 0)
+    linhas = [
+        linha for linha in dotacao.splitlines()
+        if linha.strip() and not linha.strip().startswith("__IMG__") and not linha.strip().startswith("data:image/")
+    ]
+    texto_dotacao = "\n".join(linhas).strip()
+    if imagens:
+        rotulo = f"Dotação informada ({imagens} imagem(ns)" + (" e texto)" if texto_dotacao else ")")
+        dados["{{DOTACAO}}"] = "\n".join(parte for parte in (rotulo, texto_dotacao) if parte)
+    else:
+        dados["{{DOTACAO}}"] = texto_dotacao
+    for chave in (
+        "{{CAMINHO_IMAGEM_DOTACAO}}", "{{CONTATOS_SECRETARIAS}}", "ITENS_NOMES",
+        "PAGAMENTO_ETAPAS_RAW", "INSTRUCOES_EXTRAS", "REQUISITOS_ETP_ANTERIOR",
+        "RAW_EXECUCAO", "RAW_MOTIVO_CRITERIO", "RAW_MOTIVO_MODALIDADE", "RAW_PAC",
+    ):
+        dados.pop(chave, None)
+
+    def limpar(valor):
+        if isinstance(valor, dict):
+            return {str(chave): limpar(item) for chave, item in valor.items() if "base64" not in str(chave).casefold()}
+        if isinstance(valor, list):
+            return [limpar(item) for item in valor]
+        if isinstance(valor, str):
+            if valor.startswith("__IMG__") or valor.startswith("data:image/"):
+                return "[imagem omitida do prompt]"
+            return re.sub(r"(?:__IMG__|data:image/[^;]+;base64,)[A-Za-z0-9+/=]+", "[imagem omitida do prompt]", valor)
+        return valor
+
+    return limpar(dados)
+
+
 def _substituir_contextos(texto: str, dados_usuario: dict, resultados: dict[str, dict]) -> str:
+    dados_prompt = _dados_para_prompt(dados_usuario)
     substituicoes = {
-        _PIPE_DATA: json.dumps(dados_usuario, ensure_ascii=False, indent=2),
+        _PIPE_DATA: json.dumps(dados_prompt, ensure_ascii=False, indent=2),
         _PIPE_DFD: json.dumps(resultados.get("DFD", {}), ensure_ascii=False, indent=2),
         _PIPE_ETP: json.dumps(resultados.get("ETP", {}), ensure_ascii=False, indent=2),
         _PIPE_STAGES: json.dumps(resultados, ensure_ascii=False, indent=2),
@@ -170,9 +208,17 @@ def _chamar_ia(prompt: str, model: str, temperature: float = 0.3) -> tuple[dict,
     base_url, api_key, modelo = _provider_config(model)
     if not base_url or not api_key:
         raise RuntimeError("O provedor de IA da fila não está configurado no backend.")
+    limite_prompt = max(40_000, min(118_000, int(os.getenv("LICITA_QUEUE_MAX_PROMPT_CHARS", "110000"))))
+    if len(prompt) > limite_prompt:
+        raise RuntimeError(
+            f"O prompt excede o limite de contexto seguro ({len(prompt):,} caracteres; limite {limite_prompt:,}). "
+            "Reduza a quantidade de texto dos dados ou dos documentos de referência."
+        )
+    max_tokens = max(1024, min(16_384, int(os.getenv("LICITA_QUEUE_MAX_TOKENS", "8192"))))
     payload = {
         "model": modelo,
         "temperature": float(temperature),
+        "max_tokens": max_tokens,
         "messages": [{"role": "user", "content": prompt}],
         "response_format": {"type": "json_object"},
     }
