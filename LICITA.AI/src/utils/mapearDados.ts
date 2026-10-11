@@ -1,9 +1,15 @@
 export const mapearDadosWizard = (dados: any) => {
   const itens = dados.itens || [];
   const lotesExplicitos = Array.isArray(dados.lotes) ? dados.lotes : [];
+  const lotesLegados = new Map<string, string>();
+  for (const item of itens) {
+    const nome = String(item?.lote || "").trim();
+    const chave = nome.toLocaleLowerCase("pt-BR");
+    if (chave && !lotesLegados.has(chave)) lotesLegados.set(chave, nome);
+  }
   const lotes = lotesExplicitos.length > 0
     ? lotesExplicitos
-    : [...new Map(itens.map((item: any) => [String(item?.lote || "").trim().toLocaleLowerCase("pt-BR"), String(item?.lote || "").trim()]).filter(([chave, nome]: any[]) => chave && nome))].map(([chave, nome]) => ({ id: "legado:" + chave, nome }));
+    : Array.from(lotesLegados.entries()).map(([chave, nome]) => ({ id: "legado:" + chave, nome }));
   const lotesDados = lotes.map((lote: any) => ({
     nome: String(lote.nome || "").trim(),
     itens: itens
