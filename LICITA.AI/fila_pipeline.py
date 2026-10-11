@@ -115,7 +115,7 @@ def _extrair_json(texto: str) -> dict:
 
                 if char == "\\":
                     seguinte = texto[indice + 1] if indice + 1 < len(texto) else ""
-                    if seguinte in '"\\/bfnrt':
+                    if seguinte and seguinte in '"\\/bfnrt':
                         corrigido.extend((char, seguinte))
                         indice += 2
                         continue
