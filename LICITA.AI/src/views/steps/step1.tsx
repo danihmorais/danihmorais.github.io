@@ -5,7 +5,7 @@ import ConfirmDialog from "../../components/ConfirmDialog";
 import { calcularValorEstimadoItens } from "../../utils/regrasContratacao";
 import { melhorarDescricaoItem } from "../../providers/services/descricaoItensIA";
 import { extrairObjetoCotacaoPdf, parseRelatorioCotacaoPdf } from "../../utils/cotacaoPdf";
-import { obterLotes, obterLoteIdItem } from "../../utils/lotes";
+import { obterLotes, obterLoteIdItem, distribuicaoLotesValida } from "../../utils/lotes";
 
 export default function Step1({ dados = { itens: [], objeto: "", necessidade: "" }, atualizarDados, tentouAvancar = false }: any) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -413,8 +413,10 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
       </div>
 
       {lotes.length > 0 && (
-        <div style={{ marginTop: 14, padding: 12, borderRadius: "var(--radius)", background: "var(--bg-subtle)", color: "var(--text-muted)", fontSize: 12, lineHeight: 1.5 }}>
-          Distribua todos os itens usando o campo <strong>Lote</strong> na lista abaixo. Para avançar, cada item deve pertencer a um lote existente e nenhum lote pode ficar vazio.
+        <div role={tentouAvancar && !distribuicaoLotesValida(dados) ? "alert" : "note"} style={{ marginTop: 14, padding: 12, borderRadius: "var(--radius)", background: "var(--bg-subtle)", color: tentouAvancar && !distribuicaoLotesValida(dados) ? "var(--btn-danger)" : "var(--text-muted)", border: tentouAvancar && !distribuicaoLotesValida(dados) ? "1px solid var(--btn-danger)" : "1px solid var(--border)", fontSize: 12, lineHeight: 1.5 }}>
+          {tentouAvancar && !distribuicaoLotesValida(dados)
+            ? "Distribuição incompleta: atribua cada item a um lote e verifique se todos os lotes possuem pelo menos um item."
+            : <>Distribua todos os itens usando o campo <strong>Lote</strong> na lista abaixo. Para avançar, cada item deve pertencer a um lote existente e nenhum lote pode ficar vazio.</>}
         </div>
       )}
     </section>
