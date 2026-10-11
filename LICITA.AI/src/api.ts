@@ -1,8 +1,9 @@
 import { construirPrompt } from "./providers/services/geradorIA";
 import { construirPromptAuditoriaMarcas } from "./providers/services/descricaoItensIA";
 import { mapearDadosWizard } from "./utils/mapearDados";
+import { getApiBaseUrl } from "./utils/apiBase";
 
-const BASE_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+const BASE_URL = getApiBaseUrl();
 
 export interface FasePreparatoriaJob {
   job_id: string;
