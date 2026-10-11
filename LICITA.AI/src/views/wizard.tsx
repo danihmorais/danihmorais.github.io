@@ -166,6 +166,7 @@ export default function Wizard() {
   const [mostrarAdminPedidos, setMostrarAdminPedidos] = useState(false);
   const [confirmacaoWizard, setConfirmacaoWizard] = useState<{ title: string; message: string; confirmLabel: string; cancelLabel?: string; variant?: "primary" | "danger"; onConfirm: () => void } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const beforeUnloadHandlerRef = useRef<((evento: BeforeUnloadEvent) => void) | null>(null);
   const { theme, toggleTheme } = useContext(ThemeContext);
   const isDark = theme === "dark";
   const { showToast } = useToast();
@@ -242,7 +243,7 @@ export default function Wizard() {
     } finally {
       setRascunhoInicializado(true);
     }
-    if (window.location.hash === "#/admin" || new URLSearchParams(window.location.search).has("admin")) setMostrarAdminPedidos(true);
+    if (new URLSearchParams(window.location.search).has("admin")) setMostrarAdminPedidos(true);
   }, []);
 
   useEffect(() => {
@@ -268,16 +269,22 @@ export default function Wizard() {
       evento.preventDefault();
       evento.returnValue = "";
     };
+    beforeUnloadHandlerRef.current = avisar;
     window.addEventListener("beforeunload", avisar);
-    return () => window.removeEventListener("beforeunload", avisar);
+    return () => {
+      window.removeEventListener("beforeunload", avisar);
+      if (beforeUnloadHandlerRef.current === avisar) beforeUnloadHandlerRef.current = null;
+    };
   }, [dadosPreenchidos, geracaoSucesso]);
 
   useEffect(() => {
     if (!geracaoSucesso || !jobAgendado) return;
+    if (["sent", "completed", "failed", "cancelled"].includes(String(jobAgendado.status || "").toLowerCase())) return;
     let ativo = true;
     let temporizador: number | undefined;
     const consultar = async () => {
       if (!ativo) return;
+      let statusTerminal = false;
       if (document.visibilityState === "visible") {
         try {
           const status = await consultarFilaFasePreparatoria(jobAgendado.job_id, jobAgendado.status_token);
@@ -285,15 +292,17 @@ export default function Wizard() {
           setJobDetalhe(status);
           setErroConsultaJob(null);
           setUltimaAtualizacao(new Date().toISOString());
-          if (status.status === "sent") setStatusTexto("Documentos gerados e enviados por e-mail.");
-          else if (status.status === "failed") setStatusTexto("O processamento falhou. Consulte o último erro abaixo.");
-          else if (status.status === "cancelled") setStatusTexto("Solicitação cancelada; nenhum novo envio será iniciado.");
+          const statusNormalizado = String(status.status || "").toLowerCase();
+          statusTerminal = ["sent", "completed", "failed", "cancelled"].includes(statusNormalizado);
+          if (statusNormalizado === "sent" || statusNormalizado === "completed") setStatusTexto("Documentos gerados e enviados por e-mail.");
+          else if (statusNormalizado === "failed") setStatusTexto("O processamento falhou. Consulte o último erro abaixo.");
+          else if (statusNormalizado === "cancelled") setStatusTexto("Solicitação cancelada; nenhum novo envio será iniciado.");
           else setStatusTexto(status.cancel_requested ? "Cancelamento solicitado; aguardando o fim da etapa atual." : "A solicitação continua em processamento na fila.");
         } catch (falha: any) {
           if (ativo) setErroConsultaJob(falha?.message || "Não foi possível atualizar o status agora.");
         }
       }
-      if (ativo) temporizador = window.setTimeout(consultar, 10_000);
+      if (ativo && !statusTerminal) temporizador = window.setTimeout(consultar, 10_000);
     };
     void consultar();
     return () => { ativo = false; if (temporizador !== undefined) window.clearTimeout(temporizador); };
@@ -367,7 +376,12 @@ export default function Wizard() {
       setEtapaAtual(etapaAtual - 1);
       return;
     }
-    const sair = () => { window.location.href = "/"; };
+    const sair = () => {
+      const avisar = beforeUnloadHandlerRef.current;
+      if (avisar) window.removeEventListener("beforeunload", avisar);
+      beforeUnloadHandlerRef.current = null;
+      window.location.href = "/";
+    };
     if (dadosPreenchidos) {
       setConfirmacaoWizard({
         title: "Sair do formulário?",

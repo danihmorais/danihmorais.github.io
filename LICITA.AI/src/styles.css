@@ -74,7 +74,7 @@ input::placeholder, textarea::placeholder { color: var(--text-light); opacity: 1
 input[type="checkbox"], input[type="radio"] { accent-color: var(--btn-primary); }
 select option { color: var(--text-main); background: var(--input-bg); }
 table { width: 100%; border-collapse: collapse; }
-th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .035em; }
+th { color: var(--text-muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .035em; }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -162,7 +162,7 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
   gap: 8px;
   min-width: 0;
   color: var(--text-light);
-  font-size: 11px;
+  font-size: 12px;
 }
 .stepper-number {
   display: grid;
@@ -174,7 +174,7 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
   border-radius: 50%;
   color: var(--text-muted);
   background: var(--bg-panel);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
 }
 .stepper-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -183,7 +183,7 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
 .wizard-stepper li.completed .stepper-number { color: var(--btn-success); border-color: var(--btn-success); }
 .wizard-section { padding-top: 27px; }
 .wizard-heading { margin-bottom: 22px; }
-.wizard-step-count { display: block; margin-bottom: 6px; color: var(--text-muted); font-size: 11px; }
+.wizard-step-count { display: block; margin-bottom: 6px; color: var(--text-muted); font-size: 12px; }
 .wizard-heading h1 { margin: 0; color: var(--text-main); font-size: 23px; line-height: 1.3; font-weight: 650; letter-spacing: -.035em; }
 .wizard-heading p { max-width: 700px; margin: 7px 0 0; color: var(--text-muted); font-size: 13px; }
 .wizard-form-content {
@@ -222,7 +222,7 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
 .wizard-form-content input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus,
 .wizard-form-content select:focus,
 .wizard-form-content textarea:focus { border-color: var(--border-focus) !important; box-shadow: var(--focus-ring) !important; }
-.wizard-form-content button { border-radius: 6px !important; box-shadow: none !important; font-size: 11px !important; font-weight: 600 !important; }
+.wizard-form-content button { border-radius: 6px !important; box-shadow: none !important; font-size: 12px !important; font-weight: 600 !important; }
 .wizard-form-content input[type="checkbox"], .wizard-form-content input[type="radio"] { width: 16px !important; height: 16px !important; padding: 0 !important; box-shadow: none !important; }
 
 /* Etapa 1: tabela simples no desktop e itens editáveis no celular */
@@ -247,7 +247,7 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
   border-radius: 0 !important;
   background: transparent !important;
   color: var(--text-muted) !important;
-  font-size: 9px !important;
+  font-size: 12px !important;
   letter-spacing: .04em;
   text-transform: uppercase;
 }
@@ -267,7 +267,7 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
 .wizard-form-content .item-row > div,
 .wizard-form-content .item-row > label,
 .wizard-form-content .item-row > input { min-width: 0 !important; width: auto !important; }
-.wizard-form-content .item-number { color: var(--text-muted); font-size: 11px; }
+.wizard-form-content .item-number { color: var(--text-muted); font-size: 12px; }
 .wizard-form-content .item-description-cell { display: flex; align-items: center; gap: 5px !important; min-width: 0 !important; }
 .wizard-form-content .item-description-cell textarea { min-width: 0 !important; width: 100%; padding: 7px 8px !important; }
 .wizard-form-content .item-description-cell button { min-height: 30px !important; padding: 0 7px !important; background: transparent !important; color: var(--btn-primary) !important; border: 1px solid var(--border) !important; }
@@ -277,13 +277,13 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
 .wizard-form-content .item-field-quantity input, .wizard-form-content .item-field-price input { text-align: right !important; }
 .wizard-form-content .item-field-price input { font-variant-numeric: tabular-nums; }
 .wizard-form-content .item-line-total { min-width: 0; text-align: right; }
-.wizard-form-content .item-line-total strong { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.wizard-form-content .item-line-total strong { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .wizard-form-content .item-row-actions { display: flex; justify-content: flex-end; gap: 3px !important; }
 .wizard-form-content .item-row-actions button { width: 25px !important; height: 25px !important; min-height: 25px !important; padding: 0 !important; background: transparent !important; color: var(--text-muted) !important; border: 1px solid var(--border) !important; }
 .wizard-form-content .item-row-actions .item-delete-button { color: var(--btn-danger) !important; }
 .wizard-form-content .items-table-body > div:not(.item-row) { padding: 20px 6px !important; color: var(--text-muted) !important; font-size: 12px; }
 .wizard-form-content .items-total { display: flex; align-items: baseline; justify-content: flex-end; gap: 18px; padding: 13px 6px 0; }
-.wizard-form-content .items-total span { color: var(--text-muted); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.wizard-form-content .items-total span { color: var(--text-muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
 .wizard-form-content .items-total strong { font-size: 17px; font-weight: 650; font-variant-numeric: tabular-nums; }
 
 /* Etapa 2: opções e campo de condições */
@@ -335,7 +335,7 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
 .wizard-form-content .department-contact-form button:last-child { border: 1px solid var(--border) !important; background: transparent !important; color: var(--text-muted) !important; }
 .wizard-form-content .department-contact-list { display: flex !important; gap: 0 !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important; background: transparent !important; }
 .wizard-form-content .department-contact-row { gap: 10px; padding: 8px 0 !important; border: 0 !important; border-bottom: 1px solid var(--border) !important; border-radius: 0 !important; background: transparent !important; }
-.wizard-form-content .department-contact-row > span { min-width: 0; overflow-wrap: anywhere; font-size: 11px !important; }
+.wizard-form-content .department-contact-row > span { min-width: 0; overflow-wrap: anywhere; font-size: 12px !important; }
 .wizard-form-content .department-contact-row button { min-height: 28px !important; padding: 0 8px !important; }
 .wizard-form-content .department-contact-row button:first-child { color: var(--btn-primary) !important; background: transparent !important; border: 0 !important; }
 .wizard-form-content .department-contact-row button:last-child { color: var(--btn-danger) !important; background: transparent !important; border: 0 !important; }
@@ -353,7 +353,7 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
   margin-bottom: 12px !important;
 }
 .wizard-form-content .step-form--people .person-entry-form > div { min-width: 0; }
-.wizard-form-content .step-form--people .person-entry-form label { margin-bottom: 4px !important; font-size: 11px !important; }
+.wizard-form-content .step-form--people .person-entry-form label { margin-bottom: 4px !important; font-size: 12px !important; }
 .wizard-form-content .step-form--people .person-entry-form input { min-width: 0; width: 100%; min-height: 36px !important; }
 .wizard-form-content .step-form--people .person-entry-form > div:last-child { display: flex; flex-wrap: wrap; gap: 5px !important; }
 .wizard-form-content .step-form--people .person-entry-form button { min-height: 36px !important; padding: 0 10px !important; white-space: nowrap; }
@@ -371,7 +371,7 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
 .wizard-form-content .step-form--settings .setting-section:first-child { padding-top: 0 !important; }
 .wizard-form-content .step-form--settings .setting-section:last-child { border-bottom: 0; padding-bottom: 0 !important; }
 .wizard-form-content .step-form--settings .setting-section > h2 { margin: 0 0 9px !important; font-size: 13px !important; }
-.wizard-form-content .step-form--settings .setting-section > p { margin: 0 0 10px !important; font-size: 11px !important; font-style: normal !important; }
+.wizard-form-content .step-form--settings .setting-section > p { margin: 0 0 10px !important; font-size: 12px !important; font-style: normal !important; }
 .wizard-form-content .step-form--settings .setting-options { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: center !important; gap: 2px 20px !important; margin: 0 0 8px !important; }
 .wizard-form-content .step-form--settings .setting-options > label {
   display: flex !important;
@@ -393,7 +393,7 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
 .wizard-form-content .step-form--settings .counter-wrapper input { width: 58px !important; min-height: 34px !important; text-align: center !important; }
 .wizard-form-content .step-form--settings .setting-section > select { width: min(100%, 340px) !important; min-height: 36px !important; }
 .wizard-form-content .step-form--settings .setting-justification { display: flex !important; flex-direction: column; gap: 5px; margin-top: 9px; padding: 0 0 0 12px !important; border: 0 !important; border-left: 2px solid var(--border) !important; border-radius: 0 !important; background: transparent !important; }
-.wizard-form-content .step-form--settings .setting-justification > label { margin: 0 0 2px !important; font-size: 11px !important; }
+.wizard-form-content .step-form--settings .setting-justification > label { margin: 0 0 2px !important; font-size: 12px !important; }
 .wizard-form-content .step-form--settings .setting-justification textarea { min-height: 65px !important; }
 
 /* Dotação e modais */
@@ -411,11 +411,11 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
 .dotacao-editor:empty::before { content: attr(data-placeholder); color: var(--text-light); pointer-events: none; }
 .dotacao-editor:focus { outline: none; border-color: var(--border-focus); box-shadow: var(--focus-ring); }
 .dotacao-editor img { display: block; max-width: 100%; height: auto; margin: 8px 0; border: 1px solid var(--border); border-radius: 4px; }
-.dotacao-hint { margin-top: 6px; color: var(--text-muted); font-size: 11px; }
+.dotacao-hint { margin-top: 6px; color: var(--text-muted); font-size: 12px; }
 .step-modal-overlay { padding: 16px; background: rgba(0,0,0,.48) !important; }
 .step-modal { max-height: calc(100vh - 32px); overflow-y: auto; padding: 20px !important; border: 1px solid var(--border); border-radius: 10px !important; background: var(--bg-panel) !important; box-shadow: 0 12px 40px rgba(0,0,0,.13) !important; color: var(--text-main); }
 .step-modal h3 { font-size: 15px !important; font-weight: 650 !important; }
-.step-modal button { min-height: 31px; font-size: 11px !important; }
+.step-modal button { min-height: 31px; font-size: 12px !important; }
 
 /* Modal de envio */
 .prompt-overlay { position: fixed; inset: 0; z-index: 1000; display: flex; justify-content: center; align-items: center; padding: 20px; background: rgba(15, 20, 30, .45); }
@@ -425,7 +425,7 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
 .prompt-eyebrow { display: none; }
 .prompt-lead { margin: 0 0 20px; color: var(--text-muted); font-size: 12px; }
 .prompt-close { width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 6px; color: var(--text-muted); background: transparent; font-size: 18px; }
-.optional-label { color: var(--text-muted); font-size: 9px; font-weight: 500; }
+.optional-label { color: var(--text-muted); font-size: 12px; font-weight: 500; }
 .required-mark { color: var(--btn-danger); }
 .prompt-section-label { display: block; margin-bottom: 9px; font-size: 12px; font-weight: 650; }
 .reference-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
@@ -433,14 +433,14 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
 .reference-card.has-file { border-bottom-color: var(--btn-success); background: transparent; }
 .reference-card-title { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600; }
 .reference-card-icon { display: none; }
-.reference-card-description { min-height: 0; color: var(--text-muted); font-size: 11px; }
-.reference-card input[type="file"] { display: block; width: 100%; margin-top: 2px; color: var(--text-muted); font-size: 10px; }
-.reference-file-name { color: var(--btn-success); font-size: 10px; overflow-wrap: anywhere; }
-.reference-footnote { margin: 10px 0 20px; color: var(--text-muted); font-size: 10px; }
+.reference-card-description { min-height: 0; color: var(--text-muted); font-size: 12px; }
+.reference-card input[type="file"] { display: block; width: 100%; margin-top: 2px; color: var(--text-muted); font-size: 12px; }
+.reference-file-name { color: var(--btn-success); font-size: 12px; overflow-wrap: anywhere; }
+.reference-footnote { margin: 10px 0 20px; color: var(--text-muted); font-size: 12px; }
 .prompt-field { display: block; margin-bottom: 15px; color: var(--text-main); font-size: 12px; font-weight: 600; }
 .prompt-field input, .prompt-field textarea { display: block; width: 100%; margin-top: 6px; padding: 10px 11px; font-size: 12px; font-weight: 400; }
 .prompt-field textarea { min-height: 95px; resize: vertical; }
-.prompt-field .field-hint { display: block; margin-top: 5px; color: var(--text-muted); font-size: 10px; font-weight: 400; }
+.prompt-field .field-hint { display: block; margin-top: 5px; color: var(--text-muted); font-size: 12px; font-weight: 400; }
 .prompt-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 14px; border-top: 1px solid var(--border); }
 .prompt-actions .button-primary, .prompt-actions .btn-primary { min-width: 150px; }
 
@@ -452,17 +452,17 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
 .status-content p { margin: 0 0 16px; color: var(--text-muted); font-size: 13px; }
 .status-spinner { display: block; width: 23px; height: 23px; margin: 0 0 18px; border: 2px solid var(--border); border-top-color: var(--btn-primary); border-radius: 50%; animation: status-spin .8s linear infinite; }
 @keyframes status-spin { to { transform: rotate(360deg); } }
-.status-error-detail { max-height: 230px; overflow: auto; margin: 16px 0; padding: 12px; border-left: 2px solid var(--btn-danger); background: var(--bg-subtle); color: var(--btn-danger); font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.status-error-detail { max-height: 230px; overflow: auto; margin: 16px 0; padding: 12px; border-left: 2px solid var(--btn-danger); background: var(--bg-subtle); color: var(--btn-danger); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .job-details { margin: 20px 0; border-top: 1px solid var(--border); }
 .job-details > div { display: flex; justify-content: space-between; gap: 15px; padding: 10px 0; border-bottom: 1px solid var(--border); }
-.job-details dt { color: var(--text-muted); font-size: 11px; }
-.job-details dd { margin: 0; text-align: right; font-size: 11px; overflow-wrap: anywhere; }
-.job-details code { font-size: 10px; }
+.job-details dt { color: var(--text-muted); font-size: 12px; }
+.job-details dd { margin: 0; text-align: right; font-size: 12px; overflow-wrap: anywhere; }
+.job-details code { font-size: 12px; }
 @media (max-width: 720px) {
   .wizard-header { height: 54px; padding: 0 15px; }
   .wizard-brand { font-size: 15px; }
   .wizard-header-actions { gap: 3px; }
-  .button { min-height: 34px; padding: 0 10px; font-size: 11px; }
+  .button { min-height: 34px; padding: 0 10px; font-size: 12px; }
   .button-quiet { padding: 0 8px; }
   .wizard-main { width: calc(100% - 28px); padding: 18px 0 23px; }
   .wizard-stepper { padding-bottom: 16px; }
@@ -496,12 +496,12 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
     background: transparent !important;
   }
   .wizard-form-content .item-number { grid-column: 1; grid-row: 1; }
-  .wizard-form-content .item-number::before { content: "Item"; margin-right: 5px; color: var(--text-muted); font-size: 10px; }
+  .wizard-form-content .item-number::before { content: "Item"; margin-right: 5px; color: var(--text-muted); font-size: 12px; }
   .wizard-form-content .item-description-cell { grid-column: 1 / -1; grid-row: 2; flex-direction: column; align-items: stretch; }
   .wizard-form-content .item-description-cell textarea { min-height: 65px; }
   .wizard-form-content .item-description-cell button { align-self: flex-start; }
   .wizard-form-content .item-field { gap: 4px; }
-  .wizard-form-content .item-field > span, .wizard-form-content .item-line-total > span { display: block; color: var(--text-muted); font-size: 10px; }
+  .wizard-form-content .item-field > span, .wizard-form-content .item-line-total > span { display: block; color: var(--text-muted); font-size: 12px; }
   .wizard-form-content .item-field-unit { grid-column: 1; grid-row: 3; }
   .wizard-form-content .item-field-quantity { grid-column: 2; grid-row: 3; }
   .wizard-form-content .item-field-price { grid-column: 1 / -1; grid-row: 4; }
@@ -627,13 +627,17 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
   display: flex;
   flex-direction: column;
   width: min(1160px, 100%);
-  max-height: min(92vh, 980px);
-  overflow: auto;
+  height: min(92dvh, 980px);
+  max-height: min(92dvh, 980px);
+  min-height: 0;
+  overflow: hidden;
   color: var(--text-main);
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, .26);
+  background: var(--surface-glass-strong);
+  border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  border-radius: 20px;
+  box-shadow: 0 28px 100px rgba(3,10,24,.34);
+  backdrop-filter: blur(26px);
+  -webkit-backdrop-filter: blur(26px);
 }
 .admin-pedidos-header {
   display: flex;
@@ -670,7 +674,12 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
   color: var(--text-main);
   background: var(--bg-subtle);
   border: 1px solid var(--border);
-  font-size: 25px;
+}
+.admin-lock-mark svg {
+  display: block;
+  width: 24px;
+  height: 24px;
+  flex: none;
 }
 .admin-login-form h3 {
   margin: 0 0 5px;
@@ -734,7 +743,7 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
   gap: 12px;
   padding: 12px 26px 8px;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 .admin-jobs-list {
   display: grid;
@@ -771,7 +780,7 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
   border-radius: 20px;
   color: var(--text-muted);
   background: var(--bg-subtle);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.4;
   white-space: nowrap;
 }
@@ -781,7 +790,7 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
 .admin-status-failed { color: var(--btn-danger); border-color: var(--btn-danger); }
 .admin-job-id {
   color: var(--text-light);
-  font-size: 11px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 .admin-job-card h3 {
@@ -802,16 +811,21 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
   flex-wrap: wrap;
   gap: 4px 16px;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 .admin-job-meta strong { color: var(--text-main); font-weight: 550; }
 .admin-job-error-preview {
+  display: -webkit-box;
   max-width: 800px;
-  overflow: hidden;
   margin: 10px 0 0;
+  overflow: hidden;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
+  white-space: normal;
   color: var(--btn-danger);
-  font-size: 12px;
-  text-overflow: ellipsis;
+  font-size: 13px;
+  text-overflow: initial;
 }
 .admin-job-actions {
   display: flex;
@@ -903,7 +917,7 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
 .admin-detail-grid dt,
 .admin-user-data dt {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: .025em;
 }
@@ -913,7 +927,7 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
   overflow-wrap: anywhere;
   font-size: 12px;
 }
-.admin-detail-grid code { font-size: 10px; overflow-wrap: anywhere; }
+.admin-detail-grid code { font-size: 12px; overflow-wrap: anywhere; }
 .admin-detail-section {
   margin-top: 18px;
 }
@@ -940,7 +954,7 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
   border-radius: 7px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font: 11px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 .admin-error-block {
   color: var(--btn-danger);
@@ -960,7 +974,7 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
   padding: 10px 12px;
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border);
-  font-size: 11px;
+  font-size: 12px;
 }
 .admin-history-row:last-child { border-bottom: 0; }
 .admin-history-row > div {
@@ -1031,21 +1045,19 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
   font-weight: 650;
   letter-spacing: .06em;
 }
-.admin-pedidos-dialog {
-  max-height: min(92dvh, 980px);
-  overflow: hidden;
-}
 .admin-pedidos-header,
 .admin-toolbar { flex: 0 0 auto; }
 .admin-pedidos-header p,
 .admin-session-expiry { font-size: 12px; }
 .admin-body {
   display: flex;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   flex-direction: column;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 .admin-jobs-list {
   overflow: clip;
@@ -1067,15 +1079,6 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
 .admin-list-summary,
 .admin-history-row,
 .admin-json-block { font-size: 12px; }
-.admin-job-error-preview {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-  white-space: normal;
-  text-overflow: initial;
-}
 .admin-job-error-wrap { min-width: 0; }
 .admin-job-retry-info {
   margin: 9px 0 0;
@@ -1133,17 +1136,19 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
 .stepper-button {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  width: 100%;
   min-width: 0;
-  min-height: 36px;
-  padding: 4px 5px 4px 0;
-  border: 0;
-  border-radius: 6px;
+  min-height: 44px;
+  gap: 10px;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: 11px;
   color: inherit;
   background: transparent;
   font: inherit;
   text-align: left;
   cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease;
 }
 .stepper-button:focus-visible {
   outline: 2px solid var(--focus-ring);
@@ -1167,14 +1172,17 @@ th { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  margin: 0 0 18px;
-  padding: 12px 14px;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 14px 16px;
   border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--bg-panel);
+  border-radius: 13px;
+  background: var(--surface-glass);
+  box-shadow: 0 8px 22px rgba(23,36,59,.04);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
-.draft-banner p { margin: 0; color: var(--text-muted); font-size: 13px; }
+.draft-banner p { margin: 0; color: var(--text-muted); font-size: 14px; }
 .draft-banner > div { display: flex; flex-wrap: wrap; gap: 8px; }
 .status-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 9px; margin-top: 16px; }
 .status-actions .button { min-height: 38px; }
@@ -1310,10 +1318,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 [data-theme="dark"] .wizard-stepper { box-shadow: 0 8px 28px rgba(0,0,0,.14); }
 .wizard-stepper ol { gap: 8px; }
 .wizard-stepper li { min-width: 0; color: var(--text-muted); font-size: 13px; }
-.stepper-button {
-  width: 100%; min-height: 44px; gap: 10px; padding: 7px 10px; border: 1px solid transparent; border-radius: 11px;
-  transition: background-color .15s ease, border-color .15s ease;
-}
 .stepper-button:hover:not([aria-disabled="true"]) { background: var(--bg-subtle); }
 .wizard-stepper li.current .stepper-button {
   color: var(--text-main); border-color: color-mix(in srgb, var(--btn-primary) 30%, var(--border));
@@ -1354,7 +1358,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .wizard-form-content .item-intro-section label { font-size: 14px !important; }
 .wizard-form-content .items-toolbar { gap: 8px !important; margin-bottom: 10px !important; }
 .wizard-form-content .items-toolbar button { min-height: 38px !important; }
-.wizard-form-content .items-table-head { padding: 10px 8px !important; font-size: 11px !important; }
+.wizard-form-content .items-table-head { padding: 10px 8px !important; font-size: 12px !important; }
 .wizard-form-content .item-row { gap: 9px; padding: 9px 8px !important; }
 .wizard-form-content .item-number { font-size: 13px; }
 .wizard-form-content .item-field > span,
@@ -1376,11 +1380,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .wizard-form-content .step-form--settings .setting-section { padding: 15px 0 !important; }
 .wizard-form-content .step-form--settings .setting-section label { font-size: 14px !important; }
 .wizard-validation-hint { font-size: 14px; }
-.draft-banner {
-  gap: 12px; margin-bottom: 16px; padding: 14px 16px; border-radius: 13px; background: var(--surface-glass);
-  box-shadow: 0 8px 22px rgba(23,36,59,.04); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-}
-.draft-banner p { font-size: 14px; }
 .prompt-eyebrow { font-size: 12px; letter-spacing: .09em; }
 .prompt-overlay { background: rgba(10,17,32,.48); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 .prompt-dialog, .step-modal {
@@ -1397,10 +1396,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .toast-message { font-size: 14px; }
 .admin-pedidos-overlay {
   padding: 22px; background: rgba(9,16,30,.52); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-}
-.admin-pedidos-dialog {
-  border-radius: 20px; border-color: color-mix(in srgb, var(--border) 85%, transparent); background: var(--surface-glass-strong);
-  box-shadow: 0 28px 100px rgba(3,10,24,.34); backdrop-filter: blur(26px); -webkit-backdrop-filter: blur(26px);
 }
 .admin-pedidos-header { position: relative; padding: 24px 28px 21px; border-bottom: 1px solid var(--border); background: var(--surface-glass); }
 .admin-pedidos-header h2 { font-size: 25px; }
@@ -1422,7 +1417,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .admin-job-card h3 { margin-bottom: 4px; font-size: 17px; }
 .admin-job-email { margin-bottom: 12px; font-size: 14px; }
 .admin-job-meta { gap: 6px 15px; font-size: 13px; }
-.admin-job-error-preview { font-size: 13px; }
 .admin-job-actions { align-items: flex-start; flex-wrap: wrap; gap: 8px; }
 .admin-job-actions .button, .admin-toolbar-actions .button, .admin-search .button { min-height: 40px; font-size: 13px; }
 .admin-retry-confirm {
@@ -1483,7 +1477,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .wizard-stepper ol { gap: 4px; }
   .stepper-button { flex-direction: column; justify-content: center; gap: 5px; min-height: 58px; padding: 6px 2px; }
   .stepper-number { width: 27px; height: 27px; }
-  .stepper-label { width: 100%; font-size: 11px; text-align: center; }
+  .stepper-label { width: 100%; font-size: 12px; text-align: center; }
   .wizard-section { padding: 20px 18px 18px; border-radius: 16px; }
   .wizard-heading h1 { font-size: 27px; }
   .wizard-heading p { font-size: 14px; }
@@ -1509,7 +1503,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .theme-toggle { min-width: 0; }
   .wizard-main { width: calc(100% - 16px); padding-top: 10px; }
   .wizard-stepper { padding: 5px; }
-  .stepper-label { font-size: 10px; white-space: normal; line-height: 1.15; }
+  .stepper-label { font-size: 12px; white-space: normal; line-height: 1.15; }
   .wizard-section { padding: 18px 13px 14px; }
   .wizard-heading h1 { font-size: 25px; }
   .wizard-form-content .step-form--items,
@@ -1548,23 +1542,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .job-details dt { flex: 0 0 30%; }
 .job-details dd { flex: 1 1 auto; min-width: 0; }
 
-.admin-pedidos-dialog {
-  height: min(92dvh, 980px);
-  max-height: min(92dvh, 980px);
-  overflow: hidden;
-  min-height: 0;
-}
 .admin-pedidos-header,
 .admin-toolbar,
 .admin-test-tools { flex-shrink: 0; }
-.admin-body {
-  flex: 1 1 0;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-}
 .admin-jobs-list {
   flex: 0 0 auto;
   overflow: visible;
@@ -1611,7 +1591,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   display: block;
   margin-bottom: 8px;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 750;
   letter-spacing: .1em;
 }
