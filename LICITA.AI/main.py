@@ -336,7 +336,7 @@ async def consultar_fila(job_id: str, token: str | None = None):
         "completed_stages": job.get("completed_stages", []),
         "last_error": job.get("last_error"),
         "retry_at": job.get("retry_at"),
-        "cancel_requested": (QUEUE_DIR / f"{job_id}.cancel").exists(),
+        "cancel_requested": bool(job.get("cancel_requested")) or (QUEUE_DIR / f"{job_id}.cancel").exists(),
         "cancelled_at": job.get("cancelled_at"),
         "cancelled_by": job.get("cancelled_by"),
         "fila_posicao": _queue_position(job_id)[0],
@@ -464,8 +464,8 @@ def _resumo_job_admin(job: dict, incluir_detalhes: bool = False) -> dict:
     job_id = str(job.get("job_id", ""))
     status = str(job.get("status", "desconhecido"))
     criado = job.get("created_at")
-    finalizado = job.get("completed_at") or job.get("last_error_at")
-    if status in {"queued", "processing"} or not finalizado:
+    finalizado = job.get("completed_at") or job.get("cancelled_at") or job.get("last_error_at")
+    if status in {"queued", "processing", "cancelling", "retrying"} or not finalizado:
         finalizado_para_tempo = datetime.now(timezone.utc).isoformat()
     else:
         finalizado_para_tempo = finalizado
@@ -528,7 +528,7 @@ def _resumo_job_admin(job: dict, incluir_detalhes: bool = False) -> dict:
         "processing_seconds": processamento,
         "elapsed_seconds": _segundos_entre_admin(criado, finalizado_para_tempo),
         "max_attempts": MAX_ATTEMPTS,
-        "cancel_requested": (QUEUE_DIR / f"{job_id}.cancel").exists(),
+        "cancel_requested": bool(job.get("cancel_requested")) or (QUEUE_DIR / f"{job_id}.cancel").exists(),
         "cancelled_at": job.get("cancelled_at"),
         "cancelled_by": job.get("cancelled_by"),
     }
