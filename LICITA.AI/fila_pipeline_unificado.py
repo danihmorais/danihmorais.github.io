@@ -43,6 +43,7 @@ def _concluir_cancelamento(job: dict, processing_path) -> None:
         "status": "cancelled",
         "cancelled_at": _utc_now(),
         "cancelled_by": pedido.get("requested_by") or job.get("cancelled_by") or "usuario",
+        "cancel_requested": True,
     })
     job.pop("retry_at", None)
     _write_json(_job_path(job["job_id"], ".cancelled"), job)
