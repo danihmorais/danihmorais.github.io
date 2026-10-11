@@ -67,6 +67,19 @@ class TestFilaPipeline(unittest.TestCase):
         resultado = _extrair_json('texto antes {"ok": "sim",} texto depois')
         self.assertEqual(resultado, {"ok": "sim"})
 
+    def test_extrair_json_corrige_barras_invalidas_sem_alterar_escapes_validos(self):
+        bruto = r'{"caminho": "C:\Licita\edital.docx", "expressao": "x\q + y", "quebra": "linha\nseguinte", "unicode": "\u00e7"}'
+        resultado = _extrair_json(bruto)
+        self.assertEqual(resultado["caminho"], r"C:\Licita\edital.docx")
+        self.assertEqual(resultado["expressao"], r"x\q + y")
+        self.assertEqual(resultado["quebra"], "linha\nseguinte")
+        self.assertEqual(resultado["unicode"], "ç")
+
+    def test_extrair_json_corrige_quebras_de_linha_cruas_em_strings(self):
+        resultado = _extrair_json('{"texto":"linha
+seguinte"}')
+        self.assertEqual(resultado["texto"], "linha\nseguinte")
+
     def test_valida_json(self):
         self.assertEqual(_validar_json_geracao({"A": "texto"}), {"A": "texto"})
         with self.assertRaises(RuntimeError):
