@@ -301,14 +301,79 @@ export default function Wizard() {
         dados_usuario: dados,
       }, arquivos);
       setJobAgendado(resultado);
+      setJobDetalhe({ status: resultado.status, fila_posicao: resultado.fila_posicao, current_stage: "AGUARDANDO_FILA", cancel_requested: false });
+      setErroConsultaJob(null);
+      setUltimaAtualizacao(new Date().toISOString());
       setStatusTexto("Solicitação registrada. A IA e o envio SMTP serão processados em segundo plano.");
       setGeracaoSucesso(true);
     } catch (erro: any) {
       console.error("Erro ao enfileirar geração:", erro);
       setErroMsg(erro?.message ? String(erro.message) : "Não foi possível colocar a solicitação na fila.");
+      setMostrarPromptModal(false);
     } finally {
       setCarregando(false);
     }
+  };
+
+  const cancelarSolicitacao = async () => {
+    if (!jobAgendado || !jobAgendado.status_token) return;
+    const status = jobDetalhe?.status || jobAgendado.status;
+    const emAndamento = status === "processing" || status === "cancelling";
+    const pergunta = emAndamento
+      ? "A IA não pode ser interrompida no meio de uma etapa. Solicitar o cancelamento ao fim da etapa atual? Nenhum e-mail será enviado."
+      : "Cancelar esta solicitação da fila? Nenhum e-mail será enviado.";
+    if (!window.confirm(pergunta)) return;
+    setCancelandoJob(true);
+    setErroConsultaJob(null);
+    try {
+      const resposta = await cancelarFilaFasePreparatoria(jobAgendado.job_id, jobAgendado.status_token);
+      setJobDetalhe((atual: any) => ({ ...(atual || {}), status: resposta.status, cancel_requested: resposta.status === "cancelling" }));
+      setStatusTexto(resposta.message);
+      setUltimaAtualizacao(new Date().toISOString());
+      showToast(resposta.message, "info");
+    } catch (erro: any) {
+      setErroConsultaJob(erro?.message || "Não foi possível cancelar a solicitação.");
+    } finally {
+      setCancelandoJob(false);
+    }
+  };
+
+  const voltarAoFormulario = () => {
+    setGeracaoSucesso(false);
+    setJobAgendado(null);
+    setJobDetalhe(null);
+    setErroConsultaJob(null);
+    setCarregando(false);
+    setErroMsg(null);
+    setMostrarPromptModal(false);
+  };
+
+  const novaSolicitacao = () => {
+    if (!window.confirm("Iniciar uma nova solicitação e limpar os dados atuais do formulário?")) return;
+    localStorage.removeItem("licita-ai-rascunho-v1");
+    setRascunhoDisponivel(false);
+    setDados({
+      objeto: "", necessidade: "", itens: [], amostra: false, vistoria: false, execucao: "",
+      secretarias: [], contatosSecretarias: {}, gestores: [], fiscais: [], instrumento: "CONTRATO",
+      prorrogar: true, meepp: "SIM", criterio: "ITEM", motivoCriterio: "", modalidade: "PREGAO_ELETRONICO",
+      motivoModalidade: "", pac: "SIM", motivoPac: "", vigenciaNum: 1, vigenciaUnidade: "Meses",
+      pagamentoTipo: "CONFORME_ENTREGAS", pagamentoEtapas: "", prazoRefazimentoDias: 5,
+      dotacao: "", caminhoImagemDotacao: "", dotacaoBlocos: [],
+    });
+    setEtapaAtual(0);
+    setMaiorEtapaAlcancada(0);
+    setTentouAvancar(false);
+    setEmailEnvio("");
+    setInstrucoesEnvio("");
+    setArquivosEnvio({});
+    setJobAgendado(null);
+    setJobDetalhe(null);
+    setErroConsultaJob(null);
+    setUltimaAtualizacao(null);
+    setErroMsg(null);
+    setGeracaoSucesso(false);
+    setMostrarPromptModal(false);
+    showToast("Formulário limpo para uma nova solicitação.", "success");
   };
 
   const renderizarEtapa = () => {
