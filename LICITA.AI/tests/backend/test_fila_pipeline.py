@@ -443,3 +443,76 @@ class TestNotificacaoFalhaFila(unittest.TestCase):
                 else:
                     alertar.assert_not_called()
                     self.assertEqual(job["status"], "queued")
+
+class TestIAExtracaoTotalTR(unittest.TestCase):
+    def test_ia_identifica_tabela_irregular_e_python_soma_item_por_item(self):
+        from decimal import Decimal
+        from unittest.mock import patch
+        import fila_pipeline_unificado as pipeline
+
+        texto_tr = (
+            "TERMO DE REFERÊNCIA — quadro de materiais\n"
+            "Cod. / descrição resumida / necessidade / custo por unidade\n"
+            "A1 / Papel A4 / 10 resmas / R$ 25,00\n"
+            "A2 / Caneta azul / 20 caixas / R$ 2,00"
+        )
+        resposta_ia = {
+            "todos_itens_identificados": True,
+            "itens": [
+                {"numero": "A1", "descricao": "Papel A4", "quantidade": "10", "valor_unitario": "25,00", "valor_total": None},
+                {"numero": "A2", "descricao": "Caneta azul", "quantidade": "20", "valor_unitario": "2,00", "valor_total": None},
+            ],
+        }
+        documentos = [{"tipo": "TR", "nome": "TR anterior.pdf", "texto": texto_tr}]
+
+        with patch.object(pipeline, "_chamar_ia", return_value=(resposta_ia, "modelo-resolvido")) as chamar:
+            total, modelo = pipeline._total_itens_tr_por_ia(documentos, "unsloth-auto", 0.3)
+
+        self.assertEqual(total, Decimal("290.00"))
+        self.assertEqual(modelo, "modelo-resolvido")
+        self.assertIn(texto_tr, chamar.call_args.args[0])
+        self.assertIn("Não some os valores mentalmente", chamar.call_args.args[0])
+
+        valor_aproximado = pipeline._calcular_valor_estimado_aproximado(
+            {"{{ITENS}}": "[]"}, documentos, total_anterior_ia=total
+        )
+        self.assertEqual(valor_aproximado, "R$ 305,00")
+
+    def test_ia_nao_usa_soma_parcial_quando_nao_confirma_todos_os_itens(self):
+        from unittest.mock import patch
+        import fila_pipeline_unificado as pipeline
+
+        documentos = [{
+            "tipo": "TR",
+            "texto": "Quadro de itens sem cabeçalhos claros e com parte dos preços ilegível.",
+        }]
+        resposta_ia = {
+            "todos_itens_identificados": False,
+            "itens": [],
+        }
+        with patch.object(pipeline, "_chamar_ia", return_value=(resposta_ia, "modelo-resolvido")):
+            total, _ = pipeline._total_itens_tr_por_ia(documentos, "modelo-teste")
+
+        self.assertIsNone(total)
+
+    def test_divergencia_entre_soma_da_tabela_e_total_declarado_aciona_fallback_ia(self):
+        from decimal import Decimal
+        import fila_pipeline_unificado as pipeline
+
+        documentos = [{
+            "tipo": "TR",
+            "texto": (
+                "ITEM | DESCRIÇÃO | QTD | VALOR UNITÁRIO | VALOR TOTAL\n"
+                "1 | Papel A4 | 10 | R$ 2,00 | R$ 20,00\n"
+                "Valor total estimado da contratação: R$ 200,00"
+            ),
+        }]
+
+        self.assertIsNone(pipeline._extrair_total_itens_tr_anterior(documentos))
+        self.assertEqual(
+            pipeline._calcular_valor_estimado_aproximado(
+                {"{{ITENS}}": "[]"}, documentos, total_anterior_ia=Decimal("190.00")
+            ),
+            "R$ 200,00",
+        )
+
