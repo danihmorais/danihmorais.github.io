@@ -86,8 +86,10 @@ function resumirValor(valor: unknown, chave = ""): string {
   if (valor === null || valor === undefined || valor === "") return "—";
   if (chave.includes("DOTACAO") || chave.includes("DOTAÇÃO")) {
     const texto = String(valor);
-    const imagens = (texto.match(/__IMG__/g) || []).length + (texto.startsWith("data:image/") ? 1 : 0);
-    const temTexto = texto.split(/\r?\n/).some((linha) => linha.trim() && !linha.trim().startsWith("__IMG__") && !linha.trim().startsWith("data:image/"));
+    const imagensJaSanitizadas = Number(texto.match(/(\d+)\s+imagem\(ns\)/i)?.[1] || 0);
+    const imagensMarcadas = (texto.match(/__IMG__/g) || []).length + (texto.startsWith("data:image/") ? 1 : 0);
+    const imagens = Math.max(imagensJaSanitizadas, imagensMarcadas);
+    const temTexto = texto.includes("texto:") || texto.split(/\r?\n/).some((linha) => linha.trim() && !linha.trim().startsWith("__IMG__") && !linha.trim().startsWith("data:image/"));
     return [imagens ? `${imagens} imagem(ns)` : "", temTexto ? "texto" : ""].filter(Boolean).join(" + ") || "Não informado";
   }
   if (typeof valor === "boolean") return valor ? "Sim" : "Não";
@@ -202,7 +204,7 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
     if (!token) return;
     const ativo = () => itens.some((item) => ["queued", "processing", "cancelling"].includes(String(item.status).toLowerCase()));
     const id = window.setInterval(() => {
-      if (document.visibilityState === "visible" && (ativo() || expiraEm !== null)) {
+      if (document.visibilityState === "visible" && ativo()) {
         void carregarPedidos(token).then(() => setAtualizadoEm(new Date().toISOString()));
       }
       if (expiraEm !== null && expiraEm <= Date.now()) {
