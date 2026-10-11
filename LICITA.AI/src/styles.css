@@ -1524,3 +1524,62 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 @media (prefers-reduced-motion: reduce) {
   .button, .stepper-button { transition: none !important; }
 }
+
+
+/* Correções de largura e rolagem após revisão do acompanhamento e painel. */
+.status-page {
+  align-items: stretch;
+  padding: clamp(18px, 3vw, 40px) clamp(16px, 4vw, 64px);
+}
+.status-brand,
+.status-content {
+  width: min(100%, 1120px);
+  margin-inline: auto;
+}
+.status-content {
+  padding: clamp(22px, 3vw, 36px);
+}
+.status-content p {
+  max-width: 100%;
+}
+.job-details > div {
+  align-items: flex-start;
+}
+.job-details dt { flex: 0 0 30%; }
+.job-details dd { flex: 1 1 auto; min-width: 0; }
+
+.admin-pedidos-dialog {
+  height: min(92dvh, 980px);
+  max-height: min(92dvh, 980px);
+  overflow: hidden;
+  min-height: 0;
+}
+.admin-pedidos-header,
+.admin-toolbar,
+.admin-test-tools { flex-shrink: 0; }
+.admin-body {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.admin-jobs-list {
+  flex: 0 0 auto;
+  overflow: visible;
+}
+@media (max-width: 800px) {
+  .status-page { padding: 14px; }
+  .status-content { padding: 20px 18px; }
+  .job-details dt { flex-basis: 36%; }
+  .admin-pedidos-dialog {
+    height: min(94dvh, 980px);
+    max-height: min(94dvh, 980px);
+  }
+}
+@media (max-width: 480px) {
+  .job-details > div { flex-direction: column; gap: 3px; }
+  .job-details dt { flex-basis: auto; }
+  .job-details dd { text-align: left; width: 100%; }
+}
