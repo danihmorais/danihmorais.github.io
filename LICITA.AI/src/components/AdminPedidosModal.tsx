@@ -328,6 +328,81 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
 
   const historicoEtapas = pedidoSelecionado?.stage_history ?? [];
 
+  const renderDetalhes = () => pedidoSelecionado ? (
+            <section className="admin-detail-panel" aria-labelledby="admin-detail-title">
+              <div className="admin-detail-heading">
+                <div>
+                  <span className="prompt-eyebrow">DETALHES DO PEDIDO</span>
+                  <h3 id="admin-detail-title">{pedidoSelecionado.objeto || "Pedido " + pedidoSelecionado.job_id.slice(0, 8)}</h3>
+                </div>
+                <button type="button" className="button button-quiet" onClick={() => setPedidoSelecionado(null)}>Fechar detalhes</button>
+              </div>
+              <dl className="admin-detail-grid">
+                <div><dt>Destinatário</dt><dd>{pedidoSelecionado.email || "—"}</dd></div>
+                <div><dt>ID completo</dt><dd><code>{pedidoSelecionado.job_id}</code></dd></div>
+                <div><dt>Entrada na fila</dt><dd>{formatarData(pedidoSelecionado.created_at)}</dd></div>
+                <div><dt>Primeiro início</dt><dd>{formatarData(pedidoSelecionado.started_at)}</dd></div>
+                <div><dt>Última tentativa</dt><dd>{formatarData(pedidoSelecionado.last_attempt_started_at)}</dd></div>
+                <div><dt>Conclusão</dt><dd>{formatarData(pedidoSelecionado.completed_at || pedidoSelecionado.last_error_at)}</dd></div>
+                <div><dt>Tempo total</dt><dd>{formatarDuracao(pedidoSelecionado.elapsed_seconds)}</dd></div>
+                <div><dt>Tempo processando</dt><dd>{formatarDuracao(pedidoSelecionado.processing_seconds)}</dd></div>
+                <div><dt>Etapa atual/final</dt><dd>{pedidoSelecionado.current_stage || "—"}</dd></div>
+                <div><dt>Modelo resolvido</dt><dd>{pedidoSelecionado.resolved_model || "Não registrado"}</dd></div>
+                <div><dt>Refaz pedido</dt><dd>{pedidoSelecionado.retry_of || "Solicitação original"}</dd></div>
+                <div><dt>Documento enviado</dt><dd>{pedidoSelecionado.result?.filename || "—"}</dd></div>
+              </dl>
+
+              {pedidoSelecionado.last_error && (
+                <div className="admin-detail-section">
+                  <h4>Último erro</h4>
+                  <pre className="admin-json-block admin-error-block">{pedidoSelecionado.last_error}</pre>
+                </div>
+              )}
+              {pedidoSelecionado.instrucoes && (
+                <div className="admin-detail-section">
+                  <h4>Instruções adicionais</h4>
+                  <p className="admin-detail-text">{pedidoSelecionado.instrucoes}</p>
+                </div>
+              )}
+              {pedidoSelecionado.etapas_planejadas?.length > 0 && (
+                <div className="admin-detail-section">
+                  <h4>Etapas planejadas</h4>
+                  <p className="admin-detail-text">{pedidoSelecionado.etapas_planejadas.join(" · ")}</p>
+                </div>
+              )}
+              {historicoEtapas.length > 0 && (
+                <div className="admin-detail-section">
+                  <h4>Histórico das etapas</h4>
+                  <div className="admin-history-list">
+                    {historicoEtapas.map((etapa, indice) => (
+                      <div className="admin-history-row" key={String(etapa.stage) + "-" + indice}>
+                        <div>
+                          <strong>{String(etapa.stage || "Etapa")}</strong>
+                          <span>{formatarData(etapa.started_at)} → {formatarData(etapa.ended_at)}</span>
+                        </div>
+                        <span className={"admin-status-pill admin-status-" + String(etapa.status || "unknown")}>{rotuloStatus(String(etapa.status || "desconhecido"))}</span>
+                        <span>{formatarDuracao(typeof etapa.duration_seconds === "number" ? etapa.duration_seconds : null)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {pedidoSelecionado.dados_usuario && Object.keys(pedidoSelecionado.dados_usuario).length > 0 && (
+                <details className="admin-detail-section admin-data-details">
+                  <summary>Dados enviados no formulário</summary>
+                  <dl className="admin-user-data">
+                    {Object.entries(pedidoSelecionado.dados_usuario).map(([chave, valor]) => (
+                      <div key={chave}>
+                        <dt>{formatarNomeCampo(chave)}</dt>
+                        <dd>{resumirValor(valor)}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </details>
+              )}
+            </section>
+  ) : null;
+
   useEffect(() => {
     if (!pedidoSelecionado?.job_id) return;
     document.getElementById("admin-job-" + pedidoSelecionado.job_id)?.scrollIntoView({
@@ -409,6 +484,7 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
               </div>
             </div>
 
+            <div className="admin-body">
             {erro && <p className="admin-feedback admin-feedback-error" role="alert">{erro}</p>}
             {aviso && <p className="admin-feedback admin-feedback-success" role="status">{aviso}</p>}
 
@@ -473,85 +549,14 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
                         </div>
                       </div>
                     )}
+                    {pedidoSelecionado?.job_id === pedido.job_id && renderDetalhes()}
                   </article>
                 ))}
               </div>
             )}
 
-            {pedidoSelecionado && (
-              <section className="admin-detail-panel" aria-labelledby="admin-detail-title">
-                <div className="admin-detail-heading">
-                  <div>
-                    <span className="prompt-eyebrow">DETALHES DO PEDIDO</span>
-                    <h3 id="admin-detail-title">{pedidoSelecionado.objeto || "Pedido " + pedidoSelecionado.job_id.slice(0, 8)}</h3>
-                  </div>
-                  <button type="button" className="button button-quiet" onClick={() => setPedidoSelecionado(null)}>Fechar detalhes</button>
-                </div>
-                <dl className="admin-detail-grid">
-                  <div><dt>Destinatário</dt><dd>{pedidoSelecionado.email || "—"}</dd></div>
-                  <div><dt>ID completo</dt><dd><code>{pedidoSelecionado.job_id}</code></dd></div>
-                  <div><dt>Entrada na fila</dt><dd>{formatarData(pedidoSelecionado.created_at)}</dd></div>
-                  <div><dt>Primeiro início</dt><dd>{formatarData(pedidoSelecionado.started_at)}</dd></div>
-                  <div><dt>Última tentativa</dt><dd>{formatarData(pedidoSelecionado.last_attempt_started_at)}</dd></div>
-                  <div><dt>Conclusão</dt><dd>{formatarData(pedidoSelecionado.completed_at || pedidoSelecionado.last_error_at)}</dd></div>
-                  <div><dt>Tempo total</dt><dd>{formatarDuracao(pedidoSelecionado.elapsed_seconds)}</dd></div>
-                  <div><dt>Tempo processando</dt><dd>{formatarDuracao(pedidoSelecionado.processing_seconds)}</dd></div>
-                  <div><dt>Etapa atual/final</dt><dd>{pedidoSelecionado.current_stage || "—"}</dd></div>
-                  <div><dt>Modelo resolvido</dt><dd>{pedidoSelecionado.resolved_model || "Não registrado"}</dd></div>
-                  <div><dt>Refaz pedido</dt><dd>{pedidoSelecionado.retry_of || "Solicitação original"}</dd></div>
-                  <div><dt>Documento enviado</dt><dd>{pedidoSelecionado.result?.filename || "—"}</dd></div>
-                </dl>
 
-                {pedidoSelecionado.last_error && (
-                  <div className="admin-detail-section">
-                    <h4>Último erro</h4>
-                    <pre className="admin-json-block admin-error-block">{pedidoSelecionado.last_error}</pre>
-                  </div>
-                )}
-                {pedidoSelecionado.instrucoes && (
-                  <div className="admin-detail-section">
-                    <h4>Instruções adicionais</h4>
-                    <p className="admin-detail-text">{pedidoSelecionado.instrucoes}</p>
-                  </div>
-                )}
-                {pedidoSelecionado.etapas_planejadas?.length > 0 && (
-                  <div className="admin-detail-section">
-                    <h4>Etapas planejadas</h4>
-                    <p className="admin-detail-text">{pedidoSelecionado.etapas_planejadas.join(" · ")}</p>
-                  </div>
-                )}
-                {historicoEtapas.length > 0 && (
-                  <div className="admin-detail-section">
-                    <h4>Histórico das etapas</h4>
-                    <div className="admin-history-list">
-                      {historicoEtapas.map((etapa, indice) => (
-                        <div className="admin-history-row" key={String(etapa.stage) + "-" + indice}>
-                          <div>
-                            <strong>{String(etapa.stage || "Etapa")}</strong>
-                            <span>{formatarData(etapa.started_at)} → {formatarData(etapa.ended_at)}</span>
-                          </div>
-                          <span className={"admin-status-pill admin-status-" + String(etapa.status || "unknown")}>{rotuloStatus(String(etapa.status || "desconhecido"))}</span>
-                          <span>{formatarDuracao(typeof etapa.duration_seconds === "number" ? etapa.duration_seconds : null)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {pedidoSelecionado.dados_usuario && Object.keys(pedidoSelecionado.dados_usuario).length > 0 && (
-                  <details className="admin-detail-section admin-data-details">
-                    <summary>Dados enviados no formulário</summary>
-                    <dl className="admin-user-data">
-                      {Object.entries(pedidoSelecionado.dados_usuario).map(([chave, valor]) => (
-                        <div key={chave}>
-                          <dt>{formatarNomeCampo(chave)}</dt>
-                          <dd>{resumirValor(valor)}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  </details>
-                )}
-              </section>
-            )}
+            </div>
           </>
         )}
       </section>
