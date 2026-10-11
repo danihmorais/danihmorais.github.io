@@ -153,7 +153,6 @@ export default function Wizard() {
   const [adminSessao, setAdminSessao] = useState<{ token: string; expiraEm: number } | null>(null);
   const [rascunhoDisponivel, setRascunhoDisponivel] = useState(false);
   const [rascunhoInicializado, setRascunhoInicializado] = useState(false);
-  const [mostrarTestes, setMostrarTestes] = useState(false);
   const [mostrarPromptModal, setMostrarPromptModal] = useState(false);
   const [mostrarAdminPedidos, setMostrarAdminPedidos] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -168,7 +167,6 @@ export default function Wizard() {
     (Array.isArray(dados.fiscais) && dados.fiscais.length > 0)
   );
   const validas = etapas.map((_, indice) => etapaValida(indice, dados));
-  const habilitarDadosTeste = import.meta.env.VITE_ENABLE_TEST_DATA === "true";
   const statusPedido = jobDetalhe?.cancel_requested && jobDetalhe?.status !== "cancelled"
     ? "cancelling"
     : (jobDetalhe?.status || jobAgendado?.status || "queued");
@@ -183,13 +181,23 @@ export default function Wizard() {
     setRascunhoDisponivel(false);
     setEtapaAtual(0);
     setMaiorEtapaAlcancada(0);
-    setMostrarTestes(false);
+    setTentouAvancar(false);
+    setEmailEnvio("");
+    setInstrucoesEnvio("");
+    setArquivosEnvio({});
     setMostrarPromptModal(false);
     setCarregando(false);
     setErroMsg(null);
     setGeracaoSucesso(false);
     setJobAgendado(null);
     setStatusTexto("Teste carregado. Revise as cinco etapas antes de confeccionar.");
+  };
+
+  const carregarTestePeloAdmin = (tipo: TipoTesteContratacao) => {
+    if (dadosPreenchidos && !window.confirm("Carregar dados de teste substituirá os dados atualmente preenchidos no formulário. Continuar?")) return;
+    carregarTeste(tipo);
+    setMostrarAdminPedidos(false);
+    showToast(tipo === "direta" ? "Dados de teste de contratação direta carregados." : "Dados de teste de contratação normal carregados.", "info");
   };
 
   useEffect(() => {
@@ -507,25 +515,11 @@ export default function Wizard() {
       <header className="wizard-header">
         <a className="wizard-brand" href="/" aria-label="LICITA.AI — página inicial">LICITA<span>.</span>AI</a>
         <div className="wizard-header-actions">
-          {habilitarDadosTeste && (
-          <div className="test-menu-wrap">
-            <button
-              type="button"
-              className="button button-quiet test-menu-trigger"
-              onClick={() => setMostrarTestes(v => !v)}
-              aria-expanded={mostrarTestes}
-              aria-haspopup="menu"
-            >
-              Dados de teste <span aria-hidden="true">⌄</span>
-            </button>
-            {mostrarTestes && (
-              <div className="test-menu" role="menu">
-                <button type="button" role="menuitem" onClick={() => carregarTeste("normal")}>Carregar contratação normal</button>
-                <button type="button" role="menuitem" onClick={() => carregarTeste("direta")}>Carregar contratação direta</button>
-              </div>
-            )}
-          </div>
-          )}
+          <button
+            type="button"
+            className="button button-secondary admin-pedidos-trigger"
+            onClick={() => setMostrarAdminPedidos(true)}
+          >Painel administrativo</button>
           <button
             type="button"
             className="button button-quiet theme-toggle"
@@ -614,6 +608,7 @@ export default function Wizard() {
           onClose={() => setMostrarAdminPedidos(false)}
           sessaoInicial={adminSessao}
           onSessaoChange={setAdminSessao}
+          onLoadTestData={carregarTestePeloAdmin}
         />
       )}
     </div>

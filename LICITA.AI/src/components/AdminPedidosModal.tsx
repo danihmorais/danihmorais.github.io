@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import type { TipoTesteContratacao } from "../utils/dadosTeste";
 import {
   autenticarAdminPedidos,
   cancelarAdminPedido,
@@ -14,6 +15,7 @@ interface AdminPedidosModalProps {
   onClose: () => void;
   sessaoInicial?: { token: string; expiraEm: number } | null;
   onSessaoChange?: (sessao: { token: string; expiraEm: number } | null) => void;
+  onLoadTestData: (tipo: TipoTesteContratacao) => void;
 }
 
 function formatarData(valor?: string | null): string {
@@ -126,7 +128,7 @@ function MensagemEstado({ texto }: { texto: string }) {
   return <div className="admin-empty-state">{texto}</div>;
 }
 
-export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChange }: AdminPedidosModalProps) {
+export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChange, onLoadTestData }: AdminPedidosModalProps) {
   const sessaoValida = Boolean(sessaoInicial?.token && sessaoInicial.expiraEm > Date.now());
   const [senha, setSenha] = useState("");
   const [token, setToken] = useState(sessaoValida ? sessaoInicial!.token : "");
@@ -519,6 +521,17 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
           </form>
         ) : (
           <>
+            <section className="admin-test-tools" aria-labelledby="admin-test-tools-title">
+              <div className="admin-test-tools-copy">
+                <span className="prompt-eyebrow">FERRAMENTAS ADMINISTRATIVAS</span>
+                <h3 id="admin-test-tools-title">Dados de teste</h3>
+                <p>Carregue um exemplo completo no formulário para validar o fluxo, sem precisar preencher as cinco etapas manualmente.</p>
+              </div>
+              <div className="admin-test-tools-actions">
+                <button type="button" className="button button-secondary" onClick={() => onLoadTestData("normal")}>Testar contratação normal</button>
+                <button type="button" className="button button-secondary" onClick={() => onLoadTestData("direta")}>Testar contratação direta</button>
+              </div>
+            </section>
             <div className="admin-toolbar">
               <form className="admin-search" onSubmit={(evento) => { evento.preventDefault(); setBusca(buscaDigitada.trim()); }}>
                 <input
