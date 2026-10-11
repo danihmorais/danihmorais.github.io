@@ -55,6 +55,8 @@ function etapaValida(indice: number, dados: any): boolean {
 
 export default function Wizard() {
   const [etapaAtual, setEtapaAtual] = useState(0);
+  const [maiorEtapaAlcancada, setMaiorEtapaAlcancada] = useState(0);
+  const [tentouAvancar, setTentouAvancar] = useState(false);
   const [dados, setDados] = useState<any>({
     objeto: "",
     necessidade: "",
@@ -88,19 +90,42 @@ export default function Wizard() {
   const [statusTexto, setStatusTexto] = useState("Iniciando...");
   const [erroMsg, setErroMsg] = useState<string | null>(null);
   const [geracaoSucesso, setGeracaoSucesso] = useState(false);
-  const [jobAgendado, setJobAgendado] = useState<{ job_id: string; status: string; email: string; message: string; fila_posicao?: number; solicitacoes_a_frente?: number } | null>(null);
+  const [jobAgendado, setJobAgendado] = useState<FasePreparatoriaJob | null>(null);
+  const [jobDetalhe, setJobDetalhe] = useState<any>(null);
+  const [cancelandoJob, setCancelandoJob] = useState(false);
+  const [erroConsultaJob, setErroConsultaJob] = useState<string | null>(null);
+  const [ultimaAtualizacao, setUltimaAtualizacao] = useState<string | null>(null);
+  const [emailEnvio, setEmailEnvio] = useState("");
+  const [instrucoesEnvio, setInstrucoesEnvio] = useState("");
+  const [arquivosEnvio, setArquivosEnvio] = useState<DocumentosReferenciaUpload>({});
+  const [adminSessao, setAdminSessao] = useState<{ token: string; expiraEm: number } | null>(null);
+  const [rascunhoDisponivel, setRascunhoDisponivel] = useState(false);
+  const [rascunhoInicializado, setRascunhoInicializado] = useState(false);
   const [mostrarTestes, setMostrarTestes] = useState(false);
   const [mostrarPromptModal, setMostrarPromptModal] = useState(false);
   const [mostrarAdminPedidos, setMostrarAdminPedidos] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { theme, toggleTheme } = useContext(ThemeContext);
   const isDark = theme === "dark";
+  const { showToast } = useToast();
+  const dadosPreenchidos = Boolean(
+    String(dados.objeto || "").trim() || String(dados.necessidade || "").trim() ||
+    (Array.isArray(dados.itens) && dados.itens.length > 0) || String(dados.execucao || "").trim() ||
+    (Array.isArray(dados.secretarias) && dados.secretarias.length > 0) ||
+    (Array.isArray(dados.gestores) && dados.gestores.length > 0) ||
+    (Array.isArray(dados.fiscais) && dados.fiscais.length > 0)
+  );
+  const validas = etapas.map((_, indice) => etapaValida(indice, dados));
+  const habilitarDadosTeste = import.meta.env.VITE_ENABLE_TEST_DATA === "true";
 
   const atualizarDados = (novosDados: Partial<any> | ((atual: any) => Partial<any>)) => setDados((prev: any) => ({ ...prev, ...(typeof novosDados === "function" ? novosDados(prev) : novosDados) }));
 
   const carregarTeste = (tipo: TipoTesteContratacao) => {
     setDados(criarDadosTeste(tipo) as any);
+    localStorage.removeItem("licita-ai-rascunho-v1");
+    setRascunhoDisponivel(false);
     setEtapaAtual(0);
+    setMaiorEtapaAlcancada(0);
     setMostrarTestes(false);
     setMostrarPromptModal(false);
     setCarregando(false);
@@ -111,19 +136,151 @@ export default function Wizard() {
   };
 
   useEffect(() => {
-    scrollRef.current?.scrollTo(0, 0);
+    const titulo = document.getElementById("wizard-step-title");
+    titulo?.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    titulo?.focus({ preventScroll: true });
   }, [etapaAtual]);
+
+  useEffect(() => {
+    try {
+      const salvo = localStorage.getItem("licita-ai-rascunho-v1");
+      if (salvo) {
+        const parseado = JSON.parse(salvo);
+        if (parseado?.versao === 1 && parseado?.dados && typeof parseado.dados === "object") setRascunhoDisponivel(true);
+        else localStorage.removeItem("licita-ai-rascunho-v1");
+      }
+    } catch {
+      localStorage.removeItem("licita-ai-rascunho-v1");
+    } finally {
+      setRascunhoInicializado(true);
+    }
+    if (window.location.hash === "#/admin" || new URLSearchParams(window.location.search).has("admin")) setMostrarAdminPedidos(true);
+  }, []);
+
+  useEffect(() => {
+    if (!rascunhoInicializado || rascunhoDisponivel) return;
+    try {
+      const dadosSemImagem = {
+        ...dados,
+        caminhoImagemDotacao: "",
+        dotacaoBlocos: (Array.isArray(dados.dotacaoBlocos) ? dados.dotacaoBlocos : [])
+          .filter((bloco: any) => bloco?.tipo !== "imagem")
+          .map((bloco: any) => ({ tipo: "texto", texto: String(bloco.texto || "") })),
+      };
+      const conteudo = JSON.stringify({ versao: 1, dados: dadosSemImagem, etapaAtual: Math.min(4, etapaAtual), salvoEm: new Date().toISOString() });
+      if (conteudo.length <= 180_000) localStorage.setItem("licita-ai-rascunho-v1", conteudo);
+    } catch {
+      // O formulário continua utilizável mesmo se o navegador bloquear o armazenamento local.
+    }
+  }, [dados, etapaAtual, rascunhoInicializado, rascunhoDisponivel]);
+
+  useEffect(() => {
+    if (!dadosPreenchidos || geracaoSucesso) return;
+    const avisar = (evento: BeforeUnloadEvent) => {
+      evento.preventDefault();
+      evento.returnValue = "";
+    };
+    window.addEventListener("beforeunload", avisar);
+    return () => window.removeEventListener("beforeunload", avisar);
+  }, [dadosPreenchidos, geracaoSucesso]);
+
+  useEffect(() => {
+    if (!geracaoSucesso || !jobAgendado) return;
+    let ativo = true;
+    let temporizador: number | undefined;
+    const consultar = async () => {
+      if (!ativo) return;
+      if (document.visibilityState === "visible") {
+        try {
+          const status = await consultarFilaFasePreparatoria(jobAgendado.job_id, jobAgendado.status_token);
+          if (!ativo) return;
+          setJobDetalhe(status);
+          setErroConsultaJob(null);
+          setUltimaAtualizacao(new Date().toISOString());
+          if (status.status === "sent") setStatusTexto("Documentos gerados e enviados por e-mail.");
+          else if (status.status === "failed") setStatusTexto("O processamento falhou. Consulte o último erro abaixo.");
+          else if (status.status === "cancelled") setStatusTexto("Solicitação cancelada; nenhum novo envio será iniciado.");
+          else setStatusTexto(status.cancel_requested ? "Cancelamento solicitado; aguardando o fim da etapa atual." : "A solicitação continua em processamento na fila.");
+        } catch (falha: any) {
+          if (ativo) setErroConsultaJob(falha?.message || "Não foi possível atualizar o status agora.");
+        }
+      }
+      if (ativo) temporizador = window.setTimeout(consultar, 10_000);
+    };
+    void consultar();
+    return () => { ativo = false; if (temporizador !== undefined) window.clearTimeout(temporizador); };
+  }, [geracaoSucesso, jobAgendado?.job_id, jobAgendado?.status_token]);
+
+  const restaurarRascunho = () => {
+    try {
+      const salvo = localStorage.getItem("licita-ai-rascunho-v1");
+      const parseado = salvo ? JSON.parse(salvo) : null;
+      if (parseado?.versao === 1 && parseado?.dados) {
+        setDados(parseado.dados);
+        setEtapaAtual(Number.isInteger(parseado.etapaAtual) ? Math.max(0, Math.min(4, parseado.etapaAtual)) : 0);
+        setMaiorEtapaAlcancada(Number.isInteger(parseado.etapaAtual) ? Math.max(0, Math.min(4, parseado.etapaAtual)) : 0);
+      }
+    } catch {
+      showToast("Não foi possível restaurar o rascunho salvo.", "error");
+    }
+    setRascunhoDisponivel(false);
+    showToast("Rascunho restaurado. Imagens de dotação precisam ser anexadas novamente.", "info");
+  };
+
+  const descartarRascunho = () => {
+    localStorage.removeItem("licita-ai-rascunho-v1");
+    setRascunhoDisponivel(false);
+  };
+
+  const irParaEtapa = (alvo: number) => {
+    if (alvo <= etapaAtual) {
+      setEtapaAtual(alvo);
+      return;
+    }
+    const primeiraInvalida = validas.slice(0, alvo).findIndex((valida) => !valida);
+    if (primeiraInvalida >= 0) {
+      setTentouAvancar(true);
+      showToast("Conclua a etapa " + (primeiraInvalida + 1) + " antes de avançar.", "info");
+      setEtapaAtual(primeiraInvalida);
+      setTimeout(() => {
+        const invalido = document.querySelector<HTMLElement>("[aria-invalid='true']");
+        (invalido || document.querySelector<HTMLElement>(".wizard-form-content input, .wizard-form-content textarea, .wizard-form-content select"))?.focus({ preventScroll: true });
+      }, 0);
+      return;
+    }
+    setEtapaAtual(alvo);
+    setMaiorEtapaAlcancada((atual) => Math.max(atual, alvo));
+  };
 
   const validarEtapa = () => etapaValida(etapaAtual, dados);
 
   const avancar = () => {
-    if (etapaAtual < 4) setEtapaAtual(etapaAtual + 1);
-    else setMostrarPromptModal(true);
+    setTentouAvancar(true);
+    if (!validas[etapaAtual]) {
+      showToast("Complete os campos obrigatórios desta etapa antes de continuar.", "info");
+      return;
+    }
+    if (etapaAtual < 4) {
+      setEtapaAtual(etapaAtual + 1);
+      setMaiorEtapaAlcancada((atual) => Math.max(atual, etapaAtual + 1));
+      return;
+    }
+    const primeiraInvalida = validas.findIndex((valida) => !valida);
+    if (primeiraInvalida >= 0) {
+      showToast("Conclua a etapa " + (primeiraInvalida + 1) + " antes de confeccionar os documentos.", "info");
+      setEtapaAtual(primeiraInvalida);
+      return;
+    }
+    setMostrarPromptModal(true);
   };
 
   const voltar = () => {
-    if (etapaAtual > 0) setEtapaAtual(etapaAtual - 1);
-    else window.location.href = "/";
+    if (etapaAtual > 0) {
+      setEtapaAtual(etapaAtual - 1);
+      return;
+    }
+    if (dadosPreenchidos && !window.confirm("Há dados preenchidos. Sair desta página? O rascunho será salvo sem as imagens de dotação.")) return;
+    window.location.href = "/";
   };
 
   const confeccionarDocumentos = async ({ instrucoes, email, arquivos }: { instrucoes: string; email: string; arquivos: DocumentosReferenciaUpload }) => {
