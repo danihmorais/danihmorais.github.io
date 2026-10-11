@@ -1,6 +1,8 @@
+import { getApiBaseUrl } from "../utils/apiBase";
+
 const MAX_TENTATIVAS = 3;
 
-const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+const API_URL = getApiBaseUrl();
 const IA_CHAT_URL = `${API_URL}/licita/api/ia/chat`;
 
 const CHAVE_LOGS_ERRO = "licita_ai:logs_erro";
