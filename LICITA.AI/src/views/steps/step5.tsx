@@ -92,7 +92,7 @@ export default function Step5({ dados, atualizarDados, tentouAvancar = false }: 
     });
   };
 
-  const fatorVigencia = (unidade: string) => unidade === "Dias" ? 1 : unidade === "Ano(s)" ? 365 : 30;
+  const fatorVigencia = (unidade: string) => unidade === "Dias" ? 1 : unidade === "Ano(s)" ? 365 : unidade.toLocaleLowerCase("pt-BR").startsWith("sem") ? 7 : 30;
   const maxVigencia = (unidade: string) => Math.floor(365 / fatorVigencia(unidade));
   const vigenciaAtual = Math.max(1, Number(dados.vigenciaNum) || 1);
   const vigenciaMaxima = maxVigencia(String(dados.vigenciaUnidade || "Meses"));
@@ -219,7 +219,7 @@ export default function Step5({ dados, atualizarDados, tentouAvancar = false }: 
             label="Motivação para o agrupamento (Global/Lote):"
             value={dados.motivoCriterio}
             onChange={(e: any) => atualizarDados({ motivoCriterio: e.target.value })}
-            errorMsg="Este campo é obrigatório." mostrarErro={tentouAvancar} mostrarErro={tentouAvancar}
+            errorMsg="Este campo é obrigatório." mostrarErro={tentouAvancar}
           />
         )}
       </div>
