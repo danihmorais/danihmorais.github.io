@@ -312,6 +312,17 @@ export async function detalharAdminPedido(token: string, jobId: string): Promise
   return respostaAdmin(response);
 }
 
+export async function excluirAdminPedido(
+  token: string,
+  jobId: string,
+): Promise<{ job_id: string; deleted: boolean; message: string }> {
+  const response = await fetch(BASE_URL + "/licita/api/admin/jobs/" + encodeURIComponent(jobId), {
+    method: "DELETE",
+    headers: { Authorization: "Bearer " + token },
+  });
+  return respostaAdmin(response);
+}
+
 export async function refazerAdminPedido(
   token: string,
   jobId: string,

@@ -3,6 +3,7 @@ import {
   autenticarAdminPedidos,
   cancelarAdminPedido,
   detalharAdminPedido,
+  excluirAdminPedido,
   listarAdminPedidos,
   refazerAdminPedido,
   type AdminJob,
@@ -132,7 +133,7 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
   const [expiraEm, setExpiraEm] = useState<number | null>(sessaoValida ? sessaoInicial!.expiraEm : null);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [atualizadoEm, setAtualizadoEm] = useState<string | null>(null);
-  const [confirmacao, setConfirmacao] = useState<{ tipo: "refazer" | "cancelar"; id: string } | null>(null);
+  const [confirmacao, setConfirmacao] = useState<{ tipo: "refazer" | "cancelar" | "excluir"; id: string } | null>(null);
   const [confirmando, setConfirmando] = useState<string | null>(null);
   const dialogRef = useRef<HTMLElement>(null);
   const onCloseRef = useRef(onClose);
@@ -147,6 +148,7 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
   const [detalheCarregando, setDetalheCarregando] = useState<string | null>(null);
   const [pedidoSelecionado, setPedidoSelecionado] = useState<AdminJobDetails | null>(null);
   const [refazendo, setRefazendo] = useState<string | null>(null);
+  const [excluindo, setExcluindo] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
 
@@ -312,6 +314,32 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
       }
     } finally {
       setConfirmando(null);
+    }
+  };
+
+  const excluir = async (pedido: AdminJob) => {
+    setExcluindo(pedido.job_id);
+    setErro(null);
+    setAviso(null);
+    try {
+      const resultado = await excluirAdminPedido(token, pedido.job_id);
+      setConfirmacao(null);
+      if (pedidoSelecionado?.job_id === pedido.job_id) setPedidoSelecionado(null);
+      setItens((anteriores) => anteriores.filter((item) => item.job_id !== pedido.job_id));
+      setTotal((anterior) => Math.max(0, anterior - 1));
+      setAviso(resultado.message);
+    } catch (falha: unknown) {
+      const mensagem = falha instanceof Error ? falha.message : "Não foi possível excluir o JSON do pedido.";
+      setErro(mensagem);
+      if (ehErroSessao(falha)) {
+        setToken("");
+        setExpiraEm(null);
+        onSessaoChange?.(null);
+        setItens([]);
+        setErro("Sessão expirada. Entre novamente.");
+      }
+    } finally {
+      setExcluindo(null);
     }
   };
 
@@ -580,6 +608,16 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
                           Refazer
                         </button>
                       )}
+                      {!["queued", "processing", "cancelling", "retrying"].includes(pedido.status) && (
+                        <button
+                          type="button"
+                          className="button button-danger-outline"
+                          onClick={() => setConfirmacao(confirmacao?.id === pedido.job_id && confirmacao.tipo === "excluir" ? null : { tipo: "excluir", id: pedido.job_id })}
+                          disabled={excluindo === pedido.job_id}
+                        >
+                          Excluir JSON
+                        </button>
+                      )}
                       {["queued", "processing"].includes(pedido.status) && !pedido.cancel_requested && (
                         <button
                           type="button"
@@ -597,11 +635,13 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
                           ? pedido.status === "processing"
                             ? "A IA não pode ser interrompida no meio de uma etapa. O cancelamento vale ao fim da etapa atual e nenhum e-mail será enviado."
                             : "O pedido será removido da fila e nenhum e-mail será enviado."
-                          : <>Será criada uma nova execução para <strong>{pedido.email}</strong>. O histórico original será mantido. Se um e-mail já tiver sido entregue antes de uma falha de comunicação, poderá ocorrer reenvio duplicado.</>}</p>
+                          : confirmacao.tipo === "excluir"
+                            ? <>O JSON do pedido e os arquivos associados serão excluídos permanentemente. A operação não pode ser desfeita e o pedido não poderá mais ser refeito.</>
+                            : <>Será criada uma nova execução para <strong>{pedido.email}</strong>. O histórico original será mantido. Se um e-mail já tiver sido entregue antes de uma falha de comunicação, poderá ocorrer reenvio duplicado.</>}</p>
                         <div>
                           <button type="button" className="button button-quiet" onClick={() => setConfirmacao(null)}>Voltar</button>
-                          <button type="button" className={confirmacao.tipo === "cancelar" ? "button button-danger-outline" : "button button-primary"} onClick={() => confirmacao.tipo === "cancelar" ? void cancelar(pedido) : void refazer(pedido)} disabled={refazendo === pedido.job_id || confirmando === pedido.job_id}>
-                            {confirmacao.tipo === "cancelar" ? (confirmando === pedido.job_id ? "Cancelando…" : "Confirmar cancelamento") : (refazendo === pedido.job_id ? "Enfileirando…" : "Confirmar e refazer")}
+                          <button type="button" className={confirmacao.tipo === "refazer" ? "button button-primary" : "button button-danger-outline"} onClick={() => confirmacao.tipo === "cancelar" ? void cancelar(pedido) : confirmacao.tipo === "excluir" ? void excluir(pedido) : void refazer(pedido)} disabled={refazendo === pedido.job_id || confirmando === pedido.job_id || excluindo === pedido.job_id}>
+                            {confirmacao.tipo === "cancelar" ? (confirmando === pedido.job_id ? "Cancelando…" : "Confirmar cancelamento") : confirmacao.tipo === "excluir" ? (excluindo === pedido.job_id ? "Excluindo…" : "Excluir JSON") : (refazendo === pedido.job_id ? "Enfileirando…" : "Confirmar e refazer")}
                           </button>
                         </div>
                       </div>

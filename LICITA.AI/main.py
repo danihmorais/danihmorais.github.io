@@ -640,6 +640,28 @@ async def detalhar_pedido_admin(job_id: str, request: Request):
     return _resumo_job_admin(job, incluir_detalhes=True)
 
 
+@app.delete("/api/admin/jobs/{job_id}")
+async def excluir_pedido_admin(job_id: str, request: Request):
+    _exigir_admin(request)
+    if not re.fullmatch(r"[0-9a-f]{32}", job_id, re.IGNORECASE):
+        raise HTTPException(status_code=404, detail="Solicitação não encontrada.")
+    job_id = job_id.lower()
+    job = get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Solicitação não encontrada ou já removida.")
+    status = str(job.get("status", "")).strip().lower()
+    if status in {"queued", "processing", "cancelling", "retrying"}:
+        raise HTTPException(status_code=409, detail="Não é possível excluir um pedido ativo. Cancele-o e aguarde a finalização antes de excluir o JSON.")
+    try:
+        for sufixo in ("", ".processing", ".done", ".failed", ".cancelled"):
+            _job_path(job_id, sufixo).unlink(missing_ok=True)
+        _artifact_path(job_id).unlink(missing_ok=True)
+        (QUEUE_DIR / f"{job_id}.cancel").unlink(missing_ok=True)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail="Não foi possível excluir todos os arquivos da solicitação.") from exc
+    return {"job_id": job_id, "deleted": True, "message": "JSON do pedido e arquivos associados excluídos permanentemente."}
+
+
 @app.post("/api/admin/jobs/{job_id}/cancel")
 async def cancelar_pedido_admin(job_id: str, request: Request):
     _exigir_admin(request)
