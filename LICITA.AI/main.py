@@ -322,7 +322,6 @@ async def consultar_fila(job_id: str, token: str | None = None):
     if not stored_token or not token:
         raise HTTPException(status_code=401, detail="Token de consulta não informado.")
 
-    import hmac
     if not hmac.compare_digest(stored_token, token):
         raise HTTPException(status_code=403, detail="Token de consulta inválido.")
 
