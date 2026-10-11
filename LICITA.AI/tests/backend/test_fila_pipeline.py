@@ -243,10 +243,10 @@ class TestPipelineUnificado(unittest.TestCase):
                 "tipo": "TR",
                 "nome": "Termo de Referência anterior",
                 "texto": (
-                    "ANEXO III - TERMO DE REFERÊNCIA\\n"
-                    "ITEM | DESCRIÇÃO | UN | QTD | VLR UNIT. | VLR TOTAL\\n"
-                    "1 | Papel A4 | RESMA | 10 | R$ 25,00 | R$ 250,00\\n"
-                    "2 | Caneta azul | CX | 20 | R$ 2,00 | R$ 40,00\\n"
+                    "ANEXO III - TERMO DE REFERÊNCIA\n"
+                    "ITEM | DESCRIÇÃO | UN | QTD | VLR UNIT. | VLR TOTAL\n"
+                    "1 | Papel A4 | RESMA | 10 | R$ 25,00 | R$ 250,00\n"
+                    "2 | Caneta azul | CX | 20 | R$ 2,00 | R$ 40,00\n"
                     "VALOR TOTAL DOS ITENS: R$ 290,00"
                 ),
             },
@@ -333,9 +333,9 @@ class TestPipelineUnificado(unittest.TestCase):
                                 "tipo": "TR",
                                 "nome": "TR anterior",
                                 "texto": (
-                                    "ANEXO III - TERMO DE REFERÊNCIA\\n"
-                                    "ITEM | DESCRIÇÃO | UN | QTD | VLR UNIT. | VLR TOTAL\\n"
-                                    "1 | Papel A4 | RESMA | 10 | R$ 25,00 | R$ 250,00\\n"
+                                    "ANEXO III - TERMO DE REFERÊNCIA\n"
+                                    "ITEM | DESCRIÇÃO | UN | QTD | VLR UNIT. | VLR TOTAL\n"
+                                    "1 | Papel A4 | RESMA | 10 | R$ 25,00 | R$ 250,00\n"
                                     "2 | Caneta azul | CX | 20 | R$ 2,00 | R$ 40,00"
                                 ),
                             }
@@ -360,7 +360,7 @@ class TestPipelineUnificado(unittest.TestCase):
 
         self.assertEqual(chamadas_modelo, ["unsloth-auto", "modelo-resolvido"])
         self.assertEqual(job["status"], "sent")
-        self.assertEqual(job["dados_ia"]["VALOR_ESTIMADO_APROXIMADO"], "R$ 2.600,00")
+        self.assertEqual(job["dados_ia"]["VALOR_ESTIMADO_APROXIMADO"], "R$ 305,00")
         enviar_email.assert_called_once()
 
 
