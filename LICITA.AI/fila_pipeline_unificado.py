@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import threading
 import time
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal, ROUND_CEILING, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_CEILING, ROUND_HALF_UP
+import unicodedata
 
 from fila import MAX_ATTEMPTS, POLL_INTERVAL_SECONDS, QUEUE_DIR, RETRY_BASE_SECONDS, RETRY_MAX_SECONDS, SMTP_FROM, SMTP_USERNAME, _artifact_path, _claim_next_job, _enviar_email, _enviar_email_alerta_falha, _finalizar_etapa, _finalizar_tentativa, _iniciar_etapa, _job_path, _write_json, gerar_zip
 from fila_pipeline import _aplicar_auditoria_marcas, _chamar_ia as _chamar_ia_primaria, _substituir_contextos, _validar_json_geracao
@@ -21,10 +23,153 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _calcular_valor_estimado_aproximado(dados_usuario: dict) -> str:
-    """Calcula no backend um valor redondo, cerca de 5% acima do total dos itens."""
+def _normalizar_rotulo_financeiro(valor: str) -> str:
+    texto = unicodedata.normalize("NFKD", str(valor or ""))
+    texto = "".join(char for char in texto if not unicodedata.combining(char))
+    return re.sub(r"\s+", " ", texto.casefold()).strip()
+
+
+def _parse_valor_documento(valor: str) -> Decimal | None:
+    """Converte valores monetários brasileiros ou decimais extraídos de tabelas."""
+    texto = re.sub(r"[^0-9,.-]", "", str(valor or ""))
+    if not texto or not re.search(r"\d", texto):
+        return None
+
+    if "," in texto:
+        # No padrão brasileiro, a vírgula é o separador decimal.
+        texto = texto.replace(".", "").replace(",", ".")
+    elif texto.count(".") > 1:
+        texto = texto.replace(".", "")
+    elif "." in texto:
+        parte_decimal = texto.rsplit(".", 1)[-1]
+        if len(parte_decimal) == 3:
+            texto = texto.replace(".", "")
+
     try:
-        total = Decimal(str(calcular_valor_estimado(dados_usuario)))
+        numero = Decimal(texto)
+    except InvalidOperation:
+        return None
+    return numero if numero.is_finite() and numero > 0 else None
+
+
+def _total_itens_tabela_tr(texto: str) -> Decimal | None:
+    """Soma os totais de linhas de tabelas com cabeçalhos identificáveis no TR."""
+    linhas = str(texto or "").splitlines()
+    total_itens = Decimal("0")
+    encontrou_linhas = False
+    cabecalho = None
+
+    for linha in linhas:
+        if "|" not in linha:
+            cabecalho = None
+            continue
+        celulas = [parte.strip() for parte in linha.strip().strip("|").split("|")]
+        rotulos = [_normalizar_rotulo_financeiro(parte) for parte in celulas]
+        indice_qtd = next(
+            (i for i, rotulo in enumerate(rotulos) if re.search(r"\b(qtd|qtde|quantidade|quant)\b", rotulo)),
+            None,
+        )
+        indice_total = next(
+            (i for i, rotulo in enumerate(rotulos) if "total" in rotulo and ("valor" in rotulo or "preco" in rotulo or "vlr" in rotulo or "r$" in rotulo or rotulo == "total")),
+            None,
+        )
+        indice_unitario = next(
+            (i for i, rotulo in enumerate(rotulos) if ("unit" in rotulo) and any(p in rotulo for p in ("valor", "preco", "vlr", "r$"))),
+            None,
+        )
+        indice_descricao = next(
+            (i for i, rotulo in enumerate(rotulos) if any(p in rotulo for p in ("descricao", "especificacao", "objeto", "produto", "material", "servico"))),
+            None,
+        )
+
+        if indice_qtd is not None and (indice_total is not None or indice_unitario is not None) and indice_descricao is not None:
+            cabecalho = (indice_qtd, indice_total, indice_unitario, indice_descricao, len(celulas))
+            continue
+
+        if not cabecalho:
+            continue
+
+        indice_qtd, indice_total, indice_unitario, indice_descricao, tamanho_cabecalho = cabecalho
+        if len(celulas) <= max(indice_qtd, indice_descricao, indice_total if indice_total is not None else 0, indice_unitario if indice_unitario is not None else 0):
+            continue
+
+        linha_normalizada = " ".join(rotulos)
+        if any(palavra in linha_normalizada for palavra in ("valor total estimado", "total geral", "subtotal", "total dos itens")):
+            cabecalho = None
+            continue
+        if any(rotulo and re.search(r"\b(qtd|qtde|quantidade|quant)\b", rotulo) for rotulo in rotulos):
+            continue
+
+        descricao = celulas[indice_descricao] if indice_descricao < len(celulas) else ""
+        qtd = _parse_valor_documento(celulas[indice_qtd]) if indice_qtd < len(celulas) else None
+        if not descricao or qtd is None:
+            # Depois de uma linha separadora ou seção textual, não carregue o cabeçalho
+            # antigo para outra tabela que esteja no mesmo documento.
+            continue
+
+        valor_linha = None
+        if indice_total is not None and indice_total < len(celulas):
+            valor_linha = _parse_valor_documento(celulas[indice_total])
+        if valor_linha is None and indice_unitario is not None and indice_unitario < len(celulas):
+            valor_unitario = _parse_valor_documento(celulas[indice_unitario])
+            if valor_unitario is not None:
+                valor_linha = (qtd * valor_unitario).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        if valor_linha is not None:
+            total_itens += valor_linha
+            encontrou_linhas = True
+
+    return total_itens if encontrou_linhas and total_itens > 0 else None
+
+
+def _total_explicito_tr(texto: str) -> Decimal | None:
+    """Busca um total declarado, apenas em linhas rotuladas explicitamente como total."""
+    padrao_rotulo = re.compile(
+        r"\b(total dos itens|valor total estimado(?: da contratacao)?|valor estimado total|"
+        r"valor total da contratacao|total geral|valor global estimado)\b"
+    )
+    padrao_valor = re.compile(
+        r"(?i)(?:R\$\s*)?(-?\d{1,3}(?:\.\d{3})*(?:,\d{2})|-?\d+(?:[.,]\d{2}))"
+    )
+    for linha in str(texto or "").splitlines():
+        linha_normalizada = _normalizar_rotulo_financeiro(linha)
+        if not padrao_rotulo.search(linha_normalizada):
+            continue
+        encontrados = padrao_valor.findall(linha)
+        for candidato in reversed(encontrados):
+            valor = _parse_valor_documento(candidato)
+            if valor is not None:
+                return valor
+    return None
+
+
+def _extrair_total_itens_tr_anterior(documentos_anteriores: list[dict] | None) -> Decimal | None:
+    """Usa somente o TR anterior; DFD/ETP e valores citados em outros documentos são ignorados."""
+    for documento in documentos_anteriores or []:
+        if not isinstance(documento, dict) or str(documento.get("tipo") or "").strip().upper() != "TR":
+            continue
+        texto = str(documento.get("texto") or "").strip()
+        if not texto:
+            continue
+        total = _total_itens_tabela_tr(texto)
+        if total is None:
+            total = _total_explicito_tr(texto)
+        if total is not None and total > 0:
+            return total
+    return None
+
+
+def _calcular_valor_estimado_aproximado(
+    dados_usuario: dict,
+    documentos_anteriores: list[dict] | None = None,
+) -> str:
+    """
+    Calcula valor arredondado, cerca de 5% acima do total-base.
+    Havendo TR anterior com total de itens extraível, ele prevalece sobre os itens do wizard.
+    """
+    total_anterior = _extrair_total_itens_tr_anterior(documentos_anteriores)
+    try:
+        total = total_anterior if total_anterior is not None else Decimal(str(calcular_valor_estimado(dados_usuario)))
     except (ArithmeticError, TypeError, ValueError):
         return ""
 
@@ -232,7 +377,7 @@ def _process_pipeline(job: dict) -> None:
                     continue
                 dados_ia_final[chave] = valor
 
-    valor_estimado_aproximado = _calcular_valor_estimado_aproximado(dados_usuario)
+    valor_estimado_aproximado = _calcular_valor_estimado_aproximado(dados_usuario, documentos_anteriores)
     if valor_estimado_aproximado:
         # O valor aproximado é derivado dos itens, com margem de 5% e arredondamento para cima.
         dados_ia_final["VALOR_ESTIMADO_APROXIMADO"] = valor_estimado_aproximado

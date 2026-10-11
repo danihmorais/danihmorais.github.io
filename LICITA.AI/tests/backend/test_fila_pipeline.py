@@ -226,6 +226,65 @@ class TestPipelineUnificado(unittest.TestCase):
             "",
         )
 
+    def test_valor_aproximado_prioriza_soma_dos_itens_do_tr_anterior(self):
+        import fila_pipeline_unificado as pipeline
+
+        dados_atuais = {
+            "{{ITENS}}": json.dumps([
+                {"numero": 1, "qtd": 2, "valor": 1234.56},
+            ]),
+        }
+        documentos = [
+            {
+                "tipo": "ETP",
+                "texto": "Valor total estimado: R$ 999.999,00",
+            },
+            {
+                "tipo": "TR",
+                "nome": "Termo de Referência anterior",
+                "texto": (
+                    "ANEXO III - TERMO DE REFERÊNCIA\n"
+                    "ITEM | DESCRIÇÃO | UN | QTD | VLR UNIT. | VLR TOTAL\n"
+                    "1 | Papel A4 | RESMA | 10 | R$ 25,00 | R$ 250,00\n"
+                    "2 | Caneta azul | CX | 20 | R$ 2,00 | R$ 40,00\n"
+                    "VALOR TOTAL DOS ITENS: R$ 290,00"
+                ),
+            },
+        ]
+
+        # O total de R$ 290,00 do TR anterior prevalece sobre o valor atual de R$ 2.469,12.
+        self.assertEqual(
+            pipeline._calcular_valor_estimado_aproximado(dados_atuais, documentos),
+            "R$ 305,00",
+        )
+
+    def test_valor_aproximado_usa_total_explicito_do_tr_se_nao_houver_tabela(self):
+        import fila_pipeline_unificado as pipeline
+
+        dados_atuais = {"{{ITENS}}": json.dumps([{"qtd": 1, "valor": 100}])}
+        documentos = [
+            {"tipo": "TR", "texto": "Valor total estimado da contratação: R$ 3.450,00"},
+        ]
+
+        self.assertEqual(
+            pipeline._calcular_valor_estimado_aproximado(dados_atuais, documentos),
+            "R$ 3.630,00",
+        )
+
+    def test_valor_aproximado_ignora_total_de_etp_quando_nao_ha_tr(self):
+        import fila_pipeline_unificado as pipeline
+
+        dados_atuais = {"{{ITENS}}": json.dumps([{"qtd": 1, "valor": 100}])}
+        documentos = [
+            {"tipo": "ETP", "texto": "Valor total estimado: R$ 999.999,00"},
+            {"tipo": "DFD", "texto": "Valor total estimado: R$ 777.777,00"},
+        ]
+
+        self.assertEqual(
+            pipeline._calcular_valor_estimado_aproximado(dados_atuais, documentos),
+            "R$ 105,00",
+        )
+
     def test_reutiliza_modelo_resolvido_nas_etapas_seguintes(self):
         import tempfile
         from pathlib import Path
@@ -269,6 +328,18 @@ class TestPipelineUnificado(unittest.TestCase):
                     "__LICITA_PIPELINE__": {
                         "model": "unsloth-auto",
                         "temperature": 0.3,
+                        "documentos_anteriores": [
+                            {
+                                "tipo": "TR",
+                                "nome": "TR anterior",
+                                "texto": (
+                                    "ANEXO III - TERMO DE REFERÊNCIA\n"
+                                    "ITEM | DESCRIÇÃO | UN | QTD | VLR UNIT. | VLR TOTAL\n"
+                                    "1 | Papel A4 | RESMA | 10 | R$ 25,00 | R$ 250,00\n"
+                                    "2 | Caneta azul | CX | 20 | R$ 2,00 | R$ 40,00"
+                                ),
+                            }
+                        ],
                         "etapas": [
                             {"id": "ETAPA_1", "tipo": "geracao_json", "prompt": "PROMPT_1"},
                             {"id": "ETAPA_2", "tipo": "geracao_json", "prompt": "PROMPT_2"},
@@ -289,7 +360,7 @@ class TestPipelineUnificado(unittest.TestCase):
 
         self.assertEqual(chamadas_modelo, ["unsloth-auto", "modelo-resolvido"])
         self.assertEqual(job["status"], "sent")
-        self.assertEqual(job["dados_ia"]["VALOR_ESTIMADO_APROXIMADO"], "R$ 2.600,00")
+        self.assertEqual(job["dados_ia"]["VALOR_ESTIMADO_APROXIMADO"], "R$ 305,00")
         enviar_email.assert_called_once()
 
 
