@@ -103,12 +103,13 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
     showToast("Lote excluído. Confira a distribuição dos itens restantes.", "info");
   };
 
-  const atribuirItemALote = (itemId: any, loteId: string) => {
+  const atribuirItemALote = (itemId: any, loteId: string, itemIndex: number) => {
     atualizarDados((anterior: any) => {
       const lotesAtuais = obterLotes(anterior);
       const loteSelecionado = lotesAtuais.find((lote: any) => lote.id === loteId);
-      const itensAtualizados = (anterior.itens || []).map((item: any) => {
-        if (item.id !== itemId) return item;
+      const itensAtualizados = (anterior.itens || []).map((item: any, index: number) => {
+        const corresponde = item.id !== undefined && item.id !== null ? item.id === itemId : index === itemIndex;
+        if (!corresponde) return item;
         if (!loteSelecionado) {
           const { loteId: _loteId, lote: _lote, ...itemSemLote } = item;
           return itemSemLote;
@@ -453,7 +454,7 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
                 </div>
                 {lotes.length > 0 && <label className="item-field item-field-lot" style={{ display: "flex", flexDirection: "column", gap: 4, width: 160, flexShrink: 0 }}>
                   <span style={{ color: "var(--text-muted)", fontSize: 11 }}>Lote</span>
-                  <select aria-label={`Lote do item ${item.numero || index + 1}`} value={obterLoteIdItem(item, lotes)} onChange={(e) => atribuirItemALote(item.id, e.target.value)} style={{ width: "100%", minWidth: 0, padding: 8, borderRadius: "var(--radius)", border: "1px solid var(--input-border)", background: "var(--bg-panel)", color: "var(--text-main)" }}>
+                  <select aria-label={`Lote do item ${item.numero || index + 1}`} value={obterLoteIdItem(item, lotes)} onChange={(e) => atribuirItemALote(item.id, e.target.value, index)} style={{ width: "100%", minWidth: 0, padding: 8, borderRadius: "var(--radius)", border: "1px solid var(--input-border)", background: "var(--bg-panel)", color: "var(--text-main)" }}>
                     <option value="">Selecione um lote</option>
                     {lotes.map((lote: any) => <option key={lote.id} value={lote.id}>{lote.nome}</option>)}
                   </select>
