@@ -242,30 +242,30 @@ def _chamar_ia(prompt: str, model: str, temperature: float = 0.3) -> tuple[dict,
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
     with httpx.Client(timeout=AI_TIMEOUT_SECONDS) as client:
         response = client.post(f"{base_url}/chat/completions", headers=headers, json=payload)
-    if response.status_code == 404 and modelo.casefold() in {"", "auto", "unsloth-auto"}:
-        try:
-            lista_modelos = client.get(f"{base_url}/models", headers=headers)
-            if lista_modelos.status_code >= 400:
-                raise RuntimeError(f"HTTP {lista_modelos.status_code}")
-            dados_modelos = lista_modelos.json()
-            itens_modelos = dados_modelos.get("data", []) if isinstance(dados_modelos, dict) else []
-            disponiveis = [
-                str(item.get("id", "")).strip()
-                for item in itens_modelos
-                if isinstance(item, dict) and str(item.get("id", "")).strip()
-            ] if isinstance(itens_modelos, list) else []
-        except Exception as exc:
-            raise RuntimeError(
-                "O modelo automático não foi reconhecido pelo Unsloth e não foi possível consultar /v1/models. "
-                "Carregue um modelo no Studio e tente novamente."
-            ) from exc
-        if not disponiveis:
-            raise RuntimeError(
-                "O Unsloth não informou modelos disponíveis em /v1/models. Carregue um modelo no Studio e tente novamente."
-            )
-        modelo = disponiveis[0]
-        payload["model"] = modelo
-        response = client.post(f"{base_url}/chat/completions", headers=headers, json=payload)
+        if response.status_code == 404 and modelo.casefold() in {"", "auto", "unsloth-auto"}:
+            try:
+                lista_modelos = client.get(f"{base_url}/models", headers=headers)
+                if lista_modelos.status_code >= 400:
+                    raise RuntimeError(f"HTTP {lista_modelos.status_code}")
+                dados_modelos = lista_modelos.json()
+                itens_modelos = dados_modelos.get("data", []) if isinstance(dados_modelos, dict) else []
+                disponiveis = [
+                    str(item.get("id", "")).strip()
+                    for item in itens_modelos
+                    if isinstance(item, dict) and str(item.get("id", "")).strip()
+                ] if isinstance(itens_modelos, list) else []
+            except Exception as exc:
+                raise RuntimeError(
+                    "O modelo automático não foi reconhecido pelo Unsloth e não foi possível consultar /v1/models. "
+                    "Carregue um modelo no Studio e tente novamente."
+                ) from exc
+            if not disponiveis:
+                raise RuntimeError(
+                    "O Unsloth não informou modelos disponíveis em /v1/models. Carregue um modelo no Studio e tente novamente."
+                )
+            modelo = disponiveis[0]
+            payload["model"] = modelo
+            response = client.post(f"{base_url}/chat/completions", headers=headers, json=payload)
     if response.status_code >= 400:
         raise RuntimeError(f"IA HTTP {response.status_code}: {response.text[:500]}")
     try:
