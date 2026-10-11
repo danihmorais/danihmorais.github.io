@@ -5,6 +5,7 @@ import ConfirmDialog from "../../components/ConfirmDialog";
 import { calcularValorEstimadoItens } from "../../utils/regrasContratacao";
 import { melhorarDescricaoItem } from "../../providers/services/descricaoItensIA";
 import { extrairObjetoCotacaoPdf, parseRelatorioCotacaoPdf } from "../../utils/cotacaoPdf";
+import { obterLotes, obterLoteIdItem } from "../../utils/lotes";
 
 export default function Step1({ dados = { itens: [], objeto: "", necessidade: "" }, atualizarDados, tentouAvancar = false }: any) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -13,8 +14,11 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
   const [importandoXlsx, setImportandoXlsx] = useState(false);
   const [itemEmMelhoria, setItemEmMelhoria] = useState<number | string | null>(null);
   const [importacaoPendente, setImportacaoPendente] = useState<any[] | null>(null);
+  const [loteEmEdicao, setLoteEmEdicao] = useState<any | null>(null);
+  const [loteParaExcluir, setLoteParaExcluir] = useState<any | null>(null);
   const { showToast } = useToast();
   const itens = dados.itens || [];
+  const lotes = obterLotes(dados);
   const itensRef = useRef<any[]>(itens);
   itensRef.current = itens;
   const objeto = dados.objeto || "";
@@ -30,6 +34,98 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
     return Number(texto) || 0;
   };
   const normalizar = (valor: any) => String(valor || "").trim().toLowerCase();
+
+  const iniciarNovoLote = () => {
+    if (loteEmEdicao) return;
+    const rascunho = {
+      id: `lote-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      nome: `Lote ${lotes.length + 1}`,
+      novo: true,
+    };
+    setLoteEmEdicao(rascunho);
+  };
+
+  const iniciarEdicaoLote = (lote: any) => setLoteEmEdicao({ id: lote.id, nome: lote.nome, novo: false });
+
+  const salvarLote = () => {
+    if (!loteEmEdicao) return;
+    const nome = String(loteEmEdicao.nome || "").trim();
+    if (!nome) {
+      showToast("Informe um nome para o lote.", "error");
+      return;
+    }
+    const duplicado = lotes.some((lote: any) =>
+      lote.id !== loteEmEdicao.id && normalizar(lote.nome) === normalizar(nome)
+    );
+    if (duplicado) {
+      showToast("Já existe um lote com esse nome. Use um nome diferente.", "error");
+      return;
+    }
+
+    atualizarDados((anterior: any) => {
+      const lotesAnteriores = obterLotes(anterior);
+      const novosLotes = loteEmEdicao.novo
+        ? [...lotesAnteriores, { id: loteEmEdicao.id, nome }]
+        : lotesAnteriores.map((lote: any) => lote.id === loteEmEdicao.id ? { ...lote, nome } : lote);
+      const itensAtualizados = (anterior.itens || []).map((item: any) => {
+        if (loteEmEdicao.novo || obterLoteIdItem(item, lotesAnteriores) !== loteEmEdicao.id) return item;
+        return { ...item, loteId: loteEmEdicao.id, lote: nome };
+      });
+      return { lotes: novosLotes, itens: itensAtualizados, criterio: "LOTE" };
+    });
+    setLoteEmEdicao(null);
+    showToast(loteEmEdicao.novo ? "Lote criado. Agora distribua os itens entre os lotes." : "Lote atualizado.", "success");
+  };
+
+  const cancelarEdicaoLote = () => setLoteEmEdicao(null);
+
+  const excluirLote = () => {
+    if (!loteParaExcluir) return;
+    const removido = loteParaExcluir;
+    atualizarDados((anterior: any) => {
+      const lotesAnteriores = obterLotes(anterior);
+      const lotesRestantes = lotesAnteriores.filter((lote: any) => lote.id !== removido.id);
+      const itensAtualizados = (anterior.itens || []).map((item: any) => {
+        if (obterLoteIdItem(item, lotesAnteriores) !== removido.id) return item;
+        const { loteId: _loteId, lote: _lote, ...itemSemLote } = item;
+        return itemSemLote;
+      });
+      const haviaCriterioLote = anterior.criterio === "LOTE";
+      return {
+        lotes: lotesRestantes,
+        itens: itensAtualizados,
+        criterio: lotesRestantes.length ? "LOTE" : (haviaCriterioLote ? "ITEM" : anterior.criterio),
+        motivoCriterio: lotesRestantes.length || !haviaCriterioLote ? anterior.motivoCriterio : "",
+      };
+    });
+    if (loteEmEdicao?.id === removido.id) setLoteEmEdicao(null);
+    setLoteParaExcluir(null);
+    showToast("Lote excluído. Confira a distribuição dos itens restantes.", "info");
+  };
+
+  const atribuirItemALote = (itemId: any, loteId: string) => {
+    atualizarDados((anterior: any) => {
+      const lotesAtuais = obterLotes(anterior);
+      const loteSelecionado = lotesAtuais.find((lote: any) => lote.id === loteId);
+      const itensAtualizados = (anterior.itens || []).map((item: any) => {
+        if (item.id !== itemId) return item;
+        if (!loteSelecionado) {
+          const { loteId: _loteId, lote: _lote, ...itemSemLote } = item;
+          return itemSemLote;
+        }
+        return { ...item, loteId: loteSelecionado.id, lote: loteSelecionado.nome };
+      });
+      return { itens: itensAtualizados, ...(lotesAtuais.length ? { criterio: "LOTE" } : {}) };
+    });
+  };
+
+  const dadosLote = (lote: any, lotesDisponiveis = lotes) => {
+    const itensDoLote = itens.filter((item: any) => obterLoteIdItem(item, lotesDisponiveis) === lote.id);
+    return {
+      quantidade: itensDoLote.length,
+      total: calcularValorEstimadoItens(itensDoLote),
+    };
+  };
 
   const renumerarItens = (lista: any[]) => lista.map((item, index) => ({ ...item, numero: index + 1 }));
 
@@ -252,6 +348,77 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
       style={{ padding: 12, borderRadius: "var(--radius-lg)", borderColor: erroNecessidade ? "var(--btn-danger)" : "var(--input-border)", minHeight: 120, resize: "vertical" }} />
       {erroNecessidade && <small id="erro-necessidade" className="wizard-field-error">Informe a justificativa da demanda.</small>}
     </section>
+    <section className="step-section lots-section" style={{ border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: 20, background: "var(--bg-panel)" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 16 }}>
+        <div style={{ minWidth: 220, flex: 1 }}>
+          <h2 style={{ margin: 0, color: "var(--text-main)", fontSize: 17, fontWeight: 650 }}>Organização por lotes</h2>
+          <p style={{ margin: "6px 0 0", color: "var(--text-muted)", fontSize: 13, lineHeight: 1.5 }}>
+            Agrupe itens relacionados. Ao criar pelo menos um lote, o critério de julgamento passa automaticamente para menor preço por lote.
+          </p>
+        </div>
+        <button type="button" onClick={iniciarNovoLote} disabled={Boolean(loteEmEdicao)} style={{ border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "10px 14px", background: "var(--btn-primary)", color: "var(--bg-panel)", fontWeight: 600, cursor: loteEmEdicao ? "not-allowed" : "pointer", opacity: loteEmEdicao ? 0.55 : 1, whiteSpace: "nowrap" }}>
+          + Criar lote
+        </button>
+      </div>
+
+      {lotes.length === 0 && !loteEmEdicao?.novo && (
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: 16, borderRadius: "var(--radius)", background: "var(--bg-subtle)", border: "1px dashed var(--border)" }}>
+          <span aria-hidden="true" style={{ fontSize: 22, lineHeight: 1 }}>▦</span>
+          <div>
+            <strong style={{ display: "block", color: "var(--text-main)", fontSize: 14 }}>Nenhum lote criado</strong>
+            <span style={{ display: "block", color: "var(--text-muted)", fontSize: 13, lineHeight: 1.5, marginTop: 4 }}>A contratação continuará organizada por item ou global. Crie lotes apenas quando houver justificativa para reunir itens em grupos.</span>
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))", gap: 12 }}>
+        {[...lotes, ...(loteEmEdicao?.novo ? [loteEmEdicao] : [])].map((lote: any, index: number) => {
+          const emEdicao = loteEmEdicao?.id === lote.id;
+          const resumo = dadosLote(lote, lotes);
+          return <article key={lote.id} style={{ border: emEdicao ? "1px solid var(--btn-primary)" : "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: 16, background: "var(--bg-panel)", boxShadow: emEdicao ? "0 0 0 2px color-mix(in srgb, var(--btn-primary) 12%, transparent)" : "none", minWidth: 0 }}>
+            {emEdicao ? (
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <span style={{ borderRadius: 8, background: "var(--bg-subtle)", color: "var(--text-muted)", padding: "5px 8px", fontSize: 11, fontWeight: 700 }}>LOTE {index + 1}</span>
+                  <span style={{ color: "var(--text-muted)", fontSize: 12 }}>{loteEmEdicao.novo ? "Novo grupo" : "Editando grupo"}</span>
+                </div>
+                <label style={{ display: "block", color: "var(--text-main)", fontSize: 12, fontWeight: 600, marginBottom: 6 }} htmlFor={`nome-lote-${lote.id}`}>Nome do lote</label>
+                <input id={`nome-lote-${lote.id}`} autoFocus value={loteEmEdicao.nome} maxLength={100} onChange={(e) => setLoteEmEdicao((atual: any) => ({ ...atual, nome: e.target.value }))} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); salvarLote(); } if (e.key === "Escape") cancelarEdicaoLote(); }} placeholder="Ex.: Materiais de expediente" style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: "var(--radius)", border: "1px solid var(--input-border)", background: "var(--bg-subtle)", color: "var(--text-main)" }} />
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14 }}>
+                  <button type="button" onClick={cancelarEdicaoLote} style={{ border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "8px 11px", background: "transparent", color: "var(--text-main)" }}>Cancelar</button>
+                  <button type="button" onClick={salvarLote} style={{ border: 0, borderRadius: "var(--radius)", padding: "8px 12px", background: "var(--btn-primary)", color: "var(--bg-panel)", fontWeight: 600 }}>Salvar lote</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <span style={{ display: "inline-block", color: "var(--text-muted)", fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", marginBottom: 6 }}>LOTE {index + 1}</span>
+                    <h3 style={{ margin: 0, color: "var(--text-main)", fontSize: 15, overflowWrap: "anywhere" }}>{lote.nome}</h3>
+                  </div>
+                  <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
+                    <button type="button" aria-label={`Editar ${lote.nome}`} onClick={() => iniciarEdicaoLote(lote)} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "7px 9px", background: "var(--bg-subtle)", color: "var(--text-main)", fontSize: 12 }}>Editar</button>
+                    <button type="button" aria-label={`Excluir ${lote.nome}`} onClick={() => setLoteParaExcluir(lote)} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "7px 9px", background: "transparent", color: "var(--btn-danger)", fontSize: 12 }}>Excluir</button>
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 16 }}>
+                  <span style={{ borderRadius: 999, background: "var(--bg-subtle)", padding: "5px 9px", color: "var(--text-muted)", fontSize: 12 }}>{resumo.quantidade} {resumo.quantidade === 1 ? "item" : "itens"}</span>
+                  <span style={{ borderRadius: 999, background: "var(--bg-subtle)", padding: "5px 9px", color: "var(--text-main)", fontSize: 12, fontWeight: 600 }}>{formatarMoeda(resumo.total)}</span>
+                </div>
+                {resumo.quantidade === 0 && <p style={{ margin: "12px 0 0", color: "var(--btn-danger)", fontSize: 12 }}>Atribua pelo menos um item a este lote.</p>}
+              </>
+            )}
+          </article>;
+        })}
+      </div>
+
+      {lotes.length > 0 && (
+        <div style={{ marginTop: 14, padding: 12, borderRadius: "var(--radius)", background: "var(--bg-subtle)", color: "var(--text-muted)", fontSize: 12, lineHeight: 1.5 }}>
+          Distribua todos os itens usando o campo <strong>Lote</strong> na lista abaixo. Para avançar, cada item deve pertencer a um lote existente e nenhum lote pode ficar vazio.
+        </div>
+      )}
+    </section>
+
     <section className="step-section items-section" style={{ borderTop: "1px solid var(--border)", paddingTop: 24 }}>
       <div className="items-toolbar" style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
         <button type="button" className="item-action-primary" onClick={adicionarItem} style={{ height: 38, padding: "0 16px", background: "var(--btn-primary)", color: "var(--bg-panel)", border: 0, borderRadius: "var(--radius-lg)" }}>+ Novo Item</button>
@@ -259,9 +426,9 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
         <button type="button" className="item-action-secondary" onClick={() => pdfInputRef.current?.click()} disabled={importandoPdf} style={{ height: 38, padding: "0 16px", background: "var(--btn-primary)", color: "var(--bg-panel)", border: 0, borderRadius: "var(--radius-lg)", opacity: importandoPdf ? 0.7 : 1 }}>{importandoPdf ? "Lendo PDF..." : "Importar Cotação PDF"}</button>
       </div>
       <div className="items-table-scroll" style={{ overflowX: "auto" }}>
-        <div className="items-table" style={{ minWidth: 930 }}>
+        <div className="items-table" style={{ minWidth: lotes.length ? 1090 : 930 }}>
           <div className="items-table-head" style={{ background: "var(--sidebar-bg)", color: "var(--sidebar-text)", display: "flex", padding: 12, borderRadius: "var(--radius)", fontWeight: 600, fontSize: 13 }}>
-            <div style={{ width: 40 }}>#</div><div style={{ flex: 1, minWidth: 300 }}>Descrição</div><div style={{ width: 60 }}>UN</div><div style={{ width: 80 }}>Qtd</div><div style={{ width: 130 }}>Vlr Unit.</div><div style={{ width: 130 }}>Total</div><div style={{ width: 120 }} />
+            <div style={{ width: 40 }}>#</div><div style={{ flex: 1, minWidth: 260 }}>Descrição</div>{lotes.length > 0 && <div style={{ width: 160 }}>Lote</div>}<div style={{ width: 60 }}>UN</div><div style={{ width: 80 }}>Qtd</div><div style={{ width: 130 }}>Vlr Unit.</div><div style={{ width: 130 }}>Total</div><div style={{ width: 120 }} />
           </div>
           <div className="items-table-body" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
             {itens.map((item: any, index: number) => {
@@ -270,7 +437,7 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
               const erroDescricao = tentouAvancar && !descricao.trim();
               return <div key={item.id} className="item-row" style={{ display: "flex", alignItems: "center", background: "var(--bg-subtle)", padding: "8px 12px", borderRadius: "var(--radius)", gap: 8 }}>
                 <div className="item-number" style={{ width: 40, fontWeight: 600 }}>{item.numero || index + 1}</div>
-                <div className="item-description-cell" style={{ flex: 1, minWidth: 300, display: "flex", gap: 6, alignItems: "center" }}>
+                <div className="item-description-cell" style={{ flex: 1, minWidth: 260, display: "flex", gap: 6, alignItems: "center" }}>
                   <textarea
                     required
                     rows={1}
@@ -282,6 +449,13 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
                   />
                   <button type="button" onClick={() => melhorarItem(item)} disabled={carregando || !descricao.trim()} title="Melhorar descrição e unidade deste item com IA" aria-label={`Melhorar descrição e unidade do item ${item.numero || index + 1} com IA`} style={{ height: 34, padding: "0 10px", border: "1px solid var(--border)", borderRadius: "var(--radius)", background: "var(--bg-panel)", color: "var(--text-main)", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }}>{carregando ? "..." : "✨ IA"}</button>
                 </div>
+                {lotes.length > 0 && <label className="item-field item-field-lot" style={{ display: "flex", flexDirection: "column", gap: 4, width: 160, flexShrink: 0 }}>
+                  <span style={{ color: "var(--text-muted)", fontSize: 11 }}>Lote</span>
+                  <select aria-label={`Lote do item ${item.numero || index + 1}`} value={obterLoteIdItem(item, lotes)} onChange={(e) => atribuirItemALote(item.id, e.target.value)} style={{ width: "100%", minWidth: 0, padding: 8, borderRadius: "var(--radius)", border: "1px solid var(--input-border)", background: "var(--bg-panel)", color: "var(--text-main)" }}>
+                    <option value="">Selecione um lote</option>
+                    {lotes.map((lote: any) => <option key={lote.id} value={lote.id}>{lote.nome}</option>)}
+                  </select>
+                </label>}
                 <label className="item-field item-field-unit"><span>Unidade</span><input className="item-unit" type="text" required value={item.un} onChange={(e) => atualizarItem(item.id, "un", e.target.value)} disabled={carregando} style={{ width: 60, padding: 8, textAlign: "center" }} /></label>
                 <label className="item-field item-field-quantity"><span>Quantidade</span><input className="item-quantity" type="number" required min="0.0001" step="any" value={item.qtd} onChange={(e) => atualizarItem(item.id, "qtd", parseFloat(e.target.value) || "")} disabled={carregando} style={{ width: 80, padding: 8, textAlign: "right" }} /></label>
                 <label className="item-field item-field-price"><span>Valor unitário</span><input className="item-price" type="text" required value={formatarMoeda(Number(item.valor || 0))} onChange={(e) => atualizarItem(item.id, "valor", parseMoeda(e.target.value))} disabled={carregando} style={{ width: 130, padding: 8, textAlign: "right", fontFamily: "monospace" }} /></label>
@@ -297,6 +471,17 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
         </div>
       </div>
     </section>
+    {loteParaExcluir && (
+      <ConfirmDialog
+        title={`Excluir "${loteParaExcluir.nome}"?`}
+        message="Os itens vinculados a este lote ficarão sem lote e precisarão ser redistribuídos. Se este for o último lote, o critério poderá voltar a ser por item ou global."
+        confirmLabel="Excluir lote"
+        cancelLabel="Manter lote"
+        variant="danger"
+        onConfirm={excluirLote}
+        onDismiss={() => setLoteParaExcluir(null)}
+      />
+    )}
     {importacaoPendente && (
       <ConfirmDialog
         title="Como deseja importar os itens?"
