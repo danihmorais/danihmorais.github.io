@@ -327,6 +327,32 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
   };
 
   const historicoEtapas = pedidoSelecionado?.stage_history ?? [];
+  const renderValorFormulario = (chave: string, valor: unknown) => {
+    const chaveLimpa = chave.replace(/[{}]/g, "").toUpperCase();
+    if (chaveLimpa === "ITENS") {
+      const itens = lerItens(valor);
+      if (!itens.length) return "Nenhum item informado";
+      return (
+        <div className="admin-items-table-wrap">
+          <table className="admin-items-table">
+            <thead><tr><th>Nº</th><th>Descrição</th><th>Un.</th><th>Qtd.</th><th>Valor unit.</th></tr></thead>
+            <tbody>
+              {itens.map((item, indice) => (
+                <tr key={String(item.numero ?? indice + 1) + "-" + indice}>
+                  <td>{item.numero ?? indice + 1}</td>
+                  <td>{String(item.descricao ?? item.nome ?? "—")}</td>
+                  <td>{String(item.un ?? "—")}</td>
+                  <td>{String(item.qtd ?? "—")}</td>
+                  <td>{moeda(item.valor)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+    return resumirValor(valor, chave);
+  };
 
   const renderDetalhes = () => pedidoSelecionado ? (
             <section className="admin-detail-panel" aria-labelledby="admin-detail-title">
@@ -418,16 +444,19 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
       onMouseDown={(evento) => { if (evento.target === evento.currentTarget) onClose(); }}
     >
       <section
+        ref={dialogRef}
         className="admin-pedidos-dialog"
         role="dialog"
         aria-modal="true"
         aria-labelledby="admin-pedidos-title"
+        aria-describedby="admin-pedidos-description"
       >
         <header className="admin-pedidos-header">
           <div>
             <span className="prompt-eyebrow">ÁREA RESTRITA</span>
             <h2 id="admin-pedidos-title">Pedidos do LICITA.AI</h2>
-            <p>Histórico de solicitações, processamento e envio por e-mail.</p>
+            <p id="admin-pedidos-description">Histórico de solicitações, processamento e envio por e-mail.</p>
+            {token && expiraEm !== null && <p className="admin-session-expiry">Sessão expira em {Math.max(0, Math.ceil((expiraEm - Date.now()) / 60_000))} min.</p>}
           </div>
           <button type="button" className="prompt-close" onClick={onClose} aria-label="Fechar painel">×</button>
         </header>
@@ -476,6 +505,7 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
                   <option value="processing">Processando</option>
                   <option value="sent">Concluídos</option>
                   <option value="failed">Com falha</option>
+                  <option value="cancelled">Cancelados</option>
                 </select>
                 <button type="button" className="button button-secondary" onClick={() => void carregarPedidos(token)} disabled={carregando}>
                   {carregando ? "Atualizando…" : "Atualizar"}
@@ -490,7 +520,7 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
 
             <div className="admin-list-summary">
               <span>{total} {total === 1 ? "pedido encontrado" : "pedidos encontrados"}</span>
-              <span>Até 300 registros por consulta · horários no fuso local do navegador</span>
+              <span>{atualizadoEm ? "Atualizado às " + new Date(atualizadoEm).toLocaleTimeString("pt-BR") : "Até 300 registros por consulta"} · horários no fuso local do navegador</span>
             </div>
 
             {carregando && itens.length === 0 ? (
@@ -500,11 +530,13 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
             ) : (
               <div className="admin-jobs-list">
                 {itens.map((pedido) => (
-                  <article className="admin-job-card" key={pedido.job_id}>
+                  <article className="admin-job-card" id={"admin-job-" + pedido.job_id} key={pedido.job_id}>
                     <div className="admin-job-card-main">
                       <div className="admin-job-heading">
                         <span className={"admin-status-pill admin-status-" + pedido.status}>{rotuloStatus(pedido.status)}</span>
                         <span className="admin-job-id" title={pedido.job_id}>{pedido.job_id.slice(0, 8)}</span>
+                        <button type="button" className="admin-copy-button" title="Copiar ID completo" aria-label={"Copiar ID completo " + pedido.job_id} onClick={() => void navigator.clipboard.writeText(pedido.job_id).then(() => setAviso("ID completo copiado.")).catch(() => setErro("Não foi possível copiar o ID."))}>Copiar ID</button>
+                        {pedido.cancel_requested && <span className="admin-status-pill admin-status-cancelling">Cancelamento solicitado</span>}
                       </div>
                       <h3>{pedido.objeto || "Objeto não informado"}</h3>
                       <p className="admin-job-email">{pedido.email || "Destinatário não registrado"}</p>
@@ -512,10 +544,17 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
                         <span><strong>Solicitado:</strong> {formatarData(pedido.created_at)}</span>
                         <span><strong>Tempo total:</strong> {formatarDuracao(pedido.elapsed_seconds)}</span>
                         <span><strong>Processamento:</strong> {formatarDuracao(pedido.processing_seconds)}</span>
-                        <span><strong>Tentativas:</strong> {pedido.attempts}</span>
+                        <span><strong>Etapa:</strong> {rotuloEtapa(pedido.current_stage)}</span>
+                        <span><strong>Tentativas:</strong> {pedido.attempts}{pedido.max_attempts ? " de " + pedido.max_attempts : ""}</span>
                       </div>
-                      {pedido.status === "failed" && pedido.last_error && (
-                        <p className="admin-job-error-preview">{pedido.last_error}</p>
+                      {pedido.status === "queued" && pedido.retry_at && (
+                        <p className="admin-job-retry-info">Nova tentativa às {new Date(pedido.retry_at).toLocaleTimeString("pt-BR")} (tentativa {Math.max(1, Number(pedido.attempts || 0) + 1)} de {pedido.max_attempts || "?"}).</p>
+                      )}
+                      {pedido.last_error && (
+                        <div className="admin-job-error-wrap">
+                          <p className="admin-job-error-preview">{pedido.last_error}</p>
+                          <button type="button" className="admin-copy-button" onClick={() => void navigator.clipboard.writeText(pedido.last_error || "").then(() => setAviso("Último erro copiado.")).catch(() => setErro("Não foi possível copiar o erro."))}>Copiar erro</button>
+                        </div>
                       )}
                     </div>
                     <div className="admin-job-actions">
@@ -527,24 +566,38 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
                       >
                         {detalheCarregando === pedido.job_id ? "Abrindo…" : pedidoSelecionado?.job_id === pedido.job_id ? "Ocultar detalhes" : "Detalhes"}
                       </button>
-                      {pedido.status === "failed" && (
+                      {["failed", "cancelled"].includes(pedido.status) && (
                         <button
                           type="button"
                           className="button button-primary"
-                          onClick={() => setConfirmarRefazer(confirmarRefazer === pedido.job_id ? null : pedido.job_id)}
+                          onClick={() => setConfirmacao(confirmacao?.id === pedido.job_id && confirmacao.tipo === "refazer" ? null : { tipo: "refazer", id: pedido.job_id })}
                           disabled={refazendo === pedido.job_id}
                         >
                           Refazer
                         </button>
                       )}
+                      {["queued", "processing"].includes(pedido.status) && !pedido.cancel_requested && (
+                        <button
+                          type="button"
+                          className="button button-danger-outline"
+                          onClick={() => setConfirmacao(confirmacao?.id === pedido.job_id && confirmacao.tipo === "cancelar" ? null : { tipo: "cancelar", id: pedido.job_id })}
+                          disabled={confirmando === pedido.job_id}
+                        >
+                          Cancelar pedido
+                        </button>
+                      )}
                     </div>
-                    {confirmarRefazer === pedido.job_id && (
+                    {confirmacao?.id === pedido.job_id && (
                       <div className="admin-retry-confirm">
-                        <p>Será criada uma nova execução para <strong>{pedido.email}</strong>. O histórico da falha original será mantido. Se o e-mail tiver sido entregue antes de uma falha de comunicação, poderá ocorrer reenvio duplicado.</p>
+                        <p>{confirmacao.tipo === "cancelar"
+                          ? pedido.status === "processing"
+                            ? "A IA não pode ser interrompida no meio de uma etapa. O cancelamento vale ao fim da etapa atual e nenhum e-mail será enviado."
+                            : "O pedido será removido da fila e nenhum e-mail será enviado."
+                          : <>Será criada uma nova execução para <strong>{pedido.email}</strong>. O histórico original será mantido. Se um e-mail já tiver sido entregue antes de uma falha de comunicação, poderá ocorrer reenvio duplicado.</>}</p>
                         <div>
-                          <button type="button" className="button button-quiet" onClick={() => setConfirmarRefazer(null)}>Cancelar</button>
-                          <button type="button" className="button button-primary" onClick={() => void refazer(pedido)} disabled={refazendo === pedido.job_id}>
-                            {refazendo === pedido.job_id ? "Enfileirando…" : "Confirmar e refazer"}
+                          <button type="button" className="button button-quiet" onClick={() => setConfirmacao(null)}>Voltar</button>
+                          <button type="button" className={confirmacao.tipo === "cancelar" ? "button button-danger-outline" : "button button-primary"} onClick={() => confirmacao.tipo === "cancelar" ? void cancelar(pedido) : void refazer(pedido)} disabled={refazendo === pedido.job_id || confirmando === pedido.job_id}>
+                            {confirmacao.tipo === "cancelar" ? (confirmando === pedido.job_id ? "Cancelando…" : "Confirmar cancelamento") : (refazendo === pedido.job_id ? "Enfileirando…" : "Confirmar e refazer")}
                           </button>
                         </div>
                       </div>
