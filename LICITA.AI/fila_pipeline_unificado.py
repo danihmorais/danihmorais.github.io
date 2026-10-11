@@ -26,13 +26,13 @@ def _utc_now() -> str:
 def _normalizar_rotulo_financeiro(valor: str) -> str:
     texto = unicodedata.normalize("NFKD", str(valor or ""))
     texto = "".join(char for char in texto if not unicodedata.combining(char))
-    return re.sub(r"\\s+", " ", texto.casefold()).strip()
+    return re.sub(r"\s+", " ", texto.casefold()).strip()
 
 
 def _parse_valor_documento(valor: str) -> Decimal | None:
     """Converte valores monetários brasileiros ou decimais extraídos de tabelas."""
     texto = re.sub(r"[^0-9,.-]", "", str(valor or ""))
-    if not texto or not re.search(r"\\d", texto):
+    if not texto or not re.search(r"\d", texto):
         return None
 
     if "," in texto:
@@ -65,7 +65,7 @@ def _total_itens_tabela_tr(texto: str) -> Decimal | None:
         celulas = [parte.strip() for parte in linha.strip().strip("|").split("|")]
         rotulos = [_normalizar_rotulo_financeiro(parte) for parte in celulas]
         indice_qtd = next(
-            (i for i, rotulo in enumerate(rotulos) if re.search(r"\\b(qtd|qtde|quantidade|quant)\\b", rotulo)),
+            (i for i, rotulo in enumerate(rotulos) if re.search(r"\b(qtd|qtde|quantidade|quant)\\b", rotulo)),
             None,
         )
         indice_total = next(
@@ -96,7 +96,7 @@ def _total_itens_tabela_tr(texto: str) -> Decimal | None:
         if any(palavra in linha_normalizada for palavra in ("valor total estimado", "total geral", "subtotal", "total dos itens")):
             cabecalho = None
             continue
-        if any(rotulo and re.search(r"\\b(qtd|qtde|quantidade|quant)\\b", rotulo) for rotulo in rotulos):
+        if any(rotulo and re.search(r"\b(qtd|qtde|quantidade|quant)\\b", rotulo) for rotulo in rotulos):
             continue
 
         descricao = celulas[indice_descricao] if indice_descricao < len(celulas) else ""
@@ -124,7 +124,7 @@ def _total_itens_tabela_tr(texto: str) -> Decimal | None:
 def _total_explicito_tr(texto: str) -> Decimal | None:
     """Busca um total declarado, apenas em linhas rotuladas explicitamente como total."""
     padrao_rotulo = re.compile(
-        r"\\b(total dos itens|valor total estimado(?: da contratacao)?|valor estimado total|"
+        r"\b(total dos itens|valor total estimado(?: da contratacao)?|valor estimado total|"
         r"valor total da contratacao|total geral|valor global estimado)\\b"
     )
     padrao_valor = re.compile(
