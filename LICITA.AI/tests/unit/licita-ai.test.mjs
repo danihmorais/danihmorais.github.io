@@ -83,7 +83,7 @@ test("helpers de lotes validam atribuição integral e compatibilidade com dados
   assert.equal(distribuicaoLotesValida(dados), true);
   assert.equal(distribuicaoLotesValida({ ...dados, itens: [dados.itens[0]] }), false);
   assert.equal(distribuicaoLotesValida({ ...dados, itens: [{ id: 1 }] }), false);
-  assert.deepEqual(obterLotes({ itens: [{ lote: "Lote legado" }] }), [{ id: "legado:lote legado", nome: "Lote legado" }]);
+  assertJsonEqual(obterLotes({ itens: [{ lote: "Lote legado" }] }), [{ id: "legado:lote legado", nome: "Lote legado" }]);
 });
 
 test("llm usa somente o proxy do backend e não envia Authorization do frontend", async () => {
