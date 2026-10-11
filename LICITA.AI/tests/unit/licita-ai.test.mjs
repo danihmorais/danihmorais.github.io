@@ -47,6 +47,45 @@ test("mapearDadosWizard calcula o valor estimado e preserva defaults", () => {
   assert.equal(dados["PAGAMENTO_TIPO"], "CONFORME_ENTREGAS");
 });
 
+test("mapearDadosWizard força critério por lote e envia a composição dos grupos", () => {
+  const { mapearDadosWizard } = loadTsModule("src/utils/mapearDados.ts");
+  const dados = mapearDadosWizard({
+    criterio: "ITEM",
+    motivoCriterio: "Itens da mesma categoria e fornecedores do mesmo ramo.",
+    lotes: [{ id: "lote-1", nome: "Materiais de expediente" }],
+    itens: [
+      { id: 1, numero: 1, descricao: "Papel A4", loteId: "lote-1", lote: "Materiais de expediente", qtd: 10, valor: 25 },
+      { id: 2, numero: 2, descricao: "Caneta azul", loteId: "lote-1", lote: "Materiais de expediente", qtd: 20, valor: 2 },
+    ],
+  });
+
+  assert.equal(dados["{{CRITERIOS}}"], "LOTE");
+  assert.equal(dados["{{MOTIVO_CRITERIO}}"], "Itens da mesma categoria e fornecedores do mesmo ramo.");
+  assert.deepEqual(JSON.parse(dados.LOTES_DADOS), [{
+    nome: "Materiais de expediente",
+    itens: [
+      { numero: 1, descricao: "Papel A4" },
+      { numero: 2, descricao: "Caneta azul" },
+    ],
+  }]);
+});
+
+test("helpers de lotes validam atribuição integral e compatibilidade com dados legados", () => {
+  const { obterLotes, obterLoteIdItem, distribuicaoLotesValida } = loadTsModule("src/utils/lotes.ts");
+  const dados = {
+    lotes: [{ id: "a", nome: "Material de expediente" }, { id: "b", nome: "Material de limpeza" }],
+    itens: [
+      { id: 1, numero: 1, loteId: "a", lote: "Material de expediente" },
+      { id: 2, numero: 2, loteId: "b", lote: "Material de limpeza" },
+    ],
+  };
+  assert.equal(obterLoteIdItem(dados.itens[0], obterLotes(dados)), "a");
+  assert.equal(distribuicaoLotesValida(dados), true);
+  assert.equal(distribuicaoLotesValida({ ...dados, itens: [dados.itens[0]] }), false);
+  assert.equal(distribuicaoLotesValida({ ...dados, itens: [{ id: 1 }] }), false);
+  assertJsonEqual(obterLotes({ itens: [{ lote: "Lote legado" }] }), [{ id: "legado:lote legado", nome: "Lote legado" }]);
+});
+
 test("llm usa somente o proxy do backend e não envia Authorization do frontend", async () => {
   let chamada = null;
   const storage = new MemoryStorage();

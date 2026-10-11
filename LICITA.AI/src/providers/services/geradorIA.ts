@@ -147,7 +147,13 @@ A JUSTIFICATIVA deve conter motivação administrativa detalhada, demonstração
   "PARCELAMENTO": "",
   "CONCLUSAO": ""
 }`;
-        const diretrizCriterio = criterioTipo === "ITEM" ? "Na justificativa de parcelamento, priorize adjudicação por item como regra geral para ampliar competitividade, conforme jurisprudência do TCU." : motivoCriterioRaw ? `Utilize como motivação técnica do agrupamento/lote: ${motivoCriterioRaw}` : "Justifique tecnicamente a adoção de lote considerando compatibilidade técnica e economicidade.";
+        const diretrizCriterio = criterioTipo === "ITEM"
+            ? "Na justificativa de parcelamento, priorize adjudicação por item como regra geral para ampliar competitividade, conforme jurisprudência do TCU."
+            : criterioTipo === "LOTE"
+                ? `O julgamento é por menor preço por lote. Use LOTES_DADOS e o campo lote dos itens para respeitar os grupos e os nomes cadastrados; não crie, exclua ou redistribua itens entre lotes. A justificativa inicial do usuário é: ${motivoCriterioRaw || "não informada"}. Desenvolva essa ideia simples em fundamentação técnica e econômica objetiva, verificando afinidade dos itens, competitividade, viabilidade do agrupamento e eventual economia de escala apenas quando sustentada pelos dados. Não invente pesquisa de mercado, fornecedores ou economias quantificadas.`
+                : motivoCriterioRaw
+                    ? `Utilize como motivação técnica do agrupamento global: ${motivoCriterioRaw}`
+                    : "Justifique tecnicamente a adoção do critério global com base na compatibilidade técnica e na economicidade informadas.";
         let diretrizModalidade = "";
         if (modalidadeTipo === "PREGAO_ELETRONICO") diretrizModalidade = "Justifique a adoção do Pregão Eletrônico como modalidade preferencial para bens e serviços comuns, priorizando competitividade e transparência.";
         else if (["DISPENSA_EMAIL", "DISPENSA_BLL"].includes(modalidadeTipo)) diretrizModalidade = motivoModalidadeRaw ? `Justifique tecnicamente a contratação direta utilizando como base: ${motivoModalidadeRaw}` : "Justifique tecnicamente a contratação direta excepcional.";

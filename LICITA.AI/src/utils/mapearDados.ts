@@ -1,5 +1,22 @@
 export const mapearDadosWizard = (dados: any) => {
   const itens = dados.itens || [];
+  const lotesExplicitos = Array.isArray(dados.lotes) ? dados.lotes : [];
+  const lotesLegados = new Map<string, string>();
+  for (const item of itens) {
+    const nome = String(item?.lote || "").trim();
+    const chave = nome.toLocaleLowerCase("pt-BR");
+    if (chave && !lotesLegados.has(chave)) lotesLegados.set(chave, nome);
+  }
+  const lotes = lotesExplicitos.length > 0
+    ? lotesExplicitos
+    : Array.from(lotesLegados.entries()).map(([chave, nome]) => ({ id: "legado:" + chave, nome }));
+  const lotesDados = lotes.map((lote: any) => ({
+    nome: String(lote.nome || "").trim(),
+    itens: itens
+      .filter((item: any) => String(item?.loteId || "") === String(lote.id || "") || String(item?.lote || "").trim().toLocaleLowerCase("pt-BR") === String(lote.nome || "").trim().toLocaleLowerCase("pt-BR"))
+      .map((item: any, index: number) => ({ numero: item?.numero ?? index + 1, descricao: String(item?.descricao || "").trim() })),
+  })).filter((lote: any) => lote.nome);
+  const criterioEfetivo = lotesDados.length > 0 ? "LOTE" : (dados.criterio || "ITEM");
   const pagamentoTipo = String(dados.pagamentoTipo || "CONFORME_ENTREGAS").trim().toUpperCase();
   const pagamentoEtapas = String(dados.pagamentoEtapas || "").trim();
   const pagamentoPadrao = pagamentoTipo === "MENSALMENTE"
@@ -34,6 +51,7 @@ export const mapearDadosWizard = (dados: any) => {
     "{{NECESSIDADE}}": dados.necessidade || "",
     "{{ITENS}}": JSON.stringify(itens),
     "ITENS_NOMES": JSON.stringify(itensNomes),
+    "LOTES_DADOS": JSON.stringify(lotesDados),
     "{{VALOR_ESTIMADO}}": valorEstimadoFormatado,
     "{{EXECUCAO}}": dados.execucao || "",
     "{{PAC}}": dados.pac === "SIM" ? "Previsto no PAC" : `Não previsto: ${dados.motivoPac || 'sem justificativa'}`,
@@ -46,7 +64,7 @@ export const mapearDadosWizard = (dados: any) => {
     "{{VIST}}": dados.vistoria ? "sim" : "nao",
     "{{PRORROGA}}": dados.prorrogar ? "sim" : "nao",
     "{{ME_EPP}}": dados.meepp || "NAO",
-    "{{CRITERIOS}}": dados.criterio || "ITEM",
+    "{{CRITERIOS}}": criterioEfetivo,
     "{{MOTIVO_CRITERIO}}": dados.motivoCriterio || "",
     "{{MODALIDADE}}": dados.modalidade || "PREGAO_ELETRONICO",
     "{{MOTIVO_MODALIDADE}}": dados.motivoModalidade || "",

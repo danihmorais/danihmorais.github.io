@@ -1,5 +1,6 @@
 import React from "react";
 import DotacaoEditor, { type DotacaoBloco } from "../../components/DotacaoEditor";
+import { obterLotes } from "../../utils/lotes";
 import {
   calcularValorEstimadoItens,
   exclusividadeMeeppPermitida,
@@ -42,7 +43,7 @@ const RadioOption = ({ label, value, checked, onChange, disabled = false, name }
   </label>
 );
 
-const JustificationBox = ({ label, value, onChange, errorMsg, mostrarErro = false }: any) => {
+const JustificationBox = ({ label, value, onChange, errorMsg, mostrarErro = false, description = "", placeholder = "" }: any) => {
   const id = React.useId();
   const hasError = mostrarErro && String(value || "").trim() === "";
   return (
@@ -50,9 +51,11 @@ const JustificationBox = ({ label, value, onChange, errorMsg, mostrarErro = fals
       <label htmlFor={id} style={styles.justificationTitle}>
         {label} <span style={styles.asterisk}>*</span>
       </label>
+      {description && <p style={{ color: "var(--text-muted)", fontSize: 12, lineHeight: 1.5, margin: "0 0 8px" }}>{description}</p>}
       <textarea
         id={id}
         value={value}
+        placeholder={placeholder}
         onChange={onChange}
         aria-invalid={hasError || undefined}
         aria-describedby={hasError ? id + "-error" : undefined}
@@ -116,7 +119,8 @@ export default function Step5({ dados, atualizarDados, tentouAvancar = false }: 
     }));
   };
 
-  const temLote = dados.itens && dados.itens.some((item: any) => item.lote && item.lote.toString().trim() !== "");
+  const lotes = obterLotes(dados);
+  const temLote = lotes.length > 0;
   const faltaDotacao =
     (!String(dados.dotacao || "").trim()) &&
     !blocosDotacao.some(
@@ -128,6 +132,14 @@ export default function Step5({ dados, atualizarDados, tentouAvancar = false }: 
   const meeppExclusivoPermitido = exclusividadeMeeppPermitida(dados.itens || []);
   const totalAcimaDoLimite = totalGeral > LIMITE_EXCLUSIVIDADE_MEEPP;
   const valorEstimadoFormatado = totalGeral.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+  React.useEffect(() => {
+    if (temLote && dados.criterio !== "LOTE") {
+      atualizarDados({ criterio: "LOTE" });
+    } else if (!temLote && dados.criterio === "LOTE") {
+      atualizarDados({ criterio: "ITEM", motivoCriterio: "" });
+    }
+  }, [temLote, dados.criterio, atualizarDados]);
 
   React.useEffect(() => {
     if (!meeppExclusivoPermitido && dados.meepp === "SIM") {
@@ -200,29 +212,30 @@ export default function Step5({ dados, atualizarDados, tentouAvancar = false }: 
       <div className="setting-section" style={styles.sectionGroup}>
         <h2 style={styles.titleCompact}>Critério de Julgamento</h2>
         <p style={styles.subtitle}>
-          {temLote 
-            ? "Foi detectado o uso de lotes na listagem de itens. Apenas a opção de julgamento por Lote está disponível." 
-            : "Regra geral da Lei 14.133/21: A adjudicação deve ser preferencialmente por ITEM para ampliar a concorrência."}
+          {temLote
+            ? `${lotes.length} ${lotes.length === 1 ? "lote criado" : "lotes criados"}. O critério é automaticamente definido como menor preço por lote.`
+            : "Sem lotes cadastrados, você pode escolher menor preço por item ou menor preço global. A opção por lote permanece visível, mas bloqueada."}
         </p>
         <fieldset className="setting-options" style={{ ...styles.sectionMargin, border: 0, padding: 0, minWidth: 0 }}>
           <legend className="sr-only">Critério de Julgamento</legend>
-          {!temLote && (
-            <>
-              <RadioOption name="criterio" label="Menor preço por item" value="ITEM" checked={dados.criterio === "ITEM"} onChange={(e: any) => atualizarDados({ criterio: e.target.value })} />
-              <RadioOption name="criterio" label="Menor preço global" value="GLOBAL" checked={dados.criterio === "GLOBAL"} onChange={(e: any) => atualizarDados({ criterio: e.target.value })} />
-            </>
-          )}
-          {temLote && (
-            <RadioOption name="criterio" label="Menor preço por lote" value="LOTE" checked={dados.criterio === "LOTE"} onChange={(e: any) => atualizarDados({ criterio: e.target.value })} />
-          )}
+          <RadioOption name="criterio" label="Menor preço por item" value="ITEM" checked={!temLote && dados.criterio === "ITEM"} disabled={temLote} onChange={() => { if (!temLote) atualizarDados({ criterio: "ITEM", motivoCriterio: "" }); }} />
+          <RadioOption name="criterio" label="Menor preço global" value="GLOBAL" checked={!temLote && dados.criterio === "GLOBAL"} disabled={temLote} onChange={() => { if (!temLote) atualizarDados({ criterio: "GLOBAL" }); }} />
+          <RadioOption name="criterio" label="Menor preço por lote" value="LOTE" checked={temLote} disabled={!temLote} onChange={() => { if (temLote) atualizarDados({ criterio: "LOTE" }); }} />
         </fieldset>
 
-        {(dados.criterio === "GLOBAL" || dados.criterio === "LOTE") && (
-          <JustificationBox 
-            label="Motivação para o agrupamento (Global/Lote):"
+        {(temLote || (!temLote && dados.criterio === "GLOBAL")) && (
+          <JustificationBox
+            label={temLote ? "Justificativa do agrupamento em lotes" : "Justificativa para o menor preço global"}
+            description={temLote
+              ? "Explique com suas palavras por que estes itens devem ser reunidos. Uma frase simples é suficiente; a IA vai aprimorar a fundamentação no ETP."
+              : "Explique brevemente por que a contratação deve ser julgada pelo valor global. A IA vai aprimorar a justificativa."}
+            placeholder={temLote
+              ? "Ex.: os itens pertencem à mesma categoria e podem ser fornecidos pelo mesmo mercado."
+              : "Ex.: os itens são tecnicamente integrados e a contratação conjunta traz economia comprovável."}
             value={dados.motivoCriterio}
             onChange={(e: any) => atualizarDados({ motivoCriterio: e.target.value })}
-            errorMsg="Este campo é obrigatório." mostrarErro={tentouAvancar}
+            errorMsg="Informe uma justificativa simples para o critério escolhido."
+            mostrarErro={tentouAvancar}
           />
         )}
       </div>

@@ -11,6 +11,7 @@ import AdminPedidosModal from "../components/AdminPedidosModal";
 import { ThemeContext } from "../context/ThemeContext";
 import { cancelarFilaFasePreparatoria, consultarFilaFasePreparatoria, gerarFasePreparatoria, type DocumentosReferenciaUpload, type FasePreparatoriaJob } from "../api";
 import { criarDadosTeste, TipoTesteContratacao } from "../utils/dadosTeste";
+import { obterLotes, distribuicaoLotesValida } from "../utils/lotes";
 
 function rotuloEtapa(chave?: string): string {
   const nomes: Record<string, string> = {
@@ -52,6 +53,9 @@ function pendenciasEtapa(indice: number, dados: any): string[] {
       if (!String(dados.necessidade || "").trim()) faltas.push("justificativa da demanda");
       if (!Array.isArray(dados.itens) || !dados.itens.length) faltas.push("ao menos um item");
       else if (dados.itens.some((item: any) => !String(item?.descricao || "").trim() || !String(item?.un || "").trim() || !(Number(item.qtd) > 0) || !(Number(item.valor) > 0))) faltas.push("descrição, unidade, quantidade e valor positivo de todos os itens");
+      if (obterLotes(dados).length > 0 && !distribuicaoLotesValida(dados)) {
+        faltas.push("atribua todos os itens aos lotes e mantenha pelo menos um item em cada lote");
+      }
       return faltas;
     }
     case 1: return String(dados.execucao || "").trim() ? [] : ["condições de execução"];
@@ -77,7 +81,8 @@ function etapaValida(indice: number, dados: any): boolean {
     case 0:
       return Boolean(String(dados.objeto || "").trim() && String(dados.necessidade || "").trim() &&
         Array.isArray(dados.itens) && dados.itens.length > 0 &&
-        dados.itens.every((item: any) => String(item?.descricao || "").trim() && Number(item.qtd) > 0 && Number(item.valor) > 0 && String(item.un || "").trim()));
+        dados.itens.every((item: any) => String(item?.descricao || "").trim() && Number(item.qtd) > 0 && Number(item.valor) > 0 && String(item.un || "").trim()) &&
+        (obterLotes(dados).length === 0 || distribuicaoLotesValida(dados)));
     case 1:
       return Boolean(String(dados.execucao || "").trim());
     case 2:
@@ -87,7 +92,9 @@ function etapaValida(indice: number, dados: any): boolean {
       return Array.isArray(dados.gestores) && dados.gestores.length > 0 &&
         Array.isArray(dados.fiscais) && dados.fiscais.length > 0;
     case 4: {
-      const criterioValido = dados.criterio === "ITEM" || (["GLOBAL", "LOTE"].includes(dados.criterio) && String(dados.motivoCriterio || "").trim());
+      const lotesConfigurados = obterLotes(dados);
+      const criterioEfetivo = lotesConfigurados.length > 0 ? "LOTE" : dados.criterio;
+      const criterioValido = criterioEfetivo === "ITEM" || (["GLOBAL", "LOTE"].includes(criterioEfetivo) && String(dados.motivoCriterio || "").trim());
       const modalidadeValida = dados.modalidade === "PREGAO_ELETRONICO" || String(dados.motivoModalidade || "").trim();
       const pacValido = dados.pac === "SIM" || String(dados.motivoPac || "").trim();
       const blocos = Array.isArray(dados.dotacaoBlocos) ? dados.dotacaoBlocos : [];
@@ -114,6 +121,7 @@ export default function Wizard() {
     objeto: "",
     necessidade: "",
     itens: [],
+    lotes: [],
     amostra: false,
     vistoria: false,
     execucao: "",
