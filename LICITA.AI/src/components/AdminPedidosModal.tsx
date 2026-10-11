@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   autenticarAdminPedidos,
+  cancelarAdminPedido,
   detalharAdminPedido,
   listarAdminPedidos,
   refazerAdminPedido,
@@ -10,6 +11,8 @@ import {
 
 interface AdminPedidosModalProps {
   onClose: () => void;
+  sessaoInicial?: { token: string; expiraEm: number } | null;
+  onSessaoChange?: (sessao: { token: string; expiraEm: number } | null) => void;
 }
 
 function formatarData(valor?: string | null): string {
@@ -41,8 +44,32 @@ function rotuloStatus(status: string): string {
     case "sent":
     case "completed": return "Concluído";
     case "failed": return "Falha";
+    case "cancelled": return "Cancelado";
+    case "cancelling": return "Cancelando";
+    case "retrying": return "Nova tentativa";
+    case "unavailable": return "Indisponível";
     default: return status || "Desconhecido";
   }
+}
+
+function rotuloEtapa(status?: string | null): string {
+  const nomes: Record<string, string> = {
+    AGUARDANDO_FILA: "Aguardando na fila",
+    AUDITORIA_MARCAS: "Auditoria de marcas",
+    PAGAMENTO_ETAPAS: "Revisão do pagamento por etapas",
+    DFD: "Geração do DFD",
+    ETP: "Geração do ETP",
+    TR: "Geração do TR",
+    FASE_PREPARATORIA: "Geração dos documentos",
+    CONTRATACAO_DIRETA: "Geração da contratação direta",
+    GERACAO_DOCUMENTOS: "Montagem dos documentos",
+    ENVIO_EMAIL: "Envio por e-mail",
+  };
+  return nomes[String(status || "").toUpperCase()] || String(status || "Não iniciada").replace(/_/g, " ");
+}
+
+function ehErroSessao(falha: unknown): boolean {
+  return Number((falha as Error & { status?: number })?.status) === 401;
 }
 
 function formatarNomeCampo(chave: string): string {
@@ -55,21 +82,59 @@ function formatarNomeCampo(chave: string): string {
     .replace(/^./, (letra) => letra.toLocaleUpperCase("pt-BR"));
 }
 
-function resumirValor(valor: unknown): string {
+function resumirValor(valor: unknown, chave = ""): string {
   if (valor === null || valor === undefined || valor === "") return "—";
+  if (chave.includes("DOTACAO") || chave.includes("DOTAÇÃO")) {
+    const texto = String(valor);
+    const imagens = (texto.match(/__IMG__/g) || []).length + (texto.startsWith("data:image/") ? 1 : 0);
+    const temTexto = texto.split(/\r?\n/).some((linha) => linha.trim() && !linha.trim().startsWith("__IMG__") && !linha.trim().startsWith("data:image/"));
+    return [imagens ? `${imagens} imagem(ns)` : "", temTexto ? "texto" : ""].filter(Boolean).join(" + ") || "Não informado";
+  }
   if (typeof valor === "boolean") return valor ? "Sim" : "Não";
-  if (typeof valor === "object") return JSON.stringify(valor) || "[dados estruturados]";
+  if (typeof valor === "object") return Array.isArray(valor) ? `${valor.length} registro(s)` : Object.entries(valor as Record<string, unknown>).map(([nome, item]) => `${nome}: ${String(item ?? "—")}`).join("; ");
   const texto = String(valor);
+  if (texto.startsWith("__IMG__") || texto.startsWith("data:image/")) return "[imagem anexada]";
   return texto.length > 700 ? texto.slice(0, 700) + "… [conteúdo abreviado]" : texto;
+}
+
+function chaveInterna(chave: string): boolean {
+  const limpa = chave.replace(/[{}]/g, "").toUpperCase();
+  return ["ITENS_NOMES", "PAGAMENTO_ETAPAS_RAW", "REQUISITOS_ETP_ANTERIOR", "CAMINHO_IMAGEM_DOTACAO", "CONTATOS_SECRETARIAS", "INSTRUCOES_EXTRAS"].includes(limpa)
+    || limpa.startsWith("RAW_") || limpa.startsWith("__");
+}
+
+function lerItens(valor: unknown): any[] {
+  if (Array.isArray(valor)) return valor;
+  if (typeof valor !== "string") return [];
+  try {
+    const itens = JSON.parse(valor.replace(/^__TABLE__/, ""));
+    return Array.isArray(itens) ? itens : [];
+  } catch {
+    return [];
+  }
+}
+
+function moeda(valor: unknown): string {
+  const numero = Number(valor);
+  return Number.isFinite(numero) ? numero.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—";
 }
 
 function MensagemEstado({ texto }: { texto: string }) {
   return <div className="admin-empty-state">{texto}</div>;
 }
 
-export default function AdminPedidosModal({ onClose }: AdminPedidosModalProps) {
+export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChange }: AdminPedidosModalProps) {
+  const sessaoValida = Boolean(sessaoInicial?.token && sessaoInicial.expiraEm > Date.now());
   const [senha, setSenha] = useState("");
-  const [token, setToken] = useState("");
+  const [token, setToken] = useState(sessaoValida ? sessaoInicial!.token : "");
+  const [expiraEm, setExpiraEm] = useState<number | null>(sessaoValida ? sessaoInicial!.expiraEm : null);
+  const [refreshNonce, setRefreshNonce] = useState(0);
+  const [atualizadoEm, setAtualizadoEm] = useState<string | null>(null);
+  const [confirmacao, setConfirmacao] = useState<{ tipo: "refazer" | "cancelar"; id: string } | null>(null);
+  const [confirmando, setConfirmando] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   const [entrando, setEntrando] = useState(false);
   const [itens, setItens] = useState<AdminJob[]>([]);
   const [total, setTotal] = useState(0);
@@ -79,7 +144,6 @@ export default function AdminPedidosModal({ onClose }: AdminPedidosModalProps) {
   const [carregando, setCarregando] = useState(false);
   const [detalheCarregando, setDetalheCarregando] = useState<string | null>(null);
   const [pedidoSelecionado, setPedidoSelecionado] = useState<AdminJobDetails | null>(null);
-  const [confirmarRefazer, setConfirmarRefazer] = useState<string | null>(null);
   const [refazendo, setRefazendo] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -106,7 +170,47 @@ export default function AdminPedidosModal({ onClose }: AdminPedidosModalProps) {
 
   useEffect(() => {
     if (token) void carregarPedidos(token);
-  }, [token, carregarPedidos]);
+  }, [token, carregarPedidos, refreshNonce]);
+
+  useEffect(() => {
+    const anterior = document.activeElement as HTMLElement | null;
+    dialogRef.current?.querySelector<HTMLElement>("input, button")?.focus();
+    const teclado = (evento: KeyboardEvent) => {
+      if (evento.key === "Escape") {
+        evento.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (evento.key !== "Tab" || !dialogRef.current) return;
+      const controles = Array.from(dialogRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+      if (!controles.length) return;
+      const primeiro = controles[0], ultimo = controles[controles.length - 1];
+      if (evento.shiftKey && document.activeElement === primeiro) { evento.preventDefault(); ultimo.focus(); }
+      else if (!evento.shiftKey && document.activeElement === ultimo) { evento.preventDefault(); primeiro.focus(); }
+    };
+    document.addEventListener("keydown", teclado);
+    return () => {
+      document.removeEventListener("keydown", teclado);
+      anterior?.focus?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!token) return;
+    const ativo = () => itens.some((item) => ["queued", "processing", "cancelling"].includes(String(item.status).toLowerCase()));
+    const id = window.setInterval(() => {
+      if (document.visibilityState === "visible" && (ativo() || expiraEm !== null)) {
+        void carregarPedidos(token).then(() => setAtualizadoEm(new Date().toISOString()));
+      }
+      if (expiraEm !== null && expiraEm <= Date.now()) {
+        setToken("");
+        setExpiraEm(null);
+        onSessaoChange?.(null);
+        setErro("Sessão administrativa expirada. Entre novamente.");
+      }
+    }, 10_000);
+    return () => window.clearInterval(id);
+  }, [token, expiraEm, itens, carregarPedidos, onSessaoChange]);
 
   const entrar = async (evento: React.FormEvent<HTMLFormElement>) => {
     evento.preventDefault();
@@ -114,8 +218,11 @@ export default function AdminPedidosModal({ onClose }: AdminPedidosModalProps) {
     setErro(null);
     try {
       const resposta = await autenticarAdminPedidos(senha);
+      const expiracao = Date.now() + Math.max(60, Number(resposta.expires_in) || 1800) * 1000;
       setSenha("");
       setToken(resposta.token);
+      setExpiraEm(expiracao);
+      onSessaoChange?.({ token: resposta.token, expiraEm: expiracao });
       setAviso(null);
     } catch (falha: unknown) {
       setErro(falha instanceof Error ? falha.message : "Não foi possível autenticar.");
