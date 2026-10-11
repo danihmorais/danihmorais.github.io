@@ -258,7 +258,14 @@ test("dadosParaPrompt remove imagens e campos internos", () => {
 });
 
 test("construirPrompt prioriza as instruções específicas do usuário", () => {
-  const { construirPrompt } = loadTsModule("src/providers/services/geradorIA.ts");
+  const { construirPrompt } = loadTsModule("src/providers/services/geradorIA.ts", {
+    replacements: [
+      [
+        "import { gerarTextoIA } from '../llm';",
+        "const gerarTextoIA = async () => ({ content: '{}' });",
+      ],
+    ],
+  });
   const prompt = construirPrompt({ "{{OBJETO}}": "Aquisição de materiais", "{{NECESSIDADE}}": "Reposição de estoque" }, false, "ETP", "Justifique a necessidade de amostra.", true);
   const dados = prompt.indexOf("__LICITA_PIPE_DADOS_USUARIO__");
   const instrucoes = prompt.indexOf("INSTRUÇÕES DO USUÁRIO (OBRIGATÓRIAS");
