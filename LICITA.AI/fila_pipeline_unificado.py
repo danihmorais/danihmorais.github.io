@@ -70,11 +70,11 @@ def _total_itens_tabela_tr(texto: str) -> Decimal | None:
             None,
         )
         indice_total = next(
-            (i for i, rotulo in enumerate(rotulos) if "total" in rotulo and ("valor" in rotulo or "preco" in rotulo or "r$" in rotulo or rotulo == "total")),
+            (i for i, rotulo in enumerate(rotulos) if "total" in rotulo and ("valor" in rotulo or "preco" in rotulo or "vlr" in rotulo or "r$" in rotulo or rotulo == "total")),
             None,
         )
         indice_unitario = next(
-            (i for i, rotulo in enumerate(rotulos) if ("unitario" in rotulo or "unit" == rotulo) and any(p in rotulo for p in ("valor", "preco", "vlr", "r$"))),
+            (i for i, rotulo in enumerate(rotulos) if ("unit" in rotulo) and any(p in rotulo for p in ("valor", "preco", "vlr", "r$"))),
             None,
         )
         indice_descricao = next(
