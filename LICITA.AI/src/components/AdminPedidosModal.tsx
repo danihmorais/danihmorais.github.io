@@ -158,10 +158,13 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
     } catch (falha: unknown) {
       const mensagem = falha instanceof Error ? falha.message : "Não foi possível carregar os pedidos.";
       setErro(mensagem);
-      if (mensagem.toLowerCase().includes("sessão administrativa") || mensagem.toLowerCase().includes("expirada")) {
+      if (ehErroSessao(falha)) {
         setToken("");
+        setExpiraEm(null);
+        onSessaoChange?.(null);
         setItens([]);
         setPedidoSelecionado(null);
+        setErro("Sessão expirada. Entre novamente.");
       }
     } finally {
       setCarregando(false);
@@ -241,13 +244,16 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
     try {
       const detalhe = await detalharAdminPedido(token, jobId);
       setPedidoSelecionado(detalhe);
-      setConfirmarRefazer(null);
+      setConfirmacao(null);
     } catch (falha: unknown) {
       const mensagem = falha instanceof Error ? falha.message : "Não foi possível abrir os detalhes.";
       setErro(mensagem);
-      if (mensagem.toLowerCase().includes("sessão administrativa") || mensagem.toLowerCase().includes("expirada")) {
+      if (ehErroSessao(falha)) {
         setToken("");
+        setExpiraEm(null);
+        onSessaoChange?.(null);
         setItens([]);
+        setErro("Sessão expirada. Entre novamente.");
       }
     } finally {
       setDetalheCarregando(null);
@@ -260,32 +266,59 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
     setAviso(null);
     try {
       const novo = await refazerAdminPedido(token, pedido.job_id);
-      setConfirmarRefazer(null);
+      setConfirmacao(null);
       setPedidoSelecionado(null);
       setStatusFiltro("todos");
       setBusca("");
       setBuscaDigitada("");
       setAviso("Nova execução criada: " + novo.job_id.slice(0, 8) + ". O registro da falha original foi preservado.");
-      const atualizados = await listarAdminPedidos(token, "todos", "");
-      setItens(atualizados.items);
-      setTotal(atualizados.total);
+      setRefreshNonce((valor) => valor + 1);
     } catch (falha: unknown) {
       const mensagem = falha instanceof Error ? falha.message : "Não foi possível refazer o pedido.";
       setErro(mensagem);
-      if (mensagem.toLowerCase().includes("sessão administrativa") || mensagem.toLowerCase().includes("expirada")) {
+      if (ehErroSessao(falha)) {
         setToken("");
+        setExpiraEm(null);
+        onSessaoChange?.(null);
         setItens([]);
+        setErro("Sessão expirada. Entre novamente.");
       }
     } finally {
       setRefazendo(null);
     }
   };
 
+  const cancelar = async (pedido: AdminJob) => {
+    setConfirmando(pedido.job_id);
+    setErro(null);
+    setAviso(null);
+    try {
+      const resultado = await cancelarAdminPedido(token, pedido.job_id);
+      setConfirmacao(null);
+      setPedidoSelecionado(null);
+      setAviso(resultado.message);
+      setRefreshNonce((valor) => valor + 1);
+    } catch (falha: unknown) {
+      setErro(falha instanceof Error ? falha.message : "Não foi possível cancelar o pedido.");
+      if (ehErroSessao(falha)) {
+        setToken("");
+        setExpiraEm(null);
+        onSessaoChange?.(null);
+        setItens([]);
+        setErro("Sessão expirada. Entre novamente.");
+      }
+    } finally {
+      setConfirmando(null);
+    }
+  };
+
   const encerrarSessao = () => {
     setToken("");
+    setExpiraEm(null);
+    onSessaoChange?.(null);
     setItens([]);
     setPedidoSelecionado(null);
-    setConfirmarRefazer(null);
+    setConfirmacao(null);
     setBusca("");
     setBuscaDigitada("");
     setStatusFiltro("todos");
@@ -294,6 +327,14 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
   };
 
   const historicoEtapas = pedidoSelecionado?.stage_history ?? [];
+
+  useEffect(() => {
+    if (!pedidoSelecionado?.job_id) return;
+    document.getElementById("admin-job-" + pedidoSelecionado.job_id)?.scrollIntoView({
+      block: "nearest",
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    });
+  }, [pedidoSelecionado?.job_id]);
 
   return (
     <div
