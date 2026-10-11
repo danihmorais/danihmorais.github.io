@@ -1,17 +1,15 @@
 import React, { useRef, useState } from "react";
 import { useToast } from "../../components/toast";
-import * as XLSX from "xlsx";
+
 import { calcularValorEstimadoItens } from "../../utils/regrasContratacao";
 import { melhorarDescricaoItem } from "../../providers/services/descricaoItensIA";
 import { extrairObjetoCotacaoPdf, parseRelatorioCotacaoPdf } from "../../utils/cotacaoPdf";
-// @ts-expect-error O pacote expõe o PDF.js como default em runtime, embora os tipos declarem exports nomeados.
-import pdfjs from "@bundled-es-modules/pdfjs-dist/build/pdf.js";
-import pdfWorkerUrl from "@bundled-es-modules/pdfjs-dist/build/pdf.worker.js?url";
 
 export default function Step1({ dados = { itens: [], objeto: "", necessidade: "" }, atualizarDados }: any) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const [importandoPdf, setImportandoPdf] = useState(false);
+  const [importandoXlsx, setImportandoXlsx] = useState(false);
   const [itemEmMelhoria, setItemEmMelhoria] = useState<number | string | null>(null);
   const { showToast } = useToast();
   const itens = dados.itens || [];
@@ -27,23 +25,39 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
   };
   const normalizar = (valor: any) => String(valor || "").trim().toLowerCase();
 
+  const renumerarItens = (lista: any[]) => lista.map((item, index) => ({ ...item, numero: index + 1 }));
+
   const atualizarItem = (id: any, campo: string, valor: any) => {
-    atualizarDados({ ...dados, itens: itens.map((item: any) => item.id === id ? { ...item, [campo]: valor } : item) });
+    atualizarDados((anterior: any) => ({
+      itens: (anterior.itens || []).map((item: any) => item.id === id ? { ...item, [campo]: valor } : item),
+    }));
   };
 
-  const adicionarItem = () => atualizarDados({
-    ...dados,
-    itens: [...itens, { id: Date.now() + Math.random(), numero: itens.length + 1, descricao: "", un: "UN", qtd: 1, valor: 0 }],
+  const adicionarItem = () => atualizarDados((anterior: any) => {
+    const atuais = anterior.itens || [];
+    return { itens: [...atuais, { id: Date.now() + Math.random(), numero: atuais.length + 1, descricao: "", un: "UN", qtd: 1, valor: 0 }] };
   });
 
-  const removerItem = (id: any) => atualizarDados({ ...dados, itens: itens.filter((item: any) => item.id !== id) });
+  const removerItem = (id: any) => atualizarDados((anterior: any) => ({
+    itens: renumerarItens((anterior.itens || []).filter((item: any) => item.id !== id)),
+  }));
 
-  const moverItem = (index: number, direcao: number) => {
+  const moverItem = (index: number, direcao: number) => atualizarDados((anterior: any) => {
+    const novosItens = [...(anterior.itens || [])];
     const novoIndex = index + direcao;
-    if (novoIndex < 0 || novoIndex >= itens.length) return;
-    const novosItens = [...itens];
+    if (novoIndex < 0 || novoIndex >= novosItens.length) return {};
     [novosItens[index], novosItens[novoIndex]] = [novosItens[novoIndex], novosItens[index]];
-    atualizarDados({ ...dados, itens: novosItens });
+    return { itens: renumerarItens(novosItens) };
+  });
+
+  const decidirImportacaoItens = (importados: any[]) => {
+    const atuais = Array.isArray(dados.itens) ? dados.itens : [];
+    const anexar = atuais.length > 0 && !window.confirm(
+      "Já existem itens no formulário. OK = substituir a lista atual pelos itens importados. Cancelar = acrescentar os itens importados ao final."
+    );
+    const resultado = anexar ? [...atuais, ...importados] : importados;
+    atualizarDados((anterior: any) => ({ itens: renumerarItens(resultado) }));
+    return { quantidade: importados.length, anexados: anexar };
   };
 
   const melhorarItem = async (item: any) => {
@@ -60,14 +74,13 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
         apiKey,
         modelo,
       );
-      atualizarDados({
-        ...dados,
-        itens: itens.map((itemAtual: any) =>
+      atualizarDados((anterior: any) => ({
+        itens: (anterior.itens || []).map((itemAtual: any) =>
           itemAtual.id === item.id
             ? { ...itemAtual, descricao: melhoria.descricao, un: melhoria.unidade }
             : itemAtual
         ),
-      });
+      }));
     } catch (erro: any) {
       console.error("Erro ao melhorar descrição:", erro);
       showToast(erro?.message || "Não foi possível melhorar a descrição e a unidade deste item.", "error");
@@ -79,9 +92,11 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
   const importarXlsx = (evento: React.ChangeEvent<HTMLInputElement>) => {
     const arquivo = evento.target.files?.[0];
     if (!arquivo) return;
+    setImportandoXlsx(true);
     const leitor = new FileReader();
-    leitor.onload = (ev) => {
+    leitor.onload = async (ev) => {
       try {
+        const XLSX = await import("xlsx");
         const wb = XLSX.read(ev.target?.result, { type: "array" });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const linhas = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" }) as any[][];
@@ -107,18 +122,19 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
         const cValor = coluna(aliasesValor);
         if (cNome < 0 || cQtd < 0 || cUn < 0) throw new Error("A planilha precisa possuir descrição/nome, quantidade e unidade.");
         const importados = linhas.slice(indiceCabecalho + 1).map((linha, index) => ({
-          id: Date.now() + Math.random(),
-          numero: cItem >= 0 ? Number(linha[cItem]) || index + 1 : index + 1,
+          id: Date.now() + Math.random() + index,
+          numero: index + 1,
           descricao: String(linha[cNome] || "").trim(),
           qtd: extrairNumero(linha[cQtd]) || 0,
           un: String(linha[cUn] || "UN").trim(),
           valor: cValor >= 0 ? extrairNumero(linha[cValor]) : 0,
         })).filter((item) => item.descricao);
-        atualizarDados({ ...dados, itens: importados });
-        showToast(`Planilha importada com sucesso: ${importados.length} itens.`, "success");
+        const acao = decidirImportacaoItens(importados);
+        showToast(`Planilha importada: ${importados.length} itens ${acao.anexados ? "acrescentados" : "importados"}; total atual: ${acao.anexados ? (dados.itens || []).length + importados.length : importados.length}.`, "success");
       } catch (erro: any) {
         showToast(`Erro ao importar: ${erro.message}`, "error");
       } finally {
+        setImportandoXlsx(false);
         if (fileInputRef.current) fileInputRef.current.value = "";
       }
     };
@@ -131,6 +147,12 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
 
     setImportandoPdf(true);
     try {
+      const [pdfModule, workerModule] = await Promise.all([
+        import("@bundled-es-modules/pdfjs-dist/build/pdf.js"),
+        import("@bundled-es-modules/pdfjs-dist/build/pdf.worker.js?url"),
+      ]);
+      const pdfjs: any = (pdfModule as any).default || pdfModule;
+      const pdfWorkerUrl: string = (workerModule as any).default || String(workerModule);
       pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
       const dadosPdf = new Uint8Array(await arquivo.arrayBuffer());
       const documento = await pdfjs.getDocument({ data: dadosPdf }).promise;
@@ -175,16 +197,14 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
       const objetoPdf = extrairObjetoCotacaoPdf(texto);
       const objetoAtual = String(dados.objeto || "").trim();
 
-      atualizarDados({
-        ...dados,
-        itens: importados.map((item) => ({
-          ...item,
-          id: Date.now() + Math.random(),
-        })),
-        ...(objetoAtual ? {} : (objetoPdf ? { objeto: objetoPdf } : {})),
-      });
-
-      showToast(`Cotação PDF importada com sucesso: ${importados.length} itens.`, "success");
+      const itensImportados = importados.map((item, index) => ({
+        ...item,
+        numero: index + 1,
+        id: Date.now() + Math.random() + index,
+      }));
+      const acao = decidirImportacaoItens(itensImportados);
+      if (!objetoAtual && objetoPdf) atualizarDados((anterior: any) => ({ objeto: anterior.objeto?.trim() ? anterior.objeto : objetoPdf }));
+      showToast(`Cotação PDF: ${importados.length} itens ${acao.anexados ? "acrescentados" : "importados"}; total atual: ${acao.anexados ? (dados.itens || []).length + importados.length : importados.length}.`, "success");
     } catch (erro: any) {
       console.error("Erro ao importar cotação PDF:", erro);
       showToast(`Erro ao importar cotação PDF: ${erro?.message || "arquivo inválido"}`, "error");
@@ -206,19 +226,19 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
         required
         rows={1}
         value={objeto}
-        onChange={(e) => atualizarDados({ ...dados, objeto: e.target.value })}
+        onChange={(e) => atualizarDados((anterior: any) => ({ objeto: e.target.value }))}
         style={{ padding: 12, borderRadius: "var(--radius-lg)", borderColor: objeto.trim() ? "var(--input-border)" : "var(--btn-danger)", resize: "none" }}
       />
     </section>
     <section className="step-section item-intro-section">
       <label style={{ fontWeight: 600, fontSize: 16, display: "block", marginBottom: 8 }}>Justificativa da Demanda: <span style={{ color: "var(--btn-danger)" }}>*</span></label>
       <p style={{ color: "var(--text-muted)", fontSize: 13, margin: "0 0 12px" }}>Descreva brevemente a justificativa da demanda.</p>
-      <textarea required value={necessidade} onChange={(e) => atualizarDados({ ...dados, necessidade: e.target.value })} style={{ padding: 12, borderRadius: "var(--radius-lg)", borderColor: necessidade.trim() ? "var(--input-border)" : "var(--btn-danger)", minHeight: 120, resize: "vertical" }} />
+      <textarea required value={necessidade} onChange={(e) => atualizarDados((anterior: any) => ({ necessidade: e.target.value }))} style={{ padding: 12, borderRadius: "var(--radius-lg)", borderColor: necessidade.trim() ? "var(--input-border)" : "var(--btn-danger)", minHeight: 120, resize: "vertical" }} />
     </section>
     <section className="step-section items-section" style={{ borderTop: "1px solid var(--border)", paddingTop: 24 }}>
       <div className="items-toolbar" style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
         <button type="button" className="item-action-primary" onClick={adicionarItem} style={{ height: 38, padding: "0 16px", background: "var(--btn-primary)", color: "var(--bg-panel)", border: 0, borderRadius: "var(--radius-lg)" }}>+ Novo Item</button>
-        <button type="button" className="item-action-secondary" onClick={() => fileInputRef.current?.click()} style={{ height: 38, padding: "0 16px", background: "var(--btn-primary)", color: "var(--bg-panel)", border: 0, borderRadius: "var(--radius-lg)" }}>Importar XLSX</button>
+        <button type="button" className="item-action-secondary" onClick={() => fileInputRef.current?.click()} disabled={importandoXlsx || importandoPdf} style={{ height: 38, padding: "0 16px", background: "var(--btn-primary)", color: "var(--bg-panel)", border: 0, borderRadius: "var(--radius-lg)", opacity: importandoXlsx || importandoPdf ? 0.7 : 1 }}>{importandoXlsx ? "Lendo XLSX..." : "Importar XLSX"}</button>
         <button type="button" className="item-action-secondary" onClick={() => pdfInputRef.current?.click()} disabled={importandoPdf} style={{ height: 38, padding: "0 16px", background: "var(--btn-primary)", color: "var(--bg-panel)", border: 0, borderRadius: "var(--radius-lg)", opacity: importandoPdf ? 0.7 : 1 }}>{importandoPdf ? "Lendo PDF..." : "Importar Cotação PDF"}</button>
       </div>
       <div className="items-table-scroll" style={{ overflowX: "auto" }}>
@@ -238,16 +258,17 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
                     rows={1}
                     value={descricao}
                     onChange={(e) => atualizarItem(item.id, "descricao", e.target.value)}
+                    disabled={carregando}
                     style={{ flex: 1, minWidth: 180, padding: 8, borderColor: descricao.trim() ? "var(--input-border)" : "var(--btn-danger)", resize: "none" }}
                   />
                   <button type="button" onClick={() => melhorarItem(item)} disabled={carregando || !descricao.trim()} title="Melhorar descrição e unidade deste item com IA" aria-label={`Melhorar descrição e unidade do item ${item.numero || index + 1} com IA`} style={{ height: 34, padding: "0 10px", border: "1px solid var(--border)", borderRadius: "var(--radius)", background: "var(--bg-panel)", color: "var(--text-main)", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }}>{carregando ? "..." : "✨ IA"}</button>
                 </div>
-                <label className="item-field item-field-unit"><span>Unidade</span><input className="item-unit" type="text" required value={item.un} onChange={(e) => atualizarItem(item.id, "un", e.target.value)} style={{ width: 60, padding: 8, textAlign: "center" }} /></label>
-                <label className="item-field item-field-quantity"><span>Quantidade</span><input className="item-quantity" type="number" required min="0.0001" step="any" value={item.qtd} onChange={(e) => atualizarItem(item.id, "qtd", parseFloat(e.target.value) || "")} style={{ width: 80, padding: 8, textAlign: "right" }} /></label>
-                <label className="item-field item-field-price"><span>Valor unitário</span><input className="item-price" type="text" required value={formatarMoeda(Number(item.valor || 0))} onChange={(e) => atualizarItem(item.id, "valor", parseMoeda(e.target.value))} style={{ width: 130, padding: 8, textAlign: "right", fontFamily: "monospace" }} /></label>
+                <label className="item-field item-field-unit"><span>Unidade</span><input className="item-unit" type="text" required value={item.un} onChange={(e) => atualizarItem(item.id, "un", e.target.value)} disabled={carregando} style={{ width: 60, padding: 8, textAlign: "center" }} /></label>
+                <label className="item-field item-field-quantity"><span>Quantidade</span><input className="item-quantity" type="number" required min="0.0001" step="any" value={item.qtd} onChange={(e) => atualizarItem(item.id, "qtd", parseFloat(e.target.value) || "")} disabled={carregando} style={{ width: 80, padding: 8, textAlign: "right" }} /></label>
+                <label className="item-field item-field-price"><span>Valor unitário</span><input className="item-price" type="text" required value={formatarMoeda(Number(item.valor || 0))} onChange={(e) => atualizarItem(item.id, "valor", parseMoeda(e.target.value))} disabled={carregando} style={{ width: 130, padding: 8, textAlign: "right", fontFamily: "monospace" }} /></label>
                 <div className="item-line-total" style={{ width: 130, textAlign: "right", fontWeight: 600 }}><span>Total do item</span><strong>{formatarMoeda(Number(item.qtd || 0) * Number(item.valor || 0))}</strong></div>
                 <div className="item-row-actions" style={{ width: 120, display: "flex", gap: 4, justifyContent: "flex-end" }}>
-                  <button type="button" className="item-move-button" aria-label="Mover item para cima" title="Mover para cima" onClick={() => moverItem(index, -1)} style={{ width: 28, height: 28 }}>↑</button><button type="button" className="item-move-button" aria-label="Mover item para baixo" title="Mover para baixo" onClick={() => moverItem(index, 1)} style={{ width: 28, height: 28 }}>↓</button><button type="button" className="item-delete-button" aria-label="Remover item" title="Remover item" onClick={() => removerItem(item.id)} style={{ width: 28, height: 28, background: "var(--btn-danger)", color: "var(--bg-panel)", border: 0 }}>×</button>
+                  <button type="button" className="item-move-button" aria-label="Mover item para cima" title="Mover para cima" onClick={() => moverItem(index, -1)} disabled={carregando} style={{ width: 28, height: 28 }}>↑</button><button type="button" className="item-move-button" aria-label="Mover item para baixo" title="Mover item para baixo" onClick={() => moverItem(index, 1)} disabled={carregando} style={{ width: 28, height: 28 }}>↓</button><button type="button" className="item-delete-button" aria-label="Remover item" title="Remover item" onClick={() => removerItem(item.id)} disabled={carregando} style={{ width: 28, height: 28, background: "var(--btn-danger)", color: "var(--bg-panel)", border: 0 }}>×</button>
                 </div>
               </div>;
             })}
