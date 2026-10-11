@@ -42,24 +42,28 @@ const RadioOption = ({ label, value, checked, onChange, disabled = false }: any)
   </label>
 );
 
-const JustificationBox = ({ label, value, onChange, errorMsg }: any) => {
-  const hasError = value.trim() === "";
+const JustificationBox = ({ label, value, onChange, errorMsg, mostrarErro = false }: any) => {
+  const id = React.useId();
+  const hasError = mostrarErro && String(value || "").trim() === "";
   return (
     <div className="setting-justification" style={styles.justificationBox(hasError)}>
-      <label style={styles.justificationTitle}>
+      <label htmlFor={id} style={styles.justificationTitle}>
         {label} <span style={styles.asterisk}>*</span>
       </label>
       <textarea
+        id={id}
         value={value}
         onChange={onChange}
+        aria-invalid={hasError || undefined}
+        aria-describedby={hasError ? id + "-error" : undefined}
         style={styles.textarea(hasError)}
       />
-      {hasError && <span style={styles.errorText}>{errorMsg}</span>}
+      {hasError && <span id={id + "-error"} style={styles.errorText}>{errorMsg}</span>}
     </div>
   );
 };
 
-export default function Step5({ dados, atualizarDados }: any) {
+export default function Step5({ dados, atualizarDados, tentouAvancar = false }: any) {
   const blocosDotacao: DotacaoBloco[] = React.useMemo(() => {
     if (Array.isArray(dados.dotacaoBlocos) && dados.dotacaoBlocos.length > 0) {
       return dados.dotacaoBlocos;
@@ -215,7 +219,7 @@ export default function Step5({ dados, atualizarDados }: any) {
             label="Motivação para o agrupamento (Global/Lote):"
             value={dados.motivoCriterio}
             onChange={(e: any) => atualizarDados({ motivoCriterio: e.target.value })}
-            errorMsg="Este campo é obrigatório."
+            errorMsg="Este campo é obrigatório." mostrarErro={tentouAvancar}
           />
         )}
       </div>
