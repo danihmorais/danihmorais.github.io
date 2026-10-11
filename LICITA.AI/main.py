@@ -421,6 +421,40 @@ def _sanitizar_dados_admin(valor, chave: str = ""):
             "imagem" in chave_lower and len(valor) > 1200
         ):
             return "[conteúdo de imagem omitido do painel]"
+
+        if "dotacao" in chave_lower or "dotação" in chave_lower:
+            partes = []
+            imagens = 0
+            for linha in valor.splitlines():
+                linha_limpa = linha.strip()
+                if not linha_limpa:
+                    continue
+                if linha_limpa.startswith("__IMG__") or linha_limpa.startswith("data:image/"):
+                    imagens += 1
+                    continue
+                # Linhas que parecem conter a sequência base64 são omitidas por inteiro.
+                if len(linha_limpa) > 500 and re.fullmatch(r"[A-Za-z0-9+/=]+", linha_limpa):
+                    imagens += 1
+                    continue
+                partes.append(linha_limpa)
+            descricao = []
+            if imagens:
+                descricao.append(f"{imagens} imagem(ns)")
+            if partes:
+                descricao.append("texto: " + "\n".join(partes))
+            return " + ".join(descricao) or "Não informado"
+
+        # Não exponha base64 incorporado em outros campos livres ou arrays.
+        if "__IMG__" in valor or "data:image/" in valor:
+            imagens = valor.count("__IMG__") + valor.count("data:image/")
+            texto_sem_imagem = re.sub(
+                r"__IMG__[A-Za-z0-9+/=]+|data:image/[^;]+;base64,[A-Za-z0-9+/=]+",
+                "[imagem omitida]",
+                valor,
+            )
+            texto_sem_imagem = re.sub(r"(?<![A-Za-z0-9])[A-Za-z0-9+/]{500,}={0,2}", "[conteúdo binário omitido]", texto_sem_imagem)
+            return (texto_sem_imagem[:2500] + "… [conteúdo abreviado]" if len(texto_sem_imagem) > 2500 else texto_sem_imagem)
+
         if len(valor) > 2500:
             return valor[:2500] + "… [conteúdo abreviado]"
     return valor
