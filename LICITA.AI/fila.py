@@ -132,7 +132,7 @@ def _artifact_path(job_id: str) -> Path:
 
 
 def _find_job_path(job_id: str) -> Path | None:
-    for suffix in ("", ".processing", ".done", ".failed"):
+    for suffix in ("", ".processing", ".done", ".failed", ".cancelled"):
         path = _job_path(job_id, suffix)
         if path.is_file():
             return path
@@ -397,6 +397,39 @@ def enqueue_job(
     return {"job_id": job_id, "status": "queued", "email": email, "status_token": status_token, "message": "Solicitação registrada na fila. O processamento da IA e o envio por e-mail ocorrerão em segundo plano."}
 
 
+def cancel_job(job_id: str, origem: str) -> str:
+    """Cancela um trabalho pendente ou sinaliza interrupção entre etapas."""
+    if not re.fullmatch(r"[0-9a-f]{32}", str(job_id or ""), re.IGNORECASE):
+        raise ValueError("Solicitação inválida.")
+    _ensure_queue_dir()
+    queued_path = _job_path(job_id)
+    cancelled_path = _job_path(job_id, ".cancelled")
+    try:
+        # A troca atômica resolve a corrida com o worker: se ele já reivindicou,
+        # os.path.replace falha e a rotina verifica o arquivo .processing.
+        os.replace(queued_path, cancelled_path)
+    except FileNotFoundError:
+        processing_path = _job_path(job_id, ".processing")
+        if not processing_path.is_file():
+            raise ValueError("Só é possível cancelar pedidos na fila ou em processamento.")
+        marker = QUEUE_DIR / f"{job_id}.cancel"
+        try:
+            with marker.open("x", encoding="utf-8") as handle:
+                json.dump({"requested_at": _utc_now(), "requested_by": origem}, handle)
+        except FileExistsError:
+            pass
+        return "cancelling"
+
+    try:
+        job = json.loads(cancelled_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Não foi possível ler a solicitação retirada da fila.") from exc
+    job.update({"status": "cancelled", "cancel_requested": True, "cancelled_at": _utc_now(), "cancelled_by": origem})
+    job.pop("retry_at", None)
+    _write_json(cancelled_path, job)
+    return "cancelled"
+
+
 def get_job(job_id: str) -> dict | None:
     if not re.fullmatch(r"[0-9a-f]{32}", job_id, re.IGNORECASE):
         return None
@@ -413,7 +446,7 @@ def _claim_next_job() -> tuple[Path, dict] | None:
     _ensure_queue_dir()
     pending = sorted(QUEUE_DIR.glob("[0-9a-f]*.json"), key=lambda path: path.stat().st_mtime)
     for path in pending:
-        if path.name.endswith((".processing.json", ".done.json", ".failed.json")):
+        if path.name.endswith((".processing.json", ".done.json", ".failed.json", ".cancelled.json")):
             continue
         try:
             job = json.loads(path.read_text(encoding="utf-8"))

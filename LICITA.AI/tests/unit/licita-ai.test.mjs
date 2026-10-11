@@ -116,7 +116,7 @@ test("gerarFasePreparatoria usa multipart quando há documentos de referência",
       ],
     ],
     globals: {
-      __injected_gerador: { construirPrompt: () => "PROMPT_TESTE" },
+      __injected_gerador: { construirPrompt: (_dados, _meepp, etapa) => "PROMPT_TESTE_" + etapa + "\\n__LICITA_PIPE_DADOS_USUARIO__\\nESTRUTURA JSON OBRIGATÓRIA:" },
       FormData: class {
         values = new Map();
         append(key, value, filename) {
@@ -161,7 +161,12 @@ test("gerarFasePreparatoria usa multipart quando há documentos de referência",
   assert.equal(chamada.options.body.get("dfd").name, "DFD anterior.docx");
   const payload = JSON.parse(chamada.options.body.get("payload"));
   assert.equal(payload.email, "teste@example.com");
-  assert.equal(payload.dados_ia.__LICITA_PIPELINE__.etapas.length, 1);
+  const etapas = payload.dados_ia.__LICITA_PIPELINE__.etapas;
+  assert.deepEqual(etapas.map((etapa) => etapa.id), ["DFD", "ETP", "TR"]);
+  assert.equal(etapas[0].temperature, 0.3);
+  assert.match(etapas[0].prompt, /__LICITA_PIPE_DADOS_USUARIO__/);
+  assert.match(etapas[1].prompt, /__LICITA_PIPE_DFD__/);
+  assert.match(etapas[2].prompt, /__LICITA_PIPE_ETP__/);
 });
 
 test("gerarFasePreparatoria cria etapa de IA somente para pagamento por etapas", async () => {
@@ -174,7 +179,7 @@ test("gerarFasePreparatoria cria etapa de IA somente para pagamento por etapas",
       ],
     ],
     globals: {
-      __injected_gerador: { construirPrompt: () => "PROMPT_TESTE" },
+      __injected_gerador: { construirPrompt: (_dados, _meepp, etapa) => "PROMPT_TESTE_" + etapa + "\\n__LICITA_PIPE_DADOS_USUARIO__\\nESTRUTURA JSON OBRIGATÓRIA:" },
       fetch: async (url, options) => {
         chamada = { url, options };
         return {
@@ -202,6 +207,8 @@ test("gerarFasePreparatoria cria etapa de IA somente para pagamento por etapas",
   const etapas = body.dados_ia.__LICITA_PIPELINE__.etapas;
   const pagamento = etapas.find((etapa) => etapa.id === "PAGAMENTO_ETAPAS");
   assert.equal(pagamento.tipo, "geracao_json");
+  assert.equal(pagamento.temperature, 0);
+  assert.deepEqual(etapas.filter((etapa) => ["DFD", "ETP", "TR"].includes(etapa.id)).map((etapa) => etapa.id), ["DFD", "ETP", "TR"]);
   assert.match(pagamento.prompt, /40% após a conclusão/);
   assert.match(pagamento.prompt, /EXCLUSIVAMENTE JSON válido/);
 });
@@ -215,7 +222,7 @@ test("gerarFasePreparatoria rejeita pagamento por etapas sem descrição", async
       ],
     ],
     globals: {
-      __injected_gerador: { construirPrompt: () => "PROMPT_TESTE" },
+      __injected_gerador: { construirPrompt: (_dados, _meepp, etapa) => "PROMPT_TESTE_" + etapa + "\\n__LICITA_PIPE_DADOS_USUARIO__\\nESTRUTURA JSON OBRIGATÓRIA:" },
     },
   });
 
@@ -232,4 +239,39 @@ test("gerarFasePreparatoria rejeita pagamento por etapas sem descrição", async
     }),
     /pagamento por etapas/i,
   );
+});
+
+test("dadosParaPrompt remove imagens e campos internos", () => {
+  const modulo = loadTsModule("src/api.ts");
+  const segredo = "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo=";
+  const seguro = modulo.dadosParaPrompt({
+    "{{DOTACAO}}": "__IMG__" + segredo + "\nFonte 123.456.789/0001-00",
+    "{{CAMINHO_IMAGEM_DOTACAO}}": "data:image/png;base64," + segredo,
+    "{{OBJETO}}": "Material para a unidade",
+    RAW_PAC: "interno",
+  });
+  assert.match(seguro["{{DOTACAO}}"], /2 imagem\(ns\)/);
+  assert.match(seguro["{{DOTACAO}}"], /Fonte 123\.456/);
+  assert.equal(seguro["{{CAMINHO_IMAGEM_DOTACAO}}"], undefined);
+  assert.equal(seguro.RAW_PAC, undefined);
+  assert.doesNotMatch(JSON.stringify(seguro), /QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo=/);
+});
+
+test("construirPrompt prioriza as instruções específicas do usuário", () => {
+  const { construirPrompt } = loadTsModule("src/providers/services/geradorIA.ts", {
+    replacements: [
+      [
+        "import { gerarTextoIA } from '../llm';",
+        "const gerarTextoIA = async () => ({ content: '{}' });",
+      ],
+    ],
+  });
+  const prompt = construirPrompt({ "{{OBJETO}}": "Aquisição de materiais", "{{NECESSIDADE}}": "Reposição de estoque" }, false, "ETP", "Justifique a necessidade de amostra.", true);
+  const dados = prompt.indexOf("__LICITA_PIPE_DADOS_USUARIO__");
+  const instrucoes = prompt.indexOf("INSTRUÇÕES DO USUÁRIO (OBRIGATÓRIAS");
+  const schema = prompt.indexOf("ESTRUTURA JSON OBRIGATÓRIA:");
+  assert.ok(dados >= 0 && instrucoes > dados && schema > instrucoes);
+  assert.match(prompt, /aplique integralmente as INSTRUÇÕES DO USUÁRIO/);
+  assert.doesNotMatch(prompt, /pesquisa na web/i);
+  assert.doesNotMatch(prompt, /VALOR_ESTIMADO_APROXIMADO/);
 });

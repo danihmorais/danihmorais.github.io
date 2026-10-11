@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from starlette.datastructures import UploadFile
 
 from documentos_contexto import MAX_CONTEXT_CHARS, extrair_contexto_documentos
-from fila import EMAIL_RE, QUEUE_DIR, enqueue_job, get_job
+from fila import EMAIL_RE, MAX_ATTEMPTS, QUEUE_DIR, _artifact_path, _job_path, cancel_job, enqueue_job, get_job
 from fila_pipeline_unificado import iniciar_worker
 
 app = FastAPI(title="Licita.AI API")
@@ -165,7 +165,7 @@ def _queue_items() -> list[dict]:
         return []
     items: list[dict] = []
     for path in QUEUE_DIR.glob("[0-9a-f]*.json"):
-        if path.name.endswith((".done.json", ".failed.json")):
+        if path.name.endswith((".done.json", ".failed.json", ".cancelled.json")):
             continue
         try:
             job = __import__("json").loads(path.read_text(encoding="utf-8"))
@@ -291,6 +291,27 @@ async def agendar_fase_preparatoria(request: Request):
         raise HTTPException(status_code=500, detail=f"Não foi possível agendar a solicitação: {exc}") from exc
 
 
+@app.post("/api/fila/{job_id}/cancelar")
+async def cancelar_fila_usuario(job_id: str, token: str | None = None):
+    job = get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Solicitação não encontrada.")
+    token_armazenado = str(job.get("status_token") or "")
+    if not token_armazenado or not token or not hmac.compare_digest(token_armazenado, token):
+        raise HTTPException(status_code=403, detail="Token de consulta inválido.")
+    try:
+        status = cancel_job(job_id, "usuario")
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return {
+        "job_id": job_id,
+        "status": status,
+        "message": "Solicitação cancelada." if status == "cancelled" else "Cancelamento solicitado; a etapa atual será concluída antes de interromper o processamento.",
+    }
+
+
 @app.get("/api/fila/{job_id}")
 async def consultar_fila(job_id: str, token: str | None = None):
     job = get_job(job_id)
@@ -301,7 +322,6 @@ async def consultar_fila(job_id: str, token: str | None = None):
     if not stored_token or not token:
         raise HTTPException(status_code=401, detail="Token de consulta não informado.")
 
-    import hmac
     if not hmac.compare_digest(stored_token, token):
         raise HTTPException(status_code=403, detail="Token de consulta inválido.")
 
@@ -315,6 +335,11 @@ async def consultar_fila(job_id: str, token: str | None = None):
         "current_stage": job.get("current_stage"),
         "completed_stages": job.get("completed_stages", []),
         "last_error": job.get("last_error"),
+        "retry_at": job.get("retry_at"),
+        "cancel_requested": bool(job.get("cancel_requested")) or (QUEUE_DIR / f"{job_id}.cancel").exists(),
+        "cancelled_at": job.get("cancelled_at"),
+        "cancelled_by": job.get("cancelled_by"),
+        "fila_posicao": _queue_position(job_id)[0],
         "result": job.get("result"),
     }
 
@@ -396,6 +421,40 @@ def _sanitizar_dados_admin(valor, chave: str = ""):
             "imagem" in chave_lower and len(valor) > 1200
         ):
             return "[conteúdo de imagem omitido do painel]"
+
+        if "dotacao" in chave_lower or "dotação" in chave_lower:
+            partes = []
+            imagens = 0
+            for linha in valor.splitlines():
+                linha_limpa = linha.strip()
+                if not linha_limpa:
+                    continue
+                if linha_limpa.startswith("__IMG__") or linha_limpa.startswith("data:image/"):
+                    imagens += 1
+                    continue
+                # Linhas que parecem conter a sequência base64 são omitidas por inteiro.
+                if len(linha_limpa) > 500 and re.fullmatch(r"[A-Za-z0-9+/=]+", linha_limpa):
+                    imagens += 1
+                    continue
+                partes.append(linha_limpa)
+            descricao = []
+            if imagens:
+                descricao.append(f"{imagens} imagem(ns)")
+            if partes:
+                descricao.append("texto: " + "\n".join(partes))
+            return " + ".join(descricao) or "Não informado"
+
+        # Não exponha base64 incorporado em outros campos livres ou arrays.
+        if "__IMG__" in valor or "data:image/" in valor:
+            imagens = valor.count("__IMG__") + valor.count("data:image/")
+            texto_sem_imagem = re.sub(
+                r"__IMG__[A-Za-z0-9+/=]+|data:image/[^;]+;base64,[A-Za-z0-9+/=]+",
+                "[imagem omitida]",
+                valor,
+            )
+            texto_sem_imagem = re.sub(r"(?<![A-Za-z0-9])[A-Za-z0-9+/]{500,}={0,2}", "[conteúdo binário omitido]", texto_sem_imagem)
+            return (texto_sem_imagem[:2500] + "… [conteúdo abreviado]" if len(texto_sem_imagem) > 2500 else texto_sem_imagem)
+
         if len(valor) > 2500:
             return valor[:2500] + "… [conteúdo abreviado]"
     return valor
@@ -405,8 +464,8 @@ def _resumo_job_admin(job: dict, incluir_detalhes: bool = False) -> dict:
     job_id = str(job.get("job_id", ""))
     status = str(job.get("status", "desconhecido"))
     criado = job.get("created_at")
-    finalizado = job.get("completed_at") or job.get("last_error_at")
-    if status in {"queued", "processing"} or not finalizado:
+    finalizado = job.get("completed_at") or job.get("cancelled_at") or job.get("last_error_at")
+    if status in {"queued", "processing", "cancelling", "retrying"} or not finalizado:
         finalizado_para_tempo = datetime.now(timezone.utc).isoformat()
     else:
         finalizado_para_tempo = finalizado
@@ -468,6 +527,10 @@ def _resumo_job_admin(job: dict, incluir_detalhes: bool = False) -> dict:
         "queue_wait_seconds": _segundos_entre_admin(criado, job.get("started_at")),
         "processing_seconds": processamento,
         "elapsed_seconds": _segundos_entre_admin(criado, finalizado_para_tempo),
+        "max_attempts": MAX_ATTEMPTS,
+        "cancel_requested": bool(job.get("cancel_requested")) or (QUEUE_DIR / f"{job_id}.cancel").exists(),
+        "cancelled_at": job.get("cancelled_at"),
+        "cancelled_by": job.get("cancelled_by"),
     }
     if incluir_detalhes:
         resumo["instrucoes"] = str(job.get("instrucoes") or "")[:8000]
@@ -487,7 +550,7 @@ def _listar_jobs_admin() -> list[dict]:
     if not QUEUE_DIR.exists():
         return []
     registros: dict[str, tuple[float, dict]] = {}
-    sufixos = (".processing", ".done", ".failed")
+    sufixos = (".processing", ".done", ".failed", ".cancelled")
     for caminho in QUEUE_DIR.glob("[0-9a-f]*.json"):
         nome = caminho.name[:-5] if caminho.name.endswith(".json") else caminho.name
         for sufixo in sufixos:
@@ -537,7 +600,7 @@ async def listar_pedidos_admin(
     if limit < 1 or limit > 500:
         raise HTTPException(status_code=400, detail="O limite deve ficar entre 1 e 500.")
     status_filtro = (status or "todos").strip().lower()
-    status_validos = {"todos", "queued", "processing", "sent", "failed"}
+    status_validos = {"todos", "queued", "processing", "sent", "failed", "cancelled"}
     if status_filtro not in status_validos:
         raise HTTPException(status_code=400, detail="Filtro de status inválido.")
     termo = (q or "").strip().casefold()
@@ -577,14 +640,30 @@ async def detalhar_pedido_admin(job_id: str, request: Request):
     return _resumo_job_admin(job, incluir_detalhes=True)
 
 
+@app.post("/api/admin/jobs/{job_id}/cancel")
+async def cancelar_pedido_admin(job_id: str, request: Request):
+    _exigir_admin(request)
+    try:
+        status = cancel_job(job_id, "admin")
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return {
+        "job_id": job_id,
+        "status": status,
+        "message": "Solicitação cancelada." if status == "cancelled" else "Cancelamento solicitado; o processamento será interrompido ao fim da etapa atual.",
+    }
+
+
 @app.post("/api/admin/jobs/{job_id}/retry")
 async def refazer_pedido_admin(job_id: str, request: Request):
     _exigir_admin(request)
     job = get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Solicitação não encontrada ou já removida pela retenção.")
-    if str(job.get("status", "")).lower() != "failed":
-        raise HTTPException(status_code=409, detail="Só é possível refazer solicitações marcadas como falha.")
+    if str(job.get("status", "")).lower() not in {"failed", "cancelled"}:
+        raise HTTPException(status_code=409, detail="Só é possível refazer solicitações marcadas como falha ou canceladas.")
 
     email = str(job.get("email") or "").strip()
     dados_usuario = job.get("dados_usuario")
@@ -637,7 +716,7 @@ def _limpar_fila_antiga() -> None:
         try:
             if QUEUE_DIR.exists():
                 for path in QUEUE_DIR.iterdir():
-                    if path.suffix not in {".json", ".zip"}:
+                    if path.suffix not in {".json", ".zip", ".cancel"}:
                         continue
                     if path.name.endswith(".processing.json"):
                         continue

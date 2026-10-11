@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import threading
 import time
@@ -10,8 +11,45 @@ from fila import MAX_ATTEMPTS, POLL_INTERVAL_SECONDS, QUEUE_DIR, RETRY_BASE_SECO
 from fila_pipeline import _aplicar_auditoria_marcas, _chamar_ia as _chamar_ia_primaria, _substituir_contextos, _validar_json_geracao
 
 
+class JobCancelado(Exception):
+    """Cancelamento solicitado; o worker deve interromper entre etapas."""
+
+
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _marcador_cancelamento(job: dict):
+    return QUEUE_DIR / f"{job.get('job_id', '')}.cancel"
+
+
+def _checar_cancelamento(job: dict) -> None:
+    if _marcador_cancelamento(job).exists():
+        raise JobCancelado("Solicitação cancelada pelo usuário.")
+
+
+def _concluir_cancelamento(job: dict, processing_path) -> None:
+    etapa = str(job.get("current_stage") or "PROCESSAMENTO")
+    _finalizar_etapa(job, etapa, "cancelled")
+    _finalizar_tentativa(job, "cancelled")
+    marcador = _marcador_cancelamento(job)
+    pedido = {}
+    try:
+        if marcador.exists():
+            pedido = json.loads(marcador.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        pedido = {}
+    job.update({
+        "status": "cancelled",
+        "cancelled_at": _utc_now(),
+        "cancelled_by": pedido.get("requested_by") or job.get("cancelled_by") or "usuario",
+        "cancel_requested": True,
+    })
+    job.pop("retry_at", None)
+    _write_json(_job_path(job["job_id"], ".cancelled"), job)
+    processing_path.unlink(missing_ok=True)
+    _artifact_path(job["job_id"]).unlink(missing_ok=True)
+    marcador.unlink(missing_ok=True)
 
 
 def _chamar_ia(prompt: str, model: str, temperature: float = 0.3) -> tuple[dict, str]:
@@ -54,6 +92,11 @@ def _adicionar_documentos_de_referencia(prompt: str, documentos: list[dict]) -> 
     contexto = "\n\n".join(partes)
     if len(prompt) + len(contexto) > 118_000:
         raise RuntimeError("Os documentos de referência ultrapassam o limite de contexto disponível para a geração da IA.")
+    # Anexos ficam antes da seção obrigatória de instruções do usuário.
+    marcador_instrucoes = "INSTRUÇÕES DO USUÁRIO (OBRIGATÓRIAS"
+    indice = prompt.find(marcador_instrucoes)
+    if indice >= 0:
+        return prompt[:indice] + contexto + "\n\n" + prompt[indice:]
     return prompt + "\n\n" + contexto
 
 
@@ -93,6 +136,7 @@ def _process_pipeline(job: dict) -> None:
         documentos_anteriores = []
 
     for etapa in etapas:
+        _checar_cancelamento(job)
         etapa_id = str(etapa.get("id", "")).strip().upper()
         etapa_tipo = str(etapa.get("tipo", "geracao_json"))
         prompt = str(etapa.get("prompt", ""))
@@ -106,13 +150,19 @@ def _process_pipeline(job: dict) -> None:
         _write_json(_job_path(job["job_id"], ".processing"), job)
 
         prompt_processado = _substituir_contextos(prompt, dados_usuario, resultados)
-        if etapa_tipo in {"geracao_unificada", "geracao_contratacao_direta"}:
-            prompt_processado += "\n\nDADOS ATUALIZADOS APÓS ETAPAS ANTERIORES:\n" + json.dumps(dados_usuario, ensure_ascii=False, indent=2)
-            if resultados:
-                prompt_processado += "\n\nRESULTADOS JÁ PRODUZIDOS NESTA SOLICITAÇÃO:\n" + json.dumps(resultados, ensure_ascii=False, indent=2)
+        if etapa_tipo in {"geracao_unificada", "geracao_contratacao_direta", "geracao_json"}:
             prompt_processado = _adicionar_documentos_de_referencia(prompt_processado, documentos_anteriores)
 
-        resultado, modelo_resolvido = _chamar_ia(prompt_processado, modelo, temperatura)
+        limite_prompt = max(40_000, min(118_000, int(os.getenv("LICITA_QUEUE_MAX_PROMPT_CHARS", "110000"))))
+        if len(prompt_processado) > limite_prompt:
+            raise RuntimeError(
+                f"O prompt desta etapa excede o limite seguro ({len(prompt_processado):,} caracteres; limite {limite_prompt:,})."
+            )
+        _checar_cancelamento(job)
+        resultado, modelo_resolvido = _chamar_ia(
+            prompt_processado, modelo, float(etapa.get("temperature", temperatura))
+        )
+        _checar_cancelamento(job)
         if modelo_resolvido:
             modelo = modelo_resolvido
             job["resolved_model"] = modelo_resolvido
@@ -154,6 +204,10 @@ def _process_pipeline(job: dict) -> None:
                     continue
                 dados_ia_final[chave] = valor
 
+    if dados_usuario.get("{{VALOR_ESTIMADO}}"):
+        # Este campo reproduz o total calculado a partir dos itens; não é estimado pela IA.
+        dados_ia_final["VALOR_ESTIMADO_APROXIMADO"] = str(dados_usuario["{{VALOR_ESTIMADO}}"])
+    _checar_cancelamento(job)
     _iniciar_etapa(job, "GERACAO_DOCUMENTOS")
     _write_json(_job_path(job["job_id"], ".processing"), job)
     generated_path, zip_filename = gerar_zip(dados_usuario, dados_ia_final, job["job_id"])
@@ -167,10 +221,12 @@ def _process_pipeline(job: dict) -> None:
 
     _finalizar_etapa(job, "GERACAO_DOCUMENTOS", "completed")
     job["dados_usuario_processados"] = dados_usuario
+    _checar_cancelamento(job)
     _iniciar_etapa(job, "ENVIO_EMAIL")
     job["email_started_at"] = _utc_now()
     _write_json(_job_path(job["job_id"], ".processing"), job)
 
+    _checar_cancelamento(job)
     _enviar_email(job["email"], artifact_path, zip_filename, job["job_id"])
 
     # Só substitui a entrada do pipeline pelos resultados depois do envio bem-sucedido.
@@ -192,6 +248,7 @@ def _process_email_only_retry(job: dict) -> None:
     if not isinstance(dados_usuario, dict) or not isinstance(dados_ia, dict) or not dados_ia:
         raise RuntimeError("Não há documentos gerados suficientes para refazer somente o envio de e-mail.")
 
+    _checar_cancelamento(job)
     _iniciar_etapa(job, "GERACAO_DOCUMENTOS")
     _write_json(_job_path(job["job_id"], ".processing"), job)
     generated_path, zip_filename = gerar_zip(dados_usuario, dados_ia, job["job_id"])
@@ -204,9 +261,11 @@ def _process_email_only_retry(job: dict) -> None:
         shutil.rmtree(temp_root, ignore_errors=True)
 
     _finalizar_etapa(job, "GERACAO_DOCUMENTOS", "completed")
+    _checar_cancelamento(job)
     _iniciar_etapa(job, "ENVIO_EMAIL")
     job["email_started_at"] = _utc_now()
     _write_json(_job_path(job["job_id"], ".processing"), job)
+    _checar_cancelamento(job)
     _enviar_email(job["email"], artifact_path, zip_filename, job["job_id"])
 
     _finalizar_etapa(job, "ENVIO_EMAIL", "completed")
@@ -229,7 +288,12 @@ def _process_one_job() -> None:
     processing_path, job = claimed
     try:
         _process_pipeline(job)
+    except JobCancelado:
+        _concluir_cancelamento(job, processing_path)
     except Exception as exc:
+        if _marcador_cancelamento(job).exists():
+            _concluir_cancelamento(job, processing_path)
+            return
         attempts = int(job.get("attempts", 1))
         _finalizar_etapa(job, str(job.get("current_stage") or "PROCESSAMENTO"), "failed", str(exc))
         job["last_error"] = str(exc)

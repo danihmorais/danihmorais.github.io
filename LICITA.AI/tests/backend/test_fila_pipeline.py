@@ -1,7 +1,7 @@
 import json
 import unittest
 
-from fila_pipeline import _aplicar_auditoria_marcas, _extrair_json, _substituir_contextos, _validar_json_geracao
+from fila_pipeline import _aplicar_auditoria_marcas, _dados_para_prompt, _extrair_json, _substituir_contextos, _validar_json_geracao
 from fila_pipeline_unificado import _adicionar_documentos_de_referencia
 
 
@@ -44,6 +44,24 @@ class TestFilaPipeline(unittest.TestCase):
         self.assertIn('"OBJETO": "Aquisição"', resultado)
         self.assertIn('"MERCADO": "Análise"', resultado)
         self.assertIn('"{{OBJETO}}": "Aquisição de bens"', resultado)
+
+    def test_saneia_base64_antes_de_inserir_dados_no_prompt(self):
+        segredo = "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo="
+        dados = {
+            "{{DOTACAO}}": "__IMG__" + segredo + chr(10) + "Fonte 123.456.789/0001-00",
+            "{{CAMINHO_IMAGEM_DOTACAO}}": "data:image/png;base64," + segredo,
+            "RAW_PAC": "campo interno",
+        }
+        saneado = _dados_para_prompt(dados)
+        self.assertNotIn(segredo, json.dumps(saneado))
+        self.assertIn("2 imagem(ns)", saneado["{{DOTACAO}}"])
+        self.assertIn("Fonte 123.456.789/0001-00", saneado["{{DOTACAO}}"])
+        self.assertNotIn("{{CAMINHO_IMAGEM_DOTACAO}}", saneado)
+        self.assertNotIn("RAW_PAC", saneado)
+
+        prompt = _substituir_contextos("__LICITA_PIPE_DADOS_USUARIO__", dados, {})
+        self.assertNotIn(segredo, prompt)
+        self.assertIn("Fonte 123.456.789/0001-00", prompt)
 
     def test_extrair_json(self):
         resultado = _extrair_json('texto antes {"ok": "sim",} texto depois')

@@ -1,40 +1,65 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef } from "react";
 import type { DocumentosReferenciaUpload } from "../api";
 
 interface PromptModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (dados: {
-    instrucoes: string;
-    email: string;
-    arquivos: DocumentosReferenciaUpload;
-  }) => void;
+  onConfirm: (dados: { instrucoes: string; email: string; arquivos: DocumentosReferenciaUpload }) => void;
+  texto: string;
+  onTextoChange: (valor: string) => void;
+  email: string;
+  onEmailChange: (valor: string) => void;
+  arquivos: DocumentosReferenciaUpload;
+  onArquivosChange: (arquivos: DocumentosReferenciaUpload) => void;
 }
 
-export default function PromptModal({ isOpen, onClose, onConfirm }: PromptModalProps) {
-  const [texto, setTexto] = useState("");
-  const [email, setEmail] = useState("");
-  const [arquivos, setArquivos] = useState<DocumentosReferenciaUpload>({});
+export default function PromptModal({
+  isOpen, onClose, onConfirm, texto, onTextoChange, email, onEmailChange, arquivos, onArquivosChange,
+}: PromptModalProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const emailValido = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(email.trim());
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const anterior = document.activeElement as HTMLElement | null;
+    dialogRef.current?.querySelector<HTMLElement>("input, textarea, button")?.focus();
+    const teclado = (evento: KeyboardEvent) => {
+      if (evento.key === "Escape") {
+        evento.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (evento.key !== "Tab" || !dialogRef.current) return;
+      const elementos = Array.from(dialogRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+      if (!elementos.length) return;
+      const primeiro = elementos[0];
+      const ultimo = elementos[elementos.length - 1];
+      if (evento.shiftKey && document.activeElement === primeiro) {
+        evento.preventDefault();
+        ultimo.focus();
+      } else if (!evento.shiftKey && document.activeElement === ultimo) {
+        evento.preventDefault();
+        primeiro.focus();
+      }
+    };
+    document.addEventListener("keydown", teclado);
+    return () => {
+      document.removeEventListener("keydown", teclado);
+      anterior?.focus?.();
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const emailValido = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(email.trim());
-
   const definirArquivo = (campo: keyof DocumentosReferenciaUpload, arquivo: File | null) => {
-    setArquivos((atual) => ({ ...atual, [campo]: arquivo }));
+    onArquivosChange({ ...arquivos, [campo]: arquivo });
   };
 
   const handleConfirmar = () => {
     if (!emailValido) return;
     onConfirm({ instrucoes: texto.trim(), email: email.trim(), arquivos });
-    setTexto("");
-    setArquivos({});
-  };
-
-  const handleCancelar = () => {
-    onClose();
-    setTexto("");
-    setArquivos({});
   };
 
   const campos: Array<{ chave: keyof DocumentosReferenciaUpload; titulo: string; descricao: string }> = [
@@ -45,14 +70,14 @@ export default function PromptModal({ isOpen, onClose, onConfirm }: PromptModalP
   ];
 
   return (
-    <div className="prompt-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) handleCancelar(); }}>
-      <div className="prompt-dialog" role="dialog" aria-modal="true" aria-labelledby="prompt-modal-title" aria-describedby="prompt-modal-description">
+    <div className="prompt-overlay" role="presentation">
+      <div ref={dialogRef} className="prompt-dialog" role="dialog" aria-modal="true" aria-labelledby="prompt-modal-title" aria-describedby="prompt-modal-description">
         <div className="prompt-heading">
           <div className="prompt-heading-copy">
             <span className="prompt-eyebrow">ÚLTIMA ETAPA · ENVIO</span>
             <h2 id="prompt-modal-title">Confeccionar documentos</h2>
           </div>
-          <button type="button" className="prompt-close" onClick={handleCancelar} aria-label="Fechar janela">×</button>
+          <button type="button" className="prompt-close" onClick={onClose} aria-label="Fechar janela">×</button>
         </div>
         <p className="prompt-lead" id="prompt-modal-description">
           Confira o e-mail de recebimento e, se necessário, anexe documentos de um processo anterior. Os arquivos são usados como referência para a elaboração dos novos documentos.
@@ -91,7 +116,7 @@ export default function PromptModal({ isOpen, onClose, onConfirm }: PromptModalP
           <input
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => onEmailChange(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && emailValido) handleConfirmar();
             }}
@@ -107,14 +132,14 @@ export default function PromptModal({ isOpen, onClose, onConfirm }: PromptModalP
           Instruções adicionais para a IA <span className="optional-label">OPCIONAL</span>
           <textarea
             value={texto}
-            onChange={(e) => setTexto(e.target.value)}
+            onChange={(e) => onTextoChange(e.target.value)}
             placeholder="Indique regras específicas, pontos de atenção ou referências importantes para esta contratação..."
           />
           <span className="field-hint">As instruções serão consideradas junto com os dados informados nas cinco etapas.</span>
         </label>
 
         <div className="prompt-actions">
-          <button type="button" className="button button-secondary" onClick={handleCancelar}>Cancelar</button>
+          <button type="button" className="button button-secondary" onClick={onClose}>Cancelar</button>
           <button type="button" className="button button-primary" onClick={handleConfirmar} disabled={!emailValido}>
             Colocar na fila <span aria-hidden="true">→</span>
           </button>

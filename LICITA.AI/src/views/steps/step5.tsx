@@ -35,31 +35,35 @@ const styles = {
   attachBtn: (hasImg: boolean) => ({ padding: "0 24px", height: "44px", background: hasImg ? "var(--btn-success)" : "var(--btn-primary)", color: "var(--bg-panel)", border: "none", borderRadius: "var(--radius-lg)", fontSize: "14px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" })
 };
 
-const RadioOption = ({ label, value, checked, onChange, disabled = false }: any) => (
+const RadioOption = ({ label, value, checked, onChange, disabled = false, name }: any) => (
   <label style={styles.label(disabled)}>
-    <input type="radio" value={value} checked={checked} onChange={onChange} disabled={disabled} style={styles.radioInput} />
+    <input type="radio" name={name} value={value} checked={checked} onChange={onChange} disabled={disabled} style={styles.radioInput} />
     <span style={styles.labelText}>{label}</span>
   </label>
 );
 
-const JustificationBox = ({ label, value, onChange, errorMsg }: any) => {
-  const hasError = value.trim() === "";
+const JustificationBox = ({ label, value, onChange, errorMsg, mostrarErro = false }: any) => {
+  const id = React.useId();
+  const hasError = mostrarErro && String(value || "").trim() === "";
   return (
     <div className="setting-justification" style={styles.justificationBox(hasError)}>
-      <label style={styles.justificationTitle}>
+      <label htmlFor={id} style={styles.justificationTitle}>
         {label} <span style={styles.asterisk}>*</span>
       </label>
       <textarea
+        id={id}
         value={value}
         onChange={onChange}
+        aria-invalid={hasError || undefined}
+        aria-describedby={hasError ? id + "-error" : undefined}
         style={styles.textarea(hasError)}
       />
-      {hasError && <span style={styles.errorText}>{errorMsg}</span>}
+      {hasError && <span id={id + "-error"} style={styles.errorText}>{errorMsg}</span>}
     </div>
   );
 };
 
-export default function Step5({ dados, atualizarDados }: any) {
+export default function Step5({ dados, atualizarDados, tentouAvancar = false }: any) {
   const blocosDotacao: DotacaoBloco[] = React.useMemo(() => {
     if (Array.isArray(dados.dotacaoBlocos) && dados.dotacaoBlocos.length > 0) {
       return dados.dotacaoBlocos;
@@ -88,16 +92,28 @@ export default function Step5({ dados, atualizarDados }: any) {
     });
   };
 
+  const fatorVigencia = (unidade: string) => unidade === "Dias" ? 1 : unidade === "Ano(s)" ? 365 : unidade.toLocaleLowerCase("pt-BR").startsWith("sem") ? 7 : 30;
+  const maxVigencia = (unidade: string) => Math.floor(365 / fatorVigencia(unidade));
+  const vigenciaAtual = Math.max(1, Number(dados.vigenciaNum) || 1);
+  const vigenciaMaxima = maxVigencia(String(dados.vigenciaUnidade || "Meses"));
+
   const decrementarVigencia = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (dados.vigenciaNum > 1) {
-      atualizarDados({ vigenciaNum: dados.vigenciaNum - 1 });
-    }
+    atualizarDados((anterior: any) => ({ vigenciaNum: Math.max(1, (Number(anterior.vigenciaNum) || 1) - 1) }));
   };
 
   const incrementarVigencia = (e: React.MouseEvent) => {
     e.preventDefault();
-    atualizarDados({ vigenciaNum: dados.vigenciaNum + 1 });
+    atualizarDados((anterior: any) => ({
+      vigenciaNum: Math.min(maxVigencia(String(anterior.vigenciaUnidade || "Meses")), (Number(anterior.vigenciaNum) || 1) + 1),
+    }));
+  };
+
+  const alterarUnidadeVigencia = (unidade: string) => {
+    atualizarDados((anterior: any) => ({
+      vigenciaUnidade: unidade,
+      vigenciaNum: Math.min(Math.max(1, Number(anterior.vigenciaNum) || 1), maxVigencia(unidade)),
+    }));
   };
 
   const temLote = dados.itens && dados.itens.some((item: any) => item.lote && item.lote.toString().trim() !== "");
@@ -123,26 +139,27 @@ export default function Step5({ dados, atualizarDados }: any) {
     <div className="step-form step-form--settings" style={styles.container}>
       <div className="setting-section" style={styles.sectionGroup}>
         <h2 style={styles.title}>Tipo de Instrumento</h2>
-        <div className="setting-options" style={styles.sectionMargin}>
+        <fieldset className="setting-options" style={{ ...styles.sectionMargin, border: 0, padding: 0, minWidth: 0 }}>
+          <legend className="sr-only">Tipo de Instrumento</legend>
           <RadioOption 
-            label="CONTRATO (Certeza da quantidade)" 
+            name="instrumento" label="CONTRATO (Certeza da quantidade)" 
             value="CONTRATO" 
             checked={dados.instrumento === "CONTRATO"} 
             onChange={(e: any) => atualizarDados({ instrumento: e.target.value, prorrogar: dados.prorrogar })} 
           />
           <RadioOption 
-            label="ATA DE REGISTRO DE PREÇOS (Sem certeza da quantidade)" 
+            name="instrumento" label="ATA DE REGISTRO DE PREÇOS (Sem certeza da quantidade)" 
             value="ATA" 
             checked={dados.instrumento === "ATA"} 
             onChange={(e: any) => atualizarDados({ instrumento: e.target.value, prorrogar: dados.prorrogar })} 
           />
           <RadioOption 
-            label="SEM CONTRATO (Dispensa pequeno valor)" 
+            name="instrumento" label="SEM CONTRATO (Dispensa pequeno valor)" 
             value="SEM_CONTRATO" 
             checked={dados.instrumento === "SEM_CONTRATO"} 
             onChange={(e: any) => atualizarDados({ instrumento: e.target.value, prorrogar: false })} 
           />
-        </div>
+        </fieldset>
         <label style={styles.checkboxLabel(dados.instrumento === "SEM_CONTRATO")}>
           <input 
             type="checkbox" 
@@ -157,16 +174,17 @@ export default function Step5({ dados, atualizarDados }: any) {
 
       <div className="setting-section" style={styles.sectionGroup}>
         <h2 style={styles.title}>Participação ME/EPP</h2>
-        <div className="setting-options" style={styles.section}>
+        <fieldset className="setting-options" style={{ ...styles.section, border: 0, padding: 0, minWidth: 0 }}>
+          <legend className="sr-only">Participação ME/EPP</legend>
           <RadioOption 
-            label={`Exclusiva para ME/EPP (Até ${formatarLimiteMeepp()})`} 
+            name="meepp" label={`Exclusiva para ME/EPP (Até ${formatarLimiteMeepp()})`} 
             value="SIM" 
             checked={dados.meepp === "SIM"} 
             disabled={!meeppExclusivoPermitido}
             onChange={(e: any) => atualizarDados({ meepp: e.target.value })} 
           />
           <RadioOption 
-            label="Não Exclusiva (Maior que R$ 80.000,00 ou ampla participação)" 
+            name="meepp" label="Não Exclusiva (Maior que R$ 80.000,00 ou ampla participação)" 
             value="NAO" 
             checked={dados.meepp === "NAO"} 
             onChange={(e: any) => atualizarDados({ meepp: e.target.value })} 
@@ -176,7 +194,7 @@ export default function Step5({ dados, atualizarDados }: any) {
               A exclusividade integral para ME/EPP foi bloqueada porque o valor estimado desta contratação ({valorEstimadoFormatado}) supera o limite de {formatarLimiteMeepp()}.
             </span>
           )}
-        </div>
+        </fieldset>
       </div>
 
       <div className="setting-section" style={styles.sectionGroup}>
@@ -186,24 +204,25 @@ export default function Step5({ dados, atualizarDados }: any) {
             ? "Foi detectado o uso de lotes na listagem de itens. Apenas a opção de julgamento por Lote está disponível." 
             : "Regra geral da Lei 14.133/21: A adjudicação deve ser preferencialmente por ITEM para ampliar a concorrência."}
         </p>
-        <div className="setting-options" style={styles.sectionMargin}>
+        <fieldset className="setting-options" style={{ ...styles.sectionMargin, border: 0, padding: 0, minWidth: 0 }}>
+          <legend className="sr-only">Critério de Julgamento</legend>
           {!temLote && (
             <>
-              <RadioOption label="Menor preço por item" value="ITEM" checked={dados.criterio === "ITEM"} onChange={(e: any) => atualizarDados({ criterio: e.target.value })} />
-              <RadioOption label="Menor preço global" value="GLOBAL" checked={dados.criterio === "GLOBAL"} onChange={(e: any) => atualizarDados({ criterio: e.target.value })} />
+              <RadioOption name="criterio" label="Menor preço por item" value="ITEM" checked={dados.criterio === "ITEM"} onChange={(e: any) => atualizarDados({ criterio: e.target.value })} />
+              <RadioOption name="criterio" label="Menor preço global" value="GLOBAL" checked={dados.criterio === "GLOBAL"} onChange={(e: any) => atualizarDados({ criterio: e.target.value })} />
             </>
           )}
           {temLote && (
-            <RadioOption label="Menor preço por lote" value="LOTE" checked={dados.criterio === "LOTE"} onChange={(e: any) => atualizarDados({ criterio: e.target.value })} />
+            <RadioOption name="criterio" label="Menor preço por lote" value="LOTE" checked={dados.criterio === "LOTE"} onChange={(e: any) => atualizarDados({ criterio: e.target.value })} />
           )}
-        </div>
+        </fieldset>
 
         {(dados.criterio === "GLOBAL" || dados.criterio === "LOTE") && (
           <JustificationBox 
             label="Motivação para o agrupamento (Global/Lote):"
             value={dados.motivoCriterio}
             onChange={(e: any) => atualizarDados({ motivoCriterio: e.target.value })}
-            errorMsg="Este campo é obrigatório."
+            errorMsg="Este campo é obrigatório." mostrarErro={tentouAvancar}
           />
         )}
       </div>
@@ -211,19 +230,20 @@ export default function Step5({ dados, atualizarDados }: any) {
       <div className="setting-section" style={styles.sectionGroup}>
         <h2 style={styles.titleCompact}>Modalidade</h2>
         <p style={styles.subtitle}>Regra geral da Lei 14.133/21: O Pregão Eletrônico é a modalidade obrigatória padrão.</p>
-        <div className="setting-options" style={styles.sectionMargin}>
-          <RadioOption label="Pregão Eletrônico" value="PREGAO_ELETRONICO" checked={dados.modalidade === "PREGAO_ELETRONICO"} onChange={(e: any) => atualizarDados({ modalidade: e.target.value })} />
-          <RadioOption label="Dispensa por e-mail" value="DISPENSA_EMAIL" checked={dados.modalidade === "DISPENSA_EMAIL"} onChange={(e: any) => atualizarDados({ modalidade: e.target.value })} />
-          <RadioOption label="Dispensa com lances na BLL" value="DISPENSA_BLL" checked={dados.modalidade === "DISPENSA_BLL"} onChange={(e: any) => atualizarDados({ modalidade: e.target.value })} />
-          <RadioOption label="Pregão Presencial" value="PREGAO_PRESENCIAL" checked={dados.modalidade === "PREGAO_PRESENCIAL"} onChange={(e: any) => atualizarDados({ modalidade: e.target.value })} />
-        </div>
+        <fieldset className="setting-options" style={{ ...styles.sectionMargin, border: 0, padding: 0, minWidth: 0 }}>
+          <legend className="sr-only">Modalidade</legend>
+          <RadioOption name="modalidade" label="Pregão Eletrônico" value="PREGAO_ELETRONICO" checked={dados.modalidade === "PREGAO_ELETRONICO"} onChange={(e: any) => atualizarDados({ modalidade: e.target.value })} />
+          <RadioOption name="modalidade" label="Dispensa por e-mail" value="DISPENSA_EMAIL" checked={dados.modalidade === "DISPENSA_EMAIL"} onChange={(e: any) => atualizarDados({ modalidade: e.target.value })} />
+          <RadioOption name="modalidade" label="Dispensa com lances na BLL" value="DISPENSA_BLL" checked={dados.modalidade === "DISPENSA_BLL"} onChange={(e: any) => atualizarDados({ modalidade: e.target.value })} />
+          <RadioOption name="modalidade" label="Pregão Presencial" value="PREGAO_PRESENCIAL" checked={dados.modalidade === "PREGAO_PRESENCIAL"} onChange={(e: any) => atualizarDados({ modalidade: e.target.value })} />
+        </fieldset>
 
         {dados.modalidade !== "PREGAO_ELETRONICO" && (
           <JustificationBox 
             label={dados.modalidade === "PREGAO_PRESENCIAL" ? "Justificativa (Válido para municípios com até 20k habitantes até abril de 2027):" : "Justificativa (Atenção: Limite legal de até 65k ao todo ao longo do ano):"}
             value={dados.motivoModalidade}
             onChange={(e: any) => atualizarDados({ motivoModalidade: e.target.value })}
-            errorMsg="Este campo é obrigatório."
+            errorMsg="Este campo é obrigatório." mostrarErro={tentouAvancar}
           />
         )}
       </div>
@@ -231,23 +251,25 @@ export default function Step5({ dados, atualizarDados }: any) {
       <div className="setting-section" style={styles.sectionGroup}>
         <h2 style={styles.title}>Vigência do Contrato/Ata (Máximo 1 ano)</h2>
         <div className="counter-wrapper" style={styles.counterWrapper}>
-          <button type="button" onClick={decrementarVigencia} style={styles.btn}>-</button>
-          <input 
-            type="text" 
-            value={dados.vigenciaNum} 
-            readOnly 
-            style={styles.counterInput} 
+          <button type="button" onClick={decrementarVigencia} disabled={vigenciaAtual <= 1} style={{ ...styles.btn, opacity: vigenciaAtual <= 1 ? 0.45 : 1 }}>-</button>
+          <input
+            type="text"
+            value={vigenciaAtual}
+            readOnly
+            aria-label={"Vigência em " + dados.vigenciaUnidade}
+            style={styles.counterInput}
           />
-          <button type="button" onClick={incrementarVigencia} style={styles.btn}>+</button>
+          <button type="button" onClick={incrementarVigencia} disabled={vigenciaAtual >= vigenciaMaxima} style={{ ...styles.btn, opacity: vigenciaAtual >= vigenciaMaxima ? 0.45 : 1 }}>+</button>
           <select 
             value={dados.vigenciaUnidade}
-            onChange={(e) => atualizarDados({ vigenciaUnidade: e.target.value })}
+            onChange={(e) => alterarUnidadeVigencia(e.target.value)}
             style={styles.select}
           >
             <option value="Dias">Dias</option>
             <option value="Meses">Meses</option>
             <option value="Ano(s)">Ano(s)</option>
           </select>
+          <span role="status" style={{ color: "var(--text-muted)", fontSize: 12 }}>Máximo: {vigenciaMaxima} {dados.vigenciaUnidade || "Meses"} (365 dias).</span>
         </div>
       </div>
 
@@ -335,17 +357,18 @@ export default function Step5({ dados, atualizarDados }: any) {
 
       <div className="setting-section" style={styles.sectionGroup}>
         <h2 style={styles.title}>Plano Anual de Contratações (PAC)</h2>
-        <div className="setting-options" style={styles.sectionMargin}>
-          <RadioOption label="Sim, previsto no PAC" value="SIM" checked={dados.pac === "SIM"} onChange={(e: any) => atualizarDados({ pac: e.target.value })} />
-          <RadioOption label="Não previsto no PAC" value="NAO" checked={dados.pac === "NAO"} onChange={(e: any) => atualizarDados({ pac: e.target.value })} />
-        </div>
+        <fieldset className="setting-options" style={{ ...styles.sectionMargin, border: 0, padding: 0, minWidth: 0 }}>
+          <legend className="sr-only">Plano Anual de Contratações</legend>
+          <RadioOption name="pac" label="Sim, previsto no PAC" value="SIM" checked={dados.pac === "SIM"} onChange={(e: any) => atualizarDados({ pac: e.target.value })} />
+          <RadioOption name="pac" label="Não previsto no PAC" value="NAO" checked={dados.pac === "NAO"} onChange={(e: any) => atualizarDados({ pac: e.target.value })} />
+        </fieldset>
         
         {dados.pac === "NAO" && (
           <JustificationBox 
             label="Justificativa para a não inclusão no PAC:"
             value={dados.motivoPac}
             onChange={(e: any) => atualizarDados({ motivoPac: e.target.value })}
-            errorMsg="Este campo é obrigatório."
+            errorMsg="Este campo é obrigatório." mostrarErro={tentouAvancar}
           />
         )}
       </div>

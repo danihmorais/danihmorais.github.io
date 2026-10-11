@@ -100,7 +100,9 @@ REGRAS ABSOLUTAS:
 6. Não substitua marca por outra marca. Não invente texto. Não acrescente características.
 7. Números de modelo, padrões, normas e códigos só devem ser removidos se forem inequivocamente parte da identificação comercial da marca/linha.
 8. Se não houver marca comercial explícita, devolva o nome exatamente como recebido.
-9. Retorne EXCLUSIVAMENTE JSON válido, sem markdown.
+9. Palavras genéricas usadas como substantivos comuns não são marca sem evidência inequívoca; na dúvida, preserve o texto.
+10. Exemplos: "papel sulfite A4 Chamex" → retirar somente "Chamex" se não houver justificativa; "toner original HP compatível com impressora HP indicada" → manter a marca se houver justificativa de compatibilidade nos dados; "cabo tipo banana" → manter, pois a expressão pode ser descrição genérica.
+11. Retorne EXCLUSIVAMENTE JSON válido, sem markdown.
 
 INSTRUÇÕES/JUSTIFICATIVAS DO USUÁRIO:
 ${instrucoesUsuario?.trim() || "Nenhuma justificativa específica de marca foi apresentada."}
