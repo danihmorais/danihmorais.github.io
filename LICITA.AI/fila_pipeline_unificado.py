@@ -61,15 +61,16 @@ def _total_itens_tabela_tr(texto: str) -> Decimal | None:
 
     for linha in linhas:
         if "|" not in linha:
+            cabecalho = None
             continue
         celulas = [parte.strip() for parte in linha.strip().strip("|").split("|")]
         rotulos = [_normalizar_rotulo_financeiro(parte) for parte in celulas]
         indice_qtd = next(
-            (i for i, rotulo in enumerate(rotulos) if re.search(r"\b(qtd|qtde|quantidade|quant)\\b", rotulo)),
+            (i for i, rotulo in enumerate(rotulos) if re.search(r"\b(qtd|qtde|quantidade|quant)\b", rotulo)),
             None,
         )
         indice_total = next(
-            (i for i, rotulo in enumerate(rotulos) if "total" in rotulo and ("valor" in rotulo or "preco" in rotulo or rotulo == "total")),
+            (i for i, rotulo in enumerate(rotulos) if "total" in rotulo and ("valor" in rotulo or "preco" in rotulo or "r$" in rotulo or rotulo == "total")),
             None,
         )
         indice_unitario = next(
@@ -96,7 +97,7 @@ def _total_itens_tabela_tr(texto: str) -> Decimal | None:
         if any(palavra in linha_normalizada for palavra in ("valor total estimado", "total geral", "subtotal", "total dos itens")):
             cabecalho = None
             continue
-        if any(rotulo and re.search(r"\b(qtd|qtde|quantidade|quant)\\b", rotulo) for rotulo in rotulos):
+        if any(rotulo and re.search(r"\b(qtd|qtde|quantidade|quant)\b", rotulo) for rotulo in rotulos):
             continue
 
         descricao = celulas[indice_descricao] if indice_descricao < len(celulas) else ""
@@ -125,10 +126,10 @@ def _total_explicito_tr(texto: str) -> Decimal | None:
     """Busca um total declarado, apenas em linhas rotuladas explicitamente como total."""
     padrao_rotulo = re.compile(
         r"\b(total dos itens|valor total estimado(?: da contratacao)?|valor estimado total|"
-        r"valor total da contratacao|total geral|valor global estimado)\\b"
+        r"valor total da contratacao|total geral|valor global estimado)\b"
     )
     padrao_valor = re.compile(
-        r"(?i)(?:R\\$\\s*)?(-?\\d{1,3}(?:\\.\\d{3})*(?:,\\d{2})|-?\\d+(?:[.,]\\d{2}))"
+        r"(?i)(?:R\$\s*)?(-?\d{1,3}(?:\.\d{3})*(?:,\d{2})|-?\d+(?:[.,]\d{2}))"
     )
     for linha in str(texto or "").splitlines():
         linha_normalizada = _normalizar_rotulo_financeiro(linha)
