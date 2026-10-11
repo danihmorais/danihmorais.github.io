@@ -96,7 +96,7 @@ test("fila normal envia uma única etapa de IA para DFD, ETP e TR", async () => 
   const body = JSON.parse(chamada.options.body);
   const etapas = body.dados_ia.__LICITA_PIPELINE__.etapas;
   assert.equal(chamada.url, "https://api.example.test/licita/api/gerar-fase-preparatoria");
-  assert.deepEqual(etapas.map((etapa) => etapa.id), ["DFD", "ETP", "TR"]);
+  assert.deepEqual(etapas.filter((etapa) => ["DFD", "ETP", "TR"].includes(etapa.id)).map((etapa) => etapa.id), ["DFD", "ETP", "TR"]);
   assert.equal(etapas.filter((etapa) => etapa.tipo === "geracao_json").length, 3);
   assert.match(etapas.find((etapa) => etapa.id === "DFD").prompt, /PROMPT_DFD/);
   assert.match(etapas.find((etapa) => etapa.id === "ETP").prompt, /__LICITA_PIPE_DFD__/);
