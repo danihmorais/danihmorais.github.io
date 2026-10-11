@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import shutil
@@ -9,6 +10,8 @@ import time
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation, ROUND_CEILING, ROUND_HALF_UP
 import unicodedata
+
+logger = logging.getLogger(__name__)
 
 from fila import MAX_ATTEMPTS, POLL_INTERVAL_SECONDS, QUEUE_DIR, RETRY_BASE_SECONDS, RETRY_MAX_SECONDS, SMTP_FROM, SMTP_USERNAME, _artifact_path, _claim_next_job, _enviar_email, _enviar_email_alerta_falha, _finalizar_etapa, _finalizar_tentativa, _iniciar_etapa, _job_path, _write_json, gerar_zip
 from fila_pipeline import _aplicar_auditoria_marcas, _chamar_ia as _chamar_ia_primaria, _substituir_contextos, _validar_json_geracao
@@ -151,9 +154,13 @@ def _extrair_total_itens_tr_anterior(documentos_anteriores: list[dict] | None) -
         texto = str(documento.get("texto") or "").strip()
         if not texto:
             continue
-        total = _total_itens_tabela_tr(texto)
-        if total is None:
-            total = _total_explicito_tr(texto)
+        total_tabela = _total_itens_tabela_tr(texto)
+        total_explicito = _total_explicito_tr(texto)
+        # Se os itens identificados não fecham com o total expresso no documento,
+        # não aceite uma soma possivelmente parcial: permita análise contextual pela IA.
+        if total_tabela is not None and total_explicito is not None and total_tabela != total_explicito:
+            continue
+        total = total_tabela if total_tabela is not None else total_explicito
         if total is not None and total > 0:
             return total
     return None
@@ -162,12 +169,15 @@ def _extrair_total_itens_tr_anterior(documentos_anteriores: list[dict] | None) -
 def _calcular_valor_estimado_aproximado(
     dados_usuario: dict,
     documentos_anteriores: list[dict] | None = None,
+    total_anterior_ia: Decimal | None = None,
 ) -> str:
     """
     Calcula valor arredondado, cerca de 5% acima do total-base.
     Havendo TR anterior com total de itens extraível, ele prevalece sobre os itens do wizard.
     """
     total_anterior = _extrair_total_itens_tr_anterior(documentos_anteriores)
+    if total_anterior is None:
+        total_anterior = total_anterior_ia
     try:
         total = total_anterior if total_anterior is not None else Decimal(str(calcular_valor_estimado(dados_usuario)))
     except (ArithmeticError, TypeError, ValueError):
@@ -232,6 +242,104 @@ def _chamar_ia(prompt: str, model: str, temperature: float = 0.3) -> tuple[dict,
 
 def _delay(attempts: int) -> int:
     return min(RETRY_MAX_SECONDS, RETRY_BASE_SECONDS * (2 ** max(0, attempts - 1)))
+
+
+def _total_itens_tr_por_ia(
+    documentos_anteriores: list[dict] | None,
+    modelo: str,
+    temperatura: float = 0.3,
+) -> tuple[Decimal | None, str]:
+    """
+    Usa a IA como fallback para interpretar tabelas de TR cujo formato não foi
+    reconhecido com segurança pelas regras determinísticas. A soma é refeita em
+    Python; o modelo apenas identifica as linhas, quantidades e valores.
+    """
+    documentos_tr = [
+        documento for documento in (documentos_anteriores or [])
+        if isinstance(documento, dict)
+        and str(documento.get("tipo") or "").strip().upper() == "TR"
+        and str(documento.get("texto") or "").strip()
+    ]
+    modelo_atual = str(modelo or "unsloth-auto").strip()
+
+    for documento in documentos_tr:
+        texto = str(documento.get("texto") or "").strip()
+        nome = str(documento.get("nome") or "TR anterior").strip()
+        prompt = (
+            "Tarefa de extração estruturada de dados financeiros de um Termo de Referência "
+            "anterior de contratação pública brasileira. Analise o documento integral abaixo.\n\n"
+            "Identifique TODAS as linhas de itens da tabela/lista principal de itens da contratação "
+            "(inclusive tabelas com cabeçalhos incomuns, tabelas quebradas entre páginas e valores "
+            "que aparecem em colunas ou linhas separadas). Para cada item, extraia número, descrição, "
+            "quantidade, preço unitário e valor total da linha, quando disponíveis. Preserve os valores "
+            "como aparecem no documento, sem estimar nem inventar dados. Não inclua subtotais, total "
+            "geral, linhas de resumo, pesquisa de preços de mercado, exemplos, cronogramas de entrega, "
+            "cabeçalhos repetidos nem valores referentes a outra contratação. Não conte duas vezes a "
+            "mesma linha se ela reaparecer por quebra de página.\n\n"
+            "A resposta deve ser exclusivamente um objeto JSON com este formato: "
+            '{"todos_itens_identificados": true, "itens": ['
+            '{"numero": "1", "descricao": "descrição do item", "quantidade": "10", '
+            '"valor_unitario": "25,00", "valor_total": "250,00"}]}. '
+            "Use null para um campo numérico que não esteja informado. Defina "
+            '"todos_itens_identificados" como true SOMENTE se conseguiu identificar todas as linhas '
+            "da lista principal e todas elas possuem valor_total, ou quantidade e valor_unitario "
+            "suficientes para calcular o total. Se o documento não permitir confirmar a lista completa, "
+            "se houver linhas de item sem preço/quantidade suficientes, ou se não houver lista de itens "
+            'valorizada, retorne {"todos_itens_identificados": false, "itens": []}. '
+            "Não some os valores mentalmente; a aplicação fará a soma com aritmética decimal.\n\n"
+            f"DOCUMENTO: {nome}\n--- INÍCIO DO TR ---\n{texto}\n--- FIM DO TR ---"
+        )
+        try:
+            resultado, modelo_resolvido = _chamar_ia(prompt, modelo_atual, temperatura)
+            if modelo_resolvido:
+                modelo_atual = modelo_resolvido
+        except Exception:
+            logger.warning(
+                "Não foi possível analisar por IA os itens do TR anterior; será usada a estimativa disponível no wizard.",
+                exc_info=True,
+            )
+            continue
+
+        itens = resultado.get("itens") if isinstance(resultado, dict) else None
+        if not isinstance(resultado, dict) or resultado.get("todos_itens_identificados") is not True:
+            continue
+        if not isinstance(itens, list) or not itens:
+            continue
+
+        total_itens = Decimal("0")
+        linhas_validas = 0
+        completo = True
+        for item in itens:
+            if not isinstance(item, dict):
+                completo = False
+                break
+            descricao = str(item.get("descricao") or item.get("numero") or "").strip()
+            if not descricao:
+                completo = False
+                break
+
+            quantidade = _parse_valor_documento(str(item.get("quantidade") or ""))
+            valor_unitario = _parse_valor_documento(str(item.get("valor_unitario") or ""))
+            valor_total = _parse_valor_documento(str(item.get("valor_total") or ""))
+
+            if valor_total is not None:
+                subtotal = valor_total
+            elif quantidade is not None and valor_unitario is not None:
+                subtotal = (quantidade * valor_unitario).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            else:
+                completo = False
+                break
+
+            if subtotal <= 0:
+                completo = False
+                break
+            total_itens += subtotal
+            linhas_validas += 1
+
+        if completo and linhas_validas == len(itens) and total_itens > 0:
+            return total_itens.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP), modelo_atual
+
+    return None, modelo_atual
 
 
 def _adicionar_documentos_de_referencia(prompt: str, documentos: list[dict]) -> str:
@@ -377,7 +485,17 @@ def _process_pipeline(job: dict) -> None:
                     continue
                 dados_ia_final[chave] = valor
 
-    valor_estimado_aproximado = _calcular_valor_estimado_aproximado(dados_usuario, documentos_anteriores)
+    total_anterior_ia = None
+    if _extrair_total_itens_tr_anterior(documentos_anteriores) is None:
+        total_anterior_ia, modelo_analise = _total_itens_tr_por_ia(
+            documentos_anteriores, modelo, temperatura
+        )
+        if modelo_analise:
+            modelo = modelo_analise
+            job["resolved_model"] = modelo_analise
+    valor_estimado_aproximado = _calcular_valor_estimado_aproximado(
+        dados_usuario, documentos_anteriores, total_anterior_ia=total_anterior_ia
+    )
     if valor_estimado_aproximado:
         # O valor aproximado é derivado dos itens, com margem de 5% e arredondamento para cima.
         dados_ia_final["VALOR_ESTIMADO_APROXIMADO"] = valor_estimado_aproximado
