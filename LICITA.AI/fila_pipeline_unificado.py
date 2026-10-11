@@ -486,13 +486,23 @@ def _process_pipeline(job: dict) -> None:
                 dados_ia_final[chave] = valor
 
     total_anterior_ia = None
-    if _extrair_total_itens_tr_anterior(documentos_anteriores) is None:
+    possui_tr_anterior = any(
+        isinstance(documento, dict)
+        and str(documento.get("tipo") or "").strip().upper() == "TR"
+        and str(documento.get("texto") or "").strip()
+        for documento in documentos_anteriores
+    )
+    if possui_tr_anterior and _extrair_total_itens_tr_anterior(documentos_anteriores) is None:
+        _iniciar_etapa(job, "ANALISE_VALOR_TR")
+        _write_json(_job_path(job["job_id"], ".processing"), job)
         total_anterior_ia, modelo_analise = _total_itens_tr_por_ia(
             documentos_anteriores, modelo, temperatura
         )
         if modelo_analise:
             modelo = modelo_analise
             job["resolved_model"] = modelo_analise
+        _finalizar_etapa(job, "ANALISE_VALOR_TR", "completed")
+        _write_json(_job_path(job["job_id"], ".processing"), job)
     valor_estimado_aproximado = _calcular_valor_estimado_aproximado(
         dados_usuario, documentos_anteriores, total_anterior_ia=total_anterior_ia
     )
