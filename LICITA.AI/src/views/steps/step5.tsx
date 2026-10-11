@@ -88,16 +88,28 @@ export default function Step5({ dados, atualizarDados }: any) {
     });
   };
 
+  const fatorVigencia = (unidade: string) => unidade === "Dias" ? 1 : unidade === "Ano(s)" ? 365 : 30;
+  const maxVigencia = (unidade: string) => Math.floor(365 / fatorVigencia(unidade));
+  const vigenciaAtual = Math.max(1, Number(dados.vigenciaNum) || 1);
+  const vigenciaMaxima = maxVigencia(String(dados.vigenciaUnidade || "Meses"));
+
   const decrementarVigencia = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (dados.vigenciaNum > 1) {
-      atualizarDados({ vigenciaNum: dados.vigenciaNum - 1 });
-    }
+    atualizarDados((anterior: any) => ({ vigenciaNum: Math.max(1, (Number(anterior.vigenciaNum) || 1) - 1) }));
   };
 
   const incrementarVigencia = (e: React.MouseEvent) => {
     e.preventDefault();
-    atualizarDados({ vigenciaNum: dados.vigenciaNum + 1 });
+    atualizarDados((anterior: any) => ({
+      vigenciaNum: Math.min(maxVigencia(String(anterior.vigenciaUnidade || "Meses")), (Number(anterior.vigenciaNum) || 1) + 1),
+    }));
+  };
+
+  const alterarUnidadeVigencia = (unidade: string) => {
+    atualizarDados((anterior: any) => ({
+      vigenciaUnidade: unidade,
+      vigenciaNum: Math.min(Math.max(1, Number(anterior.vigenciaNum) || 1), maxVigencia(unidade)),
+    }));
   };
 
   const temLote = dados.itens && dados.itens.some((item: any) => item.lote && item.lote.toString().trim() !== "");
@@ -231,23 +243,25 @@ export default function Step5({ dados, atualizarDados }: any) {
       <div className="setting-section" style={styles.sectionGroup}>
         <h2 style={styles.title}>Vigência do Contrato/Ata (Máximo 1 ano)</h2>
         <div className="counter-wrapper" style={styles.counterWrapper}>
-          <button type="button" onClick={decrementarVigencia} style={styles.btn}>-</button>
-          <input 
-            type="text" 
-            value={dados.vigenciaNum} 
-            readOnly 
-            style={styles.counterInput} 
+          <button type="button" onClick={decrementarVigencia} disabled={vigenciaAtual <= 1} style={{ ...styles.btn, opacity: vigenciaAtual <= 1 ? 0.45 : 1 }}>-</button>
+          <input
+            type="text"
+            value={vigenciaAtual}
+            readOnly
+            aria-label={"Vigência em " + dados.vigenciaUnidade}
+            style={styles.counterInput}
           />
-          <button type="button" onClick={incrementarVigencia} style={styles.btn}>+</button>
+          <button type="button" onClick={incrementarVigencia} disabled={vigenciaAtual >= vigenciaMaxima} style={{ ...styles.btn, opacity: vigenciaAtual >= vigenciaMaxima ? 0.45 : 1 }}>+</button>
           <select 
             value={dados.vigenciaUnidade}
-            onChange={(e) => atualizarDados({ vigenciaUnidade: e.target.value })}
+            onChange={(e) => alterarUnidadeVigencia(e.target.value)}
             style={styles.select}
           >
             <option value="Dias">Dias</option>
             <option value="Meses">Meses</option>
             <option value="Ano(s)">Ano(s)</option>
           </select>
+          <span role="status" style={{ color: "var(--text-muted)", fontSize: 12 }}>Máximo: {vigenciaMaxima} {dados.vigenciaUnidade || "Meses"} (365 dias).</span>
         </div>
       </div>
 
