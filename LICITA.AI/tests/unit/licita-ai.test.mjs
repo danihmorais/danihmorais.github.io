@@ -116,7 +116,7 @@ test("gerarFasePreparatoria usa multipart quando há documentos de referência",
       ],
     ],
     globals: {
-      __injected_gerador: { construirPrompt: () => "PROMPT_TESTE" },
+      __injected_gerador: { construirPrompt: (_dados, _meepp, etapa) => "PROMPT_TESTE_" + etapa + "\\n__LICITA_PIPE_DADOS_USUARIO__\\nESTRUTURA JSON OBRIGATÓRIA:" },
       FormData: class {
         values = new Map();
         append(key, value, filename) {
@@ -161,7 +161,12 @@ test("gerarFasePreparatoria usa multipart quando há documentos de referência",
   assert.equal(chamada.options.body.get("dfd").name, "DFD anterior.docx");
   const payload = JSON.parse(chamada.options.body.get("payload"));
   assert.equal(payload.email, "teste@example.com");
-  assert.equal(payload.dados_ia.__LICITA_PIPELINE__.etapas.length, 1);
+  const etapas = payload.dados_ia.__LICITA_PIPELINE__.etapas;
+  assert.deepEqual(etapas.map((etapa) => etapa.id), ["DFD", "ETP", "TR"]);
+  assert.equal(etapas[0].temperature, 0.3);
+  assert.match(etapas[0].prompt, /__LICITA_PIPE_DADOS_USUARIO__/);
+  assert.match(etapas[1].prompt, /__LICITA_PIPE_DFD__/);
+  assert.match(etapas[2].prompt, /__LICITA_PIPE_ETP__/);
 });
 
 test("gerarFasePreparatoria cria etapa de IA somente para pagamento por etapas", async () => {
@@ -174,7 +179,7 @@ test("gerarFasePreparatoria cria etapa de IA somente para pagamento por etapas",
       ],
     ],
     globals: {
-      __injected_gerador: { construirPrompt: () => "PROMPT_TESTE" },
+      __injected_gerador: { construirPrompt: (_dados, _meepp, etapa) => "PROMPT_TESTE_" + etapa + "\\n__LICITA_PIPE_DADOS_USUARIO__\\nESTRUTURA JSON OBRIGATÓRIA:" },
       fetch: async (url, options) => {
         chamada = { url, options };
         return {
@@ -215,7 +220,7 @@ test("gerarFasePreparatoria rejeita pagamento por etapas sem descrição", async
       ],
     ],
     globals: {
-      __injected_gerador: { construirPrompt: () => "PROMPT_TESTE" },
+      __injected_gerador: { construirPrompt: (_dados, _meepp, etapa) => "PROMPT_TESTE_" + etapa + "\\n__LICITA_PIPE_DADOS_USUARIO__\\nESTRUTURA JSON OBRIGATÓRIA:" },
     },
   });
 
