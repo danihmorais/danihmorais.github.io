@@ -437,6 +437,45 @@ class LicitaBackendTests(unittest.TestCase):
             self.assertEqual(refeito["instrucoes"], "Não perder esta instrução")
         self._com_admin(executar)
 
+    def test_painel_admin_exclui_json_concluido_e_fracassado(self):
+        def executar(client, token):
+            headers = {"Authorization": "Bearer " + token}
+            for status, sufixo in (("sent", ".done"), ("failed", ".failed")):
+                job = fila.enqueue_job(
+                    email=f"excluir-{status}@example.com",
+                    dados_usuario={"{{OBJETO}}": f"Objeto {status}"},
+                    dados_ia={"__LICITA_PIPELINE__": {"model": "unsloth-auto", "etapas": [{"id": "FASE_PREPARATORIA", "tipo": "geracao_unificada", "prompt": "teste"}]}},
+                )
+                registro = json.loads(fila._job_path(job["job_id"]).read_text(encoding="utf-8"))
+                registro["status"] = status
+                fila._write_json(fila._job_path(job["job_id"], sufixo), registro)
+                fila._job_path(job["job_id"]).unlink(missing_ok=True)
+                artefato = fila._artifact_path(job["job_id"])
+                artefato.write_bytes(b"artefato de teste")
+
+                resposta = client.delete("/api/admin/jobs/" + job["job_id"], headers=headers)
+                self.assertEqual(resposta.status_code, 200, resposta.text)
+                self.assertTrue(resposta.json()["deleted"])
+                self.assertIsNone(fila.get_job(job["job_id"]))
+                self.assertFalse(artefato.exists())
+                self.assertFalse(fila._job_path(job["job_id"], sufixo).exists())
+        self._com_admin(executar)
+
+    def test_painel_admin_impede_excluir_pedido_ativo(self):
+        def executar(client, token):
+            job = fila.enqueue_job(
+                email="ativo@example.com",
+                dados_usuario={"{{OBJETO}}": "Pedido ativo"},
+                dados_ia={"__LICITA_PIPELINE__": {"model": "unsloth-auto", "etapas": [{"id": "FASE_PREPARATORIA", "tipo": "geracao_unificada", "prompt": "teste"}]}},
+            )
+            resposta = client.delete(
+                "/api/admin/jobs/" + job["job_id"],
+                headers={"Authorization": "Bearer " + token},
+            )
+            self.assertEqual(resposta.status_code, 409)
+            self.assertIsNotNone(fila.get_job(job["job_id"]))
+        self._com_admin(executar)
+
     def test_painel_admin_recusa_refazer_pedido_que_nao_falhou(self):
         def executar(client, token):
             job = fila.enqueue_job(
