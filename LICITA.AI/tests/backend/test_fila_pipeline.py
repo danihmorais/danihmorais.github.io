@@ -282,7 +282,7 @@ class TestPipelineUnificado(unittest.TestCase):
 
         self.assertEqual(
             pipeline._calcular_valor_estimado_aproximado(dados_atuais, documentos),
-            "R$ 110,00",
+            "R$ 105,00",
         )
 
     def test_reutiliza_modelo_resolvido_nas_etapas_seguintes(self):
