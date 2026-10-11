@@ -9,7 +9,7 @@ import httpx
 
 API_UNSLOTH_URL = os.getenv("LICITA_UNSLOTH_URL", os.getenv("UNSLOTH_URL", "http://127.0.0.1:8888/v1")).rstrip("/")
 API_UNSLOTH_KEY = os.getenv("LICITA_UNSLOTH_KEY", os.getenv("API_UNSLOTH", "")).strip()
-AI_TIMEOUT_SECONDS = max(60, int(os.getenv("LICITA_QUEUE_AI_TIMEOUT", "600")))
+AI_TIMEOUT_SECONDS = max(60, min(1800, int(os.getenv("LICITA_QUEUE_AI_TIMEOUT", "600"))))
 
 PESQUISA_WEB_SYSTEM_PROMPT = """
 Você é um especialista em planejamento de contratações públicas brasileiras, com rigor jurídico e técnico. Quando a tarefa envolver a elaboração ou análise de DFD, ETP, TR, edital, contratação direta ou requisitos relacionados ao objeto, use a ferramenta de pesquisa na web do Unsloth antes de concluir. Você dispõe de até 600 segundos para concluir a tarefa atual, incluindo pesquisa, leitura das páginas e redação; organize o trabalho para terminar nesse prazo e evite buscas repetitivas.
@@ -241,6 +241,30 @@ def _chamar_ia(prompt: str, model: str, temperature: float = 0.3) -> tuple[dict,
     payload["enable_thinking"] = True
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
     with httpx.Client(timeout=AI_TIMEOUT_SECONDS) as client:
+        response = client.post(f"{base_url}/chat/completions", headers=headers, json=payload)
+    if response.status_code == 404 and modelo.casefold() in {"", "auto", "unsloth-auto"}:
+        try:
+            lista_modelos = client.get(f"{base_url}/models", headers=headers)
+            if lista_modelos.status_code >= 400:
+                raise RuntimeError(f"HTTP {lista_modelos.status_code}")
+            dados_modelos = lista_modelos.json()
+            itens_modelos = dados_modelos.get("data", []) if isinstance(dados_modelos, dict) else []
+            disponiveis = [
+                str(item.get("id", "")).strip()
+                for item in itens_modelos
+                if isinstance(item, dict) and str(item.get("id", "")).strip()
+            ] if isinstance(itens_modelos, list) else []
+        except Exception as exc:
+            raise RuntimeError(
+                "O modelo automático não foi reconhecido pelo Unsloth e não foi possível consultar /v1/models. "
+                "Carregue um modelo no Studio e tente novamente."
+            ) from exc
+        if not disponiveis:
+            raise RuntimeError(
+                "O Unsloth não informou modelos disponíveis em /v1/models. Carregue um modelo no Studio e tente novamente."
+            )
+        modelo = disponiveis[0]
+        payload["model"] = modelo
         response = client.post(f"{base_url}/chat/completions", headers=headers, json=payload)
     if response.status_code >= 400:
         raise RuntimeError(f"IA HTTP {response.status_code}: {response.text[:500]}")
