@@ -508,7 +508,6 @@ export default function AdminPedidosModal({ onClose, sessaoInicial, onSessaoChan
                   <option value="sent">Concluídos</option>
                   <option value="failed">Com falha</option>
                   <option value="cancelled">Cancelados</option>
-                  <option value="cancelled">Cancelados</option>
                 </select>
                 <button type="button" className="button button-secondary" onClick={() => void carregarPedidos(token)} disabled={carregando}>
                   {carregando ? "Atualizando…" : "Atualizar"}
