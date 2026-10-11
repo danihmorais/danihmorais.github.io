@@ -11,6 +11,38 @@ import { ThemeContext } from "../context/ThemeContext";
 import { cancelarFilaFasePreparatoria, consultarFilaFasePreparatoria, gerarFasePreparatoria, type DocumentosReferenciaUpload, type FasePreparatoriaJob } from "../api";
 import { criarDadosTeste, TipoTesteContratacao } from "../utils/dadosTeste";
 
+function rotuloEtapa(chave?: string): string {
+  const nomes: Record<string, string> = {
+    AGUARDANDO_FILA: "Aguardando na fila",
+    AUDITORIA_MARCAS: "Auditoria de marcas",
+    PAGAMENTO_ETAPAS: "Revisão das condições de pagamento",
+    DFD: "Geração do DFD",
+    ETP: "Geração do ETP",
+    TR: "Geração do TR",
+    CONTRATACAO_DIRETA: "Geração da contratação direta",
+    GERACAO_DOCUMENTOS: "Montagem dos documentos",
+    ENVIO_EMAIL: "Envio por e-mail",
+    FASE_PREPARATORIA: "Geração dos documentos",
+  };
+  return nomes[String(chave || "").toUpperCase()] || String(chave || "Aguardando atualização").replace(/_/g, " ").toLocaleLowerCase("pt-BR");
+}
+
+function rotuloStatusPedido(status?: string, cancelRequested = false): string {
+  if (cancelRequested && status !== "cancelled") return "Cancelamento solicitado";
+  const nomes: Record<string, string> = {
+    queued: "Na fila",
+    processing: "Processando",
+    sent: "Concluído",
+    completed: "Concluído",
+    failed: "Falha",
+    cancelled: "Cancelado",
+    cancelling: "Cancelando",
+    retrying: "Nova tentativa agendada",
+    unavailable: "Registro indisponível",
+  };
+  return nomes[String(status || "").toLowerCase()] || "Status desconhecido";
+}
+
 const etapas = [
   { titulo: "Objeto e itens", descricao: "Informe o objeto da contratação, a justificativa da demanda e os itens." },
   { titulo: "Execução", descricao: "Defina as condições de execução, os prazos e os requisitos de qualidade." },
@@ -117,6 +149,11 @@ export default function Wizard() {
   );
   const validas = etapas.map((_, indice) => etapaValida(indice, dados));
   const habilitarDadosTeste = import.meta.env.VITE_ENABLE_TEST_DATA === "true";
+  const statusPedido = jobDetalhe?.cancel_requested && jobDetalhe?.status !== "cancelled"
+    ? "cancelling"
+    : (jobDetalhe?.status || jobAgendado?.status || "queued");
+  const cancelamentoSolicitado = Boolean(jobDetalhe?.cancel_requested || statusPedido === "cancelling");
+  const pedidoAindaAtivo = ["queued", "processing", "cancelling"].includes(statusPedido);
 
   const atualizarDados = (novosDados: Partial<any> | ((atual: any) => Partial<any>)) => setDados((prev: any) => ({ ...prev, ...(typeof novosDados === "function" ? novosDados(prev) : novosDados) }));
 
@@ -388,42 +425,56 @@ export default function Wizard() {
   };
 
   if (carregando || erroMsg || geracaoSucesso) {
+    const statusFinalFalha = statusPedido === "failed";
+    const tituloStatus = erroMsg ? "Não foi possível agendar"
+      : carregando ? "Registrando solicitação"
+      : statusPedido === "sent" ? "Documentos enviados"
+      : statusPedido === "failed" ? "Falha no processamento"
+      : statusPedido === "cancelled" ? "Solicitação cancelada"
+      : statusPedido === "cancelling" ? "Cancelamento solicitado"
+      : "Solicitação colocada na fila";
     return (
       <main className="status-page">
         <div className="status-brand">LICITA.AI</div>
-        {carregando && !erroMsg && !geracaoSucesso && (
-          <section className="status-content" aria-live="polite">
-            <span className="status-spinner" aria-hidden="true" />
-            <h1>Registrando solicitação</h1>
-            <p>{statusTexto}</p>
-          </section>
+        {(carregando || (geracaoSucesso && pedidoAindaAtivo)) && !erroMsg && (
+          <span className="status-spinner" aria-hidden="true" />
         )}
-        {erroMsg && (
-          <section className="status-content status-content-error" role="alert">
-            <h1>Não foi possível agendar</h1>
-            <p>Confira o erro abaixo e tente novamente. Seus dados preenchidos continuam disponíveis.</p>
-            <pre className="status-error-detail">{erroMsg}</pre>
-            <button className="button button-primary" onClick={() => { setErroMsg(null); setCarregando(false); }}>
-              Voltar e tentar novamente
-            </button>
-          </section>
-        )}
-        {geracaoSucesso && !erroMsg && (
-          <section className="status-content" aria-live="polite">
-            <h1>Solicitação colocada na fila</h1>
-            <p>Os documentos serão gerados em segundo plano e enviados em um arquivo ZIP para o e-mail informado.</p>
-            {jobAgendado && (
+        <section className={"status-content" + (erroMsg || statusFinalFalha ? " status-content-error" : "")} aria-live="polite">
+          <h1>{tituloStatus}</h1>
+          <p>{erroMsg ? "Os dados do formulário, o e-mail, as instruções e os anexos foram preservados. Corrija o problema ou tente novamente." : statusTexto}</p>
+          {erroMsg && <pre className="status-error-detail">{erroMsg}</pre>}
+          {geracaoSucesso && !erroMsg && jobAgendado && (
+            <>
+              <p><strong>Status:</strong> {rotuloStatusPedido(statusPedido, cancelamentoSolicitado)}</p>
               <dl className="job-details">
-                <div><dt>E-mail</dt><dd>{jobAgendado.email}</dd></div>
-                {typeof jobAgendado.fila_posicao === "number" && <div><dt>Posição aproximada</dt><dd>{jobAgendado.fila_posicao}º</dd></div>}
+                <div><dt>E-mail de destino</dt><dd>{jobAgendado.email}</dd></div>
                 <div><dt>ID da solicitação</dt><dd><code>{jobAgendado.job_id}</code></dd></div>
+                <div><dt>Etapa atual</dt><dd>{rotuloEtapa(jobDetalhe?.current_stage)}</dd></div>
+                {(typeof (jobDetalhe?.fila_posicao ?? jobAgendado.fila_posicao) === "number" && pedidoAindaAtivo) && (
+                  <div><dt>Posição aproximada</dt><dd>{jobDetalhe?.fila_posicao ?? jobAgendado.fila_posicao}º</dd></div>
+                )}
+                {jobDetalhe?.attempts !== undefined && <div><dt>Tentativas</dt><dd>{jobDetalhe.attempts}{jobDetalhe.max_attempts ? " de " + jobDetalhe.max_attempts : ""}</dd></div>}
+                {jobDetalhe?.retry_at && <div><dt>Nova tentativa</dt><dd>{new Date(jobDetalhe.retry_at).toLocaleString("pt-BR")}</dd></div>}
+                {ultimaAtualizacao && <div><dt>Atualizado às</dt><dd>{new Date(ultimaAtualizacao).toLocaleTimeString("pt-BR")}</dd></div>}
               </dl>
-            )}
-            <button className="button button-primary" onClick={() => { setGeracaoSucesso(false); setJobAgendado(null); setStatusTexto("Iniciando..."); }}>
-              Concluir
-            </button>
-          </section>
-        )}
+              <div className="status-actions">
+                <button className="button button-secondary" onClick={() => void navigator.clipboard.writeText(jobAgendado.job_id).then(() => showToast("ID copiado.", "success")).catch(() => showToast("Não foi possível copiar o ID.", "error"))}>Copiar ID</button>
+                {pedidoAindaAtivo && (
+                  <button className="button button-secondary button-danger-outline" onClick={() => void cancelarSolicitacao()} disabled={cancelandoJob || cancelamentoSolicitado}>
+                    {cancelandoJob ? "Cancelando…" : cancelamentoSolicitado ? "Cancelamento solicitado" : "Cancelar solicitação"}
+                  </button>
+                )}
+              </div>
+              {jobDetalhe?.last_error && (statusFinalFalha || jobDetalhe.retry_at) && <pre className="status-error-detail">{String(jobDetalhe.last_error)}</pre>}
+              {erroConsultaJob && <p role="status">{erroConsultaJob}</p>}
+            </>
+          )}
+          <div className="status-actions">
+            {erroMsg && <button className="button button-primary" onClick={() => { setErroMsg(null); setCarregando(false); setMostrarPromptModal(true); }}>Voltar e tentar novamente</button>}
+            {geracaoSucesso && <button className="button button-secondary" onClick={voltarAoFormulario}>Voltar ao formulário</button>}
+            {geracaoSucesso && <button className="button button-primary" onClick={novaSolicitacao}>Nova solicitação (limpar formulário)</button>}
+          </div>
+        </section>
       </main>
     );
   }
