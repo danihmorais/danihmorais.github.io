@@ -5,7 +5,7 @@ import { calcularValorEstimadoItens } from "../../utils/regrasContratacao";
 import { melhorarDescricaoItem } from "../../providers/services/descricaoItensIA";
 import { extrairObjetoCotacaoPdf, parseRelatorioCotacaoPdf } from "../../utils/cotacaoPdf";
 
-export default function Step1({ dados = { itens: [], objeto: "", necessidade: "" }, atualizarDados }: any) {
+export default function Step1({ dados = { itens: [], objeto: "", necessidade: "" }, atualizarDados, tentouAvancar = false }: any) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const [importandoPdf, setImportandoPdf] = useState(false);
@@ -17,6 +17,8 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
   itensRef.current = itens;
   const objeto = dados.objeto || "";
   const necessidade = dados.necessidade || "";
+  const erroObjeto = tentouAvancar && !String(objeto).trim();
+  const erroNecessidade = tentouAvancar && !String(necessidade).trim();
 
   const formatarMoeda = (valor: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(valor);
   const parseMoeda = (texto: string) => Number(String(texto).replace(/[^\d]/g, "")) / 100;
@@ -227,13 +229,19 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
         rows={1}
         value={objeto}
         onChange={(e) => atualizarDados((anterior: any) => ({ objeto: e.target.value }))}
-        style={{ padding: 12, borderRadius: "var(--radius-lg)", borderColor: objeto.trim() ? "var(--input-border)" : "var(--btn-danger)", resize: "none" }}
+        aria-invalid={erroObjeto || undefined}
+        aria-describedby={erroObjeto ? "erro-objeto" : undefined}
+        style={{ padding: 12, borderRadius: "var(--radius-lg)", borderColor: erroObjeto ? "var(--btn-danger)" : "var(--input-border)", resize: "none" }}
       />
+      {erroObjeto && <small id="erro-objeto" className="wizard-field-error">Informe o objeto da contratação.</small>}
     </section>
     <section className="step-section item-intro-section">
       <label style={{ fontWeight: 600, fontSize: 16, display: "block", marginBottom: 8 }}>Justificativa da Demanda: <span style={{ color: "var(--btn-danger)" }}>*</span></label>
       <p style={{ color: "var(--text-muted)", fontSize: 13, margin: "0 0 12px" }}>Descreva brevemente a justificativa da demanda.</p>
-      <textarea required value={necessidade} onChange={(e) => atualizarDados((anterior: any) => ({ necessidade: e.target.value }))} style={{ padding: 12, borderRadius: "var(--radius-lg)", borderColor: necessidade.trim() ? "var(--input-border)" : "var(--btn-danger)", minHeight: 120, resize: "vertical" }} />
+      <textarea required value={necessidade} onChange={(e) => atualizarDados((anterior: any) => ({ necessidade: e.target.value }))} aria-invalid={erroNecessidade || undefined}
+      aria-describedby={erroNecessidade ? "erro-necessidade" : undefined}
+      style={{ padding: 12, borderRadius: "var(--radius-lg)", borderColor: erroNecessidade ? "var(--btn-danger)" : "var(--input-border)", minHeight: 120, resize: "vertical" }} />
+      {erroNecessidade && <small id="erro-necessidade" className="wizard-field-error">Informe a justificativa da demanda.</small>}
     </section>
     <section className="step-section items-section" style={{ borderTop: "1px solid var(--border)", paddingTop: 24 }}>
       <div className="items-toolbar" style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
@@ -250,6 +258,7 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
             {itens.map((item: any, index: number) => {
               const carregando = itemEmMelhoria === item.id;
               const descricao = String(item.descricao || "");
+              const erroDescricao = tentouAvancar && !descricao.trim();
               return <div key={item.id} className="item-row" style={{ display: "flex", alignItems: "center", background: "var(--bg-subtle)", padding: "8px 12px", borderRadius: "var(--radius)", gap: 8 }}>
                 <div className="item-number" style={{ width: 40, fontWeight: 600 }}>{item.numero || index + 1}</div>
                 <div className="item-description-cell" style={{ flex: 1, minWidth: 300, display: "flex", gap: 6, alignItems: "center" }}>
@@ -259,7 +268,8 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
                     value={descricao}
                     onChange={(e) => atualizarItem(item.id, "descricao", e.target.value)}
                     disabled={carregando}
-                    style={{ flex: 1, minWidth: 180, padding: 8, borderColor: descricao.trim() ? "var(--input-border)" : "var(--btn-danger)", resize: "none" }}
+                    aria-invalid={erroDescricao || undefined}
+                    style={{ flex: 1, minWidth: 180, padding: 8, borderColor: erroDescricao ? "var(--btn-danger)" : "var(--input-border)", resize: "none" }}
                   />
                   <button type="button" onClick={() => melhorarItem(item)} disabled={carregando || !descricao.trim()} title="Melhorar descrição e unidade deste item com IA" aria-label={`Melhorar descrição e unidade do item ${item.numero || index + 1} com IA`} style={{ height: 34, padding: "0 10px", border: "1px solid var(--border)", borderRadius: "var(--radius)", background: "var(--bg-panel)", color: "var(--text-main)", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }}>{carregando ? "..." : "✨ IA"}</button>
                 </div>
