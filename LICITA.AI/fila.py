@@ -424,7 +424,7 @@ def cancel_job(job_id: str, origem: str) -> str:
         job = json.loads(cancelled_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise RuntimeError("Não foi possível ler a solicitação retirada da fila.") from exc
-    job.update({"status": "cancelled", "cancelled_at": _utc_now(), "cancelled_by": origem})
+    job.update({"status": "cancelled", "cancel_requested": True, "cancelled_at": _utc_now(), "cancelled_by": origem})
     job.pop("retry_at", None)
     _write_json(cancelled_path, job)
     return "cancelled"
