@@ -435,11 +435,11 @@ export default function Wizard() {
 
   const renderizarEtapa = () => {
     switch (etapaAtual) {
-      case 0: return <Step1 dados={dados} atualizarDados={atualizarDados} />;
+      case 0: return <Step1 dados={dados} atualizarDados={atualizarDados} tentouAvancar={tentouAvancar} />;
       case 1: return <Step2 dados={dados} atualizarDados={atualizarDados} />;
       case 2: return <Step3 dados={dados} atualizarDados={atualizarDados} />;
       case 3: return <Step4 dados={dados} atualizarDados={atualizarDados} />;
-      case 4: return <Step5 dados={dados} atualizarDados={atualizarDados} />;
+      case 4: return <Step5 dados={dados} atualizarDados={atualizarDados} tentouAvancar={tentouAvancar} />;
       default: return null;
     }
   };
