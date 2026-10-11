@@ -1,4 +1,5 @@
 import React, { useContext, useEffect, useRef, useState } from "react";
+import { useToast } from "../components/toast";
 import Step1 from "./steps/step1";
 import Step2 from "./steps/step2";
 import Step3 from "./steps/step3";
@@ -7,7 +8,7 @@ import Step5 from "./steps/step5";
 import PromptModal from "../components/promptModal";
 import AdminPedidosModal from "../components/AdminPedidosModal";
 import { ThemeContext } from "../context/ThemeContext";
-import { gerarFasePreparatoria, type DocumentosReferenciaUpload } from "../api";
+import { cancelarFilaFasePreparatoria, consultarFilaFasePreparatoria, gerarFasePreparatoria, type DocumentosReferenciaUpload, type FasePreparatoriaJob } from "../api";
 import { criarDadosTeste, TipoTesteContratacao } from "../utils/dadosTeste";
 
 const etapas = [
@@ -18,9 +19,43 @@ const etapas = [
   { titulo: "Configurações finais", descricao: "Revise as regras da contratação, o pagamento e a dotação orçamentária." },
 ];
 
+function etapaValida(indice: number, dados: any): boolean {
+  switch (indice) {
+    case 0:
+      return Boolean(String(dados.objeto || "").trim() && String(dados.necessidade || "").trim() &&
+        Array.isArray(dados.itens) && dados.itens.length > 0 &&
+        dados.itens.every((item: any) => String(item?.descricao || "").trim() && Number(item.qtd) > 0 && Number(item.valor) > 0 && String(item.un || "").trim()));
+    case 1:
+      return Boolean(String(dados.execucao || "").trim());
+    case 2:
+      return Array.isArray(dados.secretarias) && dados.secretarias.length > 0 &&
+        dados.secretarias.every((secretaria: string) => Array.isArray(dados.contatosSecretarias?.[secretaria]) && dados.contatosSecretarias[secretaria].length > 0);
+    case 3:
+      return Array.isArray(dados.gestores) && dados.gestores.length > 0 &&
+        Array.isArray(dados.fiscais) && dados.fiscais.length > 0;
+    case 4: {
+      const criterioValido = dados.criterio === "ITEM" || (["GLOBAL", "LOTE"].includes(dados.criterio) && String(dados.motivoCriterio || "").trim());
+      const modalidadeValida = dados.modalidade === "PREGAO_ELETRONICO" || String(dados.motivoModalidade || "").trim();
+      const pacValido = dados.pac === "SIM" || String(dados.motivoPac || "").trim();
+      const blocos = Array.isArray(dados.dotacaoBlocos) ? dados.dotacaoBlocos : [];
+      const dotacaoValida = Boolean(String(dados.dotacao || "").trim() || dados.caminhoImagemDotacao ||
+        blocos.some((bloco: any) => (bloco?.tipo === "imagem" && bloco.imagemBase64) || (bloco?.tipo === "texto" && String(bloco.texto || "").trim())));
+      const pagamentoValido = dados.pagamentoTipo !== "POR_ETAPAS" || String(dados.pagamentoEtapas || "").trim();
+      const prazoValido = Number(dados.prazoRefazimentoDias) >= 1;
+      const unidade = String(dados.vigenciaUnidade || "Meses").toLocaleLowerCase("pt-BR");
+      const fatorDias = unidade.startsWith("ano") ? 365 : unidade.startsWith("sem") ? 7 : unidade.startsWith("dia") ? 1 : 30;
+      const vigenciaDias = Number(dados.vigenciaNum || 0) * fatorDias;
+      const vigenciaValida = vigenciaDias > 0 && vigenciaDias <= 365;
+      return Boolean(dados.instrumento && criterioValido && modalidadeValida && pacValido && dotacaoValida && pagamentoValido && prazoValido && vigenciaValida);
+    }
+    default:
+      return false;
+  }
+}
+
 export default function Wizard() {
   const [etapaAtual, setEtapaAtual] = useState(0);
-  const [dados, setDados] = useState({
+  const [dados, setDados] = useState<any>({
     objeto: "",
     necessidade: "",
     itens: [],
@@ -61,7 +96,7 @@ export default function Wizard() {
   const { theme, toggleTheme } = useContext(ThemeContext);
   const isDark = theme === "dark";
 
-  const atualizarDados = (novosDados: Partial<typeof dados>) => setDados(prev => ({ ...prev, ...novosDados }));
+  const atualizarDados = (novosDados: Partial<any> | ((atual: any) => Partial<any>)) => setDados((prev: any) => ({ ...prev, ...(typeof novosDados === "function" ? novosDados(prev) : novosDados) }));
 
   const carregarTeste = (tipo: TipoTesteContratacao) => {
     setDados(criarDadosTeste(tipo) as any);
@@ -79,35 +114,7 @@ export default function Wizard() {
     scrollRef.current?.scrollTo(0, 0);
   }, [etapaAtual]);
 
-  const validarEtapa = () => {
-    switch (etapaAtual) {
-      case 0:
-        return dados.objeto.trim() !== "" && dados.necessidade.trim() !== "" && dados.itens.length > 0 && dados.itens.every((i: any) => i.descricao.trim() !== "" && i.qtd > 0 && i.valor > 0 && i.un.trim() !== "");
-      case 1:
-        return dados.execucao.trim() !== "";
-      case 2:
-        return dados.secretarias.length > 0 && dados.secretarias.every((sec: string) => dados.contatosSecretarias[sec]?.length > 0);
-      case 3:
-        return dados.gestores.length > 0 && dados.fiscais.length > 0;
-      case 4:
-        const criterioValido = dados.criterio === "ITEM" || ((dados.criterio === "GLOBAL" || dados.criterio === "LOTE") && dados.motivoCriterio.trim() !== "");
-        const modalidadeValida = dados.modalidade === "PREGAO_ELETRONICO" || dados.motivoModalidade.trim() !== "";
-        const pacValido = dados.pac === "SIM" || dados.motivoPac.trim() !== "";
-        const dotacaoBlocosValidos =
-          Array.isArray(dados.dotacaoBlocos) &&
-          dados.dotacaoBlocos.some(
-            (bloco: any) =>
-              (bloco?.tipo === "imagem" && !!bloco.imagemBase64) ||
-              (bloco?.tipo === "texto" && String(bloco.texto || "").trim())
-          );
-        const dotacaoValida = dados.dotacao.trim() !== "" || !!dados.caminhoImagemDotacao || dotacaoBlocosValidos;
-        const pagamentoValido = dados.pagamentoTipo !== "POR_ETAPAS" || String(dados.pagamentoEtapas || "").trim() !== "";
-        const prazoRefazimentoValido = Number(dados.prazoRefazimentoDias) >= 1;
-        return dados.instrumento !== "" && criterioValido && modalidadeValida && pacValido && dotacaoValida && pagamentoValido && prazoRefazimentoValido;
-      default:
-        return true;
-    }
-  };
+  const validarEtapa = () => etapaValida(etapaAtual, dados);
 
   const avancar = () => {
     if (etapaAtual < 4) setEtapaAtual(etapaAtual + 1);
