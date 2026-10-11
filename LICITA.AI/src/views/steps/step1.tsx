@@ -13,6 +13,8 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
   const [itemEmMelhoria, setItemEmMelhoria] = useState<number | string | null>(null);
   const { showToast } = useToast();
   const itens = dados.itens || [];
+  const itensRef = useRef<any[]>(itens);
+  itensRef.current = itens;
   const objeto = dados.objeto || "";
   const necessidade = dados.necessidade || "";
 
@@ -51,13 +53,13 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
   });
 
   const decidirImportacaoItens = (importados: any[]) => {
-    const atuais = Array.isArray(dados.itens) ? dados.itens : [];
+    const atuais = itensRef.current;
     const anexar = atuais.length > 0 && !window.confirm(
       "Já existem itens no formulário. OK = substituir a lista atual pelos itens importados. Cancelar = acrescentar os itens importados ao final."
     );
     const resultado = anexar ? [...atuais, ...importados] : importados;
     atualizarDados((anterior: any) => ({ itens: renumerarItens(resultado) }));
-    return { quantidade: importados.length, anexados: anexar };
+    return { quantidade: importados.length, anexados: anexar, total: resultado.length };
   };
 
   const melhorarItem = async (item: any) => {
@@ -103,7 +105,6 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
         const aliasesNome = ["nome", "descrição", "descricao", "item", "produto", "objeto"];
         const aliasesQtd = ["quantidade", "qtd", "qtde", "quant.", "quant"];
         const aliasesUn = ["unidade", "un", "und", "u.m.", "um", "unid", "unidade de medida"];
-        const aliasesItem = ["item", "nº", "no", "numero", "número", "código", "codigo"];
         const aliasesValor = ["valor unitário", "valor unitario", "valor", "preço unitário", "preco unitario", "preço", "preco", "vlr", "vlr unitário", "vlr unitario"];
         const colunaTem = (cabecalhos: string[], aliases: string[]) => aliases.some((alias) => cabecalhos.includes(normalizar(alias)));
         const indiceCabecalho = linhas.findIndex((linha) => {
@@ -115,7 +116,6 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
         }
         const cabecalhos = linhas[indiceCabecalho].map(normalizar);
         const coluna = (nomes: string[]) => nomes.map(normalizar).map((nome) => cabecalhos.indexOf(nome)).find((i) => i >= 0) ?? -1;
-        const cItem = coluna(aliasesItem);
         const cNome = coluna(aliasesNome);
         const cQtd = coluna(aliasesQtd);
         const cUn = coluna(aliasesUn);
@@ -130,7 +130,7 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
           valor: cValor >= 0 ? extrairNumero(linha[cValor]) : 0,
         })).filter((item) => item.descricao);
         const acao = decidirImportacaoItens(importados);
-        showToast(`Planilha importada: ${importados.length} itens ${acao.anexados ? "acrescentados" : "importados"}; total atual: ${acao.anexados ? (dados.itens || []).length + importados.length : importados.length}.`, "success");
+        showToast(`Planilha importada: ${importados.length} itens ${acao.anexados ? "acrescentados" : "importados"}; total atual: ${acao.total}.`, "success");
       } catch (erro: any) {
         showToast(`Erro ao importar: ${erro.message}`, "error");
       } finally {
@@ -204,7 +204,7 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
       }));
       const acao = decidirImportacaoItens(itensImportados);
       if (!objetoAtual && objetoPdf) atualizarDados((anterior: any) => ({ objeto: anterior.objeto?.trim() ? anterior.objeto : objetoPdf }));
-      showToast(`Cotação PDF: ${importados.length} itens ${acao.anexados ? "acrescentados" : "importados"}; total atual: ${acao.anexados ? (dados.itens || []).length + importados.length : importados.length}.`, "success");
+      showToast(`Cotação PDF: ${importados.length} itens ${acao.anexados ? "acrescentados" : "importados"}; total atual: ${acao.total}.`, "success");
     } catch (erro: any) {
       console.error("Erro ao importar cotação PDF:", erro);
       showToast(`Erro ao importar cotação PDF: ${erro?.message || "arquivo inválido"}`, "error");
