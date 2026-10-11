@@ -17,6 +17,8 @@ export default function PromptModal({
   isOpen, onClose, onConfirm, texto, onTextoChange, email, onEmailChange, arquivos, onArquivosChange,
 }: PromptModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   const emailValido = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(email.trim());
 
   useEffect(() => {
@@ -26,7 +28,7 @@ export default function PromptModal({
     const teclado = (evento: KeyboardEvent) => {
       if (evento.key === "Escape") {
         evento.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (evento.key !== "Tab" || !dialogRef.current) return;
@@ -47,7 +49,7 @@ export default function PromptModal({
       document.removeEventListener("keydown", teclado);
       anterior?.focus?.();
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
