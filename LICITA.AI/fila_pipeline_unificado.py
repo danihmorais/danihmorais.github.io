@@ -255,17 +255,44 @@ def _validar_json_unificado(resultado: dict) -> dict:
             detalhe.append("blocos extras: " + ", ".join(extras))
         raise RuntimeError("A resposta JSON unificada deve conter exatamente DFD, ETP e TR (" + "; ".join(detalhe) + ").")
 
+    campos_esperados = {
+        "DFD": {"OBJETO", "TIPO_OBJ", "JUSTIFICATIVA", "ESTIMATIVA_QUANTIDADES", "RESULTADOS_ESPERADOS"},
+        "ETP": {
+            "REQUISITOS_ETP", "SUBCONTRATACAO_ETP", "ME_EPP_ETP", "JUSTIFICATIVA_PAC", "MERCADO",
+            "SOLUCAO", "CRITERIOS_JUSTIFICATIVA_ETP", "CRITERIOS_SUSTENTABILIDADE",
+            "MODALIDADE_JUSTIFICATIVA_ETP", "PROVIDENCIAS_CONT", "CORRELATAS_INTER",
+            "JUSTIFICATIVA_ESTIMATIVA", "GARANTIAS_ETP", "VISTORIA_ETP", "AMOSTRA_ETP",
+            "PARCELAMENTO", "CONCLUSAO",
+        },
+        "TR": {
+            "REQUISITOS_TR", "OBRIGACOES_CONTRATADA", "OBRIGACOES_CONTRANTE", "QUALIFICACAO_TECNICA",
+            "GARANTIAS_TR", "EXECUCAO", "PRAZO_EXEC", "LOCAL", "AMOSTRA_TR",
+        },
+    }
     for nome in ("DFD", "ETP", "TR"):
         bloco = resultado[nome]
         if not isinstance(bloco, dict) or not bloco:
             raise RuntimeError(f"A IA não retornou um objeto válido para o bloco {nome}.")
+        recebidos_campos = set(bloco)
+        esperados_campos = campos_esperados[nome]
+        if recebidos_campos != esperados_campos:
+            ausentes_campos = sorted(esperados_campos - recebidos_campos)
+            extras_campos = sorted(recebidos_campos - esperados_campos)
+            detalhe_campos = []
+            if ausentes_campos:
+                detalhe_campos.append("campos ausentes: " + ", ".join(ausentes_campos))
+            if extras_campos:
+                detalhe_campos.append("campos extras: " + ", ".join(str(campo) for campo in extras_campos))
+            raise RuntimeError(
+                f"O bloco {nome} não corresponde ao esquema JSON obrigatório (" + "; ".join(detalhe_campos) + ")."
+            )
         invalidos = [
             str(chave) for chave, valor in bloco.items()
             if not isinstance(valor, str) or not valor.strip()
         ]
         if invalidos:
             raise RuntimeError(
-                f"O bloco {nome} contém campos ausentes, não textuais ou vazios: {', '.join(invalidos)}."
+                f"O bloco {nome} contém campos não textuais ou vazios: {', '.join(invalidos)}."
             )
     return resultado
 

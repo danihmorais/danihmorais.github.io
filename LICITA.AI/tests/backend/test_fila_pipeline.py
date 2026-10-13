@@ -93,20 +93,33 @@ seguinte"}"""
             _validar_json_geracao({"A": ""})
 
     def test_json_unificado_exige_exatamente_dfd_etp_tr_com_campos_textuais(self):
-        valido = {
-            "DFD": {"OBJETO": "Aquisição de materiais"},
-            "ETP": {"REQUISITOS_ETP": "Requisitos gerais suficientes."},
-            "TR": {"REQUISITOS_TR": "Não há documentos adicionais"},
+        campos = {
+            "DFD": ["OBJETO", "TIPO_OBJ", "JUSTIFICATIVA", "ESTIMATIVA_QUANTIDADES", "RESULTADOS_ESPERADOS"],
+            "ETP": [
+                "REQUISITOS_ETP", "SUBCONTRATACAO_ETP", "ME_EPP_ETP", "JUSTIFICATIVA_PAC", "MERCADO",
+                "SOLUCAO", "CRITERIOS_JUSTIFICATIVA_ETP", "CRITERIOS_SUSTENTABILIDADE",
+                "MODALIDADE_JUSTIFICATIVA_ETP", "PROVIDENCIAS_CONT", "CORRELATAS_INTER",
+                "JUSTIFICATIVA_ESTIMATIVA", "GARANTIAS_ETP", "VISTORIA_ETP", "AMOSTRA_ETP",
+                "PARCELAMENTO", "CONCLUSAO",
+            ],
+            "TR": [
+                "REQUISITOS_TR", "OBRIGACOES_CONTRATADA", "OBRIGACOES_CONTRANTE", "QUALIFICACAO_TECNICA",
+                "GARANTIAS_TR", "EXECUCAO", "PRAZO_EXEC", "LOCAL", "AMOSTRA_TR",
+            ],
         }
+        valido = {bloco: {campo: "Texto válido." for campo in nomes} for bloco, nomes in campos.items()}
+        valido["TR"]["REQUISITOS_TR"] = "Não há documentos adicionais"
         self.assertEqual(_validar_json_unificado(valido), valido)
         with self.assertRaisesRegex(RuntimeError, "exatamente DFD, ETP e TR"):
             _validar_json_unificado({"DFD": {}, "ETP": {}, "OUTRO": {}})
+        incompleto = {bloco: dict(conteudo) for bloco, conteudo in valido.items()}
+        incompleto["DFD"].pop("TIPO_OBJ")
+        with self.assertRaisesRegex(RuntimeError, "campos ausentes"):
+            _validar_json_unificado(incompleto)
+        vazio = {bloco: dict(conteudo) for bloco, conteudo in valido.items()}
+        vazio["ETP"]["REQUISITOS_ETP"] = ""
         with self.assertRaisesRegex(RuntimeError, "vazios"):
-            _validar_json_unificado({
-                "DFD": {"OBJETO": "Aquisição"},
-                "ETP": {"REQUISITOS_ETP": ""},
-                "TR": {"REQUISITOS_TR": "Não há documentos adicionais"},
-            })
+            _validar_json_unificado(vazio)
 
     def test_auditoria_apenas_remove_marca(self):
         dados = {"{{ITENS}}": json.dumps([{"numero": 1, "descricao": "Pneu Michelin aro 15"}])}
