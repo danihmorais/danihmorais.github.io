@@ -96,11 +96,17 @@ test("fila normal envia uma única etapa de IA para DFD, ETP e TR", async () => 
   const body = JSON.parse(chamada.options.body);
   const etapas = body.dados_ia.__LICITA_PIPELINE__.etapas;
   assert.equal(chamada.url, "https://api.example.test/licita/api/gerar-fase-preparatoria");
-  assert.deepEqual(etapas.filter((etapa) => ["DFD", "ETP", "TR"].includes(etapa.id)).map((etapa) => etapa.id), ["DFD", "ETP", "TR"]);
-  assert.equal(etapas.filter((etapa) => etapa.tipo === "geracao_json").length, 3);
-  assert.match(etapas.find((etapa) => etapa.id === "DFD").prompt, /PROMPT_DFD/);
-  assert.match(etapas.find((etapa) => etapa.id === "ETP").prompt, /__LICITA_PIPE_DFD__/);
-  assert.match(etapas.find((etapa) => etapa.id === "TR").prompt, /__LICITA_PIPE_ETP__/);
+  assert.deepEqual(etapas.map((etapa) => etapa.id), ["AUDITORIA_MARCAS", "CONSULTA_HABILITACAO", "FASE_PREPARATORIA"]);
+  assert.equal(etapas.filter((etapa) => etapa.tipo === "geracao_unificada").length, 1);
+  assert.equal(etapas.filter((etapa) => etapa.tipo === "geracao_json").length, 0);
+  const consulta = etapas.find((etapa) => etapa.id === "CONSULTA_HABILITACAO");
+  const geracao = etapas.find((etapa) => etapa.id === "FASE_PREPARATORIA");
+  assert.equal(consulta.tipo, "consulta_habilitacao");
+  assert.match(consulta.prompt, /DOCUMENTOS DE HABILITAÇÃO QUE JÁ SÃO SOLICITADOS/i);
+  assert.match(geracao.prompt, /PROMPT_DFD/);
+  assert.match(geracao.prompt, /PROMPT_ETP/);
+  assert.match(geracao.prompt, /PROMPT_TR/);
+  assert.match(geracao.prompt, /__LICITA_PIPE_CONSULTA_HABILITACAO__/);
 });
 
 test("fila de contratação direta não cria DFD, ETP ou TR", async () => {

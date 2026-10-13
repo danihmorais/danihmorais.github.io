@@ -201,11 +201,24 @@ test("gerarFasePreparatoria usa multipart quando há documentos de referência",
   const payload = JSON.parse(chamada.options.body.get("payload"));
   assert.equal(payload.email, "teste@example.com");
   const etapas = payload.dados_ia.__LICITA_PIPELINE__.etapas;
-  assert.deepEqual(etapas.map((etapa) => etapa.id), ["DFD", "ETP", "TR"]);
-  assert.equal(etapas[0].temperature, 0.3);
+  assert.deepEqual(etapas.map((etapa) => etapa.id), ["CONSULTA_HABILITACAO", "FASE_PREPARATORIA"]);
+  const consulta = etapas[0];
+  assert.equal(consulta.tipo, "consulta_habilitacao");
+  assert.equal(consulta.temperature, 0.1);
+  assert.match(consulta.prompt, /DOCUMENTOS DE HABILITAÇÃO QUE JÁ SÃO SOLICITADOS/i);
   assert.match(etapas[0].prompt, /__LICITA_PIPE_DADOS_USUARIO__/);
-  assert.match(etapas[1].prompt, /__LICITA_PIPE_DFD__/);
-  assert.match(etapas[2].prompt, /__LICITA_PIPE_ETP__/);
+  const geracao = etapas[1];
+  assert.equal(geracao.tipo, "geracao_unificada");
+  assert.equal(geracao.temperature, 0.3);
+  assert.match(geracao.prompt, /__LICITA_PIPE_CONSULTA_HABILITACAO__/);
+  assert.match(consulta.prompt, /começando em Documento 12/);
+  assert.match(geracao.prompt, /começando em Documento 12/);
+  assert.doesNotMatch(consulta.prompt, /Documento 13/);
+  assert.doesNotMatch(geracao.prompt, /Documento 13/);
+  assert.match(geracao.prompt, /"DFD":\s*\{/);
+  assert.match(geracao.prompt, /"ETP":\s*\{/);
+  assert.match(geracao.prompt, /"TR":\s*\{/);
+  assert.doesNotMatch(geracao.prompt, /__LICITA_PIPE_ETP__/);
 });
 
 test("gerarFasePreparatoria cria etapa de IA somente para pagamento por etapas", async () => {
@@ -247,7 +260,7 @@ test("gerarFasePreparatoria cria etapa de IA somente para pagamento por etapas",
   const pagamento = etapas.find((etapa) => etapa.id === "PAGAMENTO_ETAPAS");
   assert.equal(pagamento.tipo, "geracao_json");
   assert.equal(pagamento.temperature, 0);
-  assert.deepEqual(etapas.filter((etapa) => ["DFD", "ETP", "TR"].includes(etapa.id)).map((etapa) => etapa.id), ["DFD", "ETP", "TR"]);
+  assert.deepEqual(etapas.filter((etapa) => etapa.id === "FASE_PREPARATORIA").map((etapa) => etapa.tipo), ["geracao_unificada"]);
   assert.match(pagamento.prompt, /40% após a conclusão/);
   assert.match(pagamento.prompt, /EXCLUSIVAMENTE JSON válido/);
 });

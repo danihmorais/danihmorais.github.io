@@ -17,6 +17,7 @@ function rotuloEtapa(chave?: string): string {
   const nomes: Record<string, string> = {
     AGUARDANDO_FILA: "Aguardando na fila",
     AUDITORIA_MARCAS: "Auditoria de marcas",
+    CONSULTA_HABILITACAO: "Pesquisa do objeto e da habilitação",
     PAGAMENTO_ETAPAS: "Revisão das condições de pagamento",
     DFD: "Geração do DFD",
     ETP: "Geração do ETP",
@@ -538,6 +539,11 @@ export default function Wizard() {
         <section className={"status-content" + (erroMsg || statusFinalFalha ? " status-content-error" : "")} aria-live="polite">
           <h1>{tituloStatus}</h1>
           <p>{erroMsg ? "Os dados do formulário, o e-mail, as instruções e os anexos foram preservados. Corrija o problema ou tente novamente." : statusTexto}</p>
+          {geracaoSucesso && pedidoAindaAtivo && !cancelamentoSolicitado && jobAgendado && (
+            <div className="status-queue-note" role="status">
+              <strong>Você pode fechar esta janela.</strong> A geração continuará em segundo plano e os documentos serão enviados para <strong>{jobAgendado.email}</strong> assim que o processamento terminar. Não é necessário manter esta página aberta.
+            </div>
+          )}
           {erroMsg && <pre className="status-error-detail">{erroMsg}</pre>}
           {geracaoSucesso && !erroMsg && jobAgendado && (
             <>
