@@ -487,6 +487,7 @@ class TestConfiguracaoThinking(unittest.TestCase):
         payload = cliente.post.call_args.kwargs["json"]
         self.assertTrue(payload["enable_thinking"])
         self.assertTrue(payload["enable_tools"])
+        self.assertEqual(payload["max_tokens"], 16384)
         self.assertNotIn("response_format", payload)
         self.assertEqual(payload["messages"][0]["role"], "system")
         self.assertIn("600 segundos", payload["messages"][0]["content"])
