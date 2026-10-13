@@ -202,9 +202,10 @@ test("gerarFasePreparatoria usa multipart quando há documentos de referência",
   assert.equal(payload.email, "teste@example.com");
   const etapas = payload.dados_ia.__LICITA_PIPELINE__.etapas;
   assert.deepEqual(etapas.map((etapa) => etapa.id), ["CONSULTA_HABILITACAO", "FASE_PREPARATORIA"]);
-  assert.equal(etapas[0].tipo, "consulta_habilitacao");
-  assert.equal(etapas[0].temperature, 0.1);
-  assert.match(etapas[0].prompt, /DOCUMENTOS DE HABILITAÇÃO QUE JÁ SÃO SOLICITADOS/i);
+  const consulta = etapas[0];
+  assert.equal(consulta.tipo, "consulta_habilitacao");
+  assert.equal(consulta.temperature, 0.1);
+  assert.match(consulta.prompt, /DOCUMENTOS DE HABILITAÇÃO QUE JÁ SÃO SOLICITADOS/i);
   assert.match(etapas[0].prompt, /__LICITA_PIPE_DADOS_USUARIO__/);
   const geracao = etapas[1];
   assert.equal(geracao.tipo, "geracao_unificada");
