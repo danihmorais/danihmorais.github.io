@@ -131,7 +131,7 @@ function construirPromptConsultaHabilitacao(instrucoesUsuario: string): string {
     "  ],",
     '  "CONCLUSAO": ""',
     "}"
-  ].join("\\n");
+  ].join("\n");
 
   return [
     "Você é um analista jurídico-técnico especializado em contratações públicas brasileiras, com acesso à pesquisa web. Faça uma consulta específica antes da geração do DFD, ETP e TR.",
@@ -153,11 +153,11 @@ function construirPromptConsultaHabilitacao(instrucoesUsuario: string): string {
     "Não altere silenciosamente os requisitos-base. Se fonte oficial atual revelar possível incompatibilidade jurídica de algum deles, registre alerta objetivo em CONCLUSAO para revisão humana, sem inventar conclusão.",
     "DADOS DA CONTRATAÇÃO:",
     "__LICITA_PIPE_DADOS_USUARIO__",
-    "INSTRUÇÕES COMPLEMENTARES DO USUÁRIO:\\n" + (instrucoesUsuario.trim() || "Nenhuma instrução adicional."),
+    "INSTRUÇÕES COMPLEMENTARES DO USUÁRIO:\n" + (instrucoesUsuario.trim() || "Nenhuma instrução adicional."),
     "Retorne exclusivamente um único objeto JSON válido, sem markdown, comentários ou texto fora do JSON. Use os campos do esquema abaixo, listas vazias quando cabível e strings não vazias nos campos textuais.",
     "ESTRUTURA JSON OBRIGATÓRIA:",
     schema
-  ].join("\\n\\n");
+  ].join("\n\n");
 }
 
 function construirPromptUnificado(
@@ -168,7 +168,7 @@ function construirPromptUnificado(
   const etapas = (["DFD", "ETP", "TR"] as const).map((etapa) =>
     construirPrompt(dadosUsuario, meeppExclusivo, etapa, instrucoesUsuario, true)
   );
-  const marcadorEtapaDfd = "\\n\\nETAPA: DOCUMENTO DE FORMALIZAÇÃO DE DEMANDA.";
+  const marcadorEtapaDfd = "\n\nETAPA: DOCUMENTO DE FORMALIZAÇÃO DE DEMANDA.";
   const inicioEtapas = etapas[0].indexOf(marcadorEtapaDfd);
   const fimSchemaComum = etapas[0].lastIndexOf("ESTRUTURA JSON OBRIGATÓRIA:");
   const prefixo = etapas[0].slice(
@@ -199,7 +199,7 @@ function construirPromptUnificado(
     '    "REQUISITOS_TR": "", "OBRIGACOES_CONTRATADA": "", "OBRIGACOES_CONTRANTE": "", "QUALIFICACAO_TECNICA": "", "GARANTIAS_TR": "", "EXECUCAO": "", "PRAZO_EXEC": "", "LOCAL": "", "AMOSTRA_TR": ""',
     "  }",
     "}"
-  ].join("\\n");
+  ].join("\n");
 
   return [
     prefixo,
@@ -215,11 +215,11 @@ function construirPromptUnificado(
     "1. Retorne exclusivamente um objeto JSON válido, sem markdown, comentários ou texto fora do objeto.",
     '2. O objeto raiz deve conter exatamente as três chaves "DFD", "ETP" e "TR", cada uma como objeto JSON independente.',
     "3. Todos os campos previstos nos três blocos devem conter strings não vazias; não omita campos, não crie chaves e não retorne arrays/valores de outro tipo dentro dos blocos.",
-    "4. Use \\\\n escapado dentro de strings JSON para quebras de linha; nunca inclua quebras de linha literais dentro de um valor de string.",
+    "4. Use \\n escapado dentro de strings JSON para quebras de linha; nunca inclua quebras de linha literais dentro de um valor de string.",
     "5. Preserve os fatos e as instruções do usuário. Não invente valores, normas, datas, locais, fornecedores, registros ou exigências de habilitação.",
     "ESTRUTURA JSON OBRIGATÓRIA:",
     schema
-  ].filter((parte) => Boolean(String(parte || "").trim())).join("\\n\\n");
+  ].filter((parte) => Boolean(String(parte || "").trim())).join("\n\n");
 }
 
 export const gerarFasePreparatoria = async (dados: any, arquivos?: DocumentosReferenciaUpload): Promise<FasePreparatoriaJob> => {
