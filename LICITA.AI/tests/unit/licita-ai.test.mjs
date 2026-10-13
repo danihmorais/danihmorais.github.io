@@ -210,6 +210,10 @@ test("gerarFasePreparatoria usa multipart quando há documentos de referência",
   assert.equal(geracao.tipo, "geracao_unificada");
   assert.equal(geracao.temperature, 0.3);
   assert.match(geracao.prompt, /__LICITA_PIPE_CONSULTA_HABILITACAO__/);
+  assert.match(consulta.prompt, /começando em Documento 12/);
+  assert.match(geracao.prompt, /começando em Documento 12/);
+  assert.doesNotMatch(consulta.prompt, /Documento 13/);
+  assert.doesNotMatch(geracao.prompt, /Documento 13/);
   assert.match(geracao.prompt, /"DFD":\s*\{/);
   assert.match(geracao.prompt, /"ETP":\s*\{/);
   assert.match(geracao.prompt, /"TR":\s*\{/);
