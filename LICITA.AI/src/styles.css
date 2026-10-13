@@ -1463,6 +1463,18 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   box-shadow: 0 18px 55px rgba(23,36,59,.07); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
 }
 .status-content h1 { font-size: clamp(26px,4vw,34px); }
+.status-queue-note {
+  margin: 18px 0;
+  padding: 15px 17px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--btn-primary);
+  border-radius: 12px;
+  background: var(--surface-glass-strong);
+  color: var(--text-main);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.status-queue-note strong { font-weight: 700; }
 .status-content > p { font-size: 15px; line-height: 1.6; }
 .job-details > div { background: var(--surface-glass-strong); border-color: var(--border); }
 .job-details dt { font-size: 12px; }

@@ -25,6 +25,7 @@ _PIPE_DFD = "__LICITA_PIPE_DFD__"
 _PIPE_ETP = "__LICITA_PIPE_ETP__"
 _PIPE_DATA = "__LICITA_PIPE_DADOS_USUARIO__"
 _PIPE_STAGES = "__LICITA_PIPE_ETAPAS__"
+_PIPE_CONSULTA_HABILITACAO = "__LICITA_PIPE_CONSULTA_HABILITACAO__"
 
 
 def _dados_para_prompt(dados_usuario: dict) -> dict:
@@ -71,6 +72,7 @@ def _substituir_contextos(texto: str, dados_usuario: dict, resultados: dict[str,
         _PIPE_DFD: json.dumps(resultados.get("DFD", {}), ensure_ascii=False, indent=2),
         _PIPE_ETP: json.dumps(resultados.get("ETP", {}), ensure_ascii=False, indent=2),
         _PIPE_STAGES: json.dumps(resultados, ensure_ascii=False, indent=2),
+        _PIPE_CONSULTA_HABILITACAO: json.dumps(resultados.get("CONSULTA_HABILITACAO", {}), ensure_ascii=False, indent=2),
     }
     for marcador, valor in substituicoes.items():
         texto = texto.replace(marcador, valor)

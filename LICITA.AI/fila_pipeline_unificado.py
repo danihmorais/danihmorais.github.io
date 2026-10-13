@@ -240,6 +240,36 @@ def _chamar_ia(prompt: str, model: str, temperature: float = 0.3) -> tuple[dict,
     return _chamar_ia_primaria(prompt, modelo, temperature)
 
 
+def _validar_json_unificado(resultado: dict) -> dict:
+    """Exige os três blocos DFD/ETP/TR completos em um único objeto JSON."""
+    resultado = _validar_json_geracao(resultado)
+    esperados = {"DFD", "ETP", "TR"}
+    recebidos = set(resultado)
+    if recebidos != esperados:
+        ausentes = sorted(esperados - recebidos)
+        extras = sorted(recebidos - esperados)
+        detalhe = []
+        if ausentes:
+            detalhe.append("blocos ausentes: " + ", ".join(ausentes))
+        if extras:
+            detalhe.append("blocos extras: " + ", ".join(extras))
+        raise RuntimeError("A resposta JSON unificada deve conter exatamente DFD, ETP e TR (" + "; ".join(detalhe) + ").")
+
+    for nome in ("DFD", "ETP", "TR"):
+        bloco = resultado[nome]
+        if not isinstance(bloco, dict) or not bloco:
+            raise RuntimeError(f"A IA não retornou um objeto válido para o bloco {nome}.")
+        invalidos = [
+            str(chave) for chave, valor in bloco.items()
+            if not isinstance(valor, str) or not valor.strip()
+        ]
+        if invalidos:
+            raise RuntimeError(
+                f"O bloco {nome} contém campos ausentes, não textuais ou vazios: {', '.join(invalidos)}."
+            )
+    return resultado
+
+
 def _delay(attempts: int) -> int:
     return min(RETRY_MAX_SECONDS, RETRY_BASE_SECONDS * (2 ** max(0, attempts - 1)))
 
@@ -431,7 +461,7 @@ def _process_pipeline(job: dict) -> None:
         _write_json(_job_path(job["job_id"], ".processing"), job)
 
         prompt_processado = _substituir_contextos(prompt, dados_usuario, resultados)
-        if etapa_tipo in {"geracao_unificada", "geracao_contratacao_direta", "geracao_json"}:
+        if etapa_tipo in {"consulta_habilitacao", "geracao_unificada", "geracao_contratacao_direta", "geracao_json"}:
             prompt_processado = _adicionar_documentos_de_referencia(prompt_processado, documentos_anteriores)
 
         limite_prompt = max(40_000, min(118_000, int(os.getenv("LICITA_QUEUE_MAX_PROMPT_CHARS", "110000"))))
@@ -452,15 +482,7 @@ def _process_pipeline(job: dict) -> None:
             dados_usuario, resultado_final = _aplicar_auditoria_marcas(dados_usuario, resultado)
             resultados[etapa_id] = resultado_final
         elif etapa_tipo == "geracao_unificada":
-            resultado_final = _validar_json_geracao(resultado)
-            for bloco in ("DFD", "ETP", "TR"):
-                if not isinstance(resultado_final.get(bloco), dict):
-                    raise RuntimeError(f"A IA não retornou o bloco {bloco} no JSON unificado.")
-                if not resultado_final[bloco]:
-                    raise RuntimeError(f"O bloco {bloco} retornado pela IA está vazio.")
-                vazios = [chave for chave, valor in resultado_final[bloco].items() if isinstance(valor, str) and not valor.strip()]
-                if vazios:
-                    raise RuntimeError(f"O bloco {bloco} possui campos vazios: {', '.join(vazios)}")
+            resultado_final = _validar_json_unificado(resultado)
             resultados[etapa_id] = resultado_final
         else:
             resultados[etapa_id] = _validar_json_geracao(resultado)
@@ -474,7 +496,7 @@ def _process_pipeline(job: dict) -> None:
 
     dados_ia_final: dict = {}
     for etapa_id, resultado in resultados.items():
-        if etapa_id == "AUDITORIA_MARCAS" or not isinstance(resultado, dict):
+        if etapa_id in {"AUDITORIA_MARCAS", "CONSULTA_HABILITACAO"} or not isinstance(resultado, dict):
             continue
         blocos = resultado if etapa_id == "FASE_PREPARATORIA" and all(isinstance(resultado.get(bloco), dict) for bloco in ("DFD", "ETP", "TR")) else {"_": resultado}
         for bloco in blocos.values():
