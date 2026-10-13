@@ -131,6 +131,71 @@ seguinte"}"""
 
 
 class TestAutomaticModelResolution(unittest.TestCase):
+    def test_json_syntax_error_triggers_one_repair_attempt(self):
+        from unittest.mock import MagicMock, patch
+        import fila_pipeline as pipeline
+
+        resposta_invalida = MagicMock()
+        resposta_invalida.status_code = 200
+        resposta_invalida.json.return_value = {
+            "choices": [{
+                "message": {"content": '{"primeiro":"texto" "segundo":"texto"}'},
+                "finish_reason": "stop",
+            }],
+            "model": "modelo-teste",
+        }
+        resposta_corrigida = MagicMock()
+        resposta_corrigida.status_code = 200
+        resposta_corrigida.json.return_value = {
+            "choices": [{
+                "message": {"content": '{"primeiro":"texto","segundo":"texto"}'},
+                "finish_reason": "stop",
+            }],
+            "model": "modelo-teste",
+        }
+
+        with (
+            patch.object(pipeline, "API_UNSLOTH_URL", "http://unsloth.test/v1"),
+            patch.object(pipeline, "API_UNSLOTH_KEY", "chave-de-teste"),
+            patch.object(pipeline.httpx, "Client") as cliente_http,
+        ):
+            cliente = cliente_http.return_value.__enter__.return_value
+            cliente.post.side_effect = [resposta_invalida, resposta_corrigida]
+            resultado, modelo = pipeline._chamar_ia("prompt de teste", "modelo-teste")
+
+        self.assertEqual(resultado, {"primeiro": "texto", "segundo": "texto"})
+        self.assertEqual(modelo, "modelo-teste")
+        self.assertEqual(cliente.post.call_count, 2)
+        payload_correcao = cliente.post.call_args.kwargs["json"]
+        self.assertFalse(payload_correcao["enable_tools"])
+        self.assertFalse(payload_correcao["enable_thinking"])
+        self.assertIn("JSON_MALFORMADO", payload_correcao["messages"][1]["content"])
+
+    def test_resposta_truncada_e_identificada_sem_tentar_reparar(self):
+        from unittest.mock import MagicMock, patch
+        import fila_pipeline as pipeline
+
+        resposta = MagicMock()
+        resposta.status_code = 200
+        resposta.json.return_value = {
+            "choices": [{
+                "message": {"content": '{"incompleto":'},
+                "finish_reason": "length",
+            }],
+            "model": "modelo-teste",
+        }
+
+        with (
+            patch.object(pipeline, "API_UNSLOTH_URL", "http://unsloth.test/v1"),
+            patch.object(pipeline, "API_UNSLOTH_KEY", "chave-de-teste"),
+            patch.object(pipeline.httpx, "Client") as cliente_http,
+        ):
+            cliente_http.return_value.__enter__.return_value.post.return_value = resposta
+            with self.assertRaisesRegex(RuntimeError, "foi truncada ao atingir o limite"):
+                pipeline._chamar_ia("prompt de teste", "modelo-teste")
+
+        cliente_http.return_value.__enter__.return_value.post.assert_called_once()
+
     def test_auto_model_falls_back_to_first_model_reported_by_unsloth(self):
         from unittest.mock import MagicMock, patch
         import fila_pipeline as pipeline
@@ -422,6 +487,7 @@ class TestConfiguracaoThinking(unittest.TestCase):
         payload = cliente.post.call_args.kwargs["json"]
         self.assertTrue(payload["enable_thinking"])
         self.assertTrue(payload["enable_tools"])
+        self.assertEqual(payload["max_tokens"], 16384)
         self.assertNotIn("response_format", payload)
         self.assertEqual(payload["messages"][0]["role"], "system")
         self.assertIn("600 segundos", payload["messages"][0]["content"])
