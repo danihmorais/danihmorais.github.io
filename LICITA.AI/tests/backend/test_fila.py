@@ -12,6 +12,38 @@ import fila
 
 
 class FilaTests(unittest.TestCase):
+    def test_gerar_zip_corrige_escapes_de_quebra_nos_campos_ia(self):
+        import shutil
+        import tempfile
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as diretorio_modelos:
+            modelo = Path(diretorio_modelos) / "modelo.docx"
+            modelo.write_bytes(b"modelo de teste")
+            modificacoes_capturadas = {}
+
+            def modificar_falso(_origem, destino, modificacoes):
+                modificacoes_capturadas.update(modificacoes)
+                Path(destino).write_bytes(b"documento de teste")
+
+            with (
+                patch.object(fila.config, "PASTA_MODELOS", diretorio_modelos),
+                patch.object(fila.config, "BASE_FILES", ["modelo.docx"]),
+                patch.object(fila, "modificar_documento", side_effect=modificar_falso),
+            ):
+                caminho_zip, _ = fila.gerar_zip(
+                    {},
+                    {"CAMPO": "Primeiro parágrafo.\\nSegundo parágrafo.\\r\\nTerceiro parágrafo."},
+                    "teste123",
+                )
+                try:
+                    self.assertEqual(
+                        modificacoes_capturadas["{{CAMPO}}"],
+                        "Primeiro parágrafo.\nSegundo parágrafo.\nTerceiro parágrafo.",
+                    )
+                finally:
+                    shutil.rmtree(caminho_zip.parent, ignore_errors=True)
+
     def test_resolve_placeholders_suporta_cadeias_maiores_que_tres_niveis(self):
         modificacoes = {
             "{{A}}": "{{B}}",
