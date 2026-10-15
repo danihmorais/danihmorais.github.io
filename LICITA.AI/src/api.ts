@@ -215,7 +215,7 @@ function construirPromptUnificado(
     "1. Retorne exclusivamente um objeto JSON válido, sem markdown, comentários ou texto fora do objeto.",
     '2. O objeto raiz deve conter exatamente as três chaves "DFD", "ETP" e "TR", cada uma como objeto JSON independente.',
     "3. Todos os campos previstos nos três blocos devem conter strings não vazias; não omita campos, não crie chaves e não retorne arrays/valores de outro tipo dentro dos blocos.",
-    "4. Use \\n escapado dentro de strings JSON para quebras de linha; nunca inclua quebras de linha literais dentro de um valor de string.",
+    "4. Use a sequência JSON \n (uma única barra invertida seguida da letra n) dentro de strings JSON para representar quebras de linha. Após a leitura do JSON, cada campo deve conter uma quebra real, nunca os caracteres literais barra invertida e n.",
     "5. Preserve os fatos e as instruções do usuário. Não invente valores, normas, datas, locais, fornecedores, registros ou exigências de habilitação.",
     "ESTRUTURA JSON OBRIGATÓRIA:",
     schema
