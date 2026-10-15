@@ -235,9 +235,113 @@ def _concluir_cancelamento(job: dict, processing_path) -> None:
     marcador.unlink(missing_ok=True)
 
 
-def _chamar_ia(prompt: str, model: str, temperature: float = 0.3) -> tuple[dict, str]:
+# Esquema estrito exigido pela montagem unificada DFD + ETP + TR.
+_FASE_PREPARATORIA_CAMPOS = {
+    "DFD": (
+        "OBJETO",
+        "TIPO_OBJ",
+        "JUSTIFICATIVA",
+        "ESTIMATIVA_QUANTIDADES",
+        "RESULTADOS_ESPERADOS",
+    ),
+    "ETP": (
+        "REQUISITOS_ETP",
+        "SUBCONTRATACAO_ETP",
+        "ME_EPP_ETP",
+        "JUSTIFICATIVA_PAC",
+        "MERCADO",
+        "SOLUCAO",
+        "CRITERIOS_JUSTIFICATIVA_ETP",
+        "CRITERIOS_SUSTENTABILIDADE",
+        "MODALIDADE_JUSTIFICATIVA_ETP",
+        "PROVIDENCIAS_CONT",
+        "CORRELATAS_INTER",
+        "JUSTIFICATIVA_ESTIMATIVA",
+        "GARANTIAS_ETP",
+        "VISTORIA_ETP",
+        "AMOSTRA_ETP",
+        "PARCELAMENTO",
+        "CONCLUSAO",
+    ),
+    "TR": (
+        "REQUISITOS_TR",
+        "OBRIGACOES_CONTRATADA",
+        "OBRIGACOES_CONTRATANTE",
+        "QUALIFICACAO_TECNICA",
+        "GARANTIAS_TR",
+        "EXECUCAO",
+        "PRAZO_EXEC",
+        "LOCAL",
+        "AMOSTRA_TR",
+    ),
+}
+
+_FASE_PREPARATORIA_SYSTEM_PROMPT = """
+Você é um especialista sênior em planejamento de contratações públicas brasileiras.
+A etapa anterior já realizou a consulta jurídica e a pesquisa web com as ferramentas disponíveis; o resultado dessa consulta e os documentos de referência foram inseridos no prompt atual. Nesta chamada, não use ferramentas nem tente fazer nova pesquisa. Use a consulta anterior, os documentos de referência e os dados concretos apresentados para fundamentar a redação.
+Priorize a Lei nº 14.133/2021, a LC nº 123/2006 e fontes oficiais já identificadas no contexto. Não invente normas, acórdãos, dados de mercado, documentos de habilitação, preços ou fatos. Diferencie obrigação legal de recomendação e preserve a proporcionalidade e a competitividade.
+A resposta deve ser exclusivamente um objeto JSON válido que corresponda integralmente ao esquema solicitado. Não use Markdown, cercas de código, comentários nem texto antes ou depois do JSON. Todos os campos devem conter strings não vazias em português formal, técnico, jurídico e administrativo. Respeite integralmente as instruções específicas de cada campo no prompt do usuário.
+""".strip()
+
+
+def _json_schema_fase_preparatoria() -> dict:
+    """Contrato JSON Schema estrito para a resposta integrada DFD/ETP/TR."""
+    blocos = {}
+    for nome, campos in _FASE_PREPARATORIA_CAMPOS.items():
+        blocos[nome] = {
+            "type": "object",
+            "properties": {campo: {"type": "string"} for campo in campos},
+            "required": list(campos),
+            "additionalProperties": False,
+        }
+
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "fase_preparatoria",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "properties": blocos,
+                "required": list(_FASE_PREPARATORIA_CAMPOS),
+                "additionalProperties": False,
+            },
+        },
+    }
+
+
+def _opcoes_chamada_ia_etapa(etapa_tipo: str) -> dict:
+    """Configura saída estruturada apenas para a geração integrada da fase preparatória."""
+    if str(etapa_tipo or "").strip().casefold() != "geracao_unificada":
+        return {}
+    return {
+        "response_format": _json_schema_fase_preparatoria(),
+        "enable_tools": False,
+        "system_prompt": _FASE_PREPARATORIA_SYSTEM_PROMPT,
+    }
+
+
+def _chamar_ia(
+    prompt: str,
+    model: str,
+    temperature: float = 0.3,
+    *,
+    response_format: dict | None = None,
+    enable_tools: bool = True,
+    system_prompt: str | None = None,
+) -> tuple[dict, str]:
     modelo = str(model or "unsloth-auto").strip()
-    return _chamar_ia_primaria(prompt, modelo, temperature)
+    # Preserva compatibilidade com as chamadas simples existentes.
+    if response_format is None and enable_tools is True and system_prompt is None:
+        return _chamar_ia_primaria(prompt, modelo, temperature)
+    return _chamar_ia_primaria(
+        prompt,
+        modelo,
+        temperature,
+        response_format=response_format,
+        enable_tools=enable_tools,
+        system_prompt=system_prompt,
+    )
 
 
 def _validar_json_unificado(resultado: dict) -> dict:
@@ -497,9 +601,18 @@ def _process_pipeline(job: dict) -> None:
                 f"O prompt desta etapa excede o limite seguro ({len(prompt_processado):,} caracteres; limite {limite_prompt:,})."
             )
         _checar_cancelamento(job)
-        resultado, modelo_resolvido = _chamar_ia(
-            prompt_processado, modelo, float(etapa.get("temperature", temperatura))
-        )
+        opcoes_chamada = _opcoes_chamada_ia_etapa(etapa_tipo)
+        if opcoes_chamada:
+            resultado, modelo_resolvido = _chamar_ia(
+                prompt_processado,
+                modelo,
+                float(etapa.get("temperature", temperatura)),
+                **opcoes_chamada,
+            )
+        else:
+            resultado, modelo_resolvido = _chamar_ia(
+                prompt_processado, modelo, float(etapa.get("temperature", temperatura))
+            )
         _checar_cancelamento(job)
         if modelo_resolvido:
             modelo = modelo_resolvido
