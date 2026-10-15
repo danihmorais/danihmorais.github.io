@@ -260,13 +260,12 @@ def _chamar_ia(
             f"O prompt excede o limite de contexto seguro ({len(prompt):,} caracteres; limite {limite_prompt:,}). "
             "Reduza a quantidade de texto dos dados ou dos documentos de referência."
         )
-    # A geração unificada contém DFD, ETP e TR na mesma resposta. O modo thinking também
-    # consome o orçamento de saída; 8.192 tokens frequentemente truncava o JSON antes de fechar.
-    max_tokens = max(1024, min(16_384, int(os.getenv("LICITA_QUEUE_MAX_TOKENS", "16384"))))
+    # Não defina max_tokens/max_completion_tokens: no Unsloth, omitir o parâmetro
+    # permite gerar até EOS. A única limitação restante é a capacidade intrínseca do
+    # contexto/modelo/servidor, e não um teto arbitrário da aplicação.
     payload = {
         "model": modelo,
         "temperature": float(temperature),
-        "max_tokens": max_tokens,
         "messages": [
             {"role": "system", "content": system_prompt or PESQUISA_WEB_SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
@@ -320,12 +319,14 @@ def _chamar_ia(
     content = str(content or "")
     modelo_resolvido = str(data.get("model") or modelo)
 
-    # finish_reason=length confirma que a resposta foi cortada no limite de tokens.
+    # finish_reason=length indica que o modelo/servidor encerrou a geração por limite
+    # de contexto ou geração. A aplicação não impõe um teto fixo de tokens de saída.
     # Não tente "reparar" uma resposta truncada: isso poderia inventar ou omitir conteúdo.
     if choice.get("finish_reason") == "length":
         raise RuntimeError(
-            f"A resposta da IA foi truncada ao atingir o limite de {max_tokens} tokens. "
-            "A solicitação será tentada novamente; se persistir, reduza o tamanho dos documentos de referência."
+            "A resposta da IA foi truncada ao atingir o limite de contexto/geração do modelo ou servidor. "
+            "A aplicação não impõe um teto fixo de tokens de saída; confira o contexto disponível no Unsloth "
+            "e, se necessário, divida a geração em etapas."
         )
 
     try:
@@ -339,8 +340,7 @@ def _chamar_ia(
         payload_correcao = {
             "model": modelo_resolvido,
             "temperature": 0.0,
-            "max_tokens": max_tokens,
-            "messages": [
+                "messages": [
                 {
                     "role": "system",
                     "content": (
@@ -390,7 +390,7 @@ def _chamar_ia(
             ) from erro_json
         if escolha_correcao.get("finish_reason") == "length":
             raise RuntimeError(
-                f"{erro_json}. A resposta de correção também foi truncada no limite de tokens."
+                f"{erro_json}. A resposta de correção também foi truncada pelo limite de contexto/geração do modelo ou servidor."
             ) from erro_json
         conteudo_correcao = ((escolha_correcao.get("message") or {}).get("content"))
         if isinstance(conteudo_correcao, list):
