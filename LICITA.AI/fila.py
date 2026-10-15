@@ -155,6 +155,11 @@ def _formata_moeda(v) -> str:
     return f"R$ {s}"
 
 
+def _normalizar_quebras_escapadas(texto: str) -> str:
+    """Converte escapes literais de quebra de linha da resposta da IA em quebras reais."""
+    return texto.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\r", "\n")
+
+
 def _canonical_placeholder(chave: str) -> str:
     nome = chave.strip().strip("{}").strip()
     return f"{{{{{nome}}}}}"
@@ -223,7 +228,11 @@ def gerar_zip(dados_usuario: dict, dados_ia: dict, session_id: str) -> tuple[Pat
                 continue
             if chave_docx == "{{PAGAMENTO}}" and pagamento_tipo != "POR_ETAPAS":
                 continue
-            modificacoes[chave_docx] = valor
+            modificacoes[chave_docx] = (
+                _normalizar_quebras_escapadas(valor)
+                if isinstance(valor, str) and not valor.startswith("__TABLE__")
+                else valor
+            )
 
         for chave1, chave2 in config.ALIASES:
             val1, val2 = modificacoes.get(chave1), modificacoes.get(chave2)
