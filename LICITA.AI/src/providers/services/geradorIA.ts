@@ -43,7 +43,7 @@ const REGRAS_MINIMAS_TEXTO: Record<string, string> = {
     "OBRIGACOES_CONTRANTE": "Entre 5 e 10 obrigações separadas obrigatoriamente pelo caractere escapado de quebra de linha.",
     "QUALIFICACAO_TECNICA": "Entre 3 e 4 parágrafos.",
     "GARANTIAS_TR": "Entre 2 e 3 parágrafos. Deve ser um resumo de GARANTIAS_ETP",
-    "TIPO_OBJ": "( ) Serviço não continuado\\n( ) Serviço continuado SEM dedicação exclusiva de mão de obra\\n( ) Serviço continuado COM dedicação exclusiva de mão de obra\\n( ) Material de Consumo\\n( ) Material Permanente/Equipamento\\n\\nReescreva as opções e insira um X na opção escolhida.",
+    "TIPO_OBJ": "( ) Serviço não continuado\n( ) Serviço continuado SEM dedicação exclusiva de mão de obra\n( ) Serviço continuado COM dedicação exclusiva de mão de obra\n( ) Material de Consumo\n( ) Material Permanente/Equipamento\n\nReescreva as opções e insira um X na opção escolhida.",
     "PARCELAMENTO": "Entre 1 e 3 parágrafos. Você deve analisar a possibilidade de parcelamento da contratação, considerando aspectos como economicidade, eficiência, vantajosidade, planejamento, e jurisprudência do TCU sobre o tema. Considere a opção escolhida e detalhe a forma de parcelamento (parcelamento por item, por lote, ou outro critério), justificando tecnicamente a escolha do critério de parcelamento escolhido. Reforce os aspectos de economicidade, eficiência, vantajosidade e planejamento envolvidos, independente da opção escolhida.",
     "EXECUCAO": "Entre 4 e 6 parágrafos. Você deve aprimorar o texto base fornecido, detalhando condições de execução, prazos, cronogramas, etapas, e demais aspectos operacionais relevantes para a execução contratual. Não permita prazos de entrega inexequíveis ou condições de execução genéricas. O texto deve ser completo, detalhado e operacional, garantindo clareza e exequibilidade.",
     "PRAZO_EXEC": "Texto completo contendo prazo por extenso e em algarismos.",
@@ -199,7 +199,7 @@ ${diretrizExecucao}`;
     const restricoesJSON = `ATENÇÃO - REGRAS RÍGIDAS DE SAÍDA:
 1. Você deve retornar EXCLUSIVAMENTE um objeto JSON válido. Não adicione nenhum texto explicativo, saudações ou comentários antes ou depois do JSON.
 2. NÃO USE marcadores de bloco de código (como \`\`\`json ou \`\`\`). Retorne o JSON diretamente em formato de texto puro.
-3. ESCAPE DE QUEBRAS DE LINHA: O JSON não suporta quebras de linha literais dentro de strings. Para formatar quebras de linha dentro dos textos de cada chave, você DEVE utilizar obrigatoriamente os caracteres escapados \\n.
+3. ESCAPE DE QUEBRAS DE LINHA: O JSON não suporta quebras de linha literais dentro de strings. Para representar quebras de linha, use a sequência JSON \n (uma única barra invertida seguida da letra n). Depois que o JSON for decodificado, o campo deve conter uma quebra de linha real, nunca os caracteres literais barra invertida e n.
 4. Nenhuma chave do JSON pode estar vazia.`;
     const dadosMarcados = usarMarcadorDados
         ? `\n\nDADOS DA CONTRATAÇÃO (JSON; fonte factual para itens, quantidades e valores):\n__LICITA_PIPE_DADOS_USUARIO__`
