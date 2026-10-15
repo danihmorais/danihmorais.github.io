@@ -242,7 +242,15 @@ def _provider_config(model: str) -> tuple[str, str, str]:
     return API_UNSLOTH_URL, API_UNSLOTH_KEY, modelo
 
 
-def _chamar_ia(prompt: str, model: str, temperature: float = 0.3) -> tuple[dict, str]:
+def _chamar_ia(
+    prompt: str,
+    model: str,
+    temperature: float = 0.3,
+    *,
+    response_format: dict | None = None,
+    enable_tools: bool = True,
+    system_prompt: str | None = None,
+) -> tuple[dict, str]:
     base_url, api_key, modelo = _provider_config(model)
     if not base_url or not api_key:
         raise RuntimeError("O provedor de IA da fila não está configurado no backend.")
@@ -260,14 +268,13 @@ def _chamar_ia(prompt: str, model: str, temperature: float = 0.3) -> tuple[dict,
         "temperature": float(temperature),
         "max_tokens": max_tokens,
         "messages": [
-            {"role": "system", "content": PESQUISA_WEB_SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt or PESQUISA_WEB_SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ],
-        "enable_tools": True,
-        # O Unsloth não aceita response_format/guided decoding junto com execução de ferramentas.
-        # Mantemos a pesquisa web e extraímos/validamos o JSON após a resposta.
-
+        "enable_tools": bool(enable_tools),
     }
+    if response_format is not None:
+        payload["response_format"] = response_format
     # O Unsloth aplica o modo de raciocínio quando suportado pelo modelo/template ativo.
     # Enviar em todas as chamadas evita acoplar esse comportamento ao nome de uma família específica.
     payload["enable_thinking"] = True
