@@ -340,7 +340,7 @@ def _chamar_ia(
         payload_correcao = {
             "model": modelo_resolvido,
             "temperature": 0.0,
-                "messages": [
+            "messages": [
                 {
                     "role": "system",
                     "content": (
