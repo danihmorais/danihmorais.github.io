@@ -2,7 +2,12 @@ import json
 import unittest
 
 from fila_pipeline import _aplicar_auditoria_marcas, _dados_para_prompt, _extrair_json, _substituir_contextos, _validar_json_geracao
-from fila_pipeline_unificado import _adicionar_documentos_de_referencia, _validar_json_unificado
+from fila_pipeline_unificado import (
+    _adicionar_documentos_de_referencia,
+    _json_schema_fase_preparatoria,
+    _opcoes_chamada_ia_etapa,
+    _validar_json_unificado,
+)
 
 
 class TestFilaPipeline(unittest.TestCase):
@@ -265,6 +270,43 @@ class TestStaleQueueCancellation(unittest.TestCase):
                 self.assertEqual(cancelado["cancelled_by"], "admin")
                 self.assertTrue((raiz / f"{job_id}.cancel").exists())
                 self.assertFalse(fila._job_path(job_id, ".processing").exists())
+
+    def test_fase_preparatoria_configura_json_schema_estrito_sem_ferramentas(self):
+        opcoes = _opcoes_chamada_ia_etapa("geracao_unificada")
+        self.assertFalse(opcoes["enable_tools"])
+        self.assertEqual(opcoes["response_format"], _json_schema_fase_preparatoria())
+        self.assertEqual(opcoes["response_format"]["type"], "json_schema")
+        self.assertEqual(opcoes["response_format"]["json_schema"]["name"], "fase_preparatoria")
+        self.assertTrue(opcoes["response_format"]["json_schema"]["strict"])
+
+        schema = opcoes["response_format"]["json_schema"]["schema"]
+        self.assertEqual(set(schema["properties"]), {"DFD", "ETP", "TR"})
+        self.assertEqual(set(schema["required"]), {"DFD", "ETP", "TR"})
+        self.assertFalse(schema["additionalProperties"])
+
+        for nome, campos in {
+            "DFD": {"OBJETO", "TIPO_OBJ", "JUSTIFICATIVA", "ESTIMATIVA_QUANTIDADES", "RESULTADOS_ESPERADOS"},
+            "ETP": {
+                "REQUISITOS_ETP", "SUBCONTRATACAO_ETP", "ME_EPP_ETP", "JUSTIFICATIVA_PAC", "MERCADO",
+                "SOLUCAO", "CRITERIOS_JUSTIFICATIVA_ETP", "CRITERIOS_SUSTENTABILIDADE",
+                "MODALIDADE_JUSTIFICATIVA_ETP", "PROVIDENCIAS_CONT", "CORRELATAS_INTER",
+                "JUSTIFICATIVA_ESTIMATIVA", "GARANTIAS_ETP", "VISTORIA_ETP", "AMOSTRA_ETP",
+                "PARCELAMENTO", "CONCLUSAO",
+            },
+            "TR": {
+                "REQUISITOS_TR", "OBRIGACOES_CONTRATADA", "OBRIGACOES_CONTRANTE", "QUALIFICACAO_TECNICA",
+                "GARANTIAS_TR", "EXECUCAO", "PRAZO_EXEC", "LOCAL", "AMOSTRA_TR",
+            },
+        }.items():
+            bloco = schema["properties"][nome]
+            self.assertEqual(set(bloco["properties"]), campos)
+            self.assertEqual(set(bloco["required"]), campos)
+            self.assertFalse(bloco["additionalProperties"])
+            self.assertTrue(all(item == {"type": "string"} for item in bloco["properties"].values()))
+
+    def test_json_schema_nao_e_ativado_nas_etapas_de_consulta(self):
+        self.assertEqual(_opcoes_chamada_ia_etapa("consulta_habilitacao"), {})
+        self.assertEqual(_opcoes_chamada_ia_etapa("geracao_json"), {})
 
 
 if __name__ == "__main__":
