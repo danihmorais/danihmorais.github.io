@@ -174,6 +174,8 @@ class TestAutomaticModelResolution(unittest.TestCase):
         payload_correcao = cliente.post.call_args.kwargs["json"]
         self.assertFalse(payload_correcao["enable_tools"])
         self.assertFalse(payload_correcao["enable_thinking"])
+        self.assertNotIn("max_tokens", payload_correcao)
+        self.assertNotIn("max_completion_tokens", payload_correcao)
         self.assertIn("JSON_MALFORMADO", payload_correcao["messages"][1]["content"])
 
     def test_resposta_truncada_e_identificada_sem_tentar_reparar(self):
@@ -196,7 +198,7 @@ class TestAutomaticModelResolution(unittest.TestCase):
             patch.object(pipeline.httpx, "Client") as cliente_http,
         ):
             cliente_http.return_value.__enter__.return_value.post.return_value = resposta
-            with self.assertRaisesRegex(RuntimeError, "foi truncada ao atingir o limite"):
+            with self.assertRaisesRegex(RuntimeError, "limite de contexto/geração do modelo ou servidor"):
                 pipeline._chamar_ia("prompt de teste", "modelo-teste")
 
         cliente_http.return_value.__enter__.return_value.post.assert_called_once()
@@ -529,7 +531,8 @@ class TestConfiguracaoThinking(unittest.TestCase):
         payload = cliente.post.call_args.kwargs["json"]
         self.assertTrue(payload["enable_thinking"])
         self.assertTrue(payload["enable_tools"])
-        self.assertEqual(payload["max_tokens"], 16384)
+        self.assertNotIn("max_tokens", payload)
+        self.assertNotIn("max_completion_tokens", payload)
         self.assertNotIn("response_format", payload)
         self.assertEqual(payload["messages"][0]["role"], "system")
         self.assertIn("600 segundos", payload["messages"][0]["content"])
