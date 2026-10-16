@@ -222,7 +222,7 @@ def montar_variaveis_fixas(dados_usuario: dict) -> dict:
         cargos_f = [c.strip() for c in cargos_fiscais_str.split(",") if c.strip()]
         for i, nome in enumerate(nomes_f):
             cargo = cargos_f[i] if i < len(cargos_f) else ""
-            linha = f"____________________________\n{nome}"
+            linha = f"\n\n\n____________________________\n{nome}"
             if cargo:
                 linha += f"\n{cargo}\nFiscal do Contrato\n\n\n"
             assinaturas_blocos.append(linha)
