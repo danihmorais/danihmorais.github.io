@@ -164,7 +164,7 @@ jobs:
             --dump-header "$HEADERS_FILE" \
             --output "$BODY_FILE" \
             "$BASE_URL/files2"
-          grep -Eiq '^access-control-allow-origin:[[:space:]]*https://danihmorais\.github\.io[[:space:]]* "$HEADERS_FILE" || {
+          grep -Eiq '^access-control-allow-origin:.*https://danihmorais\.github\.io' "$HEADERS_FILE" || {
             echo 'CORS não está configurado corretamente em /files2.'
             cat "$HEADERS_FILE"
             exit 1
