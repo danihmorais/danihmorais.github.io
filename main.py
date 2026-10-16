@@ -401,11 +401,8 @@ async def list_hidden_model_files():
             }
 
         for filename in filenames:
-            if not filename.startswith("."):
-                # Arquivos de nome comum também são ocultos quando estão
-                # dentro de qualquer diretório oculto.
-                pass
-
+            # O caminho completo decide: arquivos comuns dentro de pastas
+            # ocultas também pertencem à listagem desta API.
             path = current_path / filename
             try:
                 relative = path.relative_to(root).as_posix()
