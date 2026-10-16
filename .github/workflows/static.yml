@@ -96,6 +96,7 @@ jobs:
           cp -r BIBLIOTECA-MUNICIPAL/dist site/BIBLIOTECA-MUNICIPAL
           cp -r FIORIILICSVTOWORD/. site/FIORIILICSVTOWORD/
           cp documentos-modelo.html site/documentos-modelo.html
+          cp estudos.html site/estudos.html
           python - <<'PY'
           from pathlib import Path
           import json, os
@@ -105,15 +106,15 @@ jobs:
           api_url=api_url.rstrip("/")
           if not api_url or not api_url.startswith(("http://","https://")): raise SystemExit("Secret API_URL inválido.")
           if not version: raise SystemExit("PAGES_VERSION não configurado.")
-          doc=Path("site/documentos-modelo.html")
-          text=doc.read_text(encoding="utf-8")
-          if "__API_URL_JSON__" not in text: raise SystemExit("Placeholder __API_URL_JSON__ não encontrado.")
-          text=text.replace("__API_URL_JSON__",json.dumps(api_url,ensure_ascii=False))
-          doc.write_text(text,encoding="utf-8")
+          for name in ("documentos-modelo.html","estudos.html"):
+              page=Path("site")/name
+              text=page.read_text(encoding="utf-8")
+              if "__API_URL_JSON__" not in text: raise SystemExit(f"Placeholder __API_URL_JSON__ não encontrado em {name}.")
+              page.write_text(text.replace("__API_URL_JSON__",json.dumps(api_url,ensure_ascii=False)),encoding="utf-8")
           index=Path("site/index.html")
           text=index.read_text(encoding="utf-8").replace("__PAGES_VERSION__",version)
           index.write_text(text,encoding="utf-8")
-          if "__API_URL_JSON__" in doc.read_text(encoding="utf-8") or "__PAGES_VERSION__" in text: raise SystemExit("Placeholder não substituído.")
+          if any("__API_URL_JSON__" in (Path("site")/name).read_text(encoding="utf-8") for name in ("documentos-modelo.html","estudos.html")) or "__PAGES_VERSION__" in text: raise SystemExit("Placeholder não substituído.")
           PY
       - name: Setup Pages
         uses: actions/configure-pages@v5

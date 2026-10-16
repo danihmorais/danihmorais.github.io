@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#101a2c">
+<title>Estudos — Biblioteca pessoal</title>
+<link rel="icon" href="./assets/logo.png" type="image/png">
+<style>
+:root{color-scheme:light;--bg:#f3f5f9;--surface:#fff;--surface-2:#f7f8fb;--text:#182235;--muted:#758096;--line:#e2e7ef;--accent:#4d6df5;--accent-soft:#edf0ff;--green:#21856a;--green-soft:#e7f6ef;--shadow:0 14px 42px rgba(22,34,56,.07)}
+[data-theme="dark"]{color-scheme:dark;--bg:#0c1321;--surface:#121c2d;--surface-2:#182438;--text:#eef3fc;--muted:#9aa8be;--line:#29364b;--accent:#8aa0ff;--accent-soft:#232f54;--green:#5ad0a6;--green-soft:#163c35;--shadow:0 14px 42px rgba(0,0,0,.19)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.5;min-height:100vh}
+button,input,select{font:inherit}
+button{cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 38%,transparent);outline-offset:2px}
+button:disabled{opacity:.4;cursor:not-allowed}
+a{color:var(--accent)}
+.topbar{height:68px;border-bottom:1px solid var(--line);background:var(--surface);display:flex;align-items:center;justify-content:space-between;padding:0 clamp(16px,3vw,42px);gap:20px}
+.brand{display:flex;gap:12px;align-items:center;color:var(--text);text-decoration:none}
+.brand img{width:38px;height:38px;object-fit:contain;border-radius:10px}
+.brand-title{font-size:14px;font-weight:750;letter-spacing:.01em}
+.brand-sub{font-size:11px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
+.top-actions{display:flex;align-items:center;gap:12px}
+.connection{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}
+.dot{width:8px;height:8px;border-radius:50%;background:#e3a340;flex-shrink:0}
+.dot.ok{background:#2cab83}.dot.error{background:#e15b66}
+.icon-button{height:38px;width:38px;border-radius:12px;border:1px solid var(--line);background:var(--surface-2);color:var(--text);display:inline-grid;place-items:center;font-size:17px}
+main{max-width:1600px;margin:0 auto;padding:28px clamp(14px,2.5vw,36px) 42px}
+.hero{display:flex;align-items:flex-end;justify-content:space-between;gap:22px;margin:4px 0 23px}
+.eyebrow{font-size:11px;font-weight:750;letter-spacing:.13em;text-transform:uppercase;color:var(--accent);margin-bottom:7px}
+h1{font-size:clamp(25px,3vw,34px);letter-spacing:-.04em;line-height:1.15;margin:0;font-weight:780}
+.hero p{margin:9px 0 0;color:var(--muted);font-size:14px}
+.overall-progress{width:min(310px,35%);padding:14px 16px;border:1px solid var(--line);background:var(--surface);border-radius:15px;flex-shrink:0}
+.progress-head{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;margin-bottom:9px}
+.progress-head span:last-child{font-weight:750}
+.meter{height:6px;border-radius:8px;background:var(--line);overflow:hidden}
+.meter span{display:block;height:100%;width:0;background:var(--green);border-radius:8px;transition:width .25s}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:20px}
+.stat{padding:15px 17px;border:1px solid var(--line);background:var(--surface);border-radius:15px;min-width:0}
+.stat-label{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:7px}
+.stat-value{font-size:25px;font-weight:780;letter-spacing:-.04em;margin-top:4px;white-space:nowrap}
+.stat-note{font-size:11px;color:var(--muted);margin-top:1px}
+.workspace{display:grid;grid-template-columns:minmax(270px,330px) minmax(0,1fr);gap:19px;align-items:start}
+.sidebar,.study-panel{border:1px solid var(--line);background:var(--surface);border-radius:18px;box-shadow:var(--shadow);min-width:0}
+.sidebar{overflow:hidden}
+.side-head{padding:18px 17px 13px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.side-title{font-weight:760;font-size:15px}
+.mini-count{background:var(--surface-2);border:1px solid var(--line);padding:3px 8px;border-radius:8px;font-size:11px;color:var(--muted)}
+.search-wrap{padding:0 14px 13px}
+.search-wrap input{width:100%;background:var(--surface-2);border:1px solid var(--line);color:var(--text);border-radius:11px;padding:11px 12px;outline:none}
+.search-wrap input::placeholder{color:var(--muted)}
+.filters{display:flex;gap:6px;flex-wrap:wrap;padding:0 14px 14px}
+.filter-btn{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:9px;padding:7px 10px;font-size:12px}
+.filter-btn.active{background:var(--accent-soft);border-color:transparent;color:var(--accent);font-weight:700}
+.library-label{display:flex;justify-content:space-between;padding:10px 17px 8px;border-top:1px solid var(--line);color:var(--muted);font-size:11px;font-weight:750;letter-spacing:.1em;text-transform:uppercase}
+.tree{padding:0 8px 12px;max-height:calc(100vh - 390px);min-height:170px;overflow:auto;overscroll-behavior:contain}
+.tree-folder{margin:2px 0}
+.folder-row{display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;color:var(--text);text-align:left;padding:9px 8px;border-radius:9px;min-width:0}
+.folder-row:hover,.file-row:hover{background:var(--surface-2)}
+.folder-row.selected{background:var(--accent-soft);color:var(--accent)}
+.folder-caret{width:14px;flex-shrink:0;text-align:center;color:var(--muted);font-size:11px}
+.folder-icon{font-size:16px;flex-shrink:0}
+.folder-name{font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:630}
+.folder-count{font-size:10px;color:var(--muted);flex-shrink:0}
+.folder-children{margin-left:12px;border-left:1px solid var(--line);padding-left:5px}
+.file-row{display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;text-align:left;color:var(--text);padding:9px 8px;border-radius:9px;min-width:0}
+.file-row.selected{background:var(--accent-soft);color:var(--accent)}
+.file-type-icon{width:21px;flex-shrink:0;text-align:center;font-size:14px}
+.file-row-content{flex:1;min-width:0}
+.file-name{display:block;font-size:12px;font-weight:620;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-sub{display:flex;gap:5px;align-items:center;font-size:10px;color:var(--muted);margin-top:2px}
+.file-status{font-size:11px;color:var(--green);flex-shrink:0}
+.empty-tree{margin:8px;padding:20px 12px;text-align:center;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-size:12px}
+.study-panel{min-height:610px;overflow:hidden}
+.welcome{min-height:610px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:44px 24px}
+.welcome-symbol{height:68px;width:68px;border-radius:22px;display:grid;place-items:center;background:var(--accent-soft);font-size:31px;margin-bottom:20px}
+.welcome h2{font-size:23px;margin:0;letter-spacing:-.03em}
+.welcome p{max-width:440px;color:var(--muted);font-size:13px;margin:11px 0 0}
+.welcome-counts{display:flex;gap:9px;flex-wrap:wrap;justify-content:center;margin-top:22px}
+.soft-pill{border:1px solid var(--line);background:var(--surface-2);color:var(--muted);border-radius:999px;padding:7px 11px;font-size:11px}
+.content-head{padding:22px 24px 17px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.content-title-wrap{min-width:0}
+.content-head h2{margin:4px 0 6px;font-size:clamp(18px,2vw,24px);letter-spacing:-.035em;line-height:1.25;overflow-wrap:anywhere}
+.breadcrumb{font-size:11px;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.material-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+.tag{font-size:10px;padding:4px 8px;border-radius:7px;background:var(--surface-2);color:var(--muted);border:1px solid var(--line)}
+.tag.done{color:var(--green);background:var(--green-soft);border-color:transparent}
+.head-actions{display:flex;gap:7px;flex-shrink:0}
+.small-btn{border:1px solid var(--line);background:var(--surface-2);color:var(--text);border-radius:10px;padding:8px 11px;font-size:12px;white-space:nowrap}
+.small-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+.small-btn.positive{color:var(--green);border-color:color-mix(in srgb,var(--green) 35%,var(--line))}
+.media-wrap{padding:17px 20px 12px}
+.media-stage{position:relative;background:#070b13;border-radius:13px;overflow:hidden;display:flex;align-items:center;justify-content:center;min-height:250px;aspect-ratio:16/9;max-height:calc(100vh - 255px)}
+.media-stage video{width:100%;height:100%;max-height:calc(100vh - 255px);object-fit:contain;background:#070b13}
+.media-stage.pdf-stage{aspect-ratio:auto;height:clamp(420px,68vh,850px);background:var(--surface-2);border:1px solid var(--line)}
+.media-stage iframe{width:100%;height:100%;border:0;background:#fff}
+.media-placeholder{color:#c3cee0;text-align:center;padding:28px;max-width:420px}
+.media-placeholder .big-icon{font-size:35px;margin-bottom:10px}
+.media-placeholder p{font-size:12px;color:#aebbd0;margin:5px 0 0}
+.next-overlay{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:clamp(20px,4vw,42px);background:linear-gradient(0deg,rgba(5,9,17,.96),rgba(5,9,17,.04) 82%);color:white;z-index:3}
+.next-overlay.hidden{display:none}
+.next-kicker{font-size:10px;text-transform:uppercase;letter-spacing:.15em;font-weight:750;color:#bdc9ff}
+.next-overlay h3{font-size:clamp(18px,2.4vw,27px);line-height:1.2;margin:7px 0;max-width:650px}
+.next-overlay p{color:#d0d6e2;font-size:12px;margin:0 0 14px}
+.next-actions{display:flex;gap:8px;flex-wrap:wrap}
+.next-actions button{border-radius:9px;padding:9px 13px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.12);color:white;font-size:12px}
+.next-actions button:first-child{background:#fff;color:#101a2c;font-weight:750}
+.pdf-fallback{display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;height:100%;padding:25px;text-align:center;color:var(--muted)}
+.pdf-fallback strong{color:var(--text)}
+.playback-bar{padding:0 22px 20px}
+.playback-top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:6px 0 15px}
+.nav-controls{display:flex;align-items:center;gap:8px}
+.nav-controls button{border:1px solid var(--line);background:var(--surface);color:var(--text);padding:9px 12px;border-radius:10px;font-size:12px}
+.nav-controls .play-indicator{color:var(--accent);font-weight:700}
+.options{display:flex;align-items:center;justify-content:flex-end;gap:13px;flex-wrap:wrap}
+.check-option{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);cursor:pointer;user-select:none}
+.check-option input{accent-color:var(--accent);width:15px;height:15px}
+.speed-control{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12px}
+.speed-control select{border:1px solid var(--line);border-radius:9px;padding:8px 25px 8px 9px;background:var(--surface);color:var(--text)}
+.detail-row{border-top:1px solid var(--line);padding:15px 0 0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.detail-note{font-size:11px;color:var(--muted)}
+.detail-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.toast{position:fixed;bottom:22px;right:22px;max-width:min(440px,calc(100vw - 32px));padding:12px 15px;border-radius:12px;background:#17243b;color:#fff;box-shadow:0 12px 36px rgba(0,0,0,.22);font-size:12px;z-index:30;opacity:0;transform:translateY(9px);pointer-events:none;transition:.2s}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.error{background:#812d3a}
+footer{color:var(--muted);font-size:11px;text-align:center;padding-top:27px}
+.hidden{display:none!important}
+@media(max-width:1050px){.workspace{grid-template-columns:minmax(245px,290px) minmax(0,1fr)}.content-head{padding:19px}.media-wrap{padding:13px}.playback-bar{padding:0 16px 17px}.head-actions{flex-direction:column}.head-actions .small-btn{padding:7px 9px}.tree{max-height:520px}}
+@media(max-width:760px){.topbar{height:60px;padding:0 13px}.brand-sub{display:none}.brand img{width:33px;height:33px}.connection{font-size:0;gap:0}.connection .dot{width:9px;height:9px}.top-actions{gap:9px}main{padding:20px 11px 28px}.hero{align-items:flex-start;flex-direction:column;gap:13px;margin-bottom:17px}.overall-progress{width:100%}.stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.stat{padding:12px}.stat-value{font-size:23px}.workspace{grid-template-columns:1fr;gap:13px}.sidebar{order:2}.study-panel{order:1;min-height:480px}.tree{max-height:400px}.welcome{min-height:460px}.content-head{padding:17px 15px;flex-direction:column}.head-actions{flex-direction:row;align-self:stretch}.head-actions button{flex:1}.media-wrap{padding:10px}.media-stage{min-height:200px;max-height:none}.media-stage video{max-height:none}.media-stage.pdf-stage{height:62vh;min-height:370px}.playback-bar{padding:0 14px 16px}.playback-top{align-items:flex-start;flex-direction:column}.options{width:100%;justify-content:space-between}.detail-row{align-items:flex-start}.next-overlay{padding:20px}.next-overlay h3{font-size:19px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important}}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand" aria-label="Biblioteca pessoal de estudos">
+    <img src="./assets/logo.png" alt="">
+    <div><div class="brand-title">Caderno de estudos</div><div class="brand-sub">Sua biblioteca pessoal</div></div>
+  </div>
+  <div class="top-actions">
+    <div class="connection" title="Conexão com a biblioteca"><span id="statusDot" class="dot"></span><span id="connectionText">Conectando à biblioteca…</span></div>
+    <button class="icon-button" id="themeButton" type="button" aria-label="Alternar tema" title="Alternar tema">☾</button>
+  </div>
+</header>
+<main>
+  <section class="hero">
+    <div><div class="eyebrow">Aprendizado contínuo</div><h1>Continue de onde parou.</h1><p>Vídeos e PDFs organizados por pastas, com seu progresso salvo neste dispositivo.</p></div>
+    <div class="overall-progress">
+      <div class="progress-head"><span>Progresso da biblioteca</span><span id="overallText">0% concluído</span></div>
+      <div class="meter"><span id="overallMeter"></span></div>
+    </div>
+  </section>
+  <section class="stats" aria-label="Resumo dos estudos">
+    <div class="stat"><div class="stat-label">▤ &nbsp;Materiais disponíveis</div><div class="stat-value" id="statTotal">—</div><div class="stat-note">PDFs e vídeos</div></div>
+    <div class="stat"><div class="stat-label">▶ &nbsp;Vídeos</div><div class="stat-value" id="statVideos">—</div><div class="stat-note">Aulas para assistir</div></div>
+    <div class="stat"><div class="stat-label">▧ &nbsp;PDFs</div><div class="stat-value" id="statPdfs">—</div><div class="stat-note">Leituras e apostilas</div></div>
+    <div class="stat"><div class="stat-label">✓ &nbsp;Concluídos</div><div class="stat-value" id="statDone">0</div><div class="stat-note">Materiais marcados como estudados</div></div>
+  </section>
+  <section class="workspace">
+    <aside class="sidebar">
+      <div class="side-head"><div class="side-title">Minha biblioteca</div><span class="mini-count" id="libraryCount">0 itens</span></div>
+      <div class="search-wrap"><input id="searchInput" type="search" placeholder="Buscar aula, PDF ou pasta…" autocomplete="off" aria-label="Buscar materiais"></div>
+      <div class="filters" id="filters">
+        <button class="filter-btn active" type="button" data-filter="all">Tudo</button>
+        <button class="filter-btn" type="button" data-filter="video">Vídeos</button>
+        <button class="filter-btn" type="button" data-filter="pdf">PDFs</button>
+        <button class="filter-btn" type="button" data-filter="pending">Não concluídos</button>
+      </div>
+      <div class="library-label"><span>Pastas e materiais</span><button class="small-btn" id="refreshButton" type="button" style="padding:3px 7px;font-size:10px">Atualizar</button></div>
+      <div class="tree" id="libraryTree"><div class="empty-tree">Carregando sua biblioteca…</div></div>
+    </aside>
+    <section class="study-panel" id="studyPanel" aria-live="polite">
+      <div class="welcome">
+        <div class="welcome-symbol">📚</div>
+        <h2>Seu próximo estudo começa aqui</h2>
+        <p>Escolha um vídeo ou PDF na biblioteca. A posição dos vídeos e os materiais concluídos ficam salvos neste navegador.</p>
+        <div class="welcome-counts"><span class="soft-pill">▶ Retomar vídeos</span><span class="soft-pill">◷ Controlar velocidade</span><span class="soft-pill">✓ Acompanhar progresso</span></div>
+      </div>
+    </section>
+  </section>
+  <footer>O progresso é armazenado localmente neste navegador. Os documentos são carregados da biblioteca do servidor.</footer>
+</main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script>
+"use strict";
+const API_URL=__API_URL_JSON__.replace(/\/+$/,"");
+const FILES_URL=API_URL+"/files2";
+const PROGRESS_KEY="estudos_progress_v1";
+const LAST_KEY="estudos_last_material_v1";
+const SPEED_KEY="estudos_playback_rate_v1";
+const AUTONEXT_KEY="estudos_auto_next_v1";
+const collator=new Intl.Collator("pt-BR",{numeric:true,sensitivity:"base"});
+let entries=[];
+let materials=[];
+let rootNode=null;
+let currentEntry=null;
+let currentVideo=null;
+let progress=readProgress();
+let activeFilter="all";
+let activeFolder="";
+let expandedFolders=new Set();
+let autoNext=localStorage.getItem(AUTONEXT_KEY)!=="false";
+let savedSpeed=Number(localStorage.getItem(SPEED_KEY)||"1");
+if(![0.5,0.75,1,1.25,1.5,1.75,2].includes(savedSpeed))savedSpeed=1;
+let nextTimer=null;
+let toastTimer=null;
+const el=id=>document.getElementById(id);
+function readProgress(){try{const value=JSON.parse(localStorage.getItem(PROGRESS_KEY)||"{}");return value&&typeof value==="object"?value:{}}catch(_){return {}}}
+function persistProgress(){try{localStorage.setItem(PROGRESS_KEY,JSON.stringify(progress))}catch(_){toast("O navegador não permitiu salvar o progresso.",true)}}
+function escapeHtml(value){return String(value==null?"":value).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function displayName(value){return String(value||"").replace(/^\./,"")}
+function titleOf(entry){return displayName(entry.name||entry.path).replace(/\.(pdf|mp4|webm|ogv|ogg|m4v|mov|mkv)$/i,"")}
+function isPdf(entry){return /\.pdf$/i.test(entry.path||entry.name||"")||String(entry.content_type||"").toLowerCase()==="application/pdf"}
+function isVideo(entry){return String(entry.content_type||"").toLowerCase().startsWith("video/")||/\.(mp4|webm|ogv|ogg|m4v|mov|mkv)$/i.test(entry.path||entry.name||"")}
+function isMaterial(entry){return isPdf(entry)||isVideo(entry)}
+function mediaIcon(entry){return isPdf(entry)?"▤":"▶"}
+function entryKey(entry){return entry.path||entry.name}
+function prettifyPath(path){return String(path||"").split("/").map(displayName).join(" / ")}
+function formatTime(seconds){if(!Number.isFinite(Number(seconds))||Number(seconds)<0)return "0:00";const whole=Math.floor(Number(seconds));const hours=Math.floor(whole/3600);const mins=Math.floor((whole%3600)/60);const secs=whole%60;return hours?hours+":"+String(mins).padStart(2,"0")+":"+String(secs).padStart(2,"0"):mins+":"+String(secs).padStart(2,"0")}
+function toast(message,isError){const node=el("toast");node.textContent=message;node.classList.toggle("error",!!isError);node.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>node.classList.remove("show"),3400)}
+function itemProgress(entry){return progress[entryKey(entry)]||{}}
+function isComplete(entry){return itemProgress(entry).completed===true}
+function saveLast(entry){try{localStorage.setItem(LAST_KEY,entryKey(entry))}catch(_){}}
+function stopNextCountdown(){if(nextTimer){clearInterval(nextTimer);nextTimer=null}const overlay=el("nextOverlay");if(overlay)overlay.classList.add("hidden")}
+function mediaUrl(entry){const path=String(entry.path||entry.name||"").split("/").filter(Boolean).map(encodeURIComponent).join("/");return API_URL+"/files2/"+path}
+function normalizeEntry(item){const path=String(item.path||item.relative_path||item.filepath||item.filename||item.name||"").replace(/^\/+/,"");const name=String(item.name||item.filename||path.split("/").pop()||path);const kind=item.type||item.kind||(item.is_dir||item.directory?"tree":"file");return {name:name,path:path,type:(kind==="tree"||kind==="directory"||kind==="folder")?"tree":"file",size:item.size,content_type:item.content_type||item.mime_type||"",url:item.url||item.download_url||null}}
+function buildTree(){const root={name:"",path:"",folders:new Map(),files:[]};function ensure(parent,name,path){if(!parent.folders.has(name))parent.folders.set(name,{name:name,path:path,folders:new Map(),files:[]});return parent.folders.get(name)}
+  entries.forEach(function(entry){const path=String(entry.path||"").replace(/^\/+|\/+$/g,"");if(!path)return;const parts=path.split("/").filter(Boolean);if(!parts.length)return;const isFolder=entry.type==="tree";let parent=root;const stop=isFolder?parts.length:parts.length-1;for(let i=0;i<stop;i++)parent=ensure(parent,parts[i],parts.slice(0,i+1).join("/"));if(isFolder)ensure(parent,parts[parts.length-1],path);else if(isMaterial(entry)){parent.files.push(entry)}});
+  function sortNode(node){node.files.sort((a,b)=>collator.compare(titleOf(a),titleOf(b)));node.folders=new Map(Array.from(node.folders.entries()).sort((a,b)=>collator.compare(displayName(a[0]),displayName(b[0]))));node.folders.forEach(sortNode)}sortNode(root);return root
+}
+function folderRelation(path){if(!activeFolder)return true;return path===activeFolder||path.startsWith(activeFolder+"/")||activeFolder.startsWith(path+"/")}
+function matchesBase(entry){const query=el("searchInput").value.trim().toLocaleLowerCase("pt-BR");const name=(titleOf(entry)+" "+prettifyPath(entry.path)).toLocaleLowerCase("pt-BR");if(query&&!name.includes(query))return false;if(activeFilter==="video"&&!isVideo(entry))return false;if(activeFilter==="pdf"&&!isPdf(entry))return false;if(activeFilter==="pending"&&isComplete(entry))return false;if(activeFolder&&!entry.path.startsWith(activeFolder+"/"))return false;return true}
+function visibleMaterials(){return materials.filter(matchesBase)}
+function visibleFilesInNode(node){return node.files.filter(matchesBase)}
+function nodeHasVisible(node){if(node.files.some(matchesBase))return true;for(const child of node.folders.values())if(folderRelation(child.path)&&nodeHasVisible(child))return true;return false}
+function countNode(node){let total=node.files.length;for(const child of node.folders.values())total+=countNode(child);return total}
+function renderFileRow(entry,depth){const key=entryKey(entry);const selected=currentEntry&&entryKey(currentEntry)===key;const done=isComplete(entry);const p=itemProgress(entry);const length=isVideo(entry)&&p.duration>0?Math.min(100,Math.round((Number(p.position||0)/Number(p.duration))*100)):0;const sub=isVideo(entry)&&p.position>5&&!done?"Retomar · "+formatTime(p.position):isPdf(entry)?"Documento PDF":"Vídeo";return '<button class="file-row'+(selected?" selected":"")+'" type="button" data-open-file="'+escapeHtml(key)+'" title="'+escapeHtml(entry.path)+'" style="margin-left:0"><span class="file-type-icon">'+mediaIcon(entry)+'</span><span class="file-row-content"><span class="file-name">'+escapeHtml(titleOf(entry))+'</span><span class="file-sub"><span>'+escapeHtml(sub)+'</span>'+(length>0?'<span>· '+length+'%</span>':"")+'</span></span>'+(done?'<span class="file-status" title="Concluído">✓</span>':"")+'</button>'}
+function renderFolderNode(node,depth){if(!folderRelation(node.path)||!nodeHasVisible(node))return "";const query=el("searchInput").value.trim();const hasSearch=!!query;const autoOpen=hasSearch||activeFolder===node.path||activeFolder.startsWith(node.path+"/");const open=autoOpen||expandedFolders.has(node.path);const selected=activeFolder===node.path;let body="";visibleFilesInNode(node).forEach(entry=>body+=renderFileRow(entry,depth+1));node.folders.forEach(child=>{body+=renderFolderNode(child,depth+1)});const count=visibleMaterials().filter(entry=>entry.path.startsWith(node.path+"/")).length;return '<div class="tree-folder"><button type="button" class="folder-row'+(selected?" selected":"")+'" data-folder="'+escapeHtml(node.path)+'" aria-expanded="'+String(open)+'"><span class="folder-caret">'+(open?"▾":"▸")+'</span><span class="folder-icon">📁</span><span class="folder-name">'+escapeHtml(displayName(node.name))+'</span><span class="folder-count">'+count+'</span></button>'+(open?'<div class="folder-children">'+body+'</div>':"")+'</div>'}
+function renderLibrary(){const tree=el("libraryTree");if(!rootNode){tree.innerHTML='<div class="empty-tree">Carregando sua biblioteca…</div>';return}const rootFiles=rootNode.files.filter(matchesBase);let html="";rootFiles.forEach(entry=>html+=renderFileRow(entry,0));rootNode.folders.forEach(node=>{html+=renderFolderNode(node,0)});tree.innerHTML=html||'<div class="empty-tree">Nenhum PDF ou vídeo corresponde a esta busca.</div>';const vis=visibleMaterials();el("libraryCount").textContent=vis.length+(vis.length===1?" item":" itens");Array.from(el("filters").querySelectorAll("[data-filter]")).forEach(btn=>btn.classList.toggle("active",btn.dataset.filter===activeFilter));updateStats()}
+function updateStats(){const total=materials.length;const videos=materials.filter(isVideo).length;const pdfs=materials.filter(isPdf).length;const done=materials.filter(isComplete).length;const pct=total?Math.round(done/total*100):0;el("statTotal").textContent=String(total);el("statVideos").textContent=String(videos);el("statPdfs").textContent=String(pdfs);el("statDone").textContent=String(done);el("overallText").textContent=pct+"% concluído";el("overallMeter").style.width=pct+"%"}
+function saveVideoPosition(video,entry,completed){if(!video||!entry)return;const duration=Number.isFinite(video.duration)?video.duration:0;const position=Number.isFinite(video.currentTime)?video.currentTime:0;const old=itemProgress(entry);progress[entryKey(entry)]={position:completed?duration:position,duration:duration||Number(old.duration||0),completed:completed===true||old.completed===true,type:"video",updatedAt:Date.now()};persistProgress();updateStats()}
+function markComplete(entry,value){if(!entry)return;const old=itemProgress(entry);progress[entryKey(entry)]={...old,completed:value===undefined?!old.completed:!!value,type:isVideo(entry)?"video":"pdf",updatedAt:Date.now()};persistProgress();renderLibrary();renderContentHead()}
+function renderContentHead(){if(!currentEntry)return;const entry=currentEntry;const done=isComplete(entry);const head=el("contentHeadTitle");if(head)head.textContent=titleOf(entry);const breadcrumb=el("contentBreadcrumb");if(breadcrumb)breadcrumb.textContent=prettifyPath(entry.path);const kind=el("kindTag");if(kind)kind.textContent=isVideo(entry)?"VÍDEO":"PDF";const completedTag=el("doneTag");if(completedTag){completedTag.textContent=done?"CONCLUÍDO":"EM ANDAMENTO";completedTag.classList.toggle("done",done)}const finishBtn=el("finishButton");if(finishBtn){finishBtn.textContent=done?"✓ Estudado":"Marcar como estudado";finishBtn.classList.toggle("positive",done)}const note=el("detailNote");if(note){const p=itemProgress(entry);note.textContent=isVideo(entry)&&p.position>5&&!done?"Última posição salva: "+formatTime(p.position)+(p.duration>0?" de "+formatTime(p.duration):""):"O progresso deste material é salvo neste dispositivo."}const nav=navVideoEntries();const idx=nav.findIndex(x=>entryKey(x)===entryKey(entry));const prev=el("prevButton"),next=el("nextButton");if(prev)prev.disabled=idx<=0;if(next)next.disabled=idx<0||idx>=nav.length-1}
+function navVideoEntries(){return visibleMaterials().filter(isVideo)}
+function findNextVideo(entry,direction){const videos=navVideoEntries();const idx=videos.findIndex(item=>entryKey(item)===entryKey(entry));if(idx<0)return null;return videos[idx+direction]||null}
+function updateNavButtons(){renderContentHead()}
+function renderWelcome(){currentEntry=null;currentVideo=null;el("studyPanel").innerHTML='<div class="welcome"><div class="welcome-symbol">📚</div><h2>Seu próximo estudo começa aqui</h2><p>Escolha um vídeo ou PDF na biblioteca. A posição dos vídeos e os materiais concluídos ficam salvos neste navegador.</p><div class="welcome-counts"><span class="soft-pill">▶ Retomar vídeos</span><span class="soft-pill">◷ Controlar velocidade</span><span class="soft-pill">✓ Acompanhar progresso</span></div></div>'}
+function renderContentShell(entry){const done=isComplete(entry);const speedOptions=[0.5,0.75,1,1.25,1.5,1.75,2].map(rate=>'<option value="'+rate+'"'+(rate===savedSpeed?" selected":"")+'>'+rate+'×</option>').join("");el("studyPanel").innerHTML='<div class="content-head"><div class="content-title-wrap"><div class="eyebrow">'+(isVideo(entry)?"Aula em vídeo":"Material de leitura")+'</div><h2 id="contentHeadTitle">'+escapeHtml(titleOf(entry))+'</h2><div class="breadcrumb" id="contentBreadcrumb">'+escapeHtml(prettifyPath(entry.path))+'</div><div class="material-tags"><span class="tag" id="kindTag">'+(isVideo(entry)?"VÍDEO":"PDF")+'</span><span class="tag '+(done?"done":"")+'" id="doneTag">'+(done?"CONCLUÍDO":"EM ANDAMENTO")+'</span></div></div><div class="head-actions"><button class="small-btn" id="openOriginal" type="button">Abrir original ↗</button><button class="small-btn" id="finishButton" type="button">'+(done?"✓ Estudado":"Marcar como estudado")+'</button></div></div><div class="media-wrap"><div class="media-stage'+(isPdf(entry)?" pdf-stage":"")+'" id="mediaStage"><div class="media-placeholder"><div class="big-icon">⏳</div><strong>Carregando material…</strong></div></div></div><div class="playback-bar"><div class="playback-top"><div class="nav-controls"><button id="prevButton" type="button">← Vídeo anterior</button><button id="nextButton" type="button">Próximo vídeo →</button></div><div class="options"><label class="check-option"><input id="autoNextToggle" type="checkbox"'+(autoNext?" checked":"")+'>Avançar automaticamente</label><label class="speed-control">Velocidade<select id="speedSelect">'+speedOptions+'</select></label></div></div><div class="detail-row"><div class="detail-note" id="detailNote">O progresso deste material é salvo neste dispositivo.</div><div class="detail-actions">'+(isVideo(entry)?'<button class="small-btn" id="restartButton" type="button">↺ Do início</button><button class="small-btn" id="fullscreenButton" type="button">⛶ Tela cheia</button>':'<button class="small-btn" id="pdfFullscreenButton" type="button">⛶ Ampliar leitor</button>')+'</div></div></div>'}
+function selectEntry(entry,options){const opts=options||{};stopNextCountdown();if(currentVideo&&currentEntry){saveVideoPosition(currentVideo,currentEntry,false);currentVideo.pause()}currentVideo=null;currentEntry=entry;saveLast(entry);renderContentShell(entry);renderLibrary();renderContentHead();const stage=el("mediaStage");const url=mediaUrl(entry);
+  el("openOriginal").addEventListener("click",()=>window.open(url,"_blank","noopener,noreferrer"));
+  el("finishButton").addEventListener("click",()=>{markComplete(entry);toast(isComplete(entry)?"Material marcado como estudado.":"Marcação removida.")});
+  el("autoNextToggle").addEventListener("change",event=>{autoNext=event.target.checked;localStorage.setItem(AUTONEXT_KEY,String(autoNext));if(!autoNext)stopNextCountdown()});
+  el("speedSelect").addEventListener("change",event=>{savedSpeed=Number(event.target.value)||1;localStorage.setItem(SPEED_KEY,String(savedSpeed));if(currentVideo)currentVideo.playbackRate=savedSpeed});
+  el("prevButton").addEventListener("click",()=>{const prev=findNextVideo(entry,-1);if(prev)selectEntry(prev,{play:true})});
+  el("nextButton").addEventListener("click",()=>{const next=findNextVideo(entry,1);if(next)selectEntry(next,{play:true})});
+  if(isVideo(entry)){const video=document.createElement("video");video.controls=true;video.playsInline=true;video.preload="metadata";video.setAttribute("aria-label",titleOf(entry));video.src=url;stage.innerHTML="";stage.classList.remove("pdf-stage");stage.appendChild(video);const overlay=document.createElement("div");overlay.className="next-overlay hidden";overlay.id="nextOverlay";overlay.innerHTML='<div class="next-kicker">A seguir</div><h3 id="nextTitle"></h3><p>Começa em <strong id="nextSeconds">8</strong> segundos</p><div class="next-actions"><button id="playNextNow" type="button">Reproduzir agora</button><button id="cancelNext" type="button">Cancelar</button></div>';stage.appendChild(overlay);currentVideo=video;video.playbackRate=savedSpeed;let lastSavedAt=0;let restored=false;
+    video.addEventListener("loadedmetadata",function(){if(restored)return;restored=true;const saved=itemProgress(entry);const position=Number(saved.position||0);if(!saved.completed&&position>5&&video.duration>position+3){try{video.currentTime=position;toast("Retomando de "+formatTime(position)+".")}catch(_){}}renderContentHead()});
+    video.addEventListener("timeupdate",function(){if(Date.now()-lastSavedAt>3500){lastSavedAt=Date.now();saveVideoPosition(video,entry,false);renderLibrary();renderContentHead()}});
+    video.addEventListener("pause",function(){saveVideoPosition(video,entry,false);renderLibrary();renderContentHead()});
+    video.addEventListener("ended",function(){saveVideoPosition(video,entry,true);renderLibrary();renderContentHead();if(autoNext){const next=findNextVideo(entry,1);if(next)startNextCountdown(next);else toast("Vídeo concluído. Não há outro vídeo nesta seleção.")}else toast("Vídeo concluído.")});
+    video.addEventListener("error",function(){const code=video.error?video.error.code:0;stage.insertAdjacentHTML("beforeend",'<div class="media-placeholder" style="position:absolute;inset:0;background:rgba(7,11,19,.94);display:flex;flex-direction:column;align-items:center;justify-content:center"><div class="big-icon">⚠</div><strong>Não foi possível reproduzir este vídeo</strong><p>Confira o formato e o codec do arquivo. MP4 com H.264/AAC costuma ter melhor compatibilidade.</p><button id="retryVideo" class="small-btn" type="button" style="margin-top:12px">Tentar novamente</button></div>');el("retryVideo").addEventListener("click",()=>{video.load();const cover=stage.querySelector(".media-placeholder");if(cover)cover.remove()})});
+    el("fullscreenButton").addEventListener("click",async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await stage.requestFullscreen()}catch(_){toast("Este navegador não permitiu a tela cheia.",true)}});
+    el("restartButton").addEventListener("click",()=>{try{video.currentTime=0;video.play().catch(()=>{});toast("Vídeo reiniciado.")}catch(_){}});
+  }else{stage.innerHTML='<iframe title="'+escapeHtml(titleOf(entry))+'" src="'+escapeHtml(url)+'#toolbar=1&navpanes=0&view=FitH" loading="lazy" referrerpolicy="no-referrer"></iframe>';stage.classList.add("pdf-stage");el("pdfFullscreenButton").addEventListener("click",async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await stage.requestFullscreen()}catch(_){toast("Não foi possível ampliar o leitor.",true)}})}
+  if(opts.play&&currentVideo)currentVideo.play().catch(()=>toast("Use o botão de reprodução do vídeo para continuar."));
+}
+function startNextCountdown(entry){stopNextCountdown();const overlay=el("nextOverlay");if(!overlay)return;el("nextTitle").textContent=titleOf(entry);overlay.classList.remove("hidden");let seconds=8;el("nextSeconds").textContent=String(seconds);el("playNextNow").onclick=()=>playFollowing(entry);el("cancelNext").onclick=()=>{stopNextCountdown();toast("Avanço automático cancelado.")};nextTimer=setInterval(function(){seconds-=1;if(el("nextSeconds"))el("nextSeconds").textContent=String(Math.max(seconds,0));if(seconds<=0){stopNextCountdown();playFollowing(entry)}},1000)}
+function playFollowing(entry){stopNextCountdown();selectEntry(entry,{play:true})}
+function renderFilterState(){Array.from(el("filters").querySelectorAll("[data-filter]")).forEach(btn=>btn.classList.toggle("active",btn.dataset.filter===activeFilter))}
+async function loadFiles(){el("statusDot").className="dot";el("connectionText").textContent="Conectando à biblioteca…";el("refreshButton").disabled=true;try{if(!API_URL)throw new Error("A URL da API não foi configurada na publicação.");const response=await fetch(FILES_URL,{cache:"no-store"});if(!response.ok)throw new Error("A API respondeu HTTP "+response.status+".");const payload=await response.json();if(Array.isArray(payload))entries=payload.map(normalizeEntry);else if(payload&&Array.isArray(payload.files))entries=payload.files.map(normalizeEntry);else throw new Error("A resposta de /files2 não contém a lista de arquivos esperada.");materials=entries.filter(entry=>entry.type==="file"&&isMaterial(entry));rootNode=buildTree();const paths=new Set(materials.map(entry=>entryKey(entry)));const last=localStorage.getItem(LAST_KEY);if(last&&paths.has(last)){const item=materials.find(entry=>entryKey(entry)===last);if(item)selectEntry(item)}else{renderLibrary();renderWelcome()}el("statusDot").className="dot ok";el("connectionText").textContent="Biblioteca conectada";if(materials.length===0)toast("A API /files2 respondeu, mas não há PDFs ou vídeos nos diretórios ocultos.");else toast(materials.length+" materiais carregados.");}catch(error){el("statusDot").className="dot error";el("connectionText").textContent="Falha na conexão";el("libraryTree").innerHTML='<div class="empty-tree"><strong>Não foi possível carregar a biblioteca.</strong><br><br>'+escapeHtml(error&&error.message?error.message:"Erro desconhecido")+'<br><br>Confira a API /files2 e a conexão com o servidor.</div>';el("studyPanel").innerHTML='<div class="welcome"><div class="welcome-symbol">⌁</div><h2>Biblioteca indisponível</h2><p>Não foi possível consultar os materiais. Verifique a conexão com o servidor e tente atualizar a biblioteca.</p><button class="small-btn primary" type="button" id="retryLoad" style="margin-top:18px">Tentar novamente</button></div>';el("retryLoad").addEventListener("click",loadFiles);toast("Erro ao consultar /files2: "+(error&&error.message?error.message:"falha desconhecida"),true);}finally{el("refreshButton").disabled=false}}
+el("libraryTree").addEventListener("click",function(event){const fileButton=event.target.closest("[data-open-file]");if(fileButton){const key=fileButton.dataset.openFile;const entry=materials.find(item=>entryKey(item)===key);if(entry)selectEntry(entry);return}const folderButton=event.target.closest("[data-folder]");if(folderButton){const path=folderButton.dataset.folder;if(activeFolder===path){activeFolder="";}else{activeFolder=path;let parts=path.split("/");for(let i=1;i<=parts.length;i++)expandedFolders.add(parts.slice(0,i).join("/"))}renderLibrary();renderFilterState()}});
+el("filters").addEventListener("click",function(event){const btn=event.target.closest("[data-filter]");if(!btn)return;activeFilter=btn.dataset.filter;renderLibrary();renderFilterState()});
+el("searchInput").addEventListener("input",function(){renderLibrary()});
+el("refreshButton").addEventListener("click",loadFiles);
+el("themeButton").addEventListener("click",function(){const theme=document.documentElement.dataset.theme==="dark"?"light":"dark";document.documentElement.dataset.theme=theme;localStorage.setItem("app_theme",theme);el("themeButton").textContent=theme==="dark"?"☀":"☾"});
+(function(){const theme=localStorage.getItem("app_theme")||"light";document.documentElement.dataset.theme=theme;el("themeButton").textContent=theme==="dark"?"☀":"☾";updateStats()})();
+document.addEventListener("keydown",function(event){if(event.altKey||event.ctrlKey||event.metaKey)return;const tag=document.activeElement&&document.activeElement.tagName;if(["INPUT","TEXTAREA","SELECT"].includes(tag))return;if(!currentVideo)return;if(event.code==="Space"){event.preventDefault();if(currentVideo.paused)currentVideo.play().catch(()=>{});else currentVideo.pause()}else if(event.key==="ArrowRight"){currentVideo.currentTime=Math.min(currentVideo.duration||Infinity,currentVideo.currentTime+10)}else if(event.key==="ArrowLeft"){currentVideo.currentTime=Math.max(0,currentVideo.currentTime-10)}else if(event.key==="]"||event.key==="}"){const rates=[0.5,0.75,1,1.25,1.5,1.75,2];const index=rates.indexOf(savedSpeed);savedSpeed=rates[Math.min(rates.length-1,index+1)];el("speedSelect").value=String(savedSpeed);currentVideo.playbackRate=savedSpeed;localStorage.setItem(SPEED_KEY,String(savedSpeed));toast("Velocidade: "+savedSpeed+"×")}else if(event.key==="["){const rates=[0.5,0.75,1,1.25,1.5,1.75,2];const index=rates.indexOf(savedSpeed);savedSpeed=rates[Math.max(0,index-1)];el("speedSelect").value=String(savedSpeed);currentVideo.playbackRate=savedSpeed;localStorage.setItem(SPEED_KEY,String(savedSpeed));toast("Velocidade: "+savedSpeed+"×")}});
+window.addEventListener("pagehide",function(){if(currentVideo&&currentEntry)saveVideoPosition(currentVideo,currentEntry,false)});
+loadFiles();
+</script>
+</body>
+</html>
