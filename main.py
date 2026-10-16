@@ -196,20 +196,26 @@ def _documents_root() -> Path:
 
 def _safe_file(root: Path, relative_path: str) -> Path:
     clean = relative_path.strip().replace("\\", "/").lstrip("/")
-    if not clean or clean in {".", ".."}:
-        raise HTTPException(status_code=404, detail="Arquivo não informado.")
+    parts = [part for part in clean.split("/") if part]
+
+    # Bloqueia arquivos ocultos e qualquer caminho que atravesse uma pasta oculta.
+    if not parts or any(part.startswith(".") for part in parts):
+        raise HTTPException(status_code=404, detail="Arquivo não encontrado.")
 
     requested = (root / clean).resolve()
     try:
-        requested.relative_to(root)
+        relative_requested = requested.relative_to(root)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail="Arquivo não encontrado.") from exc
 
-    if not requested.is_file() or requested.name.startswith("."):
+    # Também verifica o caminho resolvido, inclusive quando há links simbólicos.
+    if (
+        any(part.startswith(".") for part in relative_requested.parts)
+        or not requested.is_file()
+    ):
         raise HTTPException(status_code=404, detail="Arquivo não encontrado.")
 
     return requested
-
 
 def _media_type(path: Path) -> str:
     guessed, _ = mimetypes.guess_type(path.name)
@@ -276,28 +282,55 @@ async def health():
 async def list_model_files():
     root = _documents_root()
     entries = []
-    for path in root.rglob("*"):
-        if not path.is_file() or path.name.startswith("."):
-            continue
-        try:
-            relative = path.relative_to(root).as_posix()
-            size = path.stat().st_size
-        except OSError:
-            continue
-        entries.append(
-            {
-                "name": path.name,
-                "path": relative,
-                "type": "file",
-                "size": size,
-                "content_type": _media_type(path),
-                "url": f"/files/{relative}",
-            }
+
+    # Usa caminhada top-down para não entrar em diretórios ocultos.
+    for current_dir, dirnames, filenames in os.walk(
+        root, topdown=True, followlinks=False
+    ):
+        dirnames[:] = sorted(
+            (name for name in dirnames if not name.startswith(".")),
+            key=str.casefold,
         )
+        current_path = Path(current_dir)
+
+        for filename in filenames:
+            if filename.startswith("."):
+                continue
+
+            path = current_path / filename
+            try:
+                relative = path.relative_to(root).as_posix()
+                resolved = path.resolve()
+                resolved_relative = resolved.relative_to(root).as_posix()
+
+                # Não lista caminhos ocultos nem links que apontem para eles.
+                if any(
+                    part.startswith(".")
+                    for candidate in (relative, resolved_relative)
+                    for part in candidate.split("/")
+                    if part
+                ):
+                    continue
+                if not resolved.is_file():
+                    continue
+
+                size = path.stat().st_size
+            except (OSError, ValueError):
+                continue
+
+            entries.append(
+                {
+                    "name": path.name,
+                    "path": relative,
+                    "type": "file",
+                    "size": size,
+                    "content_type": _media_type(path),
+                    "url": f"/files/{relative}",
+                }
+            )
 
     entries.sort(key=lambda item: item["path"].casefold())
     return {"files": entries}
-
 
 @app.head("/files/{file_path:path}")
 async def head_model_file(file_path: str):
