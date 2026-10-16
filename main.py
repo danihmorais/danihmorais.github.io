@@ -1,7 +1,14 @@
+import asyncio
+import hashlib
 import importlib.util
 import mimetypes
 import os
+import shutil
+import subprocess
 import sys
+import tempfile
+import threading
+import time
 from pathlib import Path
 from urllib.parse import quote
 
@@ -432,18 +439,178 @@ async def list_hidden_model_files():
     return {"files": entries, "hidden_only": True, "count": len(entries)}
 
 
+_VIDEO_TRANSCODE_LOCK = threading.Lock()
+_VIDEO_COMPAT_EXTENSIONS = {".mp4", ".m4v", ".mov", ".mkv", ".avi", ".webm", ".ogv", ".ogg", ".mpeg", ".mpg", ".wmv", ".flv"}
+
+
+def _ffmpeg_executable() -> str | None:
+    configured = os.getenv("FFMPEG_BINARY", "").strip()
+    if configured:
+        resolved = shutil.which(configured)
+        if resolved:
+            return resolved
+        if Path(configured).is_file():
+            return str(Path(configured).resolve())
+
+    system_binary = shutil.which("ffmpeg")
+    if system_binary:
+        return system_binary
+
+    # imageio-ffmpeg inclui um binário próprio quando o sistema não tem FFmpeg.
+    try:
+        import imageio_ffmpeg
+
+        bundled_binary = imageio_ffmpeg.get_ffmpeg_exe()
+        if bundled_binary and Path(bundled_binary).is_file():
+            return bundled_binary
+    except (ImportError, RuntimeError, OSError):
+        pass
+    return None
+
+
+def _transcode_browser_compatible(source: Path) -> Path:
+    """Converte vídeo incompatível com navegador para MP4 H.264/AAC e mantém cache."""
+    if source.suffix.lower() not in _VIDEO_COMPAT_EXTENSIONS and not _media_type(source).startswith("video/"):
+        raise HTTPException(status_code=415, detail="O arquivo selecionado não parece ser um vídeo.")
+
+    ffmpeg = _ffmpeg_executable()
+    if not ffmpeg:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "O servidor ainda não dispõe de FFmpeg para conversão automática. "
+                "Atualize as dependências do backend e tente novamente; enquanto isso, "
+                "use Abrir original ou Baixar vídeo."
+            ),
+        )
+
+    try:
+        stat = source.stat()
+        fingerprint = f"{source.resolve()}|{stat.st_size}|{stat.st_mtime_ns}|h264-aac-v1"
+        cache_key = hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
+        cache_dir = Path(
+            os.getenv("ESTUDOS_VIDEO_CACHE_DIR", "/tmp/danihmorais-estudos-video-cache")
+        ).expanduser()
+        cache_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise HTTPException(
+            status_code=503, detail="Não foi possível preparar o cache de conversão de vídeos."
+        ) from exc
+
+    output = cache_dir / f"{cache_key}.mp4"
+    if output.is_file() and output.stat().st_size > 0:
+        try:
+            os.utime(output, None)
+        except OSError:
+            pass
+        return output
+
+    with _VIDEO_TRANSCODE_LOCK:
+        if output.is_file() and output.stat().st_size > 0:
+            try:
+                os.utime(output, None)
+            except OSError:
+                pass
+            return output
+
+        cutoff = time.time() - 14 * 24 * 60 * 60
+        for cached in cache_dir.glob("*.mp4"):
+            if cached == output:
+                continue
+            try:
+                if cached.stat().st_mtime < cutoff:
+                    cached.unlink()
+            except OSError:
+                continue
+
+        fd, temporary_name = tempfile.mkstemp(prefix=f"{cache_key}.", suffix=".mp4", dir=cache_dir)
+        os.close(fd)
+        temporary = Path(temporary_name)
+        try:
+            try:
+                timeout_seconds = int(os.getenv("ESTUDOS_TRANSCODE_TIMEOUT_SECONDS", "1800"))
+            except ValueError:
+                timeout_seconds = 1800
+            timeout_seconds = max(120, min(timeout_seconds, 7200))
+
+            command = [
+                ffmpeg,
+                "-nostdin",
+                "-hide_banner",
+                "-loglevel", "error",
+                "-y",
+                "-i", str(source),
+                "-map", "0:v:0",
+                "-map", "0:a:0?",
+                "-sn",
+                "-dn",
+                "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+                "-c:v", "libx264",
+                "-preset", "veryfast",
+                "-crf", "23",
+                "-pix_fmt", "yuv420p",
+                "-c:a", "aac",
+                "-b:a", "128k",
+                "-movflags", "+faststart",
+                "-threads", "2",
+                str(temporary),
+            ]
+            try:
+                result = subprocess.run(
+                    command,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=timeout_seconds,
+                    check=False,
+                )
+            except subprocess.TimeoutExpired as exc:
+                raise HTTPException(
+                    status_code=504,
+                    detail="A conversão demorou mais que o limite configurado. Tente novamente ou baixe o arquivo original.",
+                ) from exc
+
+            if result.returncode != 0 or not temporary.is_file() or temporary.stat().st_size == 0:
+                diagnostic = (result.stderr or "").strip().splitlines()
+                diagnostic = diagnostic[-1][:280] if diagnostic else "O FFmpeg não gerou um arquivo de saída."
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Não foi possível converter este vídeo para H.264/AAC. {diagnostic}",
+                )
+
+            os.replace(temporary, output)
+            try:
+                os.utime(output, None)
+            except OSError:
+                pass
+            return output
+        except HTTPException:
+            raise
+        except OSError as exc:
+            raise HTTPException(
+                status_code=503, detail="Falha de acesso ao cache durante a conversão do vídeo."
+            ) from exc
+        finally:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
 @app.head("/files2/{file_path:path}")
-async def head_hidden_model_file(file_path: str):
+async def head_hidden_model_file(file_path: str, compat: bool = False):
     root = _documents_root()
-    requested = _safe_hidden_file(root, file_path)
+    source = _safe_hidden_file(root, file_path)
+    requested = await asyncio.to_thread(_transcode_browser_compatible, source) if compat else source
     size = requested.stat().st_size
     return Response(
         status_code=200,
         headers={
             "Accept-Ranges": "bytes",
             "Content-Length": str(size),
-            "Content-Type": _media_type(requested),
-            "Content-Disposition": _content_disposition(requested, download=False),
+            "Content-Type": "video/mp4" if compat else _media_type(source),
+            "Content-Disposition": _content_disposition(source, download=False),
             "X-Content-Type-Options": "nosniff",
         },
     )
@@ -451,15 +618,16 @@ async def head_hidden_model_file(file_path: str):
 
 @app.get("/files2/{file_path:path}")
 async def serve_hidden_model_file(
-    file_path: str, request: Request, download: bool = False
+    file_path: str, request: Request, download: bool = False, compat: bool = False
 ):
     root = _documents_root()
-    requested = _safe_hidden_file(root, file_path)
+    source = _safe_hidden_file(root, file_path)
+    requested = await asyncio.to_thread(_transcode_browser_compatible, source) if compat else source
     size = requested.stat().st_size
-    media_type = _media_type(requested)
+    media_type = "video/mp4" if compat else _media_type(source)
     range_header = request.headers.get("range")
     interval = _parse_range(range_header, size)
-    disposition = _content_disposition(requested, download=download)
+    disposition = _content_disposition(source, download=download)
 
     if interval:
         start, end = interval
@@ -487,6 +655,7 @@ async def serve_hidden_model_file(
             "X-Content-Type-Options": "nosniff",
         },
     )
+
 
 @app.head("/files/{file_path:path}")
 async def head_model_file(file_path: str):

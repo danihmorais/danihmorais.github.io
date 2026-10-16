@@ -58,7 +58,7 @@ A pasta dos arquivos é determinada preferencialmente pela variável de ambiente
 
 A API de arquivos retorna uma lista JSON com nome, caminho relativo, tamanho, tipo MIME e URL. O download individual valida o caminho antes de servir o arquivo e rejeita tentativas de `path traversal`.
 
-Arquivos PDF são entregues com disposição `inline` para uso do visualizador do navegador. O parâmetro `?download=1` força `attachment` para o download. Arquivos de vídeo, incluindo `.mp4`, são servidos com suporte a requisições HTTP `Range`, permitindo reprodução por streaming sem precisar baixar o arquivo inteiro antes de iniciar.
+Arquivos PDF são entregues com disposição `inline` para uso do visualizador do navegador. O parâmetro `?download=1` força `attachment` para o download. Arquivos de vídeo, incluindo `.mp4`, são servidos com suporte a requisições HTTP `Range`, permitindo reprodução por streaming sem precisar baixar o arquivo inteiro antes de iniciar. No aplicativo de estudos, se o navegador não conseguir decodificar um vídeo, a reprodução tenta solicitar uma conversão sob demanda para MP4 com vídeo H.264 e áudio AAC; os arquivos convertidos são armazenados temporariamente em cache no servidor.
 
 O frontend oferece busca por nome/pasta, visualização de PDFs em modal, botão de impressão que abre o PDF no visualizador nativo do navegador, download direto e reprodução de vídeos com controles e tela cheia.
 
