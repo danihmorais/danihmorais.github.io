@@ -217,6 +217,38 @@ def _safe_file(root: Path, relative_path: str) -> Path:
 
     return requested
 
+
+def _is_hidden_relative(relative_path: str) -> bool:
+    """Retorna True quando algum componente do caminho é oculto (começa com ponto)."""
+    normalized = str(relative_path).replace("\\", "/")
+    return any(part.startswith(".") for part in normalized.split("/") if part)
+
+
+def _safe_hidden_file(root: Path, relative_path: str) -> Path:
+    """Permite somente arquivos acessados por um caminho que contenha item oculto."""
+    clean = relative_path.strip().replace("\\", "/").lstrip("/")
+    parts = [part for part in clean.split("/") if part]
+
+    if (
+        not parts
+        or any(part in {".", ".."} for part in parts)
+        or not _is_hidden_relative(clean)
+    ):
+        raise HTTPException(status_code=404, detail="Arquivo oculto não encontrado.")
+
+    requested = (root / clean).resolve()
+    try:
+        requested.relative_to(root)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404, detail="Arquivo oculto não encontrado."
+        ) from exc
+
+    if not requested.is_file():
+        raise HTTPException(status_code=404, detail="Arquivo oculto não encontrado.")
+
+    return requested
+
 def _media_type(path: Path) -> str:
     guessed, _ = mimetypes.guess_type(path.name)
     if path.suffix.lower() == ".pdf":
@@ -331,6 +363,133 @@ async def list_model_files():
 
     entries.sort(key=lambda item: item["path"].casefold())
     return {"files": entries}
+
+
+@app.get("/files2")
+async def list_hidden_model_files():
+    """Lista somente arquivos e diretórios cujo caminho contém componente oculto."""
+    root = _documents_root()
+    root_resolved = root.resolve()
+    directories = {}
+    files = []
+
+    # Não pruna os diretórios ocultos: esta rota existe justamente para listá-los.
+    for current_dir, dirnames, filenames in os.walk(
+        root, topdown=True, followlinks=False
+    ):
+        dirnames.sort(key=str.casefold)
+        current_path = Path(current_dir)
+
+        # Inclui diretórios ocultos e descendentes dentro de uma árvore oculta.
+        for dirname in dirnames:
+            directory = current_path / dirname
+            try:
+                relative = directory.relative_to(root).as_posix()
+                if not _is_hidden_relative(relative):
+                    continue
+                resolved = directory.resolve()
+                resolved.relative_to(root_resolved)
+                if not resolved.is_dir():
+                    continue
+            except (OSError, ValueError, RuntimeError):
+                continue
+
+            directories[relative] = {
+                "name": directory.name,
+                "path": relative,
+                "type": "tree",
+            }
+
+        for filename in filenames:
+            if not filename.startswith("."):
+                # Arquivos de nome comum também são ocultos quando estão
+                # dentro de qualquer diretório oculto.
+                pass
+
+            path = current_path / filename
+            try:
+                relative = path.relative_to(root).as_posix()
+                if not _is_hidden_relative(relative):
+                    continue
+                resolved = path.resolve()
+                resolved.relative_to(root_resolved)
+                if not resolved.is_file():
+                    continue
+                size = path.stat().st_size
+            except (OSError, ValueError, RuntimeError):
+                continue
+
+            files.append(
+                {
+                    "name": path.name,
+                    "path": relative,
+                    "type": "file",
+                    "size": size,
+                    "content_type": _media_type(path),
+                    "url": f"/files2/{relative}",
+                }
+            )
+
+    entries = list(directories.values()) + files
+    entries.sort(key=lambda item: (item["path"].casefold(), item["type"] != "tree"))
+    return {"files": entries, "hidden_only": True, "count": len(entries)}
+
+
+@app.head("/files2/{file_path:path}")
+async def head_hidden_model_file(file_path: str):
+    root = _documents_root()
+    requested = _safe_hidden_file(root, file_path)
+    size = requested.stat().st_size
+    return Response(
+        status_code=200,
+        headers={
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(size),
+            "Content-Type": _media_type(requested),
+            "Content-Disposition": _content_disposition(requested, download=False),
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@app.get("/files2/{file_path:path}")
+async def serve_hidden_model_file(
+    file_path: str, request: Request, download: bool = False
+):
+    root = _documents_root()
+    requested = _safe_hidden_file(root, file_path)
+    size = requested.stat().st_size
+    media_type = _media_type(requested)
+    range_header = request.headers.get("range")
+    interval = _parse_range(range_header, size)
+    disposition = _content_disposition(requested, download=download)
+
+    if interval:
+        start, end = interval
+        return StreamingResponse(
+            _iter_file(requested, start, end),
+            status_code=206,
+            media_type=media_type,
+            headers={
+                "Accept-Ranges": "bytes",
+                "Content-Range": f"bytes {start}-{end}/{size}",
+                "Content-Length": str(end - start + 1),
+                "Content-Disposition": disposition,
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+
+    return StreamingResponse(
+        _iter_file(requested, 0, size - 1),
+        status_code=200,
+        media_type=media_type,
+        headers={
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(size),
+            "Content-Disposition": disposition,
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 @app.head("/files/{file_path:path}")
 async def head_model_file(file_path: str):
