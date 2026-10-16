@@ -19,7 +19,7 @@ const STAGE_CHAVES: Record<string, string[]> = {
 };
 
 const REGRAS_MINIMAS_TEXTO: Record<string, string> = {
-    "JUSTIFICATIVA": "Entre 4 e 6 parágrafos com no mínimo 5 linhas cada, levando em consideração os aspectos legais, técnicos e econômicos, amparados pela CF/1988, sob o prisma do interesse público envolvido.",
+    "JUSTIFICATIVA": "Entre 4 e 10 parágrafos com no mínimo 5 linhas cada, levando em consideração os aspectos legais, técnicos e econômicos, amparados pela CF/1988, sob o prisma do interesse público envolvido.",
     "ESTIMATIVA_QUANTIDADES": "Entre 1 e 2 parágrafos com fundamentação técnica e memória metodológica. Fundamente nas quantidades informadas pela unidade demandante e no consumo/necessidade descritos; só mencione estimativa de processo anterior quando um documento de referência anexado comprovar essa informação.",
     "RESULTADOS_ESPERADOS": "Entre 3 e 4 parágrafos detalhando economicidade, eficiência, continuidade e interesse público.",
     "REQUISITOS_ETP": "Elabore requisitos técnicos objetivos, necessários e proporcionais, evitando exigências excessivas de qualificação técnica. Considere a habilitação jurídica, técnica, fiscal, social, trabalhista e econômico-financeira e as declarações previstas na Lei nº 14.133/2021. Sugira documentos adicionais somente quando forem pertinentes ao objeto e indispensáveis, justificando individualmente cada um com fundamento técnico, legal e administrativo; caso contrário, explique a suficiência dos requisitos legais gerais.",
@@ -27,7 +27,7 @@ const REGRAS_MINIMAS_TEXTO: Record<string, string> = {
     "ME_EPP_ETP": "Entre 3 e 4 parágrafos com fundamento na LC 123/2006.",
     "JUSTIFICATIVA_PAC": "Mínimo de 1 parágrafo caso estivesse previsto, caso contrário justificar excepcionalidade da contratação.",
     "MERCADO": "Entre 5 e 10 parágrafos comparando soluções e práticas de mercado, geralmente demonstrando cada opção e o porquê ela não é adequada.",
-    "SOLUCAO": "Entre 3 e 5 parágrafos. Você deve focar na contratação como um todo, como a modalidade escolhida, o tipo de julgamento adotado, as condições de execução, a necessidade, o objeto, assistência técnica e garantias, e não abordar aspectos técnicos de itens específicos, que serão abordados posteriormente. O foco deve ser na solução de contratação como um todo, e não em aspectos técnicos de itens específicos.",
+    "SOLUCAO": "Entre 5 e 8 parágrafos. Você deve focar na contratação como um todo, como a modalidade escolhida, o tipo de julgamento adotado, as condições de execução, a necessidade, o objeto, assistência técnica e garantias, e não abordar aspectos técnicos de itens específicos, que serão abordados posteriormente. O foco deve ser na solução de contratação como um todo, e não em aspectos técnicos de itens específicos.",
     "CRITERIOS_JUSTIFICATIVA_ETP": "Entre 3 e 4 parágrafos.",
     "CRITERIOS_SUSTENTABILIDADE": "Entre 3 e 4 parágrafos.",
     "MODALIDADE_JUSTIFICATIVA_ETP": "Entre 4 e 5 parágrafos com fundamentação legal.",
@@ -39,7 +39,7 @@ const REGRAS_MINIMAS_TEXTO: Record<string, string> = {
     "AMOSTRA_ETP": "Mínimo de 1 parágrafo, podendo ser resumido caso se trate de prestação de serviços. Caso se tenha optado por exigir amostra, apenas justifique a exigência, sem detalhar as características técnicas da amostra, que serão abordadas posteriormente no termo de referência.",
     "CONCLUSAO": "Entre 3 e 4 parágrafos.",
     "REQUISITOS_TR": "Enumere exclusivamente os documentos adicionais indicados em REQUISITOS_ETP, separadamente e em ordem crescente, começando pelo Documento 12, no formato (Documento XX) Nome do documento. Se o ETP não tiver exigido documento adicional, escreva exatamente 'Não há documentos adicionais'. Use o contexto __LICITA_PIPE_ETP__ como fonte.",
-    "OBRIGACOES_CONTRATADA": "Entre 15 e 30 obrigações separadas obrigatoriamente pelo caractere escapado de quebra de linha. Cada obrigação deve ser robusta, evitando exigências genéricas ou superficiais, e deve ser fundamentada tecnicamente, legalmente e administrativamente. As obrigações devem ser compatíveis com o objeto, a necessidade, as condições de execução, a solução adotada e demais aspectos relevantes da contratação.",
+    "OBRIGACOES_CONTRATADA": "Entre 10 e 30 obrigações separadas obrigatoriamente pelo caractere escapado de quebra de linha. Cada obrigação deve ser robusta, evitando exigências genéricas ou superficiais, e deve ser fundamentada tecnicamente, legalmente e administrativamente. As obrigações devem ser compatíveis com o objeto, a necessidade, as condições de execução, a solução adotada e demais aspectos relevantes da contratação.",
     "OBRIGACOES_CONTRANTE": "Entre 5 e 10 obrigações separadas obrigatoriamente pelo caractere escapado de quebra de linha.",
     "QUALIFICACAO_TECNICA": "Entre 3 e 4 parágrafos.",
     "GARANTIAS_TR": "Entre 2 e 3 parágrafos. Deve ser um resumo de GARANTIAS_ETP",
