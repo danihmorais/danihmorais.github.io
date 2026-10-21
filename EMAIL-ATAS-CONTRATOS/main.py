@@ -33,7 +33,13 @@ app.add_middleware(
 )
 
 EMAIL_RE = re.compile(r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}", re.IGNORECASE)
+BLOCKED_RECIPIENT_EMAILS = {"prefeitura@saofrancisco.sp.gov.br"}
 ALLOWED_EMAIL_TAGS = {"p", "br", "strong", "b", "em", "i", "ul", "ol", "li"}
+
+
+def is_blocked_recipient(email: str) -> bool:
+    """Impede que o endereço institucional da Prefeitura seja usado como destinatário."""
+    return email.strip().casefold() in BLOCKED_RECIPIENT_EMAILS
 
 
 class SmtpSettings(BaseModel):
@@ -121,7 +127,7 @@ async def _pdf_text_with_timeout(file_path: str) -> str:
 
 
 def find_institutional_email(text: str) -> str | None:
-    """Retorna o e-mail associado à segunda ocorrência de 'E-mail institucional'."""
+    """Retorna o segundo e-mail institucional, exceto endereços bloqueados como destinatário."""
     matches = list(re.finditer(r"e[\-\s]*mail\s+institucional", text, flags=re.IGNORECASE))
     if len(matches) < 2:
         return None
@@ -129,7 +135,10 @@ def find_institutional_email(text: str) -> str | None:
     # O e-mail normalmente está logo à frente do rótulo; a janela evita pegar dados de outra seção.
     nearby = text[start:start + 350]
     email = EMAIL_RE.search(nearby)
-    return email.group(0).rstrip(".,;:") if email else None
+    if not email:
+        return None
+    candidate = email.group(0).rstrip(".,;:")
+    return None if is_blocked_recipient(candidate) else candidate
 
 
 async def _save_upload(upload: UploadFile) -> str:
@@ -152,9 +161,11 @@ async def extract_recipients(files: list[UploadFile] = File(...)):
         temp_path = await _save_upload(upload)
         try:
             text = await _pdf_text_with_timeout(temp_path)
+            recipient = find_institutional_email(text)
             results.append({
                 "filename": upload.filename or "documento.pdf",
-                "recipient": find_institutional_email(text),
+                "recipient": recipient,
+                "error": "Destinatário não localizado ou endereço bloqueado." if recipient is None else None,
             })
         except ValueError as exc:
             results.append({"filename": upload.filename or "documento.pdf", "recipient": None, "error": str(exc)})
@@ -198,6 +209,12 @@ async def send_documents(
     for upload, recipient in zip(files, recipient_list):
         if not isinstance(recipient, str) or not EMAIL_RE.fullmatch(recipient.strip()):
             failures.append({"filename": upload.filename, "error": "Destinatário inválido ou não localizado."})
+            continue
+        if is_blocked_recipient(recipient):
+            failures.append({
+                "filename": upload.filename,
+                "error": "Este endereço está bloqueado e não pode ser usado como destinatário.",
+            })
             continue
         temp_path = await _save_upload(upload)
         try:
