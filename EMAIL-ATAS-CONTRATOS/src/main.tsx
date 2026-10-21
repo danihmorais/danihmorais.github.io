@@ -4,10 +4,11 @@ import './styles.css'
 import logo from './assets/logo.png'
 
 const DEFAULT_SUBJECT = 'INSTRUMENTO CONTRATUAL (SÃO FRANCISCO - SP)'
-const DEFAULT_BODY_HTML = `<p>Prezados,</p><p>Anexo instrumento contratual para assinatura.</p><p><strong>Prazo: 02 (dois) dias úteis</strong></p><p>Atenciosamente,</p><p>Setor de Licitações e Contratos de São Francisco - SP.</p>`
+const DEFAULT_BODY_HTML = '<p>Prezados,</p><p>Anexo instrumento contratual para assinatura.</p><p><strong>Prazo: 02 (dois) dias úteis</strong></p><p>Atenciosamente,</p><p>Setor de Licitações e Contratos de São Francisco - SP.</p>'
 const API_URL = `${import.meta.env.VITE_API_URL}/email/api`
 const SETTINGS_STORAGE_KEY = 'enviador-atas-contratos.smtp-settings'
 const THEME_STORAGE_KEY = 'app_theme'
+const BLOCKED_RECIPIENT_EMAILS = new Set(['prefeitura@saofrancisco.sp.gov.br'])
 
 const VERCEL_BODY_LIMIT_BYTES = 4.5 * 1024 * 1024
 const CHUNK_SAFETY_MARGIN_BYTES = 200 * 1024
@@ -18,6 +19,10 @@ type SmtpSettings = { host: string; port: number; username: string; password: st
 type Document = { file: File; recipient: string; error?: string }
 
 const blankSettings: SmtpSettings = { host: '', port: 587, username: '', password: '', security: 'starttls', save_locally: false }
+
+function isBlockedRecipient(email: string): boolean {
+  return BLOCKED_RECIPIENT_EMAILS.has(email.trim().toLowerCase())
+}
 
 function chunkBySize<T>(items: T[], getSize: (item: T) => number, maxBytes: number): T[][] {
   const chunks: T[][] = []
@@ -105,7 +110,17 @@ function App() {
         const batchResults: { filename: string; recipient: string | null; error?: string }[] = await response.json()
         results.push(...batchResults)
       }
-      const newDocs = valid.map((file, index) => ({ file, recipient: results[index]?.recipient || '', error: results[index]?.error || (!results[index]?.recipient ? 'Segundo “E-mail institucional” não localizado.' : undefined) }))
+      const newDocs = valid.map((file, index) => {
+        const extractedRecipient = results[index]?.recipient || ''
+        const blocked = isBlockedRecipient(extractedRecipient)
+        return {
+          file,
+          recipient: blocked ? '' : extractedRecipient,
+          error: blocked
+            ? 'Este endereço está bloqueado como destinatário.'
+            : results[index]?.error || (!extractedRecipient ? 'Segundo “E-mail institucional” não localizado ou endereço bloqueado.' : undefined),
+        }
+      })
       setDocuments(old => [...old, ...newDocs]); setNotice('Revise os destinatários antes de enviar.')
     } catch (error) {
       setNotice(error instanceof DOMException && error.name === 'AbortError'
@@ -125,6 +140,9 @@ function App() {
 
   async function send() {
     if (!documents.length) return setNotice('Adicione pelo menos um PDF.')
+    if (documents.some(d => isBlockedRecipient(d.recipient))) {
+      return setNotice('prefeitura@saofrancisco.sp.gov.br nunca pode ser destinatário. Corrija o campo antes de enviar.')
+    }
     if (!settings.host || !settings.username) return setNotice('Preencha o servidor SMTP e o e-mail remetente.')
     if (documents.some(d => !d.recipient)) return setNotice('Informe ou corrija todos os destinatários antes de enviar.')
     setSending(true); setNotice('Enviando os e-mails individualmente…')
@@ -174,7 +192,14 @@ function App() {
           ? <><div className="upload-spinner" role="status" aria-label="Lendo PDFs" /><strong>Lendo os PDFs…</strong><small>Isso pode levar alguns segundos.</small></>
           : <><strong>Selecionar PDFs</strong><small>Você pode selecionar vários contratos ou atas.</small></>}
       </div>
-      {documents.length > 0 && <div className="documents">{documents.map((doc, index) => <div className="doc" key={`${doc.file.name}-${index}`}><div><strong>{doc.file.name}</strong><small>{(doc.file.size / 1024 / 1024).toFixed(2)} MB {doc.error && <em>{doc.error}</em>}</small></div><input aria-label={`Destinatário de ${doc.file.name}`} value={doc.recipient} placeholder="destinatario@instituicao.gov.br" onChange={e => setDocuments(all => all.map((d, i) => i === index ? { ...d, recipient: e.target.value, error: undefined } : d))}/><button className="remove" onClick={() => setDocuments(all => all.filter((_, i) => i !== index))} aria-label="Remover documento">×</button></div>)}</div>}
+      {documents.length > 0 && <div className="documents">{documents.map((doc, index) => <div className="doc" key={`${doc.file.name}-${index}`}><div><strong>{doc.file.name}</strong><small>{(doc.file.size / 1024 / 1024).toFixed(2)} MB {doc.error && <em>{doc.error}</em>}</small></div><input aria-label={`Destinatário de ${doc.file.name}`} value={doc.recipient} placeholder="destinatario@instituicao.gov.br" onChange={e => {
+        const recipient = e.target.value
+        setDocuments(all => all.map((d, i) => i === index ? {
+          ...d,
+          recipient,
+          error: isBlockedRecipient(recipient) ? 'Este endereço está bloqueado como destinatário.' : undefined,
+        } : d))
+      }}/><button className="remove" onClick={() => setDocuments(all => all.filter((_, i) => i !== index))} aria-label="Remover documento">×</button></div>)}</div>}
     </section>
     <section className="card">
       <div className="section-title"><span>2</span><div><h2>Mensagem</h2><p>O assunto e o texto já vêm preenchidos e podem ser ajustados.</p></div></div>
