@@ -376,7 +376,7 @@ export default function Wizard() {
       showToast("Não foi possível restaurar o rascunho salvo.", "error");
     }
     setRascunhoDisponivel(false);
-    showToast("Rascunho restaurado. Imagens de dotação precisam ser anexadas novamente.", "info");
+    showToast("Rascunho restaurado. Imagens de dotação e arquivos anexados na etapa final precisam ser anexados novamente.", "info");
   };
 
   const descartarRascunho = () => {
