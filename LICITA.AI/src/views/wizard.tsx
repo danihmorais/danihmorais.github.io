@@ -163,6 +163,7 @@ export default function Wizard() {
   const [adminSessao, setAdminSessao] = useState<{ token: string; expiraEm: number } | null>(null);
   const [rascunhoDisponivel, setRascunhoDisponivel] = useState(false);
   const [rascunhoInicializado, setRascunhoInicializado] = useState(false);
+  const [salvamentoConcluido, setSalvamentoConcluido] = useState(false);
   const [mostrarPromptModal, setMostrarPromptModal] = useState(false);
   const [mostrarAdminPedidos, setMostrarAdminPedidos] = useState(false);
   const [confirmacaoWizard, setConfirmacaoWizard] = useState<{ title: string; message: string; confirmLabel: string; cancelLabel?: string; variant?: "primary" | "danger"; onConfirm: () => void } | null>(null);
@@ -185,10 +186,14 @@ export default function Wizard() {
   const cancelamentoSolicitado = Boolean(jobDetalhe?.cancel_requested || statusPedido === "cancelling");
   const pedidoAindaAtivo = ["queued", "processing", "cancelling"].includes(statusPedido);
 
-  const atualizarDados = (novosDados: Partial<any> | ((atual: any) => Partial<any>)) => setDados((prev: any) => ({ ...prev, ...(typeof novosDados === "function" ? novosDados(prev) : novosDados) }));
+  const atualizarDados = (novosDados: Partial<any> | ((atual: any) => Partial<any>)) => {
+    setSalvamentoConcluido(false);
+    setDados((prev: any) => ({ ...prev, ...(typeof novosDados === "function" ? novosDados(prev) : novosDados) }));
+  };
 
   const carregarTeste = (tipo: TipoTesteContratacao) => {
     setDados(criarDadosTeste(tipo) as any);
+    setSalvamentoConcluido(false);
     localStorage.removeItem("licita-ai-rascunho-v1");
     setRascunhoDisponivel(false);
     setEtapaAtual(0);
@@ -265,7 +270,7 @@ export default function Wizard() {
   }, [dados, etapaAtual, rascunhoInicializado, rascunhoDisponivel]);
 
   useEffect(() => {
-    if (!dadosPreenchidos || geracaoSucesso) return;
+    if (!dadosPreenchidos || geracaoSucesso || salvamentoConcluido) return;
     const avisar = (evento: BeforeUnloadEvent) => {
       evento.preventDefault();
       evento.returnValue = "";
@@ -276,7 +281,7 @@ export default function Wizard() {
       window.removeEventListener("beforeunload", avisar);
       if (beforeUnloadHandlerRef.current === avisar) beforeUnloadHandlerRef.current = null;
     };
-  }, [dadosPreenchidos, geracaoSucesso]);
+  }, [dadosPreenchidos, geracaoSucesso, salvamentoConcluido]);
 
   useEffect(() => {
     if (!geracaoSucesso || !jobAgendado) return;
@@ -309,12 +314,47 @@ export default function Wizard() {
     return () => { ativo = false; if (temporizador !== undefined) window.clearTimeout(temporizador); };
   }, [geracaoSucesso, jobAgendado?.job_id, jobAgendado?.status_token]);
 
+  const salvarESair = () => {
+    if (rascunhoDisponivel) {
+      showToast("Há um rascunho anterior disponível. Retome-o ou descarte-o antes de salvar este preenchimento.", "info");
+      return;
+    }
+
+    try {
+      const dadosSemImagem = {
+        ...dados,
+        caminhoImagemDotacao: "",
+        dotacaoBlocos: (Array.isArray(dados.dotacaoBlocos) ? dados.dotacaoBlocos : [])
+          .filter((bloco: any) => bloco?.tipo !== "imagem")
+          .map((bloco: any) => ({ tipo: "texto", texto: String(bloco.texto || "") })),
+      };
+      const conteudo = JSON.stringify({
+        versao: 1,
+        dados: dadosSemImagem,
+        etapaAtual: Math.min(4, etapaAtual),
+        salvoEm: new Date().toISOString(),
+      });
+      if (conteudo.length > 180_000) {
+        throw new Error("O preenchimento ultrapassa o limite de armazenamento do navegador. Remova textos extensos ou imagens de dotação e tente novamente.");
+      }
+      localStorage.setItem("licita-ai-rascunho-v1", conteudo);
+
+      const avisar = beforeUnloadHandlerRef.current;
+      if (avisar) window.removeEventListener("beforeunload", avisar);
+      beforeUnloadHandlerRef.current = null;
+      setSalvamentoConcluido(true);
+    } catch (erro: any) {
+      showToast(erro?.message || "Não foi possível salvar o preenchimento neste navegador.", "error");
+    }
+  };
+
   const restaurarRascunho = () => {
     try {
       const salvo = localStorage.getItem("licita-ai-rascunho-v1");
       const parseado = salvo ? JSON.parse(salvo) : null;
       if (parseado?.versao === 1 && parseado?.dados) {
         setDados(parseado.dados);
+        setSalvamentoConcluido(false);
         setEtapaAtual(Number.isInteger(parseado.etapaAtual) ? Math.max(0, Math.min(4, parseado.etapaAtual)) : 0);
         setMaiorEtapaAlcancada(Number.isInteger(parseado.etapaAtual) ? Math.max(0, Math.min(4, parseado.etapaAtual)) : 0);
       }
@@ -475,6 +515,7 @@ export default function Wizard() {
   const limparParaNovaSolicitacao = () => {
     localStorage.removeItem("licita-ai-rascunho-v1");
     setRascunhoDisponivel(false);
+    setSalvamentoConcluido(false);
     setDados({
       objeto: "", necessidade: "", itens: [], amostra: false, vistoria: false, execucao: "",
       secretarias: [], contatosSecretarias: {}, gestores: [], fiscais: [], instrumento: "CONTRATO",
@@ -596,6 +637,11 @@ export default function Wizard() {
           >Painel administrativo</button>
           <button
             type="button"
+            className="button button-secondary save-exit-trigger"
+            onClick={salvarESair}
+          >Salvar e Sair</button>
+          <button
+            type="button"
             className="button button-quiet theme-toggle"
             onClick={toggleTheme}
             title={isDark ? "Ativar tema claro" : "Ativar tema escuro"}
@@ -605,6 +651,11 @@ export default function Wizard() {
       </header>
 
       <main className="wizard-main">
+        {salvamentoConcluido && (
+          <div className="save-exit-notice" role="status">
+            <p><strong>Preenchimento salvo neste navegador.</strong> Você já pode fechar esta página. Para continuar depois, acesse o LICITA.AI e escolha “Retomar rascunho”. Imagens de dotação não são incluídas no salvamento e deverão ser anexadas novamente.</p>
+          </div>
+        )}
         {rascunhoDisponivel && (
           <div className="draft-banner" role="status">
             <p><strong>Há um rascunho salvo.</strong> Ele não inclui imagens de dotação; anexos precisam ser enviados novamente.</p>
