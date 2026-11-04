@@ -7,6 +7,12 @@ import { melhorarDescricaoItem } from "../../providers/services/descricaoItensIA
 import { extrairObjetoCotacaoPdf, parseRelatorioCotacaoPdf } from "../../utils/cotacaoPdf";
 import { obterLotes, obterLoteIdItem, distribuicaoLotesValida } from "../../utils/lotes";
 
+function ajustarAlturaDescricao(elemento: HTMLTextAreaElement | null) {
+  if (!elemento) return;
+  elemento.style.height = "auto";
+  elemento.style.height = `${elemento.scrollHeight}px`;
+}
+
 export default function Step1({ dados = { itens: [], objeto: "", necessidade: "" }, atualizarDados, tentouAvancar = false }: any) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
@@ -442,13 +448,17 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
                 <div className="item-number" style={{ width: 40, fontWeight: 600 }}>{item.numero || index + 1}</div>
                 <div className="item-description-cell" style={{ flex: 1, minWidth: 260, display: "flex", gap: 6, alignItems: "center" }}>
                   <textarea
+                    ref={(elemento) => ajustarAlturaDescricao(elemento)}
                     required
                     rows={1}
                     value={descricao}
-                    onChange={(e) => atualizarItem(item.id, "descricao", e.target.value)}
+                    onChange={(e) => {
+                      ajustarAlturaDescricao(e.currentTarget);
+                      atualizarItem(item.id, "descricao", e.target.value);
+                    }}
                     disabled={carregando}
                     aria-invalid={erroDescricao || undefined}
-                    style={{ flex: 1, minWidth: 180, padding: 8, borderColor: erroDescricao ? "var(--btn-danger)" : "var(--input-border)", resize: "none" }}
+                    style={{ flex: 1, minWidth: 180, minHeight: 38, height: "auto", padding: 8, borderColor: erroDescricao ? "var(--btn-danger)" : "var(--input-border)", resize: "none", overflow: "hidden", boxSizing: "border-box", lineHeight: 1.45 }}
                   />
                   <button type="button" onClick={() => melhorarItem(item)} disabled={carregando || !descricao.trim()} title="Melhorar descrição e unidade deste item com IA" aria-label={`Melhorar descrição e unidade do item ${item.numero || index + 1} com IA`} style={{ height: 34, padding: "0 10px", border: "1px solid var(--border)", borderRadius: "var(--radius)", background: "var(--bg-panel)", color: "var(--text-main)", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }}>{carregando ? "..." : "✨ IA"}</button>
                 </div>

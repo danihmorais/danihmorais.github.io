@@ -1637,3 +1637,45 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .confirm-dialog-actions { flex-direction: column-reverse; }
   .confirm-dialog-actions .button { width: 100%; }
 }
+
+
+/* Ações de remoção dos arquivos de referência e confirmação de salvamento local. */
+.reference-card { cursor: default; }
+.reference-file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+.reference-file-name { flex: 1; min-width: 0; }
+.reference-file-remove {
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--btn-danger);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.reference-file-remove:hover { background: var(--bg-subtle); }
+.save-exit-notice {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--btn-success);
+  border-radius: 13px;
+  background: var(--surface-glass);
+  color: var(--text-main);
+}
+.save-exit-notice p { margin: 0; font-size: 13px; line-height: 1.55; }
+.save-exit-trigger { white-space: nowrap; }
+@media (max-width: 480px) {
+  .wizard-header-actions { gap: 4px; }
+  .wizard-header-actions .save-exit-trigger { padding-inline: 8px; font-size: 11px; }
+  .wizard-header-actions .admin-pedidos-trigger { padding-inline: 7px; font-size: 11px; }
+}
