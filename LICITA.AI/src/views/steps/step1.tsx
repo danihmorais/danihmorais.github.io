@@ -448,7 +448,7 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
                 <div className="item-number" style={{ width: 40, fontWeight: 600 }}>{item.numero || index + 1}</div>
                 <div className="item-description-cell" style={{ flex: 1, minWidth: 260, display: "flex", gap: 6, alignItems: "center" }}>
                   <textarea
-                    ref={ajustarAlturaDescricao}
+                    ref={(elemento) => ajustarAlturaDescricao(elemento)}
                     required
                     rows={1}
                     value={descricao}
@@ -458,7 +458,7 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
                     }}
                     disabled={carregando}
                     aria-invalid={erroDescricao || undefined}
-                    style={{ flex: 1, minWidth: 180, minHeight: 38, height: "auto", padding: 8, borderColor: erroDescricao ? "var(--btn-danger)" : "var(--input-border)", resize: "none", overflow: "hidden", lineHeight: 1.45 }}
+                    style={{ flex: 1, minWidth: 180, minHeight: 38, height: "auto", padding: 8, borderColor: erroDescricao ? "var(--btn-danger)" : "var(--input-border)", resize: "none", overflow: "hidden", boxSizing: "border-box", lineHeight: 1.45 }}
                   />
                   <button type="button" onClick={() => melhorarItem(item)} disabled={carregando || !descricao.trim()} title="Melhorar descrição e unidade deste item com IA" aria-label={`Melhorar descrição e unidade do item ${item.numero || index + 1} com IA`} style={{ height: 34, padding: "0 10px", border: "1px solid var(--border)", borderRadius: "var(--radius)", background: "var(--bg-panel)", color: "var(--text-main)", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }}>{carregando ? "..." : "✨ IA"}</button>
                 </div>
