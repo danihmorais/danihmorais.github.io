@@ -186,6 +186,16 @@ export default function Wizard() {
   const cancelamentoSolicitado = Boolean(jobDetalhe?.cancel_requested || statusPedido === "cancelling");
   const pedidoAindaAtivo = ["queued", "processing", "cancelling"].includes(statusPedido);
 
+  const atualizarEmailEnvio = (valor: string) => {
+    setSalvamentoConcluido(false);
+    setEmailEnvio(valor);
+  };
+
+  const atualizarInstrucoesEnvio = (valor: string) => {
+    setSalvamentoConcluido(false);
+    setInstrucoesEnvio(valor);
+  };
+
   const atualizarDados = (novosDados: Partial<any> | ((atual: any) => Partial<any>)) => {
     setSalvamentoConcluido(false);
     setDados((prev: any) => ({ ...prev, ...(typeof novosDados === "function" ? novosDados(prev) : novosDados) }));
@@ -262,12 +272,12 @@ export default function Wizard() {
           .filter((bloco: any) => bloco?.tipo !== "imagem")
           .map((bloco: any) => ({ tipo: "texto", texto: String(bloco.texto || "") })),
       };
-      const conteudo = JSON.stringify({ versao: 1, dados: dadosSemImagem, etapaAtual: Math.min(4, etapaAtual), salvoEm: new Date().toISOString() });
+      const conteudo = JSON.stringify({ versao: 1, dados: dadosSemImagem, etapaAtual: Math.min(4, etapaAtual), emailEnvio, instrucoesEnvio, salvoEm: new Date().toISOString() });
       if (conteudo.length <= 180_000) localStorage.setItem("licita-ai-rascunho-v1", conteudo);
     } catch {
       // O formulário continua utilizável mesmo se o navegador bloquear o armazenamento local.
     }
-  }, [dados, etapaAtual, rascunhoInicializado, rascunhoDisponivel]);
+  }, [dados, etapaAtual, emailEnvio, instrucoesEnvio, rascunhoInicializado, rascunhoDisponivel]);
 
   useEffect(() => {
     if (!dadosPreenchidos || geracaoSucesso || salvamentoConcluido) return;
@@ -332,6 +342,8 @@ export default function Wizard() {
         versao: 1,
         dados: dadosSemImagem,
         etapaAtual: Math.min(4, etapaAtual),
+        emailEnvio,
+        instrucoesEnvio,
         salvoEm: new Date().toISOString(),
       });
       if (conteudo.length > 180_000) {
@@ -354,6 +366,8 @@ export default function Wizard() {
       const parseado = salvo ? JSON.parse(salvo) : null;
       if (parseado?.versao === 1 && parseado?.dados) {
         setDados(parseado.dados);
+        if (typeof parseado.emailEnvio === "string") setEmailEnvio(parseado.emailEnvio);
+        if (typeof parseado.instrucoesEnvio === "string") setInstrucoesEnvio(parseado.instrucoesEnvio);
         setSalvamentoConcluido(false);
         setEtapaAtual(Number.isInteger(parseado.etapaAtual) ? Math.max(0, Math.min(4, parseado.etapaAtual)) : 0);
         setMaiorEtapaAlcancada(Number.isInteger(parseado.etapaAtual) ? Math.max(0, Math.min(4, parseado.etapaAtual)) : 0);
@@ -653,12 +667,12 @@ export default function Wizard() {
       <main className="wizard-main">
         {salvamentoConcluido && (
           <div className="save-exit-notice" role="status">
-            <p><strong>Preenchimento salvo neste navegador.</strong> Você já pode fechar esta página. Para continuar depois, acesse o LICITA.AI e escolha “Retomar rascunho”. Imagens de dotação não são incluídas no salvamento e deverão ser anexadas novamente.</p>
+            <p><strong>Preenchimento salvo neste navegador.</strong> Você já pode fechar esta página. Para continuar depois, acesse o LICITA.AI e escolha “Retomar rascunho”. Imagens de dotação e arquivos anexados na etapa final não são armazenados; será necessário anexá-los novamente.</p>
           </div>
         )}
         {rascunhoDisponivel && (
           <div className="draft-banner" role="status">
-            <p><strong>Há um rascunho salvo.</strong> Ele não inclui imagens de dotação; anexos precisam ser enviados novamente.</p>
+            <p><strong>Há um rascunho salvo.</strong> Imagens de dotação e arquivos anexados na etapa final precisam ser anexados novamente.</p>
             <div>
               <button type="button" className="button button-secondary" onClick={restaurarRascunho}>Retomar rascunho</button>
               <button type="button" className="button button-quiet" onClick={descartarRascunho}>Descartar</button>
@@ -722,9 +736,9 @@ export default function Wizard() {
         onClose={() => setMostrarPromptModal(false)}
         onConfirm={confeccionarDocumentos}
         texto={instrucoesEnvio}
-        onTextoChange={setInstrucoesEnvio}
+        onTextoChange={atualizarInstrucoesEnvio}
         email={emailEnvio}
-        onEmailChange={setEmailEnvio}
+        onEmailChange={atualizarEmailEnvio}
         arquivos={arquivosEnvio}
         onArquivosChange={setArquivosEnvio}
       />
