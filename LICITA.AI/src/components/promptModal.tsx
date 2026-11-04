@@ -17,6 +17,7 @@ export default function PromptModal({
   isOpen, onClose, onConfirm, texto, onTextoChange, email, onEmailChange, arquivos, onArquivosChange,
 }: PromptModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const inputArquivoRefs = useRef<Partial<Record<keyof DocumentosReferenciaUpload, HTMLInputElement | null>>>({});
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   const emailValido = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(email.trim());
@@ -57,6 +58,12 @@ export default function PromptModal({
     onArquivosChange({ ...arquivos, [campo]: arquivo });
   };
 
+  const removerArquivo = (campo: keyof DocumentosReferenciaUpload) => {
+    const input = inputArquivoRefs.current[campo];
+    if (input) input.value = "";
+    definirArquivo(campo, null);
+  };
+
   const handleConfirmar = () => {
     if (!emailValido) return;
     onConfirm({ instrucoes: texto.trim(), email: email.trim(), arquivos });
@@ -89,20 +96,31 @@ export default function PromptModal({
             {campos.map((campo, index) => {
               const arquivo = arquivos[campo.chave];
               return (
-                <label key={campo.chave} className={"reference-card" + (arquivo ? " has-file" : "")}>
+                <div key={campo.chave} className={"reference-card" + (arquivo ? " has-file" : "")}>
                   <span className="reference-card-title">
                     <span className="reference-card-icon">{String(index + 1).padStart(2, "0")}</span>
                     {campo.titulo}
                   </span>
                   <span className="reference-card-description">{campo.descricao}</span>
                   <input
+                    ref={(elemento) => { inputArquivoRefs.current[campo.chave] = elemento; }}
                     type="file"
                     accept=".pdf,.docx"
                     aria-label={"Anexar " + campo.titulo}
                     onChange={(e) => definirArquivo(campo.chave, e.target.files?.[0] || null)}
                   />
-                  {arquivo && <span className="reference-file-name">✓ {arquivo.name}</span>}
-                </label>
+                  {arquivo && (
+                    <div className="reference-file-row">
+                      <span className="reference-file-name">✓ {arquivo.name}</span>
+                      <button
+                        type="button"
+                        className="reference-file-remove"
+                        onClick={() => removerArquivo(campo.chave)}
+                        aria-label={"Remover " + campo.titulo}
+                      >Remover</button>
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
