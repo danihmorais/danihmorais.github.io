@@ -1,13 +1,10 @@
-import json
 import os
 import sys
 
 if getattr(sys, 'frozen', False):
     BASE_DIR = sys._MEIPASS
-    EXECUTABLE_DIR = os.path.dirname(sys.executable)
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    EXECUTABLE_DIR = BASE_DIR
 
 BASE_FILES = [
     "DFD - BASE.docx",
@@ -29,8 +26,6 @@ PLACEHOLDERS_PREENCHIMENTO_MANUAL = {
     "{{VALOR_CONTRATADO}}",
 }
 
-DEFAULT_OUTPUT_FOLDER_NAME = "Documentos_Gerados"
-
 DEFAULT_SETTINGS = {
     "textos": {
         "clausula_padrao": "A prorrogação, quando aplicável, deverá respeitar os limites legais e será formalizada por meio de termo aditivo, mediante prévia manifestação técnica e jurídica, assegurando a continuidade do fornecimento e o atendimento ininterrupto das necessidades do município.\n\nPara viabilizar a prorrogação, o pedido deverá ser encaminhado ao Setor de Licitações com antecedência mínima de 60 (sessenta) dias do término da vigência contratual, conforme dispõe o art. 68 do Decreto Municipal nº 2.056/2024.",
@@ -49,28 +44,5 @@ ALIASES = [
     ("{{IMPAC_AMB}}", "{{CRITERIOS_SUSTENTABILIDADE}}"),
 ]
 
-def deep_merge(default: dict, custom: dict) -> dict:
-    result = default.copy()
-    for key, value in custom.items():
-        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-            result[key] = deep_merge(result[key], value)
-        else:
-            result[key] = value
-    return result
-
 SETTINGS = DEFAULT_SETTINGS.copy()
 TEXTOS = SETTINGS["textos"].copy()
-
-def carregar_settings(app_data_dir: str):
-    arquivo_settings = os.path.join(app_data_dir, "settings.json")
-    if os.path.exists(arquivo_settings):
-        try:
-            with open(arquivo_settings, "r", encoding="utf-8") as file:
-                custom_settings = json.load(file)
-            merged = deep_merge(DEFAULT_SETTINGS, custom_settings)
-            SETTINGS.clear()
-            SETTINGS.update(merged)
-            TEXTOS.clear()
-            TEXTOS.update(SETTINGS.get("textos", {}))
-        except Exception:
-            pass

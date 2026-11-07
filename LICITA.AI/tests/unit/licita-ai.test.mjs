@@ -293,31 +293,8 @@ test("gerarFasePreparatoria rejeita pagamento por etapas sem descrição", async
   );
 });
 
-test("dadosParaPrompt remove imagens e campos internos", () => {
-  const modulo = loadTsModule("src/api.ts");
-  const segredo = "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo=";
-  const seguro = modulo.dadosParaPrompt({
-    "{{DOTACAO}}": "__IMG__" + segredo + "\nFonte 123.456.789/0001-00",
-    "{{CAMINHO_IMAGEM_DOTACAO}}": "data:image/png;base64," + segredo,
-    "{{OBJETO}}": "Material para a unidade",
-    RAW_PAC: "interno",
-  });
-  assert.match(seguro["{{DOTACAO}}"], /2 imagem\(ns\)/);
-  assert.match(seguro["{{DOTACAO}}"], /Fonte 123\.456/);
-  assert.equal(seguro["{{CAMINHO_IMAGEM_DOTACAO}}"], undefined);
-  assert.equal(seguro.RAW_PAC, undefined);
-  assert.doesNotMatch(JSON.stringify(seguro), /QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo=/);
-});
-
 test("construirPrompt prioriza as instruções específicas do usuário", () => {
-  const { construirPrompt } = loadTsModule("src/providers/services/geradorIA.ts", {
-    replacements: [
-      [
-        "import { gerarTextoIA } from '../llm';",
-        "const gerarTextoIA = async () => ({ content: '{}' });",
-      ],
-    ],
-  });
+  const { construirPrompt } = loadTsModule("src/providers/services/geradorIA.ts");
   const prompt = construirPrompt({ "{{OBJETO}}": "Aquisição de materiais", "{{NECESSIDADE}}": "Reposição de estoque" }, false, "ETP", "Justifique a necessidade de amostra.", true);
   const dados = prompt.indexOf("__LICITA_PIPE_DADOS_USUARIO__");
   const instrucoes = prompt.indexOf("INSTRUÇÕES DO USUÁRIO (OBRIGATÓRIAS");

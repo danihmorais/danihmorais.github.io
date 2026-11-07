@@ -13,7 +13,7 @@ import unicodedata
 
 logger = logging.getLogger(__name__)
 
-from fila import MAX_ATTEMPTS, POLL_INTERVAL_SECONDS, QUEUE_DIR, RETRY_BASE_SECONDS, RETRY_MAX_SECONDS, SMTP_FROM, SMTP_USERNAME, _artifact_path, _claim_next_job, _enviar_email, _enviar_email_alerta_falha, _finalizar_etapa, _finalizar_tentativa, _iniciar_etapa, _job_path, _write_json, gerar_zip
+from fila import MAX_ATTEMPTS, POLL_INTERVAL_SECONDS, QUEUE_DIR, SMTP_FROM, SMTP_USERNAME, _artifact_path, _claim_next_job, _enviar_email, _enviar_email_alerta_falha, _finalizar_etapa, _finalizar_tentativa, _iniciar_etapa, _job_path, _retry_delay_seconds, _write_json, gerar_zip
 from fila_pipeline import ErroPermanente, _aplicar_auditoria_marcas, _chamar_ia as _chamar_ia_primaria, _substituir_contextos, _validar_json_geracao, limite_prompt_chars
 from montador_variaveis import calcular_valor_estimado_decimal
 
@@ -108,7 +108,7 @@ def _total_itens_tabela_tr(texto: str) -> Decimal | None:
         if not cabecalho:
             continue
 
-        indice_qtd, indice_total, indice_unitario, indice_descricao, tamanho_cabecalho = cabecalho
+        indice_qtd, indice_total, indice_unitario, indice_descricao, _ = cabecalho
         if len(celulas) <= max(indice_qtd, indice_descricao, indice_total if indice_total is not None else 0, indice_unitario if indice_unitario is not None else 0):
             continue
 
@@ -484,10 +484,6 @@ def _validar_json_pagamento_etapas(resultado: dict) -> dict:
     return {"PAGAMENTO": pagamento}
 
 
-def _delay(attempts: int) -> int:
-    return min(RETRY_MAX_SECONDS, RETRY_BASE_SECONDS * (2 ** max(0, attempts - 1)))
-
-
 def _total_itens_tr_por_ia(
     documentos_anteriores: list[dict] | None,
     modelo: str,
@@ -623,18 +619,6 @@ def _adicionar_documentos_de_referencia(prompt: str, documentos: list[dict]) -> 
     if indice >= 0:
         return prompt[:indice] + contexto + "\n\n" + prompt[indice:]
     return prompt + "\n\n" + contexto
-
-
-def _remover_documentos_de_referencia(job: dict) -> None:
-    container = job.get("dados_ia")
-    if not isinstance(container, dict):
-        return
-    pipeline = container.get("__LICITA_PIPELINE__")
-    if not isinstance(pipeline, dict):
-        return
-    pipeline_limpo = dict(pipeline)
-    pipeline_limpo.pop("documentos_anteriores", None)
-    job["dados_ia"] = {**container, "__LICITA_PIPELINE__": pipeline_limpo}
 
 
 def _process_pipeline(job: dict) -> None:
@@ -869,7 +853,7 @@ def _process_one_job() -> None:
         if attempts < MAX_ATTEMPTS and not permanente:
             _finalizar_tentativa(job, "retrying", erro_texto)
             job["status"] = "queued"
-            job["retry_at"] = (datetime.now(timezone.utc) + timedelta(seconds=_delay(attempts))).isoformat()
+            job["retry_at"] = (datetime.now(timezone.utc) + timedelta(seconds=_retry_delay_seconds(attempts))).isoformat()
             _write_json(_job_path(job["job_id"]), job)
             processing_path.unlink(missing_ok=True)
         else:

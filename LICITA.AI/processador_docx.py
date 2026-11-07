@@ -6,7 +6,6 @@ import io
 from copy import deepcopy
 from docx import Document
 from docx.shared import RGBColor, Inches
-from docx.oxml.ns import qn
 from docx.table import _Cell
 
 PLACEHOLDER_RE = re.compile(r"\{\{\s*[^{}]+?\s*\}\}")
@@ -29,16 +28,6 @@ def _iterar_paragrafos(container):
                 yield from _iterar_paragrafos(celula)
 
 
-def _safe_color_rgb(run):
-    try:
-        color = run.font.color
-        if color.type is not None:
-            return color.rgb
-    except Exception:
-        pass
-    return None
-
-
 def extrair_placeholders_documento(caminho_docx):
     doc = Document(caminho_docx)
     placeholders = set()
@@ -55,15 +44,6 @@ def extrair_placeholders_documento(caminho_docx):
     for section in doc.sections:
         iterar_blocos([section.header, section.footer])
 
-    return placeholders
-
-
-def extrair_placeholders_modelos(pasta_modelos, arquivos_base):
-    placeholders = set()
-    for arquivo in arquivos_base:
-        caminho = os.path.join(pasta_modelos, arquivo)
-        if os.path.exists(caminho):
-            placeholders.update(extrair_placeholders_documento(caminho))
     return placeholders
 
 

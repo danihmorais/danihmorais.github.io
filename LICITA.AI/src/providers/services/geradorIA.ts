@@ -1,5 +1,3 @@
-import { gerarTextoIA } from '../llm';
-
 const STAGE_CHAVES: Record<string, string[]> = {
     "DFD": [
         "OBJETO", "TIPO_OBJ", "JUSTIFICATIVA", "ESTIMATIVA_QUANTIDADES", "RESULTADOS_ESPERADOS"
@@ -211,16 +209,4 @@ ${diretrizExecucao}`;
         ? `\n\nLEMBRETE OBRIGATÓRIO: aplique integralmente as INSTRUÇÕES DO USUÁRIO acima, preserve os dados concretos e não invente fatos.`
         : "";
     return `${regrasGerais}\n\n${basePrompt}${dadosMarcados}${instrucoesObrigatorias}\n\n${diretrizEtapa}\n\nREGRAS MÍNIMAS OBRIGATÓRIAS DE TAMANHO E PROFUNDIDADE:\n${regrasMinimas}${lembreteFinal}\n\nESTRUTURA JSON OBRIGATÓRIA:\n${chaves}\n\n${restricoesJSON}`;
-}
-
-export async function processarDadosIA(
-    dadosUsuario: Record<string, string>,
-    apiKey: string,
-    provider: string,
-    meeppExclusivo: boolean,
-    etapa: string,
-    modelo: string
-): Promise<Record<string, string>> {
-    const prompt = construirPrompt(dadosUsuario, meeppExclusivo, etapa);
-    return await gerarTextoIA(prompt, apiKey, modelo);
 }

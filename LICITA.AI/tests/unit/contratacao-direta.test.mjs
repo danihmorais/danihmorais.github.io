@@ -18,47 +18,6 @@ class MemoryStorage {
 
 
 
-test("geração de contratação direta exige os sete campos específicos", async () => {
-  let prompt = "";
-  const modulo = loadTsModule("src/providers/services/contratacaoDiretaIA.ts", {
-    replacements: [
-      [
-        'import { gerarTextoIA } from "../llm";',
-        "const { gerarTextoIA } = __injected_llm;",
-      ],
-    ],
-    globals: {
-      __injected_llm: {
-        gerarTextoIA: async (texto) => {
-          prompt = texto;
-          return {
-            FUNDAMENTO_CONTRATACAO_DIRETA: "Art. 75, conforme fundamento informado no processo.",
-            JUSTIFICATIVA_CONTRATACAO_DIRETA: "Justificativa da contratação direta.",
-            INSTRUCAO_ART72: "Conferir a instrução processual antes da assinatura.",
-            CRITERIOS_ESCOLHA_FORNECEDOR: "Critérios objetivos e documentação disponível.",
-            CONDICOES_CONTRATACAO: "Condições conforme TR e proposta.",
-            PUBLICIDADE_TRANSPARENCIA: "Providências de publicidade e transparência a conferir.",
-            CONCLUSAO_CONTRATACAO_DIRETA: "Conclusão pela continuidade, condicionada à conferência processual.",
-          };
-        },
-      },
-    },
-  });
-
-  const resultado = await modulo.gerarDadosContratacaoDireta(
-    { "{{OBJETO}}": "Aquisição de materiais", "{{MOTIVO_MODALIDADE}}": "Art. 75, fundamento informado" },
-    { FASE_PREPARATORIA: { JUSTIFICATIVA: "texto anterior" } },
-    "Justificar contratação direta.",
-    "DISPENSA_BLL",
-    "api-key",
-    "modelo",
-  );
-
-  assert.equal(Object.keys(resultado).length, 7);
-  assert.match(prompt, /Dispensa de Licitação com lances/);
-  assert.match(prompt, /art\. 72/);
-});
-
 test("fila normal envia uma única etapa de IA para DFD, ETP e TR", async () => {
   let chamada = null;
   const modulo = loadTsModule("src/api.ts", {

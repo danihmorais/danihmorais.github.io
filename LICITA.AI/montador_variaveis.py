@@ -77,7 +77,6 @@ CHAVES_RAW = {
 
 LIMITE_EXCLUSIVIDADE_MEEPP = 80000
 SIM_VALORES = {"sim", "s", "x", "true", "1"}
-NAO_VALORES = {"não", "nao", "n", "", "false", "0"}
 
 
 def _normalizar_sim_nao(valor) -> str:

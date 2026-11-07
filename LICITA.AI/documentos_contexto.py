@@ -109,7 +109,7 @@ def _ocr_imagem(imagem: object) -> str:
         )
     try:
         return _normalizar_texto(pytesseract.image_to_string(imagem, lang=OCR_LANG))
-    except Exception as exc:
+    except Exception:
         try:
             return _normalizar_texto(pytesseract.image_to_string(imagem, lang="eng"))
         except Exception as fallback_exc:

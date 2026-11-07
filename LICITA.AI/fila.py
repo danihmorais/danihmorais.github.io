@@ -11,7 +11,7 @@ import ssl
 import tempfile
 import uuid
 import zipfile
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from email.message import EmailMessage
 from pathlib import Path
 

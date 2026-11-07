@@ -24,12 +24,6 @@ function testRequire(request) {
       melhorarDescricaoItem: async (descricao, unidade) => ({ descricao, unidade }),
     };
   }
-  if (request === "./providers/services/contratacaoDiretaIA") {
-    return {
-      revisarMarcasItens: async (itens) => ({ itens, auditoria: [] }),
-      gerarDadosContratacaoDireta: async () => ({}),
-    };
-  }
   if (request === "./utils/mapearDados") {
     return { mapearDadosWizard: (dados) => ({ ...dados }) };
   }
