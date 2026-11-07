@@ -21,6 +21,14 @@ BASE_FILES_CONTRATACAO_DIRETA = [
 
 PASTA_MODELOS = os.path.join(BASE_DIR, "modelos")
 
+# Campos do modelo de Contratação Direta preenchidos manualmente depois da geração.
+# Não geram aviso de "placeholder sem valor" no log.
+PLACEHOLDERS_PREENCHIMENTO_MANUAL = {
+    "{{AUTORIZACAO}}", "{{CARGO_RESPONSAVEL}}", "{{CNPJ_FORNECEDOR}}", "{{DATA_AUTORIZACAO}}",
+    "{{FORNECEDOR}}", "{{NUM_PROCESSO}}", "{{PROPOSTA_FORNECEDOR}}", "{{RESPONSAVEL_AUTORIZACAO}}",
+    "{{VALOR_CONTRATADO}}",
+}
+
 DEFAULT_OUTPUT_FOLDER_NAME = "Documentos_Gerados"
 
 DEFAULT_SETTINGS = {

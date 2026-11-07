@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import secrets
@@ -16,7 +17,9 @@ from pathlib import Path
 
 import config
 from montador_variaveis import filtrar_chaves_docx, formatar_moeda, montar_variaveis_fixas, total_linha_item, valor_decimal, validar_consistencia_dados
-from processador_docx import modificar_documento
+from processador_docx import extrair_placeholders_documento, modificar_documento
+
+logger = logging.getLogger(__name__)
 
 EMAIL_RE = re.compile(r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}", re.IGNORECASE)
 PLACEHOLDER_RE = re.compile(r"\{\{\s*([^{}]+?)\s*\}\}")
@@ -153,9 +156,15 @@ def _formata_moeda(v) -> str:
     return formatar_moeda(v)
 
 
+_QUEBRA_ESCAPADA_RE = re.compile(r"(?<!\\)\\r\\n|(?<!\\)\\n")
+
+
 def _normalizar_quebras_escapadas(texto: str) -> str:
-    """Converte escapes literais de quebra de linha da resposta da IA em quebras reais."""
-    return texto.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\r", "\n")
+    """
+    Converte escapes literais \\n / \\r\\n (IA que duplica o escape) em quebras reais. Uma barra
+    invertida sozinha antes de "r" não é tratada: "\\rua" e "\\relatório" são texto, não quebra.
+    """
+    return _QUEBRA_ESCAPADA_RE.sub("\n", texto)
 
 
 def _canonical_placeholder(chave: str) -> str:
@@ -213,6 +222,23 @@ def _arquivos_base_por_fluxo(dados_usuario: dict) -> list[str]:
     if _eh_contratacao_direta(dados_usuario):
         return list(getattr(config, "BASE_FILES_CONTRATACAO_DIRETA", []))
     return list(config.BASE_FILES)
+
+
+def _avisar_placeholders_residuais(caminho: Path, session_id: str, nome_modelo: str) -> None:
+    """Registra no log placeholders que continuaram no documento (diagnóstico; nunca interrompe a geração)."""
+    try:
+        residuais = sorted(
+            extrair_placeholders_documento(str(caminho))
+            - getattr(config, "PLACEHOLDERS_PREENCHIMENTO_MANUAL", set())
+        )
+    except Exception:
+        logger.debug("Não foi possível verificar placeholders residuais de %s", nome_modelo, exc_info=True)
+        return
+    if residuais:
+        logger.warning(
+            "Solicitação %s: %s foi gerado com placeholders sem valor: %s",
+            session_id, nome_modelo, ", ".join(residuais),
+        )
 
 
 def gerar_zip(dados_usuario: dict, dados_ia: dict, session_id: str) -> tuple[Path, str]:
@@ -276,6 +302,7 @@ def gerar_zip(dados_usuario: dict, dados_ia: dict, session_id: str) -> tuple[Pat
             if os.path.exists(cam_origem):
                 modificar_documento(cam_origem, str(cam_destino), modificacoes)
                 arquivos_gerados.append(cam_destino)
+                _avisar_placeholders_residuais(cam_destino, session_id, arq)
 
         if not arquivos_gerados:
             raise RuntimeError("Nenhum documento base encontrado para o fluxo selecionado.")

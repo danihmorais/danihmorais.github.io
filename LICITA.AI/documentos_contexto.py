@@ -40,9 +40,19 @@ MIN_TEXT_FOR_OCR_PAGE = 80
 OCR_DPI = 220
 OCR_LANG = "por+eng"
 
+# Cabeçalho de anexo: "ANEXO I - TERMO...", "ANEXO II", "ANEXO III TERMO DE REFERÊNCIA" (título em
+# maiúsculas) ou "Anexo único - ...". Uma frase do corpo que apenas comece com a palavra
+# ("Anexo II da Resolução 12/2020 define...", "Anexos deste edital") NÃO é cabeçalho: após o
+# numeral só se aceita separador (- – — : .) ou resto da linha sem minúsculas.
 ANEXO_RE = re.compile(
-    r"(?im)^\s*ANEXO(?:\s+(?:ÚNICO|[IVXLCDM]+|\d+))?\b[^\n]{0,240}$"
+    r"(?m)^[ \t]*(?i:anexo)[ \t]+(?:(?i:único)|[IVXLCDM]+|\d+|[A-Z])"
+    r"(?:[ \t]*[-–—:.][^\n]{0,240}|[ \t]+[^a-zà-ÿ\n]{0,240})?[ \t]*$"
 )
+
+# Linhas de título consideradas após o cabeçalho do anexo, e tamanho máximo de um título.
+LINHAS_TITULO_ANEXO = 5
+MAX_CARACTERES_TITULO = 120
+_NUMERACAO_INICIAL_RE = re.compile(r"^[\d.\-–—)\s]+")
 
 TIPO_PATTERNS = {
     "DFD": (
@@ -185,11 +195,13 @@ def _extrair_pdf(data: bytes) -> str:
     if PdfReader is None:
         raise RuntimeError("A biblioteca pypdf não está disponível no backend.")
     leitor = PdfReader(BytesIO(data))
+    # extract_text() é caro; extrai uma única vez por página.
+    textos_paginas = [_normalizar_texto(pagina.extract_text() or "") for pagina in leitor.pages]
     texto_nativo = _normalizar_texto(
         "\n\n".join(
-            f"--- PÁGINA {numero} ---\n{_normalizar_texto(pagina.extract_text() or '')}"
-            for numero, pagina in enumerate(leitor.pages, start=1)
-            if _normalizar_texto(pagina.extract_text() or "")
+            f"--- PÁGINA {numero} ---\n{texto}"
+            for numero, texto in enumerate(textos_paginas, start=1)
+            if texto
         )
     )
 
@@ -253,6 +265,15 @@ def extrair_texto_arquivo(nome: str, data: bytes) -> str:
     return texto
 
 
+def _tipo_do_titulo(linha: str) -> str | None:
+    """Tipo do documento se a linha COMEÇA com o título (ex.: "TERMO DE REFERÊNCIA Nº 5/2026")."""
+    linha = _NUMERACAO_INICIAL_RE.sub("", linha.strip())
+    for tipo, padroes in TIPO_PATTERNS.items():
+        if any(padrao.match(linha) for padrao in padroes):
+            return tipo
+    return None
+
+
 def _classificar_anexo(trecho: str, cabecalho: str) -> str | None:
     # Primeiro usa o próprio cabeçalho do anexo, onde normalmente está o título.
     cab = _normalizar_texto(cabecalho)
@@ -260,20 +281,16 @@ def _classificar_anexo(trecho: str, cabecalho: str) -> str | None:
         if any(padrao.search(cab) for padrao in padroes):
             return tipo
 
-    # Depois procura o primeiro título explícito no início do anexo.
-    inicio = _normalizar_texto(trecho[:1800])
-    candidatos: list[tuple[int, str]] = []
-    for tipo, padroes in TIPO_PATTERNS.items():
-        for padrao in padroes:
-            encontrado = padrao.search(inicio)
-            if encontrado:
-                candidatos.append((encontrado.start(), tipo))
-                break
-
-    if candidatos:
-        candidatos.sort(key=lambda item: (item[0], ("DFD", "ETP", "TR").index(item[1])))
-        return candidatos[0][1]
-
+    # Depois, apenas as primeiras linhas curtas após o cabeçalho que COMECEM com um título.
+    # Citações no corpo ("conforme o Termo de Referência") não classificam o anexo: uma minuta
+    # de contrato cita o TR logo no início e não é um TR.
+    linhas = [linha.strip() for linha in _normalizar_texto(trecho).split("\n") if linha.strip()]
+    for linha in linhas[1:1 + LINHAS_TITULO_ANEXO]:
+        if len(linha) > MAX_CARACTERES_TITULO:
+            continue
+        tipo = _tipo_do_titulo(linha)
+        if tipo:
+            return tipo
     return None
 
 
