@@ -65,6 +65,7 @@ def _dados_para_prompt(dados_usuario: dict) -> dict:
         dados["{{DOTACAO}}"] = texto_dotacao
     for chave in (
         "{{CAMINHO_IMAGEM_DOTACAO}}", "{{CONTATOS_SECRETARIAS}}", "ITENS_NOMES",
+        "GESTORES_DADOS", "FISCAIS_DADOS",
         "PAGAMENTO_ETAPAS_RAW", "INSTRUCOES_EXTRAS", "REQUISITOS_ETP_ANTERIOR",
         "RAW_EXECUCAO", "RAW_MOTIVO_CRITERIO", "RAW_MOTIVO_MODALIDADE", "RAW_PAC",
     ):

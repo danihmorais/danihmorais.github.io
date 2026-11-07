@@ -105,7 +105,7 @@ function resumirValor(valor: unknown, chave = ""): string {
 
 function chaveInterna(chave: string): boolean {
   const limpa = chave.replace(/[{}]/g, "").toUpperCase();
-  return ["ITENS_NOMES", "PAGAMENTO_ETAPAS_RAW", "REQUISITOS_ETP_ANTERIOR", "CAMINHO_IMAGEM_DOTACAO", "CONTATOS_SECRETARIAS", "INSTRUCOES_EXTRAS"].includes(limpa)
+  return ["ITENS_NOMES", "GESTORES_DADOS", "FISCAIS_DADOS", "PAGAMENTO_ETAPAS_RAW", "REQUISITOS_ETP_ANTERIOR", "CAMINHO_IMAGEM_DOTACAO", "CONTATOS_SECRETARIAS", "INSTRUCOES_EXTRAS"].includes(limpa)
     || limpa.startsWith("RAW_") || limpa.startsWith("__");
 }
 

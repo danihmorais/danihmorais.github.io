@@ -73,7 +73,7 @@ export function dadosParaPrompt(dados: Record<string, any>): Record<string, any>
   resultado["{{DOTACAO}}"] = imagens
     ? ["Dotação informada (" + imagens + " imagem(ns)" + (textoDotacao ? " e texto" : "") + ").", textoDotacao].filter(Boolean).join("\n")
     : (textoDotacao || dotacaoBruta.replace(/data:image\/[^;]+;base64,[^\s]+/g, "[imagem omitida]"));
-  for (const chave of ["{{CAMINHO_IMAGEM_DOTACAO}}", "{{CONTATOS_SECRETARIAS}}", "ITENS_NOMES", "PAGAMENTO_ETAPAS_RAW", "INSTRUCOES_EXTRAS", "RAW_EXECUCAO", "RAW_MOTIVO_CRITERIO", "RAW_MOTIVO_MODALIDADE", "RAW_PAC", "REQUISITOS_ETP_ANTERIOR"]) delete resultado[chave];
+  for (const chave of ["{{CAMINHO_IMAGEM_DOTACAO}}", "{{CONTATOS_SECRETARIAS}}", "ITENS_NOMES", "GESTORES_DADOS", "FISCAIS_DADOS", "PAGAMENTO_ETAPAS_RAW", "INSTRUCOES_EXTRAS", "RAW_EXECUCAO", "RAW_MOTIVO_CRITERIO", "RAW_MOTIVO_MODALIDADE", "RAW_PAC", "REQUISITOS_ETP_ANTERIOR"]) delete resultado[chave];
   const limpar = (valor: any): any => {
     if (Array.isArray(valor)) return valor.map(limpar);
     if (valor && typeof valor === "object") return Object.fromEntries(Object.entries(valor).map(([chave, item]) => [chave, limpar(item)]));
@@ -215,7 +215,7 @@ function construirPromptUnificado(
     "1. Retorne exclusivamente um objeto JSON válido, sem markdown, comentários ou texto fora do objeto.",
     '2. O objeto raiz deve conter exatamente as três chaves "DFD", "ETP" e "TR", cada uma como objeto JSON independente.',
     "3. Todos os campos previstos nos três blocos devem conter strings não vazias; não omita campos, não crie chaves e não retorne arrays/valores de outro tipo dentro dos blocos.",
-    "4. Use a sequência JSON \n (uma única barra invertida seguida da letra n) dentro de strings JSON para representar quebras de linha. Após a leitura do JSON, cada campo deve conter uma quebra real, nunca os caracteres literais barra invertida e n.",
+    "4. Use a sequência JSON \\n (uma única barra invertida seguida da letra n) dentro de strings JSON para representar quebras de linha. Após a leitura do JSON, cada campo deve conter uma quebra real, nunca os caracteres literais barra invertida e n.",
     "5. Preserve os fatos e as instruções do usuário. Não invente valores, normas, datas, locais, fornecedores, registros ou exigências de habilitação.",
     "ESTRUTURA JSON OBRIGATÓRIA:",
     schema

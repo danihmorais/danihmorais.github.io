@@ -71,6 +71,8 @@ CHAVES_RAW = {
     "INSTRUCOES_EXTRAS",
     "REQUISITOS_ETP_ANTERIOR",
     "LOTES_DADOS",
+    "GESTORES_DADOS",
+    "FISCAIS_DADOS",
 }
 
 LIMITE_EXCLUSIVIDADE_MEEPP = 80000
@@ -86,14 +88,40 @@ def _converter_para_sim(valor) -> bool:
     return _normalizar_sim_nao(valor) in SIM_VALORES
 
 
-def _formatar_lista_assinaturas(nomes_str: str, cargos_str: str):
-    nomes = [nome.strip() for nome in nomes_str.split(",") if nome.strip()]
-    cargos = [cargo.strip() for cargo in cargos_str.split(",") if cargo.strip()]
-    resultado = []
-    for index, nome in enumerate(nomes):
-        cargo = cargos[index] if index < len(cargos) else ""
-        resultado.append(f"{nome} ({cargo})" if cargo else nome)
-    return resultado
+def _pessoas(dados_usuario: dict, chave_dados: str, chave_nomes: str, chave_cargos: str) -> list[tuple[str, str]]:
+    """Retorna [(nome, cargo)]. Prefere a lista estruturada (JSON); cai no split por vírgula."""
+    bruto = dados_usuario.get(chave_dados)
+    if isinstance(bruto, str) and bruto.strip():
+        try:
+            bruto = json.loads(bruto)
+        except ValueError:
+            bruto = None
+    if isinstance(bruto, list):
+        pessoas = []
+        for item in bruto:
+            if not isinstance(item, dict):
+                continue
+            nome = str(item.get("nome") or "").strip()
+            cargo = str(item.get("cargo") or "").strip()
+            if cargo == "[Não informado]":
+                cargo = ""
+            if nome:
+                pessoas.append((nome, cargo))
+        return pessoas
+    nomes_str = str(dados_usuario.get(chave_nomes) or "")
+    cargos_str = str(dados_usuario.get(chave_cargos) or "")
+    if not nomes_str or nomes_str == "[Não informado]":
+        return []
+    nomes = [n.strip() for n in nomes_str.split(",") if n.strip()]
+    cargos = [c.strip() for c in cargos_str.split(",")]
+    return [
+        (nome, cargos[i] if i < len(cargos) and cargos[i] != "[Não informado]" else "")
+        for i, nome in enumerate(nomes)
+    ]
+
+
+def _formatar_lista_assinaturas(pessoas: list[tuple[str, str]]) -> list[str]:
+    return [f"{nome} ({cargo})" if cargo else nome for nome, cargo in pessoas]
 
 
 def _extrair_itens(dados_usuario: dict) -> list[dict]:
@@ -220,32 +248,17 @@ def montar_variaveis_fixas(dados_usuario: dict) -> dict:
         else "Não exclusiva para ME/EPP"
     )
 
-    gestores_str = dados_usuario.get("{{GESTOR}}", "")
-    cargos_gestores_str = dados_usuario.get("{{GESTOR_CARGO}}", "")
-    fiscais_str = dados_usuario.get("{{FISCAL}}", "")
-    cargos_fiscais_str = dados_usuario.get("{{FISCAL_CARGO}}", "")
+    gestores = _pessoas(dados_usuario, "GESTORES_DADOS", "{{GESTOR}}", "{{GESTOR_CARGO}}")
+    fiscais = _pessoas(dados_usuario, "FISCAIS_DADOS", "{{FISCAL}}", "{{FISCAL_CARGO}}")
 
     assinaturas_blocos = []
-
-    if gestores_str and gestores_str != "[Não informado]":
-        nomes_g = [n.strip() for n in gestores_str.split(",") if n.strip()]
-        cargos_g = [c.strip() for c in cargos_gestores_str.split(",") if c.strip()]
-        for i, nome in enumerate(nomes_g):
-            cargo = cargos_g[i] if i < len(cargos_g) else ""
-            linha = f"\n\n\n____________________________\n{nome}"
+    for papel, pessoas in (("Gestor do Contrato", gestores), ("Fiscal do Contrato", fiscais)):
+        for nome, cargo in pessoas:
+            linhas = ["", "", "", "____________________________", nome]
             if cargo:
-                linha += f"\n{cargo}\nGestor do Contrato\n\n\n"
-            assinaturas_blocos.append(linha)
-
-    if fiscais_str and fiscais_str != "[Não informado]":
-        nomes_f = [n.strip() for n in fiscais_str.split(",") if n.strip()]
-        cargos_f = [c.strip() for c in cargos_fiscais_str.split(",") if c.strip()]
-        for i, nome in enumerate(nomes_f):
-            cargo = cargos_f[i] if i < len(cargos_f) else ""
-            linha = f"\n\n\n____________________________\n{nome}"
-            if cargo:
-                linha += f"\n{cargo}\nFiscal do Contrato\n\n\n"
-            assinaturas_blocos.append(linha)
+                linhas.append(cargo)
+            linhas.extend([papel, "", "", ""])
+            assinaturas_blocos.append("\n".join(linhas))
 
     resultado["{{ASSINATURAS}}"] = "\n\n".join(assinaturas_blocos) if assinaturas_blocos else ""
     # O total exibido deve fechar com a soma das linhas da tabela de itens (centavos exatos,
@@ -253,16 +266,8 @@ def montar_variaveis_fixas(dados_usuario: dict) -> dict:
     total_itens = calcular_valor_estimado_decimal(dados_usuario)
     if total_itens > 0:
         resultado["{{VALOR_ESTIMADO}}"] = formatar_moeda(total_itens)
-    resultado["{{GESTORES}}"] = (
-        "; ".join(_formatar_lista_assinaturas(gestores_str, cargos_gestores_str))
-        if gestores_str and gestores_str != "[Não informado]"
-        else "[Não informado]"
-    )
-    resultado["{{FISCAIS}}"] = (
-        "; ".join(_formatar_lista_assinaturas(fiscais_str, cargos_fiscais_str))
-        if fiscais_str and fiscais_str != "[Não informado]"
-        else "[Não informado]"
-    )
+    resultado["{{GESTORES}}"] = "; ".join(_formatar_lista_assinaturas(gestores)) or "[Não informado]"
+    resultado["{{FISCAIS}}"] = "; ".join(_formatar_lista_assinaturas(fiscais)) or "[Não informado]"
 
     return resultado
 

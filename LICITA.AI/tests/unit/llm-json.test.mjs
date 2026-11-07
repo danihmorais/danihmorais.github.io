@@ -33,3 +33,11 @@ test("quebra de linha crua dentro de string é escapada", () => {
 test("texto sem JSON levanta erro de JSON corrompido", () => {
   assert.throws(() => extrairEConverterJSON("sem json nenhum"), /corrompido/);
 });
+
+test("prompts instruem \\n literal (barra invertida + n), não quebra real", async () => {
+  const { readFileSync } = await import("node:fs");
+  const api = readFileSync(new URL("../../src/api.ts", import.meta.url), "utf8");
+  const gerador = readFileSync(new URL("../../src/providers/services/geradorIA.ts", import.meta.url), "utf8");
+  assert.match(api, /sequência JSON \\\\n \(uma/);
+  assert.match(gerador, /sequência JSON \\\\n \(uma/);
+});
