@@ -1,13 +1,10 @@
-import json
 import os
 import sys
 
 if getattr(sys, 'frozen', False):
     BASE_DIR = sys._MEIPASS
-    EXECUTABLE_DIR = os.path.dirname(sys.executable)
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    EXECUTABLE_DIR = BASE_DIR
 
 BASE_FILES = [
     "DFD - BASE.docx",
@@ -21,7 +18,13 @@ BASE_FILES_CONTRATACAO_DIRETA = [
 
 PASTA_MODELOS = os.path.join(BASE_DIR, "modelos")
 
-DEFAULT_OUTPUT_FOLDER_NAME = "Documentos_Gerados"
+# Campos do modelo de Contratação Direta preenchidos manualmente depois da geração.
+# Não geram aviso de "placeholder sem valor" no log.
+PLACEHOLDERS_PREENCHIMENTO_MANUAL = {
+    "{{AUTORIZACAO}}", "{{CARGO_RESPONSAVEL}}", "{{CNPJ_FORNECEDOR}}", "{{DATA_AUTORIZACAO}}",
+    "{{FORNECEDOR}}", "{{NUM_PROCESSO}}", "{{PROPOSTA_FORNECEDOR}}", "{{RESPONSAVEL_AUTORIZACAO}}",
+    "{{VALOR_CONTRATADO}}",
+}
 
 DEFAULT_SETTINGS = {
     "textos": {
@@ -41,28 +44,5 @@ ALIASES = [
     ("{{IMPAC_AMB}}", "{{CRITERIOS_SUSTENTABILIDADE}}"),
 ]
 
-def deep_merge(default: dict, custom: dict) -> dict:
-    result = default.copy()
-    for key, value in custom.items():
-        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-            result[key] = deep_merge(result[key], value)
-        else:
-            result[key] = value
-    return result
-
 SETTINGS = DEFAULT_SETTINGS.copy()
 TEXTOS = SETTINGS["textos"].copy()
-
-def carregar_settings(app_data_dir: str):
-    arquivo_settings = os.path.join(app_data_dir, "settings.json")
-    if os.path.exists(arquivo_settings):
-        try:
-            with open(arquivo_settings, "r", encoding="utf-8") as file:
-                custom_settings = json.load(file)
-            merged = deep_merge(DEFAULT_SETTINGS, custom_settings)
-            SETTINGS.clear()
-            SETTINGS.update(merged)
-            TEXTOS.clear()
-            TEXTOS.update(SETTINGS.get("textos", {}))
-        except Exception:
-            pass

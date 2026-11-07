@@ -10,6 +10,25 @@ import httpx
 API_UNSLOTH_URL = os.getenv("LICITA_UNSLOTH_URL", os.getenv("UNSLOTH_URL", "http://127.0.0.1:8888/v1")).rstrip("/")
 API_UNSLOTH_KEY = os.getenv("LICITA_UNSLOTH_KEY", os.getenv("API_UNSLOTH", "")).strip()
 AI_TIMEOUT_SECONDS = max(60, min(1800, int(os.getenv("LICITA_QUEUE_AI_TIMEOUT", "600"))))
+AI_CONNECT_TIMEOUT_SECONDS = 10.0
+
+
+class ErroPermanente(RuntimeError):
+    """Falha determinística: repetir a tentativa não resolve (ex.: prompt grande demais)."""
+
+
+class JSONCorrompidoError(RuntimeError):
+    """A resposta da IA não contém um objeto JSON sintaticamente recuperável."""
+
+
+def limite_prompt_chars() -> int:
+    """Limite seguro de caracteres do prompt, compartilhado por API, fila e chamada à IA."""
+    try:
+        valor = int(os.getenv("LICITA_QUEUE_MAX_PROMPT_CHARS", "110000"))
+    except ValueError:
+        valor = 110_000
+    return max(40_000, min(118_000, valor))
+
 
 PESQUISA_WEB_SYSTEM_PROMPT = """
 Você é um especialista em planejamento de contratações públicas brasileiras, com rigor jurídico e técnico. Quando a tarefa envolver a elaboração ou análise de DFD, ETP, TR, edital, contratação direta ou requisitos relacionados ao objeto, use a ferramenta de pesquisa na web do Unsloth antes de concluir. Você dispõe de até 600 segundos para concluir a tarefa atual, incluindo pesquisa, leitura das páginas e redação; organize o trabalho para terminar nesse prazo e evite buscas repetitivas.
@@ -46,6 +65,7 @@ def _dados_para_prompt(dados_usuario: dict) -> dict:
         dados["{{DOTACAO}}"] = texto_dotacao
     for chave in (
         "{{CAMINHO_IMAGEM_DOTACAO}}", "{{CONTATOS_SECRETARIAS}}", "ITENS_NOMES",
+        "GESTORES_DADOS", "FISCAIS_DADOS",
         "PAGAMENTO_ETAPAS_RAW", "INSTRUCOES_EXTRAS", "REQUISITOS_ETP_ANTERIOR",
         "RAW_EXECUCAO", "RAW_MOTIVO_CRITERIO", "RAW_MOTIVO_MODALIDADE", "RAW_PAC",
     ):
@@ -65,6 +85,9 @@ def _dados_para_prompt(dados_usuario: dict) -> dict:
     return limpar(dados)
 
 
+_PIPE_MARCADOR_RE = re.compile(r"__LICITA_PIPE_[A-Z_]+__")
+
+
 def _substituir_contextos(texto: str, dados_usuario: dict, resultados: dict[str, dict]) -> str:
     dados_prompt = _dados_para_prompt(dados_usuario)
     substituicoes = {
@@ -74,83 +97,162 @@ def _substituir_contextos(texto: str, dados_usuario: dict, resultados: dict[str,
         _PIPE_STAGES: json.dumps(resultados, ensure_ascii=False, indent=2),
         _PIPE_CONSULTA_HABILITACAO: json.dumps(resultados.get("CONSULTA_HABILITACAO", {}), ensure_ascii=False, indent=2),
     }
-    for marcador, valor in substituicoes.items():
-        texto = texto.replace(marcador, valor)
-    return texto
+    # Passada única: um marcador digitado pelo usuário dentro dos dados já inseridos
+    # não pode ser reexpandido por uma substituição posterior.
+    return _PIPE_MARCADOR_RE.sub(lambda m: substituicoes.get(m.group(0), m.group(0)), texto)
+
+
+_THINK_RE = re.compile(r"(?is)<think>.*?</think>|^.*?</think>")
+_FENCE_RE = re.compile(r"(?is)```(?:json)?\s*(.*?)```")
+_MAX_CANDIDATOS_JSON = 50
+
+
+def _remover_virgulas_finais(texto: str) -> str:
+    """Remove vírgulas antes de } ou ], sem tocar no conteúdo das strings JSON."""
+    saida: list[str] = []
+    em_string = False
+    escapado = False
+    indice = 0
+    tamanho = len(texto)
+    while indice < tamanho:
+        char = texto[indice]
+        if em_string:
+            saida.append(char)
+            if escapado:
+                escapado = False
+            elif char == "\\":
+                escapado = True
+            elif char == '"':
+                em_string = False
+            indice += 1
+            continue
+        if char == '"':
+            em_string = True
+        elif char == ",":
+            proximo = indice + 1
+            while proximo < tamanho and texto[proximo] in " \t\r\n":
+                proximo += 1
+            if proximo < tamanho and texto[proximo] in "}]":
+                indice += 1
+                continue
+        saida.append(char)
+        indice += 1
+    return "".join(saida)
+
+
+def _corrigir_strings_json(texto: str) -> str:
+    """
+    Repara strings que contêm barras invertidas sem escape válido, por exemplo
+    caminhos Windows (C:\\Licita\\edital.docx), e quebras/controles crus, sem tocar
+    em escapes JSON válidos.
+    """
+    corrigido: list[str] = []
+    em_string = False
+    indice = 0
+    hexadecimais = set("0123456789abcdefABCDEF")
+    while indice < len(texto):
+        char = texto[indice]
+        if not em_string:
+            corrigido.append(char)
+            if char == '"':
+                em_string = True
+            indice += 1
+            continue
+
+        if char == '"':
+            corrigido.append(char)
+            em_string = False
+            indice += 1
+            continue
+
+        if char == "\\":
+            seguinte = texto[indice + 1] if indice + 1 < len(texto) else ""
+            if seguinte and seguinte in '"\\/bfnrt':
+                corrigido.extend((char, seguinte))
+                indice += 2
+                continue
+            if (
+                seguinte == "u"
+                and indice + 5 < len(texto)
+                and all(digito in hexadecimais for digito in texto[indice + 2:indice + 6])
+            ):
+                corrigido.extend(texto[indice:indice + 6])
+                indice += 6
+                continue
+            # Barra inválida: codifica a barra como conteúdo literal da string.
+            corrigido.extend(("\\", "\\"))
+            indice += 1
+            continue
+
+        if char == "\n":
+            corrigido.append("\\n")
+        elif char == "\r":
+            corrigido.append("\\r")
+        elif char == "\t":
+            corrigido.append("\\t")
+        elif ord(char) < 32:
+            corrigido.append("\\u%04x" % ord(char))
+        else:
+            corrigido.append(char)
+        indice += 1
+    return "".join(corrigido)
+
+
+def _melhor_objeto_valido(texto: str) -> dict | None:
+    """
+    Procura objetos JSON estritamente válidos em qualquer posição do texto. Isso tolera
+    preâmbulos com chaves (``{{OBJETO}}``, ``{x}``) que quebrariam um recorte entre a
+    primeira ``{`` e a última ``}``. Havendo mais de um, prevalece o de maior extensão.
+    """
+    decodificador = json.JSONDecoder()
+    melhor: tuple[int, dict] | None = None
+    for tentativa, marcador in enumerate(re.finditer(r"\{", texto)):
+        if tentativa >= _MAX_CANDIDATOS_JSON:
+            break
+        try:
+            objeto, fim = decodificador.raw_decode(texto, marcador.start())
+        except json.JSONDecodeError:
+            continue
+        if isinstance(objeto, dict) and (melhor is None or fim - marcador.start() > melhor[0]):
+            melhor = (fim - marcador.start(), objeto)
+    return melhor[1] if melhor else None
 
 
 def _extrair_json(texto: str) -> dict:
     texto = str(texto or "").strip()
     if not texto:
         raise RuntimeError("A IA retornou resposta vazia.")
+
+    # Modelos com raciocínio podem inserir o "pensamento" no conteúdo; ele pode conter
+    # chaves e JSON de rascunho que não fazem parte da resposta.
+    texto = _THINK_RE.sub("", texto).strip()
+    cerca = _FENCE_RE.search(texto)
+    if cerca and "{" in cerca.group(1):
+        texto = cerca.group(1).strip()
+
+    objeto = _melhor_objeto_valido(texto)
+    if objeto is not None:
+        return objeto
+
     inicio = texto.find("{")
     fim = texto.rfind("}")
-    if inicio != -1 and fim != -1:
-        texto = texto[inicio:fim + 1]
-    try:
-        resultado = json.loads(texto)
-    except json.JSONDecodeError:
-        texto = re.sub(r",\s*([}\]])", r"\1", texto)
+    if inicio == -1 or fim == -1 or fim < inicio:
         try:
             resultado = json.loads(texto)
-        except json.JSONDecodeError:
-            # Repara strings que contêm barras invertidas sem escape válido, por exemplo
-            # caminhos Windows (C:\Licita\edital.docx), sem tocar em escapes JSON válidos.
-            corrigido = []
-            em_string = False
-            indice = 0
-            hexadecimais = set("0123456789abcdefABCDEF")
-            while indice < len(texto):
-                char = texto[indice]
-                if not em_string:
-                    corrigido.append(char)
-                    if char == '"':
-                        em_string = True
-                    indice += 1
-                    continue
+        except json.JSONDecodeError as exc:
+            raise JSONCorrompidoError(f"O texto gerado pela IA está corrompido: {exc}") from exc
+        if not isinstance(resultado, dict):
+            raise RuntimeError("A IA não retornou um objeto JSON.")
+        return resultado
 
-                if char == '"':
-                    corrigido.append(char)
-                    em_string = False
-                    indice += 1
-                    continue
-
-                if char == "\\":
-                    seguinte = texto[indice + 1] if indice + 1 < len(texto) else ""
-                    if seguinte and seguinte in '"\\/bfnrt':
-                        corrigido.extend((char, seguinte))
-                        indice += 2
-                        continue
-                    if (
-                        seguinte == "u"
-                        and indice + 5 < len(texto)
-                        and all(digito in hexadecimais for digito in texto[indice + 2:indice + 6])
-                    ):
-                        corrigido.extend(texto[indice:indice + 6])
-                        indice += 6
-                        continue
-                    # Barra inválida: codifica a barra como conteúdo literal da string.
-                    corrigido.extend(("\\", "\\"))
-                    indice += 1
-                    continue
-
-                if char == "\n":
-                    corrigido.append("\\n")
-                elif char == "\r":
-                    corrigido.append("\\r")
-                elif char == "\t":
-                    corrigido.append("\\t")
-                elif ord(char) < 32:
-                    corrigido.append("\\u%04x" % ord(char))
-                else:
-                    corrigido.append(char)
-                indice += 1
-
-            texto = re.sub(r",\s*([}\]])", r"\1", "".join(corrigido))
-            try:
-                resultado = json.loads(texto)
-            except json.JSONDecodeError as exc:
-                raise RuntimeError(f"O texto gerado pela IA está corrompido: {exc}") from exc
+    recorte = texto[inicio:fim + 1]
+    try:
+        resultado = json.loads(_remover_virgulas_finais(recorte))
+    except json.JSONDecodeError:
+        try:
+            resultado = json.loads(_remover_virgulas_finais(_corrigir_strings_json(recorte)))
+        except json.JSONDecodeError as exc:
+            raise JSONCorrompidoError(f"O texto gerado pela IA está corrompido: {exc}") from exc
     if not isinstance(resultado, dict):
         raise RuntimeError("A IA não retornou um objeto JSON.")
     return resultado
@@ -242,6 +344,26 @@ def _provider_config(model: str) -> tuple[str, str, str]:
     return API_UNSLOTH_URL, API_UNSLOTH_KEY, modelo
 
 
+def _timeout_ia() -> httpx.Timeout:
+    # Timeout total generoso para a geração, mas conexão curta: provedor fora do ar não
+    # deve prender a fila por AI_TIMEOUT_SECONDS a cada tentativa.
+    return httpx.Timeout(AI_TIMEOUT_SECONDS, connect=AI_CONNECT_TIMEOUT_SECONDS)
+
+
+def _post_ia(client, url: str, **kwargs):
+    """POST ao provedor de IA convertendo falhas de rede em erros com mensagem legível."""
+    try:
+        return client.post(url, **kwargs)
+    except httpx.TimeoutException as exc:
+        raise RuntimeError(
+            f"A IA não respondeu dentro do tempo limite ({AI_TIMEOUT_SECONDS}s; {type(exc).__name__})."
+        ) from exc
+    except httpx.RequestError as exc:
+        raise RuntimeError(
+            f"Falha de comunicação com o provedor de IA ({type(exc).__name__}): {exc}"
+        ) from exc
+
+
 def _chamar_ia(
     prompt: str,
     model: str,
@@ -253,10 +375,10 @@ def _chamar_ia(
 ) -> tuple[dict, str]:
     base_url, api_key, modelo = _provider_config(model)
     if not base_url or not api_key:
-        raise RuntimeError("O provedor de IA da fila não está configurado no backend.")
-    limite_prompt = max(40_000, min(118_000, int(os.getenv("LICITA_QUEUE_MAX_PROMPT_CHARS", "110000"))))
+        raise ErroPermanente("O provedor de IA da fila não está configurado no backend.")
+    limite_prompt = limite_prompt_chars()
     if len(prompt) > limite_prompt:
-        raise RuntimeError(
+        raise ErroPermanente(
             f"O prompt excede o limite de contexto seguro ({len(prompt):,} caracteres; limite {limite_prompt:,}). "
             "Reduza a quantidade de texto dos dados ou dos documentos de referência."
         )
@@ -278,8 +400,8 @@ def _chamar_ia(
     # Enviar em todas as chamadas evita acoplar esse comportamento ao nome de uma família específica.
     payload["enable_thinking"] = True
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
-    with httpx.Client(timeout=AI_TIMEOUT_SECONDS) as client:
-        response = client.post(f"{base_url}/chat/completions", headers=headers, json=payload)
+    with httpx.Client(timeout=_timeout_ia()) as client:
+        response = _post_ia(client, f"{base_url}/chat/completions", headers=headers, json=payload)
         if response.status_code == 404 and modelo.casefold() in {"", "auto", "unsloth-auto"}:
             try:
                 lista_modelos = client.get(f"{base_url}/models", headers=headers)
@@ -303,13 +425,15 @@ def _chamar_ia(
                 )
             modelo = disponiveis[0]
             payload["model"] = modelo
-            response = client.post(f"{base_url}/chat/completions", headers=headers, json=payload)
+            response = _post_ia(client, f"{base_url}/chat/completions", headers=headers, json=payload)
     if response.status_code >= 400:
         raise RuntimeError(f"IA HTTP {response.status_code}: {response.text[:500]}")
     try:
         data = response.json()
     except ValueError as exc:
         raise RuntimeError("O provedor de IA retornou JSON inválido.") from exc
+    if not isinstance(data, dict):
+        raise RuntimeError("O provedor de IA retornou JSON inválido.")
     choice = (data.get("choices") or [None])[0]
     if not isinstance(choice, dict):
         raise RuntimeError("O provedor de IA não retornou uma escolha de resposta válida.")
@@ -331,10 +455,7 @@ def _chamar_ia(
 
     try:
         resultado = _extrair_json(content)
-    except RuntimeError as erro_json:
-        if "corrompido" not in str(erro_json).casefold():
-            raise
-
+    except JSONCorrompidoError as erro_json:
         # Uma única chamada adicional corrige somente a sintaxe do JSON; não reescreve a
         # contratação nem aceita o resultado sem passar novamente pelo parser/validador.
         payload_correcao = {
@@ -365,8 +486,9 @@ def _chamar_ia(
             "enable_tools": False,
             "enable_thinking": False,
         }
-        with httpx.Client(timeout=AI_TIMEOUT_SECONDS) as cliente_correcao:
-            resposta_correcao = cliente_correcao.post(
+        with httpx.Client(timeout=_timeout_ia()) as cliente_correcao:
+            resposta_correcao = _post_ia(
+                cliente_correcao,
                 f"{base_url}/chat/completions",
                 headers=headers,
                 json=payload_correcao,

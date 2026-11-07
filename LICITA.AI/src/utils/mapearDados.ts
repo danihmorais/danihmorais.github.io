@@ -60,6 +60,9 @@ export const mapearDadosWizard = (dados: any) => {
     "{{GESTOR_CARGO}}": (dados.gestores || []).map((g: any) => g.cargo).join(", ") || "[Não informado]",
     "{{FISCAL}}": (dados.fiscais || []).map((f: any) => f.nome).join(", ") || "[Não informado]",
     "{{FISCAL_CARGO}}": (dados.fiscais || []).map((f: any) => f.cargo).join(", ") || "[Não informado]",
+    // Listas estruturadas: nomes/cargos com vírgula (ex.: "Silva, João") não quebram mais as assinaturas.
+    "GESTORES_DADOS": JSON.stringify((dados.gestores || []).map((g: any) => ({ nome: String(g?.nome || "").trim(), cargo: String(g?.cargo || "").trim() })).filter((g: any) => g.nome)),
+    "FISCAIS_DADOS": JSON.stringify((dados.fiscais || []).map((f: any) => ({ nome: String(f?.nome || "").trim(), cargo: String(f?.cargo || "").trim() })).filter((f: any) => f.nome)),
     "{{AMOST}}": dados.amostra ? "sim" : "nao",
     "{{VIST}}": dados.vistoria ? "sim" : "nao",
     "{{PRORROGA}}": dados.prorrogar ? "sim" : "nao",

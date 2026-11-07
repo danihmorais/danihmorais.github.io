@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import secrets
@@ -10,13 +11,15 @@ import ssl
 import tempfile
 import uuid
 import zipfile
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from email.message import EmailMessage
 from pathlib import Path
 
 import config
-from montador_variaveis import filtrar_chaves_docx, montar_variaveis_fixas, validar_consistencia_dados
-from processador_docx import modificar_documento
+from montador_variaveis import filtrar_chaves_docx, formatar_moeda, montar_variaveis_fixas, total_linha_item, valor_decimal, validar_consistencia_dados
+from processador_docx import extrair_placeholders_documento, modificar_documento
+
+logger = logging.getLogger(__name__)
 
 EMAIL_RE = re.compile(r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}", re.IGNORECASE)
 PLACEHOLDER_RE = re.compile(r"\{\{\s*([^{}]+?)\s*\}\}")
@@ -150,14 +153,18 @@ def _valor_vazio(valor) -> bool:
 
 
 def _formata_moeda(v) -> str:
-    s = f"{v:,.2f}"
-    s = s.replace(",", "X").replace(".", ",").replace("X", ".")
-    return f"R$ {s}"
+    return formatar_moeda(v)
+
+
+_QUEBRA_ESCAPADA_RE = re.compile(r"(?<!\\)\\r\\n|(?<!\\)\\n")
 
 
 def _normalizar_quebras_escapadas(texto: str) -> str:
-    """Converte escapes literais de quebra de linha da resposta da IA em quebras reais."""
-    return texto.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\r", "\n")
+    """
+    Converte escapes literais \\n / \\r\\n (IA que duplica o escape) em quebras reais. Uma barra
+    invertida sozinha antes de "r" não é tratada: "\\rua" e "\\relatório" são texto, não quebra.
+    """
+    return _QUEBRA_ESCAPADA_RE.sub("\n", texto)
 
 
 def _canonical_placeholder(chave: str) -> str:
@@ -217,6 +224,23 @@ def _arquivos_base_por_fluxo(dados_usuario: dict) -> list[str]:
     return list(config.BASE_FILES)
 
 
+def _avisar_placeholders_residuais(caminho: Path, session_id: str, nome_modelo: str) -> None:
+    """Registra no log placeholders que continuaram no documento (diagnóstico; nunca interrompe a geração)."""
+    try:
+        residuais = sorted(
+            extrair_placeholders_documento(str(caminho))
+            - getattr(config, "PLACEHOLDERS_PREENCHIMENTO_MANUAL", set())
+        )
+    except Exception:
+        logger.debug("Não foi possível verificar placeholders residuais de %s", nome_modelo, exc_info=True)
+        return
+    if residuais:
+        logger.warning(
+            "Solicitação %s: %s foi gerado com placeholders sem valor: %s",
+            session_id, nome_modelo, ", ".join(residuais),
+        )
+
+
 def gerar_zip(dados_usuario: dict, dados_ia: dict, session_id: str) -> tuple[Path, str]:
     temp_dir = Path(tempfile.mkdtemp(prefix=f"fase_prep_{session_id}_"))
     try:
@@ -260,15 +284,8 @@ def gerar_zip(dados_usuario: dict, dados_ia: dict, session_id: str) -> tuple[Pat
                 itens_formatados = []
                 itens_sem_valor = []
                 for item in itens:
-                    try:
-                        valor_unit = float(item.get("valor", 0))
-                    except (ValueError, TypeError):
-                        valor_unit = 0.0
-                    try:
-                        qtd = float(item.get("qtd", 0))
-                    except (ValueError, TypeError):
-                        qtd = 0.0
-                    total = valor_unit * qtd
+                    valor_unit = valor_decimal(item.get("valor", 0))
+                    total = total_linha_item(item)
                     itens_formatados.append({"Item": item.get("numero", ""), "Descrição": item.get("descricao", ""), "UN": item.get("un", ""), "Qtd": item.get("qtd", ""), "Vlr Unit.": _formata_moeda(valor_unit), "Total": _formata_moeda(total)})
                     itens_sem_valor.append({"Item": item.get("numero", ""), "Descrição": item.get("descricao", ""), "UN": item.get("un", ""), "Qtd": item.get("qtd", "")})
                 modificacoes["{{ITENS}}"] = f"__TABLE__{json.dumps(itens_formatados, ensure_ascii=False)}"
@@ -285,6 +302,7 @@ def gerar_zip(dados_usuario: dict, dados_ia: dict, session_id: str) -> tuple[Pat
             if os.path.exists(cam_origem):
                 modificar_documento(cam_origem, str(cam_destino), modificacoes)
                 arquivos_gerados.append(cam_destino)
+                _avisar_placeholders_residuais(cam_destino, session_id, arq)
 
         if not arquivos_gerados:
             raise RuntimeError("Nenhum documento base encontrado para o fluxo selecionado.")

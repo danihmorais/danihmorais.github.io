@@ -13,9 +13,9 @@ import unicodedata
 
 logger = logging.getLogger(__name__)
 
-from fila import MAX_ATTEMPTS, POLL_INTERVAL_SECONDS, QUEUE_DIR, RETRY_BASE_SECONDS, RETRY_MAX_SECONDS, SMTP_FROM, SMTP_USERNAME, _artifact_path, _claim_next_job, _enviar_email, _enviar_email_alerta_falha, _finalizar_etapa, _finalizar_tentativa, _iniciar_etapa, _job_path, _write_json, gerar_zip
-from fila_pipeline import _aplicar_auditoria_marcas, _chamar_ia as _chamar_ia_primaria, _substituir_contextos, _validar_json_geracao
-from montador_variaveis import calcular_valor_estimado
+from fila import MAX_ATTEMPTS, POLL_INTERVAL_SECONDS, QUEUE_DIR, SMTP_FROM, SMTP_USERNAME, _artifact_path, _claim_next_job, _enviar_email, _enviar_email_alerta_falha, _finalizar_etapa, _finalizar_tentativa, _iniciar_etapa, _job_path, _retry_delay_seconds, _write_json, gerar_zip
+from fila_pipeline import ErroPermanente, _aplicar_auditoria_marcas, _chamar_ia as _chamar_ia_primaria, _substituir_contextos, _validar_json_geracao, limite_prompt_chars
+from montador_variaveis import calcular_valor_estimado_decimal
 
 
 class JobCancelado(Exception):
@@ -32,13 +32,29 @@ def _normalizar_rotulo_financeiro(valor: str) -> str:
     return re.sub(r"\s+", " ", texto.casefold()).strip()
 
 
-def _parse_valor_documento(valor: str) -> Decimal | None:
-    """Converte valores monetários brasileiros ou decimais extraídos de tabelas."""
+def _parse_valor_documento(valor) -> Decimal | None:
+    """
+    Converte valores monetários de tabelas/documentos. Números já tipados (JSON) são
+    usados como estão: "2.125" em texto é 2125 (milhar brasileiro), mas o número
+    JSON 2.125 vale dois reais e doze centavos.
+    """
+    if isinstance(valor, bool):
+        return None
+    if isinstance(valor, (int, float, Decimal)):
+        try:
+            numero = Decimal(str(valor))
+        except InvalidOperation:
+            return None
+        return numero if numero.is_finite() and numero > 0 else None
+
     texto = re.sub(r"[^0-9,.-]", "", str(valor or ""))
     if not texto or not re.search(r"\d", texto):
         return None
 
-    if "," in texto:
+    if "," in texto and "." in texto and texto.rfind(".") > texto.rfind(","):
+        # Formato 1,234.56: vírgula de milhar e ponto decimal.
+        texto = texto.replace(",", "")
+    elif "," in texto:
         # No padrão brasileiro, a vírgula é o separador decimal.
         texto = texto.replace(".", "").replace(",", ".")
     elif texto.count(".") > 1:
@@ -92,7 +108,7 @@ def _total_itens_tabela_tr(texto: str) -> Decimal | None:
         if not cabecalho:
             continue
 
-        indice_qtd, indice_total, indice_unitario, indice_descricao, tamanho_cabecalho = cabecalho
+        indice_qtd, indice_total, indice_unitario, indice_descricao, _ = cabecalho
         if len(celulas) <= max(indice_qtd, indice_descricao, indice_total if indice_total is not None else 0, indice_unitario if indice_unitario is not None else 0):
             continue
 
@@ -100,8 +116,8 @@ def _total_itens_tabela_tr(texto: str) -> Decimal | None:
         if any(palavra in linha_normalizada for palavra in ("valor total estimado", "total geral", "subtotal", "total dos itens")):
             cabecalho = None
             continue
-        if any(rotulo and re.search(r"\b(qtd|qtde|quantidade|quant)\b", rotulo) for rotulo in rotulos):
-            continue
+        # Cabeçalhos repetidos (quebra de página) caem no teste de quantidade numérica abaixo;
+        # uma descrição que apenas cite a palavra "quantidade" continua sendo linha de item.
 
         descricao = celulas[indice_descricao] if indice_descricao < len(celulas) else ""
         qtd = _parse_valor_documento(celulas[indice_qtd]) if indice_qtd < len(celulas) else None
@@ -132,7 +148,7 @@ def _total_explicito_tr(texto: str) -> Decimal | None:
         r"valor total da contratacao|total geral|valor global estimado)\b"
     )
     padrao_valor = re.compile(
-        r"(?i)(?:R\$\s*)?(-?\d{1,3}(?:\.\d{3})*(?:,\d{2})|-?\d+(?:[.,]\d{2}))"
+        r"(?i)(?:R\$\s*)?(-?\d{1,3}(?:\.\d{3})*(?:,\d{2})|-?\d+(?:[.,]\d{2}))(?![\d,.]*\s*%)"
     )
     for linha in str(texto or "").splitlines():
         linha_normalizada = _normalizar_rotulo_financeiro(linha)
@@ -179,7 +195,7 @@ def _calcular_valor_estimado_aproximado(
     if total_anterior is None:
         total_anterior = total_anterior_ia
     try:
-        total = total_anterior if total_anterior is not None else Decimal(str(calcular_valor_estimado(dados_usuario)))
+        total = total_anterior if total_anterior is not None else calcular_valor_estimado_decimal(dados_usuario)
     except (ArithmeticError, TypeError, ValueError):
         return ""
 
@@ -311,8 +327,13 @@ def _json_schema_fase_preparatoria() -> dict:
 
 
 def _opcoes_chamada_ia_etapa(etapa_tipo: str) -> dict:
-    """Configura saída estruturada apenas para a geração integrada da fase preparatória."""
-    if str(etapa_tipo or "").strip().casefold() != "geracao_unificada":
+    """Saída estruturada na geração integrada; sem ferramentas nas etapas puramente mecânicas."""
+    tipo = str(etapa_tipo or "").strip().casefold()
+    if tipo == "auditoria_marcas":
+        # O próprio prompt de sistema manda não pesquisar em tarefas mecânicas; desligar as
+        # ferramentas evita minutos de busca inútil numa remoção de marca.
+        return {"enable_tools": False}
+    if tipo != "geracao_unificada":
         return {}
     return {
         "response_format": _json_schema_fase_preparatoria(),
@@ -401,8 +422,66 @@ def _validar_json_unificado(resultado: dict) -> dict:
     return resultado
 
 
-def _delay(attempts: int) -> int:
-    return min(RETRY_MAX_SECONDS, RETRY_BASE_SECONDS * (2 ** max(0, attempts - 1)))
+# O pipeline chega do navegador (dados_ia.__LICITA_PIPELINE__). O servidor só aceita os tipos
+# de etapa que o próprio front gera e limita quantidade, identificadores e temperatura.
+TIPOS_ETAPA_PERMITIDOS = frozenset({
+    "auditoria_marcas", "geracao_json", "consulta_habilitacao", "geracao_unificada", "geracao_contratacao_direta",
+})
+MAX_ETAPAS = 8
+_ETAPA_ID_RE = re.compile(r"[A-Z0-9_]{1,40}")
+
+_CAMPOS_CONTRATACAO_DIRETA = (
+    "FUNDAMENTO_CONTRATACAO_DIRETA",
+    "JUSTIFICATIVA_CONTRATACAO_DIRETA",
+    "INSTRUCAO_ART72",
+    "CRITERIOS_ESCOLHA_FORNECEDOR",
+    "CONDICOES_CONTRATACAO",
+    "PUBLICIDADE_TRANSPARENCIA",
+    "CONCLUSAO_CONTRATACAO_DIRETA",
+)
+
+
+def _temperatura_valida(valor, padrao: float) -> float:
+    try:
+        numero = float(valor)
+    except (TypeError, ValueError):
+        return padrao
+    if numero != numero:  # NaN
+        return padrao
+    return min(1.5, max(0.0, numero))
+
+
+def _validar_etapas(etapas: list) -> None:
+    if len(etapas) > MAX_ETAPAS:
+        raise ErroPermanente(f"A solicitação possui etapas de IA demais ({len(etapas)}; máximo {MAX_ETAPAS}).")
+    for etapa in etapas:
+        if not isinstance(etapa, dict):
+            raise ErroPermanente("Há uma etapa de IA incompleta na fila.")
+        tipo = str(etapa.get("tipo", "geracao_json"))
+        if tipo not in TIPOS_ETAPA_PERMITIDOS:
+            raise ErroPermanente(f"Tipo de etapa de IA não permitido: {tipo[:60]!r}.")
+        if not _ETAPA_ID_RE.fullmatch(str(etapa.get("id", "")).strip().upper()):
+            raise ErroPermanente("Identificador de etapa de IA inválido.")
+
+
+def _validar_json_contratacao_direta(resultado: dict) -> dict:
+    """Exige os sete campos e descarta chaves extras (não podem sobrescrever dados fixos do documento)."""
+    resultado = _validar_json_geracao(resultado)
+    ausentes = [
+        campo for campo in _CAMPOS_CONTRATACAO_DIRETA
+        if not isinstance(resultado.get(campo), str) or not resultado[campo].strip()
+    ]
+    if ausentes:
+        raise RuntimeError("A geração da Contratação Direta não retornou os campos: " + ", ".join(ausentes) + ".")
+    return {campo: resultado[campo] for campo in _CAMPOS_CONTRATACAO_DIRETA}
+
+
+def _validar_json_pagamento_etapas(resultado: dict) -> dict:
+    resultado = _validar_json_geracao(resultado)
+    pagamento = resultado.get("PAGAMENTO")
+    if not isinstance(pagamento, str) or not pagamento.strip():
+        raise RuntimeError("A revisão do pagamento por etapas não retornou o campo PAGAMENTO.")
+    return {"PAGAMENTO": pagamento}
 
 
 def _total_itens_tr_por_ia(
@@ -451,7 +530,7 @@ def _total_itens_tr_por_ia(
             f"DOCUMENTO: {nome}\n--- INÍCIO DO TR ---\n{texto}\n--- FIM DO TR ---"
         )
         try:
-            resultado, modelo_resolvido = _chamar_ia(prompt, modelo_atual, temperatura)
+            resultado, modelo_resolvido = _chamar_ia(prompt, modelo_atual, temperatura, enable_tools=False)
             if modelo_resolvido:
                 modelo_atual = modelo_resolvido
         except Exception:
@@ -479,9 +558,9 @@ def _total_itens_tr_por_ia(
                 completo = False
                 break
 
-            quantidade = _parse_valor_documento(str(item.get("quantidade") or ""))
-            valor_unitario = _parse_valor_documento(str(item.get("valor_unitario") or ""))
-            valor_total = _parse_valor_documento(str(item.get("valor_total") or ""))
+            quantidade = _parse_valor_documento(item.get("quantidade"))
+            valor_unitario = _parse_valor_documento(item.get("valor_unitario"))
+            valor_total = _parse_valor_documento(item.get("valor_total"))
 
             if valor_total is not None:
                 subtotal = valor_total
@@ -532,26 +611,14 @@ def _adicionar_documentos_de_referencia(prompt: str, documentos: list[dict]) -> 
         )
 
     contexto = "\n\n".join(partes)
-    if len(prompt) + len(contexto) > 118_000:
-        raise RuntimeError("Os documentos de referência ultrapassam o limite de contexto disponível para a geração da IA.")
+    if len(prompt) + len(contexto) > limite_prompt_chars():
+        raise ErroPermanente("Os documentos de referência ultrapassam o limite de contexto disponível para a geração da IA.")
     # Anexos ficam antes da seção obrigatória de instruções do usuário.
     marcador_instrucoes = "INSTRUÇÕES DO USUÁRIO (OBRIGATÓRIAS"
     indice = prompt.find(marcador_instrucoes)
     if indice >= 0:
         return prompt[:indice] + contexto + "\n\n" + prompt[indice:]
     return prompt + "\n\n" + contexto
-
-
-def _remover_documentos_de_referencia(job: dict) -> None:
-    container = job.get("dados_ia")
-    if not isinstance(container, dict):
-        return
-    pipeline = container.get("__LICITA_PIPELINE__")
-    if not isinstance(pipeline, dict):
-        return
-    pipeline_limpo = dict(pipeline)
-    pipeline_limpo.pop("documentos_anteriores", None)
-    job["dados_ia"] = {**container, "__LICITA_PIPELINE__": pipeline_limpo}
 
 
 def _process_pipeline(job: dict) -> None:
@@ -562,17 +629,18 @@ def _process_pipeline(job: dict) -> None:
     container = job.get("dados_ia") if isinstance(job.get("dados_ia"), dict) else {}
     pipeline = container.get("__LICITA_PIPELINE__")
     if not isinstance(pipeline, dict):
-        raise RuntimeError("Solicitação sem pipeline de IA assíncrona; recrie a solicitação.")
+        raise ErroPermanente("Solicitação sem pipeline de IA assíncrona; recrie a solicitação.")
 
     etapas = pipeline.get("etapas")
     if not isinstance(etapas, list) or not etapas:
-        raise RuntimeError("A solicitação não possui etapas de IA válidas.")
+        raise ErroPermanente("A solicitação não possui etapas de IA válidas.")
+    _validar_etapas(etapas)
 
     dados_usuario = dict(job.get("pipeline_dados_usuario") or job.get("dados_usuario") or {})
     resultados = dict(job.get("pipeline_results") or {})
     completed = {str(item).upper() for item in job.get("completed_stages", [])}
     modelo = str(job.get("resolved_model") or pipeline.get("model") or "unsloth-auto")
-    temperatura = float(pipeline.get("temperature", 0.3))
+    temperatura = _temperatura_valida(pipeline.get("temperature"), 0.3)
     documentos_anteriores = pipeline.get("documentos_anteriores")
     if not isinstance(documentos_anteriores, list):
         documentos_anteriores = []
@@ -583,7 +651,7 @@ def _process_pipeline(job: dict) -> None:
         etapa_tipo = str(etapa.get("tipo", "geracao_json"))
         prompt = str(etapa.get("prompt", ""))
         if not etapa_id or not prompt:
-            raise RuntimeError("Há uma etapa de IA incompleta na fila.")
+            raise ErroPermanente("Há uma etapa de IA incompleta na fila.")
         if etapa_id in completed and etapa_id in resultados:
             continue
 
@@ -595,24 +663,18 @@ def _process_pipeline(job: dict) -> None:
         if etapa_tipo in {"consulta_habilitacao", "geracao_unificada", "geracao_contratacao_direta", "geracao_json"}:
             prompt_processado = _adicionar_documentos_de_referencia(prompt_processado, documentos_anteriores)
 
-        limite_prompt = max(40_000, min(118_000, int(os.getenv("LICITA_QUEUE_MAX_PROMPT_CHARS", "110000"))))
+        limite_prompt = limite_prompt_chars()
         if len(prompt_processado) > limite_prompt:
-            raise RuntimeError(
+            raise ErroPermanente(
                 f"O prompt desta etapa excede o limite seguro ({len(prompt_processado):,} caracteres; limite {limite_prompt:,})."
             )
         _checar_cancelamento(job)
         opcoes_chamada = _opcoes_chamada_ia_etapa(etapa_tipo)
+        temperatura_etapa = _temperatura_valida(etapa.get("temperature"), temperatura)
         if opcoes_chamada:
-            resultado, modelo_resolvido = _chamar_ia(
-                prompt_processado,
-                modelo,
-                float(etapa.get("temperature", temperatura)),
-                **opcoes_chamada,
-            )
+            resultado, modelo_resolvido = _chamar_ia(prompt_processado, modelo, temperatura_etapa, **opcoes_chamada)
         else:
-            resultado, modelo_resolvido = _chamar_ia(
-                prompt_processado, modelo, float(etapa.get("temperature", temperatura))
-            )
+            resultado, modelo_resolvido = _chamar_ia(prompt_processado, modelo, temperatura_etapa)
         _checar_cancelamento(job)
         if modelo_resolvido:
             modelo = modelo_resolvido
@@ -624,6 +686,10 @@ def _process_pipeline(job: dict) -> None:
         elif etapa_tipo == "geracao_unificada":
             resultado_final = _validar_json_unificado(resultado)
             resultados[etapa_id] = resultado_final
+        elif etapa_tipo == "geracao_contratacao_direta":
+            resultados[etapa_id] = _validar_json_contratacao_direta(resultado)
+        elif etapa_id == "PAGAMENTO_ETAPAS":
+            resultados[etapa_id] = _validar_json_pagamento_etapas(resultado)
         else:
             resultados[etapa_id] = _validar_json_geracao(resultado)
 
@@ -648,13 +714,24 @@ def _process_pipeline(job: dict) -> None:
                 dados_ia_final[chave] = valor
 
     total_anterior_ia = None
+    if job.get("total_anterior_ia"):
+        try:
+            total_anterior_ia = Decimal(str(job["total_anterior_ia"]))
+        except InvalidOperation:
+            total_anterior_ia = None
     possui_tr_anterior = any(
         isinstance(documento, dict)
         and str(documento.get("tipo") or "").strip().upper() == "TR"
         and str(documento.get("texto") or "").strip()
         for documento in documentos_anteriores
     )
-    if possui_tr_anterior and _extrair_total_itens_tr_anterior(documentos_anteriores) is None:
+    # A análise por IA é persistida: uma nova tentativa (ex.: falha de SMTP) não repete a chamada
+    # nem arrisca obter um valor diferente do da tentativa anterior.
+    if (
+        possui_tr_anterior
+        and not job.get("analise_valor_tr_concluida")
+        and _extrair_total_itens_tr_anterior(documentos_anteriores) is None
+    ):
         _iniciar_etapa(job, "ANALISE_VALOR_TR")
         _write_json(_job_path(job["job_id"], ".processing"), job)
         total_anterior_ia, modelo_analise = _total_itens_tr_por_ia(
@@ -663,6 +740,8 @@ def _process_pipeline(job: dict) -> None:
         if modelo_analise:
             modelo = modelo_analise
             job["resolved_model"] = modelo_analise
+        job["analise_valor_tr_concluida"] = True
+        job["total_anterior_ia"] = str(total_anterior_ia) if total_anterior_ia is not None else None
         _finalizar_etapa(job, "ANALISE_VALOR_TR", "completed")
         _write_json(_job_path(job["job_id"], ".processing"), job)
     valor_estimado_aproximado = _calcular_valor_estimado_aproximado(
@@ -759,23 +838,31 @@ def _process_one_job() -> None:
             _concluir_cancelamento(job, processing_path)
             return
         attempts = int(job.get("attempts", 1))
-        _finalizar_etapa(job, str(job.get("current_stage") or "PROCESSAMENTO"), "failed", str(exc))
-        job["last_error"] = str(exc)
+        # str() de algumas exceções (ex.: timeouts) é vazio; registre ao menos o tipo.
+        erro_texto = str(exc) or type(exc).__name__
+        permanente = isinstance(exc, ErroPermanente)
+        logger.warning(
+            "Solicitação %s falhou na tentativa %s (%s): %s",
+            job.get("job_id"), attempts, "permanente" if permanente else "transitória", erro_texto,
+            exc_info=not permanente,
+        )
+        _finalizar_etapa(job, str(job.get("current_stage") or "PROCESSAMENTO"), "failed", erro_texto)
+        job["last_error"] = erro_texto
         job["last_error_at"] = _utc_now()
         job["current_stage"] = job.get("current_stage") or "PROCESSAMENTO"
-        if attempts < MAX_ATTEMPTS:
-            _finalizar_tentativa(job, "retrying", str(exc))
+        if attempts < MAX_ATTEMPTS and not permanente:
+            _finalizar_tentativa(job, "retrying", erro_texto)
             job["status"] = "queued"
-            job["retry_at"] = (datetime.now(timezone.utc) + timedelta(seconds=_delay(attempts))).isoformat()
+            job["retry_at"] = (datetime.now(timezone.utc) + timedelta(seconds=_retry_delay_seconds(attempts))).isoformat()
             _write_json(_job_path(job["job_id"]), job)
             processing_path.unlink(missing_ok=True)
         else:
-            _finalizar_tentativa(job, "failed", str(exc))
+            _finalizar_tentativa(job, "failed", erro_texto)
             job["status"] = "failed"
             job.pop("retry_at", None)
             destinatario_alerta = SMTP_FROM or SMTP_USERNAME
             try:
-                _enviar_email_alerta_falha(job, str(exc))
+                _enviar_email_alerta_falha(job, erro_texto)
                 job["failure_notification"] = {
                     "status": "sent",
                     "recipient": destinatario_alerta,
@@ -788,22 +875,78 @@ def _process_one_job() -> None:
                     "attempted_at": _utc_now(),
                     "error": str(alert_exc)[:1000],
                 }
-                print(
-                    f"[LICITA.AI] Não foi possível enviar o alerta da solicitação "
-                    f"{job.get('job_id', 'desconhecida')} para {destinatario_alerta}: {alert_exc}",
-                    flush=True,
+                logger.error(
+                    "Não foi possível enviar o alerta da solicitação %s para %s: %s",
+                    job.get("job_id", "desconhecida"), destinatario_alerta, alert_exc,
                 )
             _write_json(_job_path(job["job_id"], ".failed"), job)
             processing_path.unlink(missing_ok=True)
             _artifact_path(job["job_id"]).unlink(missing_ok=True)
 
 
+STALE_PROCESSING_SECONDS = max(600, int(os.getenv("LICITA_QUEUE_STALE_PROCESSING_SECONDS", "3600")))
+_RECUPERACAO_A_CADA_CICLOS = 20
+
+
+def _recuperar_orfaos(agora: float | None = None) -> int:
+    """
+    Reencaminha pedidos presos em ".processing" (reinício/deploy do servidor no meio do
+    processamento). Sem isso o pedido ficava para sempre em "processando": o worker só reivindica
+    arquivos da fila, e o usuário nunca recebia e-mail nem alerta. Só age em arquivos parados há
+    mais de STALE_PROCESSING_SECONDS, para não tomar um pedido ainda em execução.
+    """
+    agora = time.time() if agora is None else agora
+    recuperados = 0
+    if not QUEUE_DIR.exists():
+        return 0
+    for caminho in list(QUEUE_DIR.glob("[0-9a-f]*.processing.json")):
+        try:
+            if agora - caminho.stat().st_mtime < STALE_PROCESSING_SECONDS:
+                continue
+            job = json.loads(caminho.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        job_id = job.get("job_id") if isinstance(job, dict) else None
+        if not isinstance(job_id, str) or not re.fullmatch(r"[0-9a-f]{32}", job_id, re.IGNORECASE):
+            continue
+        if _marcador_cancelamento(job).exists():
+            _concluir_cancelamento(job, caminho)
+            recuperados += 1
+            continue
+
+        aviso = "Processamento interrompido (reinício do servidor ou worker travado); pedido reenfileirado."
+        etapa = str(job.get("current_stage") or "PROCESSAMENTO")
+        job["last_error"] = aviso
+        job["last_error_at"] = _utc_now()
+        _finalizar_etapa(job, etapa, "failed", aviso)
+        if int(job.get("attempts", 0) or 0) < MAX_ATTEMPTS:
+            _finalizar_tentativa(job, "retrying", aviso)
+            job["status"] = "queued"
+            job.pop("retry_at", None)
+            _write_json(_job_path(job_id), job)
+        else:
+            _finalizar_tentativa(job, "failed", aviso)
+            job["status"] = "failed"
+            job.pop("retry_at", None)
+            _write_json(_job_path(job_id, ".failed"), job)
+        caminho.unlink(missing_ok=True)
+        _artifact_path(job_id).unlink(missing_ok=True)  # a próxima tentativa gera o pacote de novo
+        logger.warning("Solicitação %s recuperada de .processing órfão (status=%s).", job_id, job["status"])
+        recuperados += 1
+    return recuperados
+
+
 def _worker_loop() -> None:
+    ciclo = 0
     while True:
         try:
+            if ciclo % _RECUPERACAO_A_CADA_CICLOS == 0:
+                _recuperar_orfaos()
             _process_one_job()
         except Exception:
-            pass
+            # Nunca derrube o worker, mas também nunca engula o erro em silêncio.
+            logger.exception("Erro inesperado no worker da fila.")
+        ciclo += 1
         time.sleep(POLL_INTERVAL_SECONDS)
 
 

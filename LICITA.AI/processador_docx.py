@@ -6,19 +6,26 @@ import io
 from copy import deepcopy
 from docx import Document
 from docx.shared import RGBColor, Inches
-from docx.oxml.ns import qn
+from docx.table import _Cell
 
 PLACEHOLDER_RE = re.compile(r"\{\{\s*[^{}]+?\s*\}\}")
+# Caracteres que o XML do Word não aceita (python-docx levanta ValueError). Costumam chegar
+# em textos colados de PDF (\x0c, \x0b) ou em saídas de IA.
+_XML_INVALIDO_RE = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]")
 
 
-def _safe_color_rgb(run):
-    try:
-        color = run.font.color
-        if color.type is not None:
-            return color.rgb
-    except Exception:
-        pass
-    return None
+def _limpar_texto_xml(texto) -> str:
+    return _XML_INVALIDO_RE.sub("", str(texto))
+
+
+def _iterar_paragrafos(container):
+    """Percorre parágrafos do container e de tabelas, inclusive tabelas aninhadas em células."""
+    for paragrafo in list(getattr(container, "paragraphs", [])):
+        yield paragrafo
+    for tabela in list(getattr(container, "tables", [])):
+        for linha in list(tabela.rows):
+            for celula in list(linha.cells):
+                yield from _iterar_paragrafos(celula)
 
 
 def extrair_placeholders_documento(caminho_docx):
@@ -30,27 +37,13 @@ def extrair_placeholders_documento(caminho_docx):
 
     def iterar_blocos(blocos):
         for b in blocos:
-            for p in getattr(b, "paragraphs", []):
+            for p in _iterar_paragrafos(b):
                 coletar(p.text)
-            for t in getattr(b, "tables", []):
-                for r in t.rows:
-                    for c in r.cells:
-                        for p in c.paragraphs:
-                            coletar(p.text)
 
     iterar_blocos([doc])
     for section in doc.sections:
         iterar_blocos([section.header, section.footer])
 
-    return placeholders
-
-
-def extrair_placeholders_modelos(pasta_modelos, arquivos_base):
-    placeholders = set()
-    for arquivo in arquivos_base:
-        caminho = os.path.join(pasta_modelos, arquivo)
-        if os.path.exists(caminho):
-            placeholders.update(extrair_placeholders_documento(caminho))
     return placeholders
 
 
@@ -91,16 +84,7 @@ def _split_linear_content_for_paragraphs(linear_content):
     return paragraphs
 
 
-def _replace_in_linear_content(linear_content, old_text, new_text):
-    if not old_text:
-        return linear_content
-
-    texto_completo = "".join(segment["text"] for segment in linear_content)
-    inicio = texto_completo.find(old_text)
-    if inicio == -1:
-        return linear_content
-    fim = inicio + len(old_text)
-
+def _substituir_trecho(linear_content, inicio, fim, new_text):
     acumulado = 0
     inicio_segmento = None
     inicio_offset = 0
@@ -133,14 +117,31 @@ def _replace_in_linear_content(linear_content, old_text, new_text):
     if prefixo:
         novo.append({**segmento_inicio, "text": prefixo})
 
-    if str(new_text):
-        novo.append({**segmento_inicio, "text": str(new_text)})
+    if new_text:
+        novo.append({**segmento_inicio, "text": new_text})
 
     if sufixo:
         novo.append({**segmento_fim, "text": sufixo})
 
     novo.extend(linear_content[fim_segmento + 1:])
     return novo
+
+
+def _replace_in_linear_content(linear_content, old_text, new_text):
+    """Substitui todas as ocorrências de old_text (não apenas a primeira do parágrafo)."""
+    if not old_text:
+        return linear_content
+
+    new_text = str(new_text)
+    posicao = 0
+    while True:
+        texto_completo = "".join(segment["text"] for segment in linear_content)
+        inicio = texto_completo.find(old_text, posicao)
+        if inicio == -1:
+            return linear_content
+        linear_content = _substituir_trecho(linear_content, inicio, inicio + len(old_text), new_text)
+        # Segue depois do texto inserido: se ele contiver old_text, não entra em laço infinito.
+        posicao = inicio + len(new_text)
 
 
 def _inserir_tabela(paragraph, json_str):
@@ -160,15 +161,19 @@ def _inserir_tabela(paragraph, json_str):
             return
 
         parent = paragraph._parent
-        table = parent.add_table(rows=1, cols=len(colunas), width=Inches(6.0))
+        if isinstance(parent, _Cell):
+            # _Cell.add_table não aceita "width": usa a largura da própria célula.
+            table = parent.add_table(rows=1, cols=len(colunas))
+        else:
+            table = parent.add_table(rows=1, cols=len(colunas), width=Inches(6.0))
         table.style = "Table Grid"
         hdr_cells = table.rows[0].cells
         for i, key in enumerate(colunas):
-            hdr_cells[i].text = str(key)
+            hdr_cells[i].text = _limpar_texto_xml(key)
         for item in itens_validos:
             row_cells = table.add_row().cells
             for i, key in enumerate(colunas):
-                row_cells[i].text = str(item.get(key, ""))
+                row_cells[i].text = _limpar_texto_xml(item.get(key, ""))
         paragraph._p.addnext(table._tbl)
     except Exception as e:
         new_run = paragraph.add_run(f"[ERRO AO GERAR TABELA: {e}]")
@@ -177,6 +182,7 @@ def _inserir_tabela(paragraph, json_str):
 
 
 def _adicionar_run_preservando_formatacao(paragraph, text, original_run_data):
+    text = _limpar_texto_xml(text) if text else text
     if not text:
         return None
     new_run = paragraph.add_run()
@@ -271,13 +277,8 @@ def modificar_documento(cam_origem, cam_destino, modificacoes):
 
     def substituir_blocos(blocos):
         for b in blocos:
-            for p in getattr(b, "paragraphs", []):
+            for p in _iterar_paragrafos(b):
                 replace_text_in_paragraph(p, modificacoes)
-            for t in getattr(b, "tables", []):
-                for r in t.rows:
-                    for c in r.cells:
-                        for p in c.paragraphs:
-                            replace_text_in_paragraph(p, modificacoes)
 
     substituir_blocos([doc])
     for section in doc.sections:

@@ -19,6 +19,7 @@ from starlette.datastructures import UploadFile
 
 from documentos_contexto import MAX_CONTEXT_CHARS, extrair_contexto_documentos
 from fila import EMAIL_RE, MAX_ATTEMPTS, QUEUE_DIR, _artifact_path, _job_path, cancel_job, enqueue_job, get_job
+from fila_pipeline import limite_prompt_chars
 from fila_pipeline_unificado import iniciar_worker
 
 app = FastAPI(title="Licita.AI API")
@@ -110,8 +111,13 @@ async def _upstream_chat(base_url: str, api_key: str, payload: dict) -> tuple[di
     headers = {"Content-Type": "application/json"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
-    async with httpx.AsyncClient(timeout=180) as client:
-        response = await client.post(f"{base_url}/chat/completions", headers=headers, json=payload)
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(180, connect=10)) as client:
+            response = await client.post(f"{base_url}/chat/completions", headers=headers, json=payload)
+    except httpx.TimeoutException:
+        return {}, 504
+    except httpx.RequestError:
+        return {}, 502
     if response.status_code >= 400:
         return {}, response.status_code
     try:
@@ -176,9 +182,14 @@ async def _gerar_ia(req: IAChatRequest) -> dict:
     if status >= 400:
         if status == 429:
             raise HTTPException(status_code=429, detail="O Unsloth local está limitando as requisições no momento.")
+        if status == 504:
+            raise HTTPException(status_code=504, detail="O Unsloth local não respondeu dentro do tempo limite.")
         raise HTTPException(status_code=502, detail=f"O Unsloth local retornou HTTP {status}.")
 
     choice = (data.get("choices") or [None])[0]
+    if (choice or {}).get("finish_reason") == "length":
+        # Um JSON truncado só geraria um erro de interpretação mais adiante.
+        raise HTTPException(status_code=502, detail="A resposta da IA foi truncada por limite de tamanho. Tente novamente.")
     content = ((choice or {}).get("message") or {}).get("content")
     model = data.get("model") or payload["model"]
     if not content:
@@ -279,6 +290,23 @@ async def _ler_payload_fase_preparatoria(request: Request) -> tuple[FasePreparat
     pipeline = req.dados_ia.get("__LICITA_PIPELINE__") if isinstance(req.dados_ia, dict) else None
     if not isinstance(pipeline, dict):
         raise HTTPException(status_code=400, detail="Não foi possível associar os documentos de referência ao pipeline de IA.")
+
+    # Falha rápido, no envio, em vez de aceitar o pedido e só descobrir na fila (por e-mail de
+    # alerta) que o prompt somado aos documentos de referência ultrapassa o limite da IA.
+    etapas = pipeline.get("etapas") if isinstance(pipeline.get("etapas"), list) else []
+    maior_prompt = max((len(str(e.get("prompt", ""))) for e in etapas if isinstance(e, dict)), default=0)
+    caracteres_documentos = sum(len(str(item.get("texto", ""))) + 200 for item in contexto["documentos"])
+    limite = limite_prompt_chars()
+    excesso = maior_prompt + caracteres_documentos - limite
+    if excesso > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Os documentos de referência, somados às instruções da geração, ultrapassam o limite de "
+                f"contexto da IA. Reduza os documentos em pelo menos {excesso:,} caracteres "
+                "(por exemplo, anexando apenas as páginas necessárias).".replace(",", ".")
+            ),
+        )
 
     dados_ia = dict(req.dados_ia)
     pipeline_atualizado = dict(pipeline)

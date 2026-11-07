@@ -1,5 +1,3 @@
-import { gerarTextoIA } from '../llm';
-
 const STAGE_CHAVES: Record<string, string[]> = {
     "DFD": [
         "OBJETO", "TIPO_OBJ", "JUSTIFICATIVA", "ESTIMATIVA_QUANTIDADES", "RESULTADOS_ESPERADOS"
@@ -199,7 +197,7 @@ ${diretrizExecucao}`;
     const restricoesJSON = `ATENÇÃO - REGRAS RÍGIDAS DE SAÍDA:
 1. Você deve retornar EXCLUSIVAMENTE um objeto JSON válido. Não adicione nenhum texto explicativo, saudações ou comentários antes ou depois do JSON.
 2. NÃO USE marcadores de bloco de código (como \`\`\`json ou \`\`\`). Retorne o JSON diretamente em formato de texto puro.
-3. ESCAPE DE QUEBRAS DE LINHA: O JSON não suporta quebras de linha literais dentro de strings. Para representar quebras de linha, use a sequência JSON \n (uma única barra invertida seguida da letra n). Depois que o JSON for decodificado, o campo deve conter uma quebra de linha real, nunca os caracteres literais barra invertida e n.
+3. ESCAPE DE QUEBRAS DE LINHA: O JSON não suporta quebras de linha literais dentro de strings. Para representar quebras de linha, use a sequência JSON \\n (uma única barra invertida seguida da letra n). Depois que o JSON for decodificado, o campo deve conter uma quebra de linha real, nunca os caracteres literais barra invertida e n.
 4. Nenhuma chave do JSON pode estar vazia.`;
     const dadosMarcados = usarMarcadorDados
         ? `\n\nDADOS DA CONTRATAÇÃO (JSON; fonte factual para itens, quantidades e valores):\n__LICITA_PIPE_DADOS_USUARIO__`
@@ -211,16 +209,4 @@ ${diretrizExecucao}`;
         ? `\n\nLEMBRETE OBRIGATÓRIO: aplique integralmente as INSTRUÇÕES DO USUÁRIO acima, preserve os dados concretos e não invente fatos.`
         : "";
     return `${regrasGerais}\n\n${basePrompt}${dadosMarcados}${instrucoesObrigatorias}\n\n${diretrizEtapa}\n\nREGRAS MÍNIMAS OBRIGATÓRIAS DE TAMANHO E PROFUNDIDADE:\n${regrasMinimas}${lembreteFinal}\n\nESTRUTURA JSON OBRIGATÓRIA:\n${chaves}\n\n${restricoesJSON}`;
-}
-
-export async function processarDadosIA(
-    dadosUsuario: Record<string, string>,
-    apiKey: string,
-    provider: string,
-    meeppExclusivo: boolean,
-    etapa: string,
-    modelo: string
-): Promise<Record<string, string>> {
-    const prompt = construirPrompt(dadosUsuario, meeppExclusivo, etapa);
-    return await gerarTextoIA(prompt, apiKey, modelo);
 }

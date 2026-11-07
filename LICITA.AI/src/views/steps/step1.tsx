@@ -162,7 +162,7 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
   const aplicarImportacaoItens = (importados: any[], anexar: boolean) => {
     const atuais = itensRef.current;
     const resultado = anexar ? [...atuais, ...importados] : importados;
-    atualizarDados((anterior: any) => ({ itens: renumerarItens(resultado) }));
+    atualizarDados(() => ({ itens: renumerarItens(resultado) }));
     setImportacaoPendente(null);
     showToast(
       `${importados.length} itens ${anexar ? "acrescentados ao final" : "importados"}; total atual: ${resultado.length}.`,
@@ -340,7 +340,7 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
         required
         rows={1}
         value={objeto}
-        onChange={(e) => atualizarDados((anterior: any) => ({ objeto: e.target.value }))}
+        onChange={(e) => atualizarDados(() => ({ objeto: e.target.value }))}
         aria-invalid={erroObjeto || undefined}
         aria-describedby={erroObjeto ? "erro-objeto" : undefined}
         style={{ padding: 12, borderRadius: "var(--radius-lg)", borderColor: erroObjeto ? "var(--btn-danger)" : "var(--input-border)", resize: "none" }}
@@ -350,7 +350,7 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
     <section className="step-section item-intro-section">
       <label style={{ fontWeight: 600, fontSize: 16, display: "block", marginBottom: 8 }}>Justificativa da Demanda: <span style={{ color: "var(--btn-danger)" }}>*</span></label>
       <p style={{ color: "var(--text-muted)", fontSize: 13, margin: "0 0 12px" }}>Descreva brevemente a justificativa da demanda.</p>
-      <textarea required value={necessidade} onChange={(e) => atualizarDados((anterior: any) => ({ necessidade: e.target.value }))} aria-invalid={erroNecessidade || undefined}
+      <textarea required value={necessidade} onChange={(e) => atualizarDados(() => ({ necessidade: e.target.value }))} aria-invalid={erroNecessidade || undefined}
       aria-describedby={erroNecessidade ? "erro-necessidade" : undefined}
       style={{ padding: 12, borderRadius: "var(--radius-lg)", borderColor: erroNecessidade ? "var(--btn-danger)" : "var(--input-border)", minHeight: 120, resize: "vertical" }} />
       {erroNecessidade && <small id="erro-necessidade" className="wizard-field-error">Informe a justificativa da demanda.</small>}

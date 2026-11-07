@@ -9,6 +9,9 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
+
+import httpx
 
 TEST_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(TEST_ROOT))
@@ -115,6 +118,63 @@ class LicitaBackendTests(unittest.TestCase):
         self.assertEqual(len(documentos), 1)
         self.assertEqual(documentos[0]["tipo"], "DFD")
         self.assertIn("Objeto anterior usado como referência", documentos[0]["texto"])
+
+    def test_endpoint_rejeita_no_envio_documentos_que_estouram_o_contexto(self):
+        documento = Document()
+        documento.add_paragraph("DOCUMENTO DE FORMALIZAÇÃO DA DEMANDA")
+        documento.add_paragraph("Texto de referência. " * 400)
+        buffer = BytesIO()
+        documento.save(buffer)
+        payload = {
+            "email": "teste-contexto@example.com",
+            "dados_ia": {"__LICITA_PIPELINE__": {
+                "etapas": [{"id": "FASE_PREPARATORIA", "tipo": "geracao_unificada", "prompt": "x" * 105_000}],
+            }},
+            "dados_usuario": {"{{OBJETO}}": "Objeto atual"},
+        }
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/gerar-fase-preparatoria",
+                data={"payload": json.dumps(payload)},
+                files={"dfd": ("DFD.docx", buffer.getvalue(), "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+            )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("ultrapassam o limite", response.json()["detail"])
+        self.assertEqual(list(QUEUE_DIR.glob("[0-9a-f]*.json")), [])
+
+    def test_chat_ia_converte_timeout_do_provedor_em_504(self):
+        class ClienteComTimeout:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+            async def post(self, *args, **kwargs):
+                raise httpx.ReadTimeout("")
+
+        with (
+            patch.object(main, "API_UNSLOTH_URL", "http://unsloth.test/v1"),
+            patch.object(main.httpx, "AsyncClient", ClienteComTimeout),
+            TestClient(app) as client,
+        ):
+            response = client.post("/api/ia/chat", json={"prompt": "olá", "model": "unsloth-auto"})
+        self.assertEqual(response.status_code, 504)
+        self.assertIn("tempo limite", response.json()["detail"])
+
+    def test_chat_ia_recusa_resposta_truncada(self):
+        truncada = ({"choices": [{"finish_reason": "length", "message": {"content": '{"A":'}}]}, 200)
+        with (
+            patch.object(main, "API_UNSLOTH_URL", "http://unsloth.test/v1"),
+            patch.object(main, "_upstream_chat", return_value=truncada),
+            TestClient(app) as client,
+        ):
+            response = client.post("/api/ia/chat", json={"prompt": "olá", "model": "unsloth-auto"})
+        self.assertEqual(response.status_code, 502)
+        self.assertIn("truncada", response.json()["detail"])
 
     def test_endpoint_agenda_e_consulta_job(self):
         payload = {
