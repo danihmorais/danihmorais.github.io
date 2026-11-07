@@ -15,7 +15,7 @@ from email.message import EmailMessage
 from pathlib import Path
 
 import config
-from montador_variaveis import filtrar_chaves_docx, montar_variaveis_fixas, validar_consistencia_dados
+from montador_variaveis import filtrar_chaves_docx, formatar_moeda, montar_variaveis_fixas, total_linha_item, valor_decimal, validar_consistencia_dados
 from processador_docx import modificar_documento
 
 EMAIL_RE = re.compile(r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}", re.IGNORECASE)
@@ -150,9 +150,7 @@ def _valor_vazio(valor) -> bool:
 
 
 def _formata_moeda(v) -> str:
-    s = f"{v:,.2f}"
-    s = s.replace(",", "X").replace(".", ",").replace("X", ".")
-    return f"R$ {s}"
+    return formatar_moeda(v)
 
 
 def _normalizar_quebras_escapadas(texto: str) -> str:
@@ -260,15 +258,8 @@ def gerar_zip(dados_usuario: dict, dados_ia: dict, session_id: str) -> tuple[Pat
                 itens_formatados = []
                 itens_sem_valor = []
                 for item in itens:
-                    try:
-                        valor_unit = float(item.get("valor", 0))
-                    except (ValueError, TypeError):
-                        valor_unit = 0.0
-                    try:
-                        qtd = float(item.get("qtd", 0))
-                    except (ValueError, TypeError):
-                        qtd = 0.0
-                    total = valor_unit * qtd
+                    valor_unit = valor_decimal(item.get("valor", 0))
+                    total = total_linha_item(item)
                     itens_formatados.append({"Item": item.get("numero", ""), "Descrição": item.get("descricao", ""), "UN": item.get("un", ""), "Qtd": item.get("qtd", ""), "Vlr Unit.": _formata_moeda(valor_unit), "Total": _formata_moeda(total)})
                     itens_sem_valor.append({"Item": item.get("numero", ""), "Descrição": item.get("descricao", ""), "UN": item.get("un", ""), "Qtd": item.get("qtd", "")})
                 modificacoes["{{ITENS}}"] = f"__TABLE__{json.dumps(itens_formatados, ensure_ascii=False)}"

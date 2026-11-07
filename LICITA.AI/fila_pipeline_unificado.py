@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 from fila import MAX_ATTEMPTS, POLL_INTERVAL_SECONDS, QUEUE_DIR, RETRY_BASE_SECONDS, RETRY_MAX_SECONDS, SMTP_FROM, SMTP_USERNAME, _artifact_path, _claim_next_job, _enviar_email, _enviar_email_alerta_falha, _finalizar_etapa, _finalizar_tentativa, _iniciar_etapa, _job_path, _write_json, gerar_zip
 from fila_pipeline import _aplicar_auditoria_marcas, _chamar_ia as _chamar_ia_primaria, _substituir_contextos, _validar_json_geracao
-from montador_variaveis import calcular_valor_estimado
+from montador_variaveis import calcular_valor_estimado_decimal
 
 
 class JobCancelado(Exception):
@@ -32,13 +32,29 @@ def _normalizar_rotulo_financeiro(valor: str) -> str:
     return re.sub(r"\s+", " ", texto.casefold()).strip()
 
 
-def _parse_valor_documento(valor: str) -> Decimal | None:
-    """Converte valores monetários brasileiros ou decimais extraídos de tabelas."""
+def _parse_valor_documento(valor) -> Decimal | None:
+    """
+    Converte valores monetários de tabelas/documentos. Números já tipados (JSON) são
+    usados como estão: "2.125" em texto é 2125 (milhar brasileiro), mas o número
+    JSON 2.125 vale dois reais e doze centavos.
+    """
+    if isinstance(valor, bool):
+        return None
+    if isinstance(valor, (int, float, Decimal)):
+        try:
+            numero = Decimal(str(valor))
+        except InvalidOperation:
+            return None
+        return numero if numero.is_finite() and numero > 0 else None
+
     texto = re.sub(r"[^0-9,.-]", "", str(valor or ""))
     if not texto or not re.search(r"\d", texto):
         return None
 
-    if "," in texto:
+    if "," in texto and "." in texto and texto.rfind(".") > texto.rfind(","):
+        # Formato 1,234.56: vírgula de milhar e ponto decimal.
+        texto = texto.replace(",", "")
+    elif "," in texto:
         # No padrão brasileiro, a vírgula é o separador decimal.
         texto = texto.replace(".", "").replace(",", ".")
     elif texto.count(".") > 1:
@@ -100,8 +116,8 @@ def _total_itens_tabela_tr(texto: str) -> Decimal | None:
         if any(palavra in linha_normalizada for palavra in ("valor total estimado", "total geral", "subtotal", "total dos itens")):
             cabecalho = None
             continue
-        if any(rotulo and re.search(r"\b(qtd|qtde|quantidade|quant)\b", rotulo) for rotulo in rotulos):
-            continue
+        # Cabeçalhos repetidos (quebra de página) caem no teste de quantidade numérica abaixo;
+        # uma descrição que apenas cite a palavra "quantidade" continua sendo linha de item.
 
         descricao = celulas[indice_descricao] if indice_descricao < len(celulas) else ""
         qtd = _parse_valor_documento(celulas[indice_qtd]) if indice_qtd < len(celulas) else None
@@ -132,7 +148,7 @@ def _total_explicito_tr(texto: str) -> Decimal | None:
         r"valor total da contratacao|total geral|valor global estimado)\b"
     )
     padrao_valor = re.compile(
-        r"(?i)(?:R\$\s*)?(-?\d{1,3}(?:\.\d{3})*(?:,\d{2})|-?\d+(?:[.,]\d{2}))"
+        r"(?i)(?:R\$\s*)?(-?\d{1,3}(?:\.\d{3})*(?:,\d{2})|-?\d+(?:[.,]\d{2}))(?![\d,.]*\s*%)"
     )
     for linha in str(texto or "").splitlines():
         linha_normalizada = _normalizar_rotulo_financeiro(linha)
@@ -179,7 +195,7 @@ def _calcular_valor_estimado_aproximado(
     if total_anterior is None:
         total_anterior = total_anterior_ia
     try:
-        total = total_anterior if total_anterior is not None else Decimal(str(calcular_valor_estimado(dados_usuario)))
+        total = total_anterior if total_anterior is not None else calcular_valor_estimado_decimal(dados_usuario)
     except (ArithmeticError, TypeError, ValueError):
         return ""
 
@@ -479,9 +495,9 @@ def _total_itens_tr_por_ia(
                 completo = False
                 break
 
-            quantidade = _parse_valor_documento(str(item.get("quantidade") or ""))
-            valor_unitario = _parse_valor_documento(str(item.get("valor_unitario") or ""))
-            valor_total = _parse_valor_documento(str(item.get("valor_total") or ""))
+            quantidade = _parse_valor_documento(item.get("quantidade"))
+            valor_unitario = _parse_valor_documento(item.get("valor_unitario"))
+            valor_total = _parse_valor_documento(item.get("valor_total"))
 
             if valor_total is not None:
                 subtotal = valor_total
