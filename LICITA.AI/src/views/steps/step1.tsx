@@ -68,7 +68,7 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
       return;
     }
 
-    atualizarDados(() => {
+    atualizarDados((anterior: any) => {
       const lotesAnteriores = obterLotes(anterior);
       const novosLotes = loteEmEdicao.novo
         ? [...lotesAnteriores, { id: loteEmEdicao.id, nome }]
@@ -88,7 +88,7 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
   const excluirLote = () => {
     if (!loteParaExcluir) return;
     const removido = loteParaExcluir;
-    atualizarDados(() => {
+    atualizarDados((anterior: any) => {
       const lotesAnteriores = obterLotes(anterior);
       const lotesRestantes = lotesAnteriores.filter((lote: any) => lote.id !== removido.id);
       const itensAtualizados = (anterior.itens || []).map((item: any) => {
@@ -110,7 +110,7 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
   };
 
   const atribuirItemALote = (itemId: any, loteId: string, itemIndex: number) => {
-    atualizarDados(() => {
+    atualizarDados((anterior: any) => {
       const lotesAtuais = obterLotes(anterior);
       const loteSelecionado = lotesAtuais.find((lote: any) => lote.id === loteId);
       const itensAtualizados = (anterior.itens || []).map((item: any, index: number) => {
@@ -137,21 +137,21 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
   const renumerarItens = (lista: any[]) => lista.map((item, index) => ({ ...item, numero: index + 1 }));
 
   const atualizarItem = (id: any, campo: string, valor: any) => {
-    atualizarDados(() => ({
+    atualizarDados((anterior: any) => ({
       itens: (anterior.itens || []).map((item: any) => item.id === id ? { ...item, [campo]: valor } : item),
     }));
   };
 
-  const adicionarItem = () => atualizarDados(() => {
+  const adicionarItem = () => atualizarDados((anterior: any) => {
     const atuais = anterior.itens || [];
     return { itens: [...atuais, { id: Date.now() + Math.random(), numero: atuais.length + 1, descricao: "", un: "UN", qtd: 1, valor: 0 }] };
   });
 
-  const removerItem = (id: any) => atualizarDados(() => ({
+  const removerItem = (id: any) => atualizarDados((anterior: any) => ({
     itens: renumerarItens((anterior.itens || []).filter((item: any) => item.id !== id)),
   }));
 
-  const moverItem = (index: number, direcao: number) => atualizarDados(() => {
+  const moverItem = (index: number, direcao: number) => atualizarDados((anterior: any) => {
     const novosItens = [...(anterior.itens || [])];
     const novoIndex = index + direcao;
     if (novoIndex < 0 || novoIndex >= novosItens.length) return {};
@@ -192,7 +192,7 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
         apiKey,
         modelo,
       );
-      atualizarDados(() => ({
+      atualizarDados((anterior: any) => ({
         itens: (anterior.itens || []).map((itemAtual: any) =>
           itemAtual.id === item.id
             ? { ...itemAtual, descricao: melhoria.descricao, un: melhoria.unidade }
@@ -318,7 +318,7 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
         id: Date.now() + Math.random() + index,
       }));
       decidirImportacaoItens(itensImportados);
-      if (!objetoAtual && objetoPdf) atualizarDados(() => ({ objeto: anterior.objeto?.trim() ? anterior.objeto : objetoPdf }));
+      if (!objetoAtual && objetoPdf) atualizarDados((anterior: any) => ({ objeto: anterior.objeto?.trim() ? anterior.objeto : objetoPdf }));
     } catch (erro: any) {
       console.error("Erro ao importar cotação PDF:", erro);
       showToast(`Erro ao importar cotação PDF: ${erro?.message || "arquivo inválido"}`, "error");
