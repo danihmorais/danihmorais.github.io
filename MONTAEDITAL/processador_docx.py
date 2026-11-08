@@ -816,41 +816,75 @@ def preencher_documento(caminho_modelo: str, caminho_saida: str, dados: dict) ->
     return caminho_saida
 
 def _substituir_texto_mantendo_formatacao(paragrafo, marcador, valor_str):
-    if marcador not in paragrafo.text:
+    """
+    Substitui um marcador em todos os nós de texto do parágrafo, preservando
+    a formatação dos runs.
+
+    É importante percorrer os elementos w:t diretamente: Paragraph.text inclui
+    textos dentro de hyperlinks, mas Paragraph.runs retorna apenas os runs
+    diretamente filhos do parágrafo. Misturar os offsets dessas duas
+    representações pode inserir a data no lugar errado e deixar parte do
+    marcador original no documento.
+    """
+    if not marcador:
         return False
-    texto_p = paragrafo.text
-    idx_inicio = texto_p.find(marcador)
-    while idx_inicio != -1:
-        idx_fim = idx_inicio + len(marcador)
-        pos_atual = 0
-        runs_envolvidos = []
-        for run in paragrafo.runs:
-            texto_run = run.text
-            len_run = len(texto_run)
-            pos_fim_run = pos_atual + len_run
-            if pos_fim_run > idx_inicio and pos_atual < idx_fim:
-                runs_envolvidos.append({
-                    'run': run,
-                    'inicio_run': pos_atual,
-                    'fim_run': pos_fim_run,
-                    'texto_original': texto_run
-                })
-            pos_atual = pos_fim_run
-        if runs_envolvidos:
-            for j, info in enumerate(runs_envolvidos):
-                run = info['run']
-                txt = info['texto_original']
-                inicio_intersecao = max(0, idx_inicio - info['inicio_run'])
-                fim_intersecao = min(len(txt), idx_fim - info['inicio_run'])
-                prefixo = txt[:inicio_intersecao]
-                sufixo = txt[fim_intersecao:]
-                if j == 0:
-                    run.text = prefixo + valor_str + sufixo
-                else:
-                    run.text = prefixo + sufixo
-        texto_p = paragrafo.text
-        idx_inicio = texto_p.find(marcador)
-    return True
+
+    valor_str = str(valor_str)
+
+    def _definir_texto(no_texto, texto):
+        no_texto.text = texto
+        atributo_xml_space = "{http://www.w3.org/XML/1998/namespace}space"
+        if texto.startswith(" ") or texto.endswith(" "):
+            no_texto.set(atributo_xml_space, "preserve")
+        else:
+            no_texto.attrib.pop(atributo_xml_space, None)
+
+    substituiu = False
+    inicio_busca = 0
+
+    while True:
+        nos_texto = []
+        partes_texto = []
+        posicao = 0
+
+        # Inclui runs comuns, hyperlinks e demais estruturas aninhadas do
+        # parágrafo, sempre na mesma ordem em que o Word apresenta o texto.
+        for no_texto in paragrafo._p.iter(qn("w:t")):
+            texto_original = no_texto.text or ""
+            fim = posicao + len(texto_original)
+            nos_texto.append((no_texto, texto_original, posicao, fim))
+            partes_texto.append(texto_original)
+            posicao = fim
+
+        texto_paragrafo = "".join(partes_texto)
+        inicio = texto_paragrafo.find(marcador, inicio_busca)
+        if inicio < 0:
+            break
+
+        fim_marcador = inicio + len(marcador)
+        primeiro_no = True
+
+        for no_texto, texto_original, inicio_no, fim_no in nos_texto:
+            if fim_no <= inicio or inicio_no >= fim_marcador:
+                continue
+
+            inicio_local = max(0, inicio - inicio_no)
+            fim_local = min(len(texto_original), fim_marcador - inicio_no)
+            texto_substituto = valor_str if primeiro_no else ""
+
+            _definir_texto(
+                no_texto,
+                texto_original[:inicio_local]
+                + texto_substituto
+                + texto_original[fim_local:],
+            )
+            primeiro_no = False
+
+        substituiu = True
+        # Não procura novamente dentro do valor recém-inserido.
+        inicio_busca = inicio + len(valor_str)
+
+    return substituiu
 
 def _aplicar_formatacao_markdown_avancado(paragrafo):
     if "***" not in paragrafo.text and "**" not in paragrafo.text:
