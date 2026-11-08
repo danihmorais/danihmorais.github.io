@@ -12,6 +12,7 @@ from docx.shared import Inches
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.text.paragraph import Paragraph
+from docx.text.run import Run
 from docx.opc.part import Part
 from docx.opc.packuri import PackURI
 from lxml import etree
@@ -815,16 +816,25 @@ def preencher_documento(caminho_modelo: str, caminho_saida: str, dados: dict) ->
         
     return caminho_saida
 
+def _runs_do_paragrafo(paragrafo):
+    """Todos os runs do parágrafo em ordem de documento, inclusive os que estão
+    dentro de <w:hyperlink>. `paragrafo.runs` (python-docx) ignora os hyperlinks,
+    enquanto `paragrafo.text` os inclui; misturar os dois desloca os offsets."""
+    return [Run(r, paragrafo) for r in paragrafo._p.xpath('.//w:r')]
+
+def _texto_dos_runs(paragrafo):
+    return "".join(r.text for r in _runs_do_paragrafo(paragrafo))
+
 def _substituir_texto_mantendo_formatacao(paragrafo, marcador, valor_str):
-    if marcador not in paragrafo.text:
+    texto_p = _texto_dos_runs(paragrafo)
+    if marcador not in texto_p:
         return False
-    texto_p = paragrafo.text
     idx_inicio = texto_p.find(marcador)
     while idx_inicio != -1:
         idx_fim = idx_inicio + len(marcador)
         pos_atual = 0
         runs_envolvidos = []
-        for run in paragrafo.runs:
+        for run in _runs_do_paragrafo(paragrafo):
             texto_run = run.text
             len_run = len(texto_run)
             pos_fim_run = pos_atual + len_run
@@ -848,7 +858,7 @@ def _substituir_texto_mantendo_formatacao(paragrafo, marcador, valor_str):
                     run.text = prefixo + valor_str + sufixo
                 else:
                     run.text = prefixo + sufixo
-        texto_p = paragrafo.text
+        texto_p = _texto_dos_runs(paragrafo)
         idx_inicio = texto_p.find(marcador)
     return True
 
@@ -888,12 +898,12 @@ def _aplicar_formatacao_markdown_avancado(paragrafo):
                 pass
 
 def _inserir_multilinhas_safe(paragrafo, marcador, valor_str):
-    texto_p = paragrafo.text
+    texto_p = _texto_dos_runs(paragrafo)
     idx_inicio = texto_p.find(marcador)
     rPr_base = None
     if idx_inicio != -1:
         pos_atual = 0
-        for run in paragrafo.runs:
+        for run in _runs_do_paragrafo(paragrafo):
             len_run = len(run.text)
             if pos_atual + len_run > idx_inicio:
                 if run._element.rPr is not None:
