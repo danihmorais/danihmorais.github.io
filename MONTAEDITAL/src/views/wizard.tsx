@@ -48,6 +48,7 @@ export default function Wizard() {
     pagamento: "",
     retirada: "",
     valor: "",
+    orcamentoSigiloso: false,
     exclusivo: "NAO",
     dataAutorizacao: "",
     secretaria: "",
@@ -297,7 +298,7 @@ function numeroProcessoValido(valor: string): boolean {
 
         return !!(
           dados.vigencia &&
-          dados.valor &&
+          (dados.orcamentoSigiloso || dados.valor) &&
           dados.exclusivo &&
           dados.pagamento &&
           dados.prorrogacaoCheck &&
