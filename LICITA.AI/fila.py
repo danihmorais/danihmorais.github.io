@@ -167,6 +167,31 @@ def _normalizar_quebras_escapadas(texto: str) -> str:
     return _QUEBRA_ESCAPADA_RE.sub("\n", texto)
 
 
+def _remover_barras_finais_paragrafos(texto: str) -> str:
+    """Remove barras isoladas no fim das linhas, preservando URLs terminadas em barra."""
+    linhas = []
+    for linha in texto.splitlines(keepends=True):
+        if linha.endswith("\r\n"):
+            conteudo, quebra = linha[:-2], "\r\n"
+        elif linha.endswith(("\n", "\r")):
+            conteudo, quebra = linha[:-1], linha[-1]
+        else:
+            conteudo, quebra = linha, ""
+
+        conteudo = conteudo.rstrip(" \t")
+        if conteudo.endswith("/") and not re.search(
+            r"(?i)(?:\b(?:https?|ftp)://|\bwww\.)\S+/$", conteudo
+        ):
+            conteudo = conteudo[:-1].rstrip(" \t")
+        linhas.append(conteudo + quebra)
+    return "".join(linhas)
+
+
+def _normalizar_texto_gerado(texto: str) -> str:
+    """Normaliza quebras escapadas e remove separadores '/' espúrios no fim dos parágrafos."""
+    return _remover_barras_finais_paragrafos(_normalizar_quebras_escapadas(texto))
+
+
 def _canonical_placeholder(chave: str) -> str:
     nome = chave.strip().strip("{}").strip()
     return f"{{{{{nome}}}}}"
@@ -253,7 +278,7 @@ def gerar_zip(dados_usuario: dict, dados_ia: dict, session_id: str) -> tuple[Pat
             if chave_docx == "{{PAGAMENTO}}" and pagamento_tipo != "POR_ETAPAS":
                 continue
             modificacoes[chave_docx] = (
-                _normalizar_quebras_escapadas(valor)
+                _normalizar_texto_gerado(valor)
                 if isinstance(valor, str) and not valor.startswith("__TABLE__")
                 else valor
             )
