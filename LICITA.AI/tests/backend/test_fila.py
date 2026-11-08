@@ -44,6 +44,22 @@ class FilaTests(unittest.TestCase):
                 finally:
                     shutil.rmtree(caminho_zip.parent, ignore_errors=True)
 
+    def test_remove_barras_soltas_no_fim_dos_paragrafos_sem_alterar_barras_legitimas(self):
+        texto = (
+            "Primeiro parágrafo. /\n"
+            "Segundo parágrafo/\n"
+            "Uso de e/ou e referência 14/2026.\n"
+            "https://exemplo.gov.br/\n"
+        )
+
+        self.assertEqual(
+            fila._normalizar_texto_gerado(texto),
+            "Primeiro parágrafo.\n"
+            "Segundo parágrafo\n"
+            "Uso de e/ou e referência 14/2026.\n"
+            "https://exemplo.gov.br/\n",
+        )
+
     def test_resolve_placeholders_suporta_cadeias_maiores_que_tres_niveis(self):
         modificacoes = {
             "{{A}}": "{{B}}",
