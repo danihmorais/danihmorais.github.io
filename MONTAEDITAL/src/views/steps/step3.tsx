@@ -69,19 +69,71 @@ export default function Step3({ dados, atualizarDados }: any) {
 
         <div className="wiz-grid-2" style={{ marginBottom: "16px" }}>
           <div className="wiz-field">
-            <label className="wiz-label">
-              Valor Estimado <span className="req-star">*</span>
-            </label>
-            <div className="wiz-prefix-wrap">
-              <input
-                type="text"
-                className="wiz-input"
-                style={{ paddingLeft: "12px" }}
-                value={dados.valor || ""}
-                onChange={handleValorChange}
-                placeholder="R$ 0,00"
-              />
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: "8px 12px",
+                marginBottom: "6px",
+              }}
+            >
+              <label className="wiz-label" style={{ marginBottom: 0 }}>
+                Valor Estimado {!dados.orcamentoSigiloso && <span className="req-star">*</span>}
+              </label>
+              <label
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "7px",
+                  color: "var(--wiz-text-2)",
+                  fontSize: "12.5px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={!!dados.orcamentoSigiloso}
+                  onChange={(e) => atualizarDados({ orcamentoSigiloso: e.target.checked })}
+                  style={{
+                    width: "15px",
+                    height: "15px",
+                    margin: 0,
+                    accentColor: "var(--wiz-accent)",
+                  }}
+                />
+                Orçamento Sigiloso
+              </label>
             </div>
+            {dados.orcamentoSigiloso ? (
+              <div
+                className="wiz-input"
+                aria-label="Valor estimado"
+                aria-readonly="true"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  color: "var(--wiz-text-2)",
+                  cursor: "default",
+                }}
+              >
+                Orçamento Sigiloso
+              </div>
+            ) : (
+              <div className="wiz-prefix-wrap">
+                <input
+                  type="text"
+                  className="wiz-input"
+                  style={{ paddingLeft: "12px" }}
+                  value={dados.valor || ""}
+                  onChange={handleValorChange}
+                  placeholder="R$ 0,00"
+                />
+              </div>
+            )}
           </div>
 
           {!isLeilao && (
