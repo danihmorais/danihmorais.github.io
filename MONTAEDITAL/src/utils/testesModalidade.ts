@@ -131,6 +131,7 @@ export function criarDadosTeste(modalidade: ModalidadeTeste) {
         ? "Pátio Municipal de São Francisco-SP, em data e horário previamente agendados, após a confirmação do pagamento."
         : "",
     valor: "R$ 12.500,00",
+    orcamentoSigiloso: false,
     exclusivo: "NAO",
     dataAutorizacao,
     secretaria: "Diversos",
