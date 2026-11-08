@@ -9,6 +9,7 @@ from docx.shared import RGBColor, Inches
 from docx.table import _Cell
 
 PLACEHOLDER_RE = re.compile(r"\{\{\s*[^{}]+?\s*\}\}")
+_TITULO_NUMERADO_RE = re.compile(r"^\s*\d+(?:\.\d+)*\s*(?:[.)\-–—:]|\s)\s*\S")
 # Caracteres que o XML do Word não aceita (python-docx levanta ValueError). Costumam chegar
 # em textos colados de PDF (\x0c, \x0b) ou em saídas de IA.
 _XML_INVALIDO_RE = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]")
@@ -121,6 +122,18 @@ def _substituir_trecho(linear_content, inicio, fim, new_text):
         novo.append({**segmento_inicio, "text": new_text})
 
     if sufixo:
+        # O modelo do TR pode manter o próximo título numerado no mesmo parágrafo
+        # do placeholder. A substituição deve encerrar o bloco antes desse título,
+        # mesmo quando o texto gerado não termina com "\n".
+        sufixo_sem_espacos = sufixo.lstrip(" \t")
+        if _TITULO_NUMERADO_RE.match(sufixo_sem_espacos):
+            if (
+                new_text
+                and not new_text.endswith(("\n", "\r"))
+                and not sufixo_sem_espacos.startswith(("\n", "\r"))
+            ):
+                novo.append({**segmento_inicio, "text": "\n"})
+            sufixo = sufixo_sem_espacos
         novo.append({**segmento_fim, "text": sufixo})
 
     novo.extend(linear_content[fim_segmento + 1:])
