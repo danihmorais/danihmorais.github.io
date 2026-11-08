@@ -88,6 +88,24 @@ class ProcessadorDocxTests(unittest.TestCase):
         self.assertNotIn("<w:br", doc.paragraphs[0]._p.xml)
         self.assertNotIn("<w:br", doc.paragraphs[1]._p.xml)
 
+    def test_titulo_numerado_apos_texto_substituido_fica_em_paragrafo_proprio(self):
+        doc = Document()
+        paragraph = doc.add_paragraph("13. DO PAGAMENTO {{CHAVE}} 14. DA VIGÊNCIA")
+
+        replace_text_in_paragraph(
+            paragraph,
+            {"{{CHAVE}}": "Primeiro parágrafo gerado.\nSegundo parágrafo gerado."},
+        )
+
+        self.assertEqual(
+            [p.text for p in doc.paragraphs],
+            [
+                "13. DO PAGAMENTO Primeiro parágrafo gerado.",
+                "Segundo parágrafo gerado.",
+                "14. DA VIGÊNCIA",
+            ],
+        )
+
     def test_quebras_consecutivas_nao_criam_paragrafos_vazios(self):
         doc = Document()
         paragraph = doc.add_paragraph("{{CHAVE}}")
