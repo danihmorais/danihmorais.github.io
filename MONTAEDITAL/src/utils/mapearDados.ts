@@ -103,7 +103,7 @@ export const mapearDadosWizard = async (dados: any) => {
         "{{DATA REC PROP1}}": dados.dataRecProp1 || "",
         "{{HORA SESSAO}}": dados.horaSessao || "",
         "{{HORA_SESSAO}}": dados.horaSessao || "",
-        "{{VALOR}}": dados.valor || "",
+        "{{VALOR}}": dados.orcamentoSigiloso ? "Orçamento Sigiloso" : (dados.valor || ""),
         "{{EXCLUSIVO}}": dados.exclusivo || "NAO",
         "{{ITENS}}": itensFormatado,
         "{{LOTE2}}": lotesFormatado,
