@@ -5,6 +5,7 @@ from fila_pipeline import _aplicar_auditoria_marcas, _dados_para_prompt, _extrai
 from fila_pipeline_unificado import (
     _adicionar_documentos_de_referencia,
     _json_schema_fase_preparatoria,
+    _json_schema_itens_tr,
     _opcoes_chamada_ia_etapa,
     _validar_json_unificado,
 )
@@ -309,6 +310,35 @@ class TestStaleQueueCancellation(unittest.TestCase):
     def test_json_schema_nao_e_ativado_nas_etapas_de_consulta(self):
         self.assertEqual(_opcoes_chamada_ia_etapa("consulta_habilitacao"), {})
         self.assertEqual(_opcoes_chamada_ia_etapa("geracao_json"), {})
+        self.assertEqual(_opcoes_chamada_ia_etapa("geracao_json", "OUTRA_ETAPA"), {})
+        self.assertEqual(_opcoes_chamada_ia_etapa("geracao_contratacao_direta", "CONTRATACAO_DIRETA"), {})
+
+    def test_pagamento_por_etapas_usa_json_schema_estrito_sem_ferramentas(self):
+        opcoes = _opcoes_chamada_ia_etapa("geracao_json", "PAGAMENTO_ETAPAS")
+        self.assertFalse(opcoes["enable_tools"])
+        self.assertTrue(opcoes["system_prompt"])
+        formato = opcoes["response_format"]
+        self.assertEqual(formato["type"], "json_schema")
+        self.assertEqual(formato["json_schema"]["name"], "pagamento_etapas")
+        self.assertTrue(formato["json_schema"]["strict"])
+        schema = formato["json_schema"]["schema"]
+        self.assertEqual(schema["properties"], {"PAGAMENTO": {"type": "string"}})
+        self.assertEqual(schema["required"], ["PAGAMENTO"])
+        self.assertFalse(schema["additionalProperties"])
+
+    def test_extracao_de_itens_do_tr_tem_schema_estrito(self):
+        formato = _json_schema_itens_tr()
+        self.assertEqual(formato["type"], "json_schema")
+        self.assertTrue(formato["json_schema"]["strict"])
+        schema = formato["json_schema"]["schema"]
+        self.assertEqual(set(schema["required"]), {"todos_itens_identificados", "itens"})
+        self.assertFalse(schema["additionalProperties"])
+        self.assertEqual(schema["properties"]["todos_itens_identificados"], {"type": "boolean"})
+        item = schema["properties"]["itens"]["items"]
+        campos = {"numero", "descricao", "quantidade", "valor_unitario", "valor_total"}
+        self.assertEqual(set(item["properties"]), campos)
+        self.assertEqual(set(item["required"]), campos)
+        self.assertFalse(item["additionalProperties"])
 
 
 if __name__ == "__main__":

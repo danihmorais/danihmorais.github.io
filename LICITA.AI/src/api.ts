@@ -79,12 +79,7 @@ REGRAS ABSOLUTAS:
 DESCRIÇÃO INFORMADA PELO USUÁRIO:
 ${textoUsuario}
 
-ESTRUTURA OBRIGATÓRIA:
-{
-  "PAGAMENTO": ""
-}
-
-O campo PAGAMENTO deve conter somente o texto final revisado sobre o pagamento por etapas.`;
+O campo PAGAMENTO do esquema JSON da resposta deve conter somente o texto final revisado sobre o pagamento por etapas.`;
 }
 function construirPromptContratacaoDireta(instrucoesUsuario: string, modalidade: string): string {
   const modalidadeNome = modalidade === "DISPENSA_BLL" ? "Dispensa de Licitação com lances em plataforma eletrônica (BLL)" : "Dispensa de Licitação com recebimento de propostas por e-mail";
@@ -164,20 +159,9 @@ function construirPromptUnificado(
   const tr = diretriz(etapas[2], "ETAPA: TERMO DE REFERÊNCIA.")
     .replace(/__LICITA_PIPE_ETP__/g, "bloco ETP que será produzido nesta mesma resposta JSON");
 
-  const schema = [
-    "{",
-    '  "DFD": {',
-    '    "OBJETO": "", "TIPO_OBJ": "", "JUSTIFICATIVA": "", "ESTIMATIVA_QUANTIDADES": "", "RESULTADOS_ESPERADOS": ""',
-    "  },",
-    '  "ETP": {',
-    '    "REQUISITOS_ETP": "", "SUBCONTRATACAO_ETP": "", "ME_EPP_ETP": "", "JUSTIFICATIVA_PAC": "", "MERCADO": "", "SOLUCAO": "", "CRITERIOS_JUSTIFICATIVA_ETP": "", "CRITERIOS_SUSTENTABILIDADE": "", "MODALIDADE_JUSTIFICATIVA_ETP": "", "PROVIDENCIAS_CONT": "", "CORRELATAS_INTER": "", "JUSTIFICATIVA_ESTIMATIVA": "", "GARANTIAS_ETP": "", "VISTORIA_ETP": "", "AMOSTRA_ETP": "", "PARCELAMENTO": "", "CONCLUSAO": ""',
-    "  },",
-    '  "TR": {',
-    '    "REQUISITOS_TR": "", "OBRIGACOES_CONTRATADA": "", "OBRIGACOES_CONTRANTE": "", "QUALIFICACAO_TECNICA": "", "GARANTIAS_TR": "", "EXECUCAO": "", "PRAZO_EXEC": "", "LOCAL": "", "AMOSTRA_TR": ""',
-    "  }",
-    "}"
-  ].join("\n");
-
+  // O formato de saída (blocos DFD/ETP/TR e seus campos) NÃO é descrito aqui: o backend o impõe
+  // por response_format = json_schema estrito (fila_pipeline_unificado._json_schema_fase_preparatoria).
+  // Repetir o esqueleto no prompt só duplicaria a fonte de verdade e gastaria contexto.
   return [
     prefixo,
     "CONSULTA PRÉVIA SOBRE O OBJETO E A HABILITAÇÃO — CONTEXTO JURÍDICO-TÉCNICO OBRIGATÓRIO:",
@@ -188,14 +172,9 @@ function construirPromptUnificado(
     dfd,
     etp,
     tr,
-    "REGRAS RÍGIDAS PARA O JSON UNIFICADO:",
-    "1. Retorne exclusivamente um objeto JSON válido, sem markdown, comentários ou texto fora do objeto.",
-    '2. O objeto raiz deve conter exatamente as três chaves "DFD", "ETP" e "TR", cada uma como objeto JSON independente.',
-    "3. Todos os campos previstos nos três blocos devem conter strings não vazias; não omita campos, não crie chaves e não retorne arrays/valores de outro tipo dentro dos blocos.",
-    "4. Use a sequência JSON \\n (uma única barra invertida seguida da letra n) dentro de strings JSON para representar quebras de linha. Após a leitura do JSON, cada campo deve conter uma quebra real, nunca os caracteres literais barra invertida e n.",
-    "5. Preserve os fatos e as instruções do usuário. Não invente valores, normas, datas, locais, fornecedores, registros ou exigências de habilitação.",
-    "ESTRUTURA JSON OBRIGATÓRIA:",
-    schema
+    "REGRAS PARA A RESPOSTA:",
+    "1. Preencha todos os campos dos blocos DFD, ETP e TR com texto não vazio, conforme o esquema JSON da resposta. As quebras de linha dentro dos textos são tratadas pelo próprio formato JSON.",
+    "2. Preserve os fatos e as instruções do usuário. Não invente valores, normas, datas, locais, fornecedores, registros ou exigências de habilitação."
   ].filter((parte) => Boolean(String(parte || "").trim())).join("\n\n");
 }
 
