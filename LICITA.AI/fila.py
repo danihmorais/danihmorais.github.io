@@ -168,7 +168,11 @@ def _normalizar_quebras_escapadas(texto: str) -> str:
 
 
 def _remover_barras_finais_paragrafos(texto: str) -> str:
-    """Remove barras isoladas no fim das linhas, preservando URLs terminadas em barra."""
+    """Remove barras ("/" ou "\\") soltas no fim das linhas, preservando URLs terminadas em barra.
+
+    A barra invertida sobra quando a IA duplica o escape da quebra de linha (o "\\" fica antes da
+    quebra real) e aparece como lixo no fim do parágrafo.
+    """
     linhas = []
     for linha in texto.splitlines(keepends=True):
         if linha.endswith("\r\n"):
@@ -179,10 +183,15 @@ def _remover_barras_finais_paragrafos(texto: str) -> str:
             conteudo, quebra = linha, ""
 
         conteudo = conteudo.rstrip(" \t")
-        if conteudo.endswith("/") and not re.search(
-            r"(?i)(?:\b(?:https?|ftp)://|\bwww\.)\S+/$", conteudo
-        ):
-            conteudo = conteudo[:-1].rstrip(" \t")
+        while True:
+            if conteudo.endswith("\\"):
+                conteudo = conteudo[:-1].rstrip(" \t")
+            elif conteudo.endswith("/") and not re.search(
+                r"(?i)(?:\b(?:https?|ftp)://|\bwww\.)\S+/$", conteudo
+            ):
+                conteudo = conteudo[:-1].rstrip(" \t")
+            else:
+                break
         linhas.append(conteudo + quebra)
     return "".join(linhas)
 

@@ -105,6 +105,28 @@ class FilaTests(unittest.TestCase):
             "https://exemplo.gov.br/\n",
         )
 
+    def test_remove_barra_invertida_solta_no_fim_dos_paragrafos(self):
+        texto = (
+            "Primeiro parágrafo.\\\n"
+            "Segundo parágrafo. \\ \n"
+            "Terceiro parágrafo.\\/\n"
+            "Caminho C:\\Pasta\\arquivo.docx e Lei 14.133/2021.\\"
+        )
+
+        self.assertEqual(
+            fila._normalizar_texto_gerado(texto),
+            "Primeiro parágrafo.\n"
+            "Segundo parágrafo.\n"
+            "Terceiro parágrafo.\n"
+            "Caminho C:\\Pasta\\arquivo.docx e Lei 14.133/2021.",
+        )
+
+    def test_url_terminada_em_barra_continua_preservada_com_barra_invertida_junto(self):
+        self.assertEqual(
+            fila._normalizar_texto_gerado("Veja https://exemplo.gov.br/\n"),
+            "Veja https://exemplo.gov.br/\n",
+        )
+
     def test_resolve_placeholders_suporta_cadeias_maiores_que_tres_niveis(self):
         modificacoes = {
             "{{A}}": "{{B}}",

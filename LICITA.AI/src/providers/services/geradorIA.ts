@@ -202,7 +202,7 @@ ${instrucoesCondicionaisTr}`;
 2. NÃO USE marcadores de bloco de código (como \`\`\`json ou \`\`\`). Retorne o JSON diretamente em formato de texto puro.
 3. ESCAPE DE QUEBRAS DE LINHA: O JSON não suporta quebras de linha literais dentro de strings. Para representar quebras de linha, use a sequência JSON \\n (uma única barra invertida seguida da letra n). Depois que o JSON for decodificado, o campo deve conter uma quebra de linha real, nunca os caracteres literais barra invertida e n.
 4. Nenhuma chave do JSON pode estar vazia.
-5. Não use "/" isolada como marcador ou separador de parágrafo e não deixe uma "/" no final de parágrafo. Preserve barras internas legítimas em datas, expressões e URLs.`;
+5. Não use "/" isolada como marcador ou separador de parágrafo e não deixe uma "/" no final de parágrafo. Nunca termine um parágrafo com barra invertida ("\\"). Preserve barras internas legítimas em datas, expressões e URLs.`;
     const dadosMarcados = usarMarcadorDados
         ? `\n\nDADOS DA CONTRATAÇÃO (JSON; fonte factual para itens, quantidades e valores):\n__LICITA_PIPE_DADOS_USUARIO__`
         : "";
