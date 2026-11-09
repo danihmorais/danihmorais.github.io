@@ -168,6 +168,7 @@ export default function Wizard() {
   const [mostrarAdminPedidos, setMostrarAdminPedidos] = useState(false);
   const [confirmacaoWizard, setConfirmacaoWizard] = useState<{ title: string; message: string; confirmLabel: string; cancelLabel?: string; variant?: "primary" | "danger"; onConfirm: () => void } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const etapaAnteriorRef = useRef(etapaAtual);
   const beforeUnloadHandlerRef = useRef<((evento: BeforeUnloadEvent) => void) | null>(null);
   const { theme, toggleTheme } = useContext(ThemeContext);
   const isDark = theme === "dark";
@@ -241,6 +242,10 @@ export default function Wizard() {
   };
 
   useEffect(() => {
+    // A rolagem deve ocorrer ao trocar de etapa, não na abertura inicial da página.
+    if (etapaAnteriorRef.current === etapaAtual) return;
+    etapaAnteriorRef.current = etapaAtual;
+
     const titulo = document.getElementById("wizard-step-title");
     titulo?.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
     titulo?.focus({ preventScroll: true });
