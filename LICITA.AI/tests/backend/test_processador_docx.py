@@ -9,6 +9,8 @@ import unittest
 from pathlib import Path
 
 from docx import Document
+from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches
 
 TEST_ROOT = Path(__file__).resolve().parents[2]
@@ -42,6 +44,27 @@ class ProcessadorDocxTests(unittest.TestCase):
         self.assertEqual(tabela.cell(0, 2).text, "Observação")
         self.assertEqual(tabela.cell(1, 2).text, "")
         self.assertEqual(tabela.cell(2, 2).text, "Entrega imediata")
+
+    def test_tabela_centralizada_justifica_conteudo_das_celulas(self):
+        doc = Document()
+        paragraph = doc.add_paragraph("{{ITENS}}")
+        dados = [{"Item": 1, "Descrição": "Papel A4", "Qtd": 10}]
+
+        replace_text_in_paragraph(
+            paragraph,
+            {"{{ITENS}}": "__TABLE_CENTER_JUSTIFY__" + json.dumps(dados, ensure_ascii=False)},
+        )
+
+        tabela = doc.tables[0]
+        self.assertEqual(tabela.alignment, WD_TABLE_ALIGNMENT.CENTER)
+        self.assertTrue(
+            all(
+                paragrafo.alignment == WD_ALIGN_PARAGRAPH.JUSTIFY
+                for linha in tabela.rows
+                for celula in linha.cells
+                for paragrafo in celula.paragraphs
+            )
+        )
 
     def test_placeholder_dividido_em_runs_preserva_formatacao_ao_redor(self):
         doc = Document()
