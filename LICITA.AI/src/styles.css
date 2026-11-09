@@ -640,8 +640,8 @@ th { color: var(--text-muted); font-size: 12px; font-weight: 600; text-transform
   border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
   border-radius: 20px;
   box-shadow: 0 28px 100px rgba(3,10,24,.34);
-  backdrop-filter: blur(26px);
-  -webkit-backdrop-filter: blur(26px);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 .admin-pedidos-header {
   display: flex;
@@ -1399,7 +1399,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .toast-message { font-size: 14px; }
 .admin-pedidos-overlay {
-  padding: 22px; background: rgba(9,16,30,.52); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  /* Sem backdrop-filter: o desfoque em tela cheia, empilhado com o do diálogo e o dos cartões, travava a rolagem. */
+  padding: 22px; background: rgba(9,16,30,.72); backdrop-filter: none; -webkit-backdrop-filter: none;
 }
 .admin-pedidos-header { position: relative; padding: 24px 28px 21px; border-bottom: 1px solid var(--border); background: var(--surface-glass); }
 .admin-pedidos-header h2 { font-size: 25px; }
@@ -1411,8 +1412,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .admin-list-summary { padding: 14px 24px 10px; font-size: 13px; }
 .admin-jobs-list { gap: 9px; margin: 0 24px 24px; border: 0; border-radius: 0; overflow: visible; }
 .admin-job-card {
-  gap: 16px; padding: 18px 19px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface-glass);
-  box-shadow: 0 5px 16px rgba(23,36,59,.035); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  gap: 16px; padding: 18px 19px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface-glass-strong);
+  box-shadow: 0 5px 16px rgba(23,36,59,.035); backdrop-filter: none; -webkit-backdrop-filter: none;
 }
 .admin-job-card:last-child { border-bottom: 1px solid var(--border); }
 .admin-job-heading { gap: 9px; }
