@@ -165,7 +165,7 @@ export async function gerarTextoIA(prompt: string, _legacyApiKey: string, model:
   while (tentativaAtual < MAX_TENTATIVAS) {
     try {
       const modeloDaRequisicao = !model ? "unsloth-auto" : model;
-      const resultado = await chamarBackend({ model: modeloDaRequisicao, prompt, temperature: 0.3, response_format: { type: "json_object" } });
+      const resultado = await chamarBackend({ model: modeloDaRequisicao, prompt, temperature: 0.7, response_format: { type: "json_object" } });
       onModelResolved?.(resultado.model);
       return resultado.json;
     } catch (erro: any) {
