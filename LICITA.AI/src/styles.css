@@ -185,6 +185,7 @@ th { color: var(--text-muted); font-size: 12px; font-weight: 600; text-transform
 .wizard-heading { margin-bottom: 22px; }
 .wizard-step-count { display: block; margin-bottom: 6px; color: var(--text-muted); font-size: 12px; }
 .wizard-heading h1 { margin: 0; color: var(--text-main); font-size: 23px; line-height: 1.3; font-weight: 650; letter-spacing: -.035em; }
+#wizard-step-title { scroll-margin-top: 92px; }
 .wizard-heading p { max-width: 700px; margin: 7px 0 0; color: var(--text-muted); font-size: 13px; }
 .wizard-form-content {
   min-height: 270px;
@@ -539,8 +540,11 @@ th { color: var(--text-muted); font-size: 12px; font-weight: 600; text-transform
 .toast-viewport {
   position: fixed;
   z-index: 1000;
-  top: 16px;
+  top: auto;
   right: 16px;
+  bottom: 16px;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -609,7 +613,7 @@ th { color: var(--text-muted); font-size: 12px; font-weight: 600; text-transform
   to { opacity: 1; transform: translateY(0); }
 }
 @media (max-width: 640px) {
-  .toast-viewport { top: 10px; right: 10px; width: calc(100vw - 20px); }
+  .toast-viewport { top: auto; right: 10px; bottom: 10px; width: calc(100vw - 20px); }
 }
 
 /* Painel administrativo de pedidos */
