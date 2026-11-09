@@ -326,13 +326,82 @@ def _json_schema_fase_preparatoria() -> dict:
     }
 
 
-def _opcoes_chamada_ia_etapa(etapa_tipo: str) -> dict:
-    """Saída estruturada na geração integrada; sem ferramentas nas etapas puramente mecânicas."""
+_JSON_ESTRUTURADO_SYSTEM_PROMPT = """
+Você é um assistente jurídico-administrativo especializado em contratações públicas brasileiras.
+Esta é uma tarefa de redação ou extração sobre o texto fornecido no prompt do usuário. Não use ferramentas nem faça pesquisa; não invente fatos, valores, normas ou documentos.
+A resposta deve ser exclusivamente um objeto JSON válido que corresponda integralmente ao esquema solicitado, sem Markdown, cercas de código ou texto antes ou depois do JSON.
+""".strip()
+
+
+def _response_format_estrito(nome: str, schema: dict) -> dict:
+    """Envelope response_format (json_schema estrito) no formato OpenAI-compatível."""
+    return {"type": "json_schema", "json_schema": {"name": nome, "strict": True, "schema": schema}}
+
+
+def _json_schema_pagamento_etapas() -> dict:
+    """Contrato JSON Schema estrito da revisão do pagamento por etapas."""
+    return _response_format_estrito(
+        "pagamento_etapas",
+        {
+            "type": "object",
+            "properties": {"PAGAMENTO": {"type": "string"}},
+            "required": ["PAGAMENTO"],
+            "additionalProperties": False,
+        },
+    )
+
+
+def _json_schema_itens_tr() -> dict:
+    """Contrato JSON Schema estrito da extração de itens de um TR anterior.
+
+    Os campos são texto (como aparecem no documento) ou null quando não informados; a soma é
+    refeita em Python com aritmética decimal.
+    """
+    texto_ou_nulo = {"type": ["string", "null"]}
+    item = {
+        "type": "object",
+        "properties": {
+            "numero": texto_ou_nulo,
+            "descricao": texto_ou_nulo,
+            "quantidade": texto_ou_nulo,
+            "valor_unitario": texto_ou_nulo,
+            "valor_total": texto_ou_nulo,
+        },
+        "required": ["numero", "descricao", "quantidade", "valor_unitario", "valor_total"],
+        "additionalProperties": False,
+    }
+    return _response_format_estrito(
+        "itens_tr_anterior",
+        {
+            "type": "object",
+            "properties": {
+                "todos_itens_identificados": {"type": "boolean"},
+                "itens": {"type": "array", "items": item},
+            },
+            "required": ["todos_itens_identificados", "itens"],
+            "additionalProperties": False,
+        },
+    )
+
+
+def _opcoes_chamada_ia_etapa(etapa_tipo: str, etapa_id: str = "") -> dict:
+    """Saída estruturada nas etapas de JSON fechado; sem ferramentas nas etapas puramente mecânicas.
+
+    A consulta de habilitação (que usa pesquisa web) e a contratação direta (que ainda descreve o
+    formato no prompt e roda com ferramentas) ficam de fora: combinar gramática estrita com o laço
+    de ferramentas precisa ser validado no servidor antes de ser ligado.
+    """
     tipo = str(etapa_tipo or "").strip().casefold()
     if tipo == "auditoria_marcas":
         # O próprio prompt de sistema manda não pesquisar em tarefas mecânicas; desligar as
         # ferramentas evita minutos de busca inútil numa remoção de marca.
         return {"enable_tools": False}
+    if tipo == "geracao_json" and str(etapa_id or "").strip().upper() == "PAGAMENTO_ETAPAS":
+        return {
+            "response_format": _json_schema_pagamento_etapas(),
+            "enable_tools": False,
+            "system_prompt": _JSON_ESTRUTURADO_SYSTEM_PROMPT,
+        }
     if tipo != "geracao_unificada":
         return {}
     return {
@@ -516,21 +585,26 @@ def _total_itens_tr_por_ia(
             "geral, linhas de resumo, pesquisa de preços de mercado, exemplos, cronogramas de entrega, "
             "cabeçalhos repetidos nem valores referentes a outra contratação. Não conte duas vezes a "
             "mesma linha se ela reaparecer por quebra de página.\n\n"
-            "A resposta deve ser exclusivamente um objeto JSON com este formato: "
-            '{"todos_itens_identificados": true, "itens": ['
-            '{"numero": "1", "descricao": "descrição do item", "quantidade": "10", '
-            '"valor_unitario": "25,00", "valor_total": "250,00"}]}. '
-            "Use null para um campo numérico que não esteja informado. Defina "
-            '"todos_itens_identificados" como true SOMENTE se conseguiu identificar todas as linhas '
+            "Responda conforme o esquema JSON da resposta: cada item traz numero, descricao, quantidade, "
+            "valor_unitario e valor_total, como texto exatamente como aparece no documento (por exemplo "
+            '"10", "25,00", "250,00"). Use null para um campo que não esteja informado. Defina '
+            "todos_itens_identificados como true SOMENTE se conseguiu identificar todas as linhas "
             "da lista principal e todas elas possuem valor_total, ou quantidade e valor_unitario "
             "suficientes para calcular o total. Se o documento não permitir confirmar a lista completa, "
             "se houver linhas de item sem preço/quantidade suficientes, ou se não houver lista de itens "
-            'valorizada, retorne {"todos_itens_identificados": false, "itens": []}. '
+            "valorizada, defina todos_itens_identificados como false e itens como lista vazia. "
             "Não some os valores mentalmente; a aplicação fará a soma com aritmética decimal.\n\n"
             f"DOCUMENTO: {nome}\n--- INÍCIO DO TR ---\n{texto}\n--- FIM DO TR ---"
         )
         try:
-            resultado, modelo_resolvido = _chamar_ia(prompt, modelo_atual, temperatura, enable_tools=False)
+            resultado, modelo_resolvido = _chamar_ia(
+                prompt,
+                modelo_atual,
+                temperatura,
+                response_format=_json_schema_itens_tr(),
+                enable_tools=False,
+                system_prompt=_JSON_ESTRUTURADO_SYSTEM_PROMPT,
+            )
             if modelo_resolvido:
                 modelo_atual = modelo_resolvido
         except Exception:
@@ -669,7 +743,7 @@ def _process_pipeline(job: dict) -> None:
                 f"O prompt desta etapa excede o limite seguro ({len(prompt_processado):,} caracteres; limite {limite_prompt:,})."
             )
         _checar_cancelamento(job)
-        opcoes_chamada = _opcoes_chamada_ia_etapa(etapa_tipo)
+        opcoes_chamada = _opcoes_chamada_ia_etapa(etapa_tipo, etapa_id)
         temperatura_etapa = _temperatura_valida(etapa.get("temperature"), temperatura)
         if opcoes_chamada:
             resultado, modelo_resolvido = _chamar_ia(prompt_processado, modelo, temperatura_etapa, **opcoes_chamada)

@@ -34,10 +34,11 @@ test("texto sem JSON levanta erro de JSON corrompido", () => {
   assert.throws(() => extrairEConverterJSON("sem json nenhum"), /corrompido/);
 });
 
-test("prompts instruem \\n literal (barra invertida + n), não quebra real", async () => {
+test("prompt legado instrui \\n literal; prompts com json_schema não repetem a regra", async () => {
   const { readFileSync } = await import("node:fs");
   const api = readFileSync(new URL("../../src/api.ts", import.meta.url), "utf8");
   const gerador = readFileSync(new URL("../../src/providers/services/geradorIA.ts", import.meta.url), "utf8");
-  assert.match(api, /sequência JSON \\\\n \(uma/);
+  // geradorIA.ts ainda alimenta a rota legada (json_object); o escape é imposto pela gramática nas demais.
   assert.match(gerador, /sequência JSON \\\\n \(uma/);
+  assert.doesNotMatch(api, /sequência JSON \\\\n \(uma/);
 });

@@ -215,9 +215,12 @@ test("gerarFasePreparatoria usa multipart quando há documentos de referência",
   assert.match(geracao.prompt, /começando em Documento 12/);
   assert.doesNotMatch(consulta.prompt, /Documento 13/);
   assert.doesNotMatch(geracao.prompt, /Documento 13/);
-  assert.match(geracao.prompt, /"DFD":\s*\{/);
-  assert.match(geracao.prompt, /"ETP":\s*\{/);
-  assert.match(geracao.prompt, /"TR":\s*\{/);
+  // O formato é imposto por response_format/json_schema no backend; o prompt não repete o esqueleto.
+  assert.doesNotMatch(geracao.prompt, /"DFD":\s*\{/);
+  assert.doesNotMatch(geracao.prompt, /"ETP":\s*\{/);
+  assert.doesNotMatch(geracao.prompt, /"TR":\s*\{/);
+  assert.doesNotMatch(geracao.prompt, /ESTRUTURA JSON OBRIGATÓRIA/);
+  assert.doesNotMatch(geracao.prompt, /barra invertida/);
   assert.doesNotMatch(geracao.prompt, /__LICITA_PIPE_ETP__/);
 });
 
