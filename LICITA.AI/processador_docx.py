@@ -8,6 +8,8 @@ from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import RGBColor, Inches
+from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.table import _Cell
 from docx.text.paragraph import Paragraph
 
@@ -174,7 +176,7 @@ def _replace_in_linear_content(linear_content, old_text, new_text):
         posicao = inicio + len(new_text)
 
 
-def _inserir_tabela(paragraph, json_str):
+def _inserir_tabela(paragraph, json_str, *, centralizar=False, justificar_conteudo=False):
     try:
         dados = json.loads(json_str)
         if not isinstance(dados, list) or not dados:
@@ -197,6 +199,9 @@ def _inserir_tabela(paragraph, json_str):
         else:
             table = parent.add_table(rows=1, cols=len(colunas), width=Inches(6.0))
         table.style = "Table Grid"
+        if centralizar:
+            table.alignment = WD_TABLE_ALIGNMENT.CENTER
+
         hdr_cells = table.rows[0].cells
         for i, key in enumerate(colunas):
             hdr_cells[i].text = _limpar_texto_xml(key)
@@ -204,6 +209,13 @@ def _inserir_tabela(paragraph, json_str):
             row_cells = table.add_row().cells
             for i, key in enumerate(colunas):
                 row_cells[i].text = _limpar_texto_xml(item.get(key, ""))
+
+        if justificar_conteudo:
+            for row in table.rows:
+                for cell in row.cells:
+                    for cell_paragraph in cell.paragraphs:
+                        cell_paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+
         paragraph._p.addnext(table._tbl)
     except Exception as e:
         new_run = paragraph.add_run(f"[ERRO AO GERAR TABELA: {e}]")
@@ -249,6 +261,9 @@ def _apply_segments_to_paragraph(paragraph, segments, extracted_runs_data):
                 new_run = paragraph.add_run("[IMAGEM DE DOTAÇÃO NÃO PÔDE SER INSERIDA]")
                 new_run.font.color.rgb = RGBColor(255, 0, 0)
                 new_run.bold = True
+        elif part.startswith("__TABLE_CENTER_JUSTIFY__"):
+            json_str = part.replace("__TABLE_CENTER_JUSTIFY__", "", 1)
+            _inserir_tabela(paragraph, json_str, centralizar=True, justificar_conteudo=True)
         elif part.startswith("__TABLE__"):
             json_str = part.replace("__TABLE__", "", 1)
             _inserir_tabela(paragraph, json_str)
