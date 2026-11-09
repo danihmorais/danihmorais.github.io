@@ -265,6 +265,11 @@ export default function Wizard() {
   useEffect(() => {
     if (!rascunhoInicializado || rascunhoDisponivel) return;
     try {
+      // Não recria um rascunho vazio logo após o usuário descartar o anterior.
+      if (!dadosPreenchidos && !emailEnvio.trim() && !instrucoesEnvio.trim()) {
+        localStorage.removeItem("licita-ai-rascunho-v1");
+        return;
+      }
       const dadosSemImagem = {
         ...dados,
         caminhoImagemDotacao: "",
@@ -277,7 +282,7 @@ export default function Wizard() {
     } catch {
       // O formulário continua utilizável mesmo se o navegador bloquear o armazenamento local.
     }
-  }, [dados, etapaAtual, emailEnvio, instrucoesEnvio, rascunhoInicializado, rascunhoDisponivel]);
+  }, [dados, dadosPreenchidos, etapaAtual, emailEnvio, instrucoesEnvio, rascunhoInicializado, rascunhoDisponivel]);
 
   useEffect(() => {
     if (!dadosPreenchidos || geracaoSucesso || salvamentoConcluido) return;
@@ -380,8 +385,13 @@ export default function Wizard() {
   };
 
   const descartarRascunho = () => {
-    localStorage.removeItem("licita-ai-rascunho-v1");
-    setRascunhoDisponivel(false);
+    try {
+      localStorage.removeItem("licita-ai-rascunho-v1");
+      setRascunhoDisponivel(false);
+      showToast("Rascunho descartado.", "success");
+    } catch {
+      showToast("Não foi possível descartar o rascunho neste navegador.", "error");
+    }
   };
 
   const irParaEtapa = (alvo: number) => {
