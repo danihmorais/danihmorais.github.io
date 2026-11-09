@@ -5,8 +5,11 @@ import base64
 import io
 from copy import deepcopy
 from docx import Document
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 from docx.shared import RGBColor, Inches
 from docx.table import _Cell
+from docx.text.paragraph import Paragraph
 
 PLACEHOLDER_RE = re.compile(r"\{\{\s*[^{}]+?\s*\}\}")
 _TITULO_NUMERADO_RE = re.compile(r"^\s*\d+(?:\.\d+)*\s*(?:[.)\-–—:]|\s)\s*\S")
@@ -56,6 +59,20 @@ def _copy_paragraph_properties(source_paragraph, target_paragraph):
     if target_pPr is not None:
         target_paragraph._p.remove(target_pPr)
     target_paragraph._p.insert(0, deepcopy(source_pPr))
+
+
+def _inserir_paragrafo_vazio_depois(paragraph):
+    """Insere uma linha em branco logo após `paragraph`, com as mesmas propriedades (sem numeração)."""
+    novo_p = OxmlElement("w:p")
+    paragraph._p.addnext(novo_p)
+    novo = Paragraph(novo_p, paragraph._parent)
+    _copy_paragraph_properties(paragraph, novo)
+    p_pr = novo._p.pPr
+    if p_pr is not None:
+        # Uma linha de respiro não pode herdar marcador/numeração de lista do parágrafo-modelo.
+        for num_pr in p_pr.findall(qn("w:numPr")):
+            p_pr.remove(num_pr)
+    return novo
 
 
 def _split_linear_content_for_paragraphs(linear_content):
@@ -261,6 +278,10 @@ def replace_text_in_paragraph(paragraph, replacements):
         {"text": (run_data["text"] or "").replace("\r\n", "\n").replace("\r", "\n"), "original_run_index": index}
         for index, run_data in enumerate(extracted_runs_data)
     ]
+    # Uma quebra de linha no fim do parágrafo-modelo é o "respiro" que o autor do modelo deixou antes
+    # do próximo título. A divisão em parágrafos descarta quebras finais, então a linha em branco é
+    # reposta depois do bloco; sem ela o último parágrafo gerado ficaria colado no título seguinte.
+    espaco_final = "".join(item["text"] for item in linear_content).rstrip(" \t").endswith("\n")
 
     for old_text, new_text in replacements.items():
         linear_content = _replace_in_linear_content(linear_content, old_text, new_text)
@@ -269,6 +290,8 @@ def replace_text_in_paragraph(paragraph, replacements):
 
     if len(paragraph_groups) == 1:
         _apply_segments_to_paragraph(paragraph, paragraph_groups[0], extracted_runs_data)
+        if espaco_final:
+            _inserir_paragrafo_vazio_depois(paragraph)
         return
 
     for segments in paragraph_groups[:-1]:
@@ -283,6 +306,8 @@ def replace_text_in_paragraph(paragraph, replacements):
     paragraph.paragraph_format.space_before = 0
     paragraph.paragraph_format.space_after = 0
     _apply_segments_to_paragraph(paragraph, paragraph_groups[-1], extracted_runs_data)
+    if espaco_final:
+        _inserir_paragrafo_vazio_depois(paragraph)
 
 
 def modificar_documento(cam_origem, cam_destino, modificacoes):

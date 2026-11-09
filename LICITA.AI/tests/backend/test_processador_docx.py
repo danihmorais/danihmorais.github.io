@@ -141,6 +141,76 @@ class ProcessadorDocxTests(unittest.TestCase):
             [0, 0, 0],
         )
 
+    def test_quebra_final_do_modelo_vira_linha_em_branco_antes_do_proximo_titulo(self):
+        doc = Document()
+        paragraph = doc.add_paragraph("{{CHAVE}}\n")
+        doc.add_paragraph("14. ADEQUAÇÃO ORÇAMENTÁRIA")
+
+        replace_text_in_paragraph(
+            paragraph,
+            {"{{CHAVE}}": "Primeiro parágrafo.\nSegundo parágrafo."},
+        )
+
+        self.assertEqual(
+            [p.text for p in doc.paragraphs],
+            ["Primeiro parágrafo.", "Segundo parágrafo.", "", "14. ADEQUAÇÃO ORÇAMENTÁRIA"],
+        )
+        # A linha de respiro não pode herdar espaçamentos que a deixem maior que uma linha.
+        self.assertEqual(doc.paragraphs[2].paragraph_format.space_after, 0)
+
+    def test_quebra_final_do_modelo_tambem_vale_para_texto_de_um_unico_paragrafo(self):
+        doc = Document()
+        paragraph = doc.add_paragraph("{{CHAVE}}\n")
+        doc.add_paragraph("14. ADEQUAÇÃO ORÇAMENTÁRIA")
+
+        replace_text_in_paragraph(paragraph, {"{{CHAVE}}": "Texto único."})
+
+        self.assertEqual(
+            [p.text for p in doc.paragraphs],
+            ["Texto único.", "", "14. ADEQUAÇÃO ORÇAMENTÁRIA"],
+        )
+
+    def test_modelo_sem_quebra_final_nao_ganha_linha_em_branco(self):
+        doc = Document()
+        paragraph = doc.add_paragraph("{{CHAVE}}")
+        doc.add_paragraph("14. ADEQUAÇÃO ORÇAMENTÁRIA")
+
+        replace_text_in_paragraph(paragraph, {"{{CHAVE}}": "Primeiro.\nSegundo."})
+
+        self.assertEqual(
+            [p.text for p in doc.paragraphs],
+            ["Primeiro.", "Segundo.", "14. ADEQUAÇÃO ORÇAMENTÁRIA"],
+        )
+
+    def test_linha_em_branco_final_nao_herda_numeracao_de_lista(self):
+        doc = Document()
+        paragraph = doc.add_paragraph("{{CHAVE}}\n")
+        paragraph._p.get_or_add_pPr().get_or_add_numPr().get_or_add_numId().val = 3
+
+        replace_text_in_paragraph(paragraph, {"{{CHAVE}}": "Primeiro.\nSegundo."})
+
+        self.assertEqual([p.text for p in doc.paragraphs], ["Primeiro.", "Segundo.", ""])
+        self.assertIn("<w:numPr", doc.paragraphs[1]._p.xml)
+        self.assertNotIn("<w:numPr", doc.paragraphs[2]._p.xml)
+
+    def test_modelo_tr_base_mantem_linha_em_branco_antes_da_adequacao_orcamentaria(self):
+        from montador_variaveis import filtrar_chaves_docx, montar_variaveis_fixas
+
+        modelo = TEST_ROOT / "modelos" / "TR - BASE.docx"
+        modificacoes = {
+            chave: valor
+            for chave, valor in filtrar_chaves_docx(montar_variaveis_fixas({"{{MODALIDADE}}": "PREGAO_ELETRONICO"})).items()
+            if isinstance(valor, str)
+        }
+        with tempfile.TemporaryDirectory() as diretorio:
+            destino = Path(diretorio) / "tr.docx"
+            modificar_documento(str(modelo), str(destino), modificacoes)
+            paragrafos = Document(str(destino)).paragraphs
+
+        indice = next(i for i, p in enumerate(paragrafos) if p.text.strip() == "ADEQUAÇÃO ORÇAMENTÁRIA")
+        self.assertEqual(paragrafos[indice - 1].text, "")
+        self.assertTrue(paragrafos[indice - 2].text.strip())
+
     def test_imagem_no_cabecalho_sem_placeholder_e_preservada(self):
         doc = Document()
         header = doc.sections[0].header

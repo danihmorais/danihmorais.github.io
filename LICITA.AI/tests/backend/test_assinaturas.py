@@ -28,6 +28,32 @@ class AssinaturasTest(unittest.TestCase):
         r = mv.montar_variaveis_fixas({})
         self.assertEqual(r["{{ASSINATURAS}}"], "")
 
+    def test_assinaturas_mantem_espaco_para_assinar_no_documento(self):
+        from docx import Document
+
+        from processador_docx import replace_text_in_paragraph
+
+        dados = {
+            "GESTORES_DADOS": json.dumps([
+                {"nome": "Ana", "cargo": "Secretária"},
+                {"nome": "Beto", "cargo": "Diretor"},
+            ]),
+            "FISCAIS_DADOS": json.dumps([{"nome": "Carla", "cargo": "Engenheira"}]),
+        }
+        doc = Document()
+        paragrafo = doc.add_paragraph("{{ASSINATURAS}}")
+        replace_text_in_paragraph(paragrafo, {"{{ASSINATURAS}}": mv.montar_variaveis_fixas(dados)["{{ASSINATURAS}}"]})
+
+        linhas = [p.text for p in doc.paragraphs]
+        tracos = [i for i, texto in enumerate(linhas) if texto.startswith("____")]
+        self.assertEqual(len(tracos), 3)
+        for i in tracos:
+            # Espaço para assinar acima do traço de cada signatário (inclusive entre um bloco e outro).
+            acima = linhas[i - mv.LINHAS_ESPACO_ASSINATURA:i]
+            self.assertEqual(acima, [mv.LINHA_EM_BRANCO] * mv.LINHAS_ESPACO_ASSINATURA)
+        self.assertEqual(linhas[tracos[0] + 1:tracos[0] + 4], ["Ana", "Secretária", "Gestor do Contrato"])
+        self.assertEqual(linhas[tracos[2] + 1:], ["Carla", "Engenheira", "Fiscal do Contrato"])
+
 
 if __name__ == "__main__":
     unittest.main()

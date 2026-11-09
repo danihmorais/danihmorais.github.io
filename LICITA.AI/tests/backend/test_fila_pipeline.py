@@ -307,6 +307,43 @@ class TestStaleQueueCancellation(unittest.TestCase):
             self.assertFalse(bloco["additionalProperties"])
             self.assertTrue(all(item == {"type": "string"} for item in bloco["properties"].values()))
 
+    def test_amostra_tr_sai_do_schema_e_da_validacao_quando_nao_ha_amostra(self):
+        com_amostra = _json_schema_fase_preparatoria()["json_schema"]["schema"]["properties"]["TR"]
+        sem_amostra = _json_schema_fase_preparatoria(exigir_amostra_tr=False)["json_schema"]["schema"]["properties"]["TR"]
+
+        self.assertIn("AMOSTRA_TR", com_amostra["properties"])
+        self.assertIn("AMOSTRA_TR", com_amostra["required"])
+        self.assertNotIn("AMOSTRA_TR", sem_amostra["properties"])
+        self.assertNotIn("AMOSTRA_TR", sem_amostra["required"])
+        self.assertEqual(set(com_amostra["properties"]) - set(sem_amostra["properties"]), {"AMOSTRA_TR"})
+        # Somente o campo do TR muda: o ETP continua com AMOSTRA_ETP.
+        etp = _json_schema_fase_preparatoria(exigir_amostra_tr=False)["json_schema"]["schema"]["properties"]["ETP"]
+        self.assertIn("AMOSTRA_ETP", etp["required"])
+
+        opcoes = _opcoes_chamada_ia_etapa("geracao_unificada", "FASE_PREPARATORIA", exigir_amostra_tr=False)
+        self.assertEqual(
+            opcoes["response_format"],
+            _json_schema_fase_preparatoria(exigir_amostra_tr=False),
+        )
+
+    def test_validacao_sem_amostra_nao_exige_amostra_tr_e_descarta_o_que_vier(self):
+        sem_amostra = _json_schema_fase_preparatoria(exigir_amostra_tr=False)["json_schema"]["schema"]["properties"]
+        valido = {
+            bloco: {campo: "Texto válido." for campo in definicao["properties"]}
+            for bloco, definicao in sem_amostra.items()
+        }
+        valido["TR"]["REQUISITOS_TR"] = "Não há documentos adicionais"
+
+        self.assertEqual(_validar_json_unificado(valido, exigir_amostra_tr=False), valido)
+        # Por padrão (amostra exigida) o campo continua obrigatório.
+        with self.assertRaisesRegex(RuntimeError, "campos ausentes: AMOSTRA_TR"):
+            _validar_json_unificado(valido)
+
+        com_extra = {bloco: dict(conteudo) for bloco, conteudo in valido.items()}
+        com_extra["TR"]["AMOSTRA_TR"] = "Redação da IA que não deve ser aproveitada."
+        resultado = _validar_json_unificado(com_extra, exigir_amostra_tr=False)
+        self.assertNotIn("AMOSTRA_TR", resultado["TR"])
+
     def test_json_schema_nao_e_ativado_nas_etapas_de_consulta(self):
         self.assertEqual(_opcoes_chamada_ia_etapa("consulta_habilitacao"), {})
         self.assertEqual(_opcoes_chamada_ia_etapa("geracao_json"), {})
@@ -536,6 +573,88 @@ class TestPipelineUnificado(unittest.TestCase):
         self.assertEqual(job["status"], "sent")
         self.assertEqual(job["dados_ia"]["VALOR_ESTIMADO_APROXIMADO"], "R$ 305,00")
         enviar_email.assert_called_once()
+
+
+    def _rodar_pipeline_unificado(self, dados_usuario, resposta_ia):
+        """Executa a etapa unificada com IA falsa e devolve (opções enviadas à IA, dados_ia gerados)."""
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        import fila_pipeline_unificado as pipeline
+
+        opcoes_recebidas = {}
+        dados_ia_gerados = {}
+        job_id = "b" * 32
+
+        def chamar_ia(prompt, model, temperature=0.3, **opcoes):
+            opcoes_recebidas.update(opcoes)
+            return resposta_ia, "modelo-resolvido"
+
+        with tempfile.TemporaryDirectory() as diretorio:
+            raiz = Path(diretorio)
+
+            def gerar_zip(_dados_usuario, dados_ia, _session_id):
+                dados_ia_gerados.update(dados_ia)
+                pasta = raiz / "gerados"
+                pasta.mkdir()
+                arquivo = pasta / "documentos.zip"
+                arquivo.write_bytes(b"zip de teste")
+                return arquivo, "documentos.zip"
+
+            job = {
+                "job_id": job_id,
+                "email": "teste@example.com",
+                "status": "processing",
+                "attempts": 1,
+                "dados_usuario": dados_usuario,
+                "dados_ia": {
+                    "__LICITA_PIPELINE__": {
+                        "model": "unsloth-auto",
+                        "temperature": 0.3,
+                        "etapas": [{"id": "FASE_PREPARATORIA", "tipo": "geracao_unificada", "prompt": "PROMPT"}],
+                    }
+                },
+            }
+            with (
+                patch.object(pipeline, "_job_path", side_effect=lambda _id, suffix="": raiz / f"{_id}{suffix}.json"),
+                patch.object(pipeline, "_artifact_path", side_effect=lambda _id: raiz / f"{_id}.artifact.zip"),
+                patch.object(pipeline, "_write_json"),
+                patch.object(pipeline, "_chamar_ia", side_effect=chamar_ia),
+                patch.object(pipeline, "gerar_zip", side_effect=gerar_zip),
+                patch.object(pipeline, "_enviar_email"),
+            ):
+                pipeline._process_pipeline(job)
+        return opcoes_recebidas, dados_ia_gerados
+
+    def _resposta_unificada(self, com_amostra_tr):
+        schema = _json_schema_fase_preparatoria(exigir_amostra_tr=com_amostra_tr)["json_schema"]["schema"]["properties"]
+        resposta = {
+            bloco: {campo: f"Texto de {campo}." for campo in definicao["properties"]}
+            for bloco, definicao in schema.items()
+        }
+        resposta["TR"]["REQUISITOS_TR"] = "Não há documentos adicionais"
+        return resposta
+
+    def test_pipeline_sem_amostra_nao_pede_amostra_tr_a_ia(self):
+        opcoes, dados_ia = self._rodar_pipeline_unificado(
+            {"{{OBJETO}}": "Objeto de teste", "{{AMOST}}": "nao"},
+            self._resposta_unificada(com_amostra_tr=False),
+        )
+
+        tr = opcoes["response_format"]["json_schema"]["schema"]["properties"]["TR"]
+        self.assertNotIn("AMOSTRA_TR", tr["properties"])
+        self.assertNotIn("AMOSTRA_TR", dados_ia)
+        self.assertIn("AMOSTRA_ETP", dados_ia)
+
+    def test_pipeline_com_amostra_continua_pedindo_amostra_tr_a_ia(self):
+        opcoes, dados_ia = self._rodar_pipeline_unificado(
+            {"{{OBJETO}}": "Objeto de teste", "{{AMOST}}": "sim"},
+            self._resposta_unificada(com_amostra_tr=True),
+        )
+
+        tr = opcoes["response_format"]["json_schema"]["schema"]["properties"]["TR"]
+        self.assertIn("AMOSTRA_TR", tr["required"])
+        self.assertEqual(dados_ia["AMOSTRA_TR"], "Texto de AMOSTRA_TR.")
 
 
 class TestConfiguracaoThinking(unittest.TestCase):

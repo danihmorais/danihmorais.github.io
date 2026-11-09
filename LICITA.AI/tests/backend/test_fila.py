@@ -44,6 +44,51 @@ class FilaTests(unittest.TestCase):
                 finally:
                     shutil.rmtree(caminho_zip.parent, ignore_errors=True)
 
+    def _modificacoes_de_gerar_zip(self, dados_usuario, dados_ia):
+        import shutil
+        import tempfile
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as diretorio_modelos:
+            modelo = Path(diretorio_modelos) / "modelo.docx"
+            modelo.write_bytes(b"modelo de teste")
+            capturadas = {}
+
+            def modificar_falso(_origem, destino, modificacoes):
+                capturadas.update(modificacoes)
+                Path(destino).write_bytes(b"documento de teste")
+
+            with (
+                patch.object(fila.config, "PASTA_MODELOS", diretorio_modelos),
+                patch.object(fila.config, "BASE_FILES", ["modelo.docx"]),
+                patch.object(fila, "modificar_documento", side_effect=modificar_falso),
+            ):
+                caminho_zip, _ = fila.gerar_zip(dados_usuario, dados_ia, "teste123")
+                shutil.rmtree(caminho_zip.parent, ignore_errors=True)
+        return capturadas
+
+    def test_gerar_zip_sem_amostra_mantem_texto_fixo_mesmo_se_a_ia_devolver_amostra_tr(self):
+        modificacoes = self._modificacoes_de_gerar_zip(
+            {"{{AMOST}}": "nao"},
+            {"AMOSTRA_TR": "Texto inventado pela IA sobre amostras."},
+        )
+
+        self.assertEqual(
+            modificacoes["{{AMOSTRA_TR}}"],
+            "Não há exigência de amostra para esta contratação.",
+        )
+
+    def test_gerar_zip_com_amostra_usa_a_redacao_detalhada_da_ia(self):
+        modificacoes = self._modificacoes_de_gerar_zip(
+            {"{{AMOST}}": "sim"},
+            {"AMOSTRA_TR": "Os licitantes deverão entregar amostras em até 7 dias úteis."},
+        )
+
+        self.assertEqual(
+            modificacoes["{{AMOSTRA_TR}}"],
+            "Os licitantes deverão entregar amostras em até 7 dias úteis.",
+        )
+
     def test_remove_barras_soltas_no_fim_dos_paragrafos_sem_alterar_barras_legitimas(self):
         texto = (
             "Primeiro parágrafo. /\n"

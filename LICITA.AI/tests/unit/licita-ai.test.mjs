@@ -296,6 +296,23 @@ test("gerarFasePreparatoria rejeita pagamento por etapas sem descrição", async
   );
 });
 
+test("construirPrompt do TR não pede AMOSTRA_TR à IA quando a amostra não é exigida", () => {
+  const { construirPrompt } = loadTsModule("src/providers/services/geradorIA.ts");
+  const base = { "{{OBJETO}}": "Aquisição de materiais", "{{NECESSIDADE}}": "Reposição de estoque" };
+
+  for (const dados of [base, { ...base, "{{AMOST}}": "nao" }]) {
+    const prompt = construirPrompt(dados, false, "TR", "", true);
+    assert.doesNotMatch(prompt, /AMOSTRA_TR/);
+    assert.doesNotMatch(prompt, /Não há exigência de amostra/);
+    assert.match(prompt, /"LOCAL": ""\n\}/);
+    assert.match(prompt, /O campo EXECUCAO deve obrigatoriamente aprimorar|Elabore condições completas de execução/);
+  }
+
+  const comAmostra = construirPrompt({ ...base, "{{AMOST}}": "sim" }, false, "TR", "", true);
+  assert.match(comAmostra, /"AMOSTRA_TR": ""/);
+  assert.match(comAmostra, /AMOSTRA_TR: Detalhe a parte prática da exigência de amostra/);
+});
+
 test("construirPrompt prioriza as instruções específicas do usuário", () => {
   const { construirPrompt } = loadTsModule("src/providers/services/geradorIA.ts");
   const prompt = construirPrompt({ "{{OBJETO}}": "Aquisição de materiais", "{{NECESSIDADE}}": "Reposição de estoque" }, false, "ETP", "Justifique a necessidade de amostra.", true);

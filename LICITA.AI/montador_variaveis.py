@@ -78,6 +78,14 @@ CHAVES_RAW = {
 LIMITE_EXCLUSIVIDADE_MEEPP = 80000
 SIM_VALORES = {"sim", "s", "x", "true", "1"}
 
+# Texto fixo do item de amostra do TR quando a amostra não é exigida: não passa pela IA.
+TEXTO_AMOSTRA_TR_NAO_EXIGIDA = "Não há exigência de amostra para esta contratação."
+
+# Linha em branco "real" nos blocos de várias linhas: o processador de DOCX descarta linhas vazias
+# (quebras consecutivas viram uma só), mas mantém uma linha que contém apenas espaço não separável.
+LINHA_EM_BRANCO = " "
+LINHAS_ESPACO_ASSINATURA = 3
+
 
 def _normalizar_sim_nao(valor) -> str:
     return str(valor).strip().casefold()
@@ -85,6 +93,11 @@ def _normalizar_sim_nao(valor) -> str:
 
 def _converter_para_sim(valor) -> bool:
     return _normalizar_sim_nao(valor) in SIM_VALORES
+
+
+def amostra_exigida(dados_usuario: dict) -> bool:
+    """True quando o usuário marcou que a contratação exige amostra."""
+    return _converter_para_sim(dados_usuario.get("{{AMOST}}", "nao"))
 
 
 def _pessoas(dados_usuario: dict, chave_dados: str, chave_nomes: str, chave_cargos: str) -> list[tuple[str, str]]:
@@ -189,10 +202,12 @@ def montar_variaveis_fixas(dados_usuario: dict) -> dict:
             continue
         resultado[chave] = valor
     
-    amostra_opt = dados_usuario.get("{{AMOST}}", "nao")
-    texto_amostra = config.TEXTOS.get("amostra_tr", "") if _converter_para_sim(amostra_opt) else ""
+    exige_amostra = amostra_exigida(dados_usuario)
+    texto_amostra = config.TEXTOS.get("amostra_tr", "") if exige_amostra else ""
     resultado["{{AMOSTRA}}"] = texto_amostra
-    resultado["{{AMOSTRA_TR}}"] = texto_amostra
+    # Sem amostra, o item do TR é texto fixo (a IA nem é consultada para ele). Com amostra, este valor
+    # é só o texto-base: a redação detalhada da IA o substitui em gerar_zip.
+    resultado["{{AMOSTRA_TR}}"] = texto_amostra if exige_amostra else TEXTO_AMOSTRA_TR_NAO_EXIGIDA
 
     vistoria_opt = dados_usuario.get("{{VIST}}", "nao")
     texto_vistoria = config.TEXTOS.get("vistoria_tr", "") if _converter_para_sim(vistoria_opt) else ""
@@ -250,16 +265,18 @@ def montar_variaveis_fixas(dados_usuario: dict) -> dict:
     gestores = _pessoas(dados_usuario, "GESTORES_DADOS", "{{GESTOR}}", "{{GESTOR_CARGO}}")
     fiscais = _pessoas(dados_usuario, "FISCAIS_DADOS", "{{FISCAL}}", "{{FISCAL_CARGO}}")
 
+    # Cada bloco abre com linhas em branco (espaço para assinar acima do traço) e os blocos se
+    # encadeiam, de modo que o espaço de um bloco separa o anterior do seguinte.
     assinaturas_blocos = []
     for papel, pessoas in (("Gestor do Contrato", gestores), ("Fiscal do Contrato", fiscais)):
         for nome, cargo in pessoas:
-            linhas = ["", "", "", "____________________________", nome]
+            linhas = [LINHA_EM_BRANCO] * LINHAS_ESPACO_ASSINATURA + ["____________________________", nome]
             if cargo:
                 linhas.append(cargo)
-            linhas.extend([papel, "", "", ""])
+            linhas.append(papel)
             assinaturas_blocos.append("\n".join(linhas))
 
-    resultado["{{ASSINATURAS}}"] = "\n\n".join(assinaturas_blocos) if assinaturas_blocos else ""
+    resultado["{{ASSINATURAS}}"] = "\n".join(assinaturas_blocos) if assinaturas_blocos else ""
     # O total exibido deve fechar com a soma das linhas da tabela de itens (centavos exatos,
     # sem ruído de ponto flutuante do navegador). Sem itens valorizados, preserva o informado.
     total_itens = calcular_valor_estimado_decimal(dados_usuario)

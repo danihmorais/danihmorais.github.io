@@ -170,6 +170,9 @@ ${instrucaoVistoriaEtp}
 ${diretrizCriterio}
 ${diretrizModalidade}`;
     } else if (etapa === "TR") {
+        // Sem exigência de amostra, AMOSTRA_TR é texto fixo montado no backend: não é pedido à IA
+        // (o backend também o retira do esquema JSON da resposta).
+        const exigeAmostra = amostraFormatada === "Sim";
         chaves = `{
   "REQUISITOS_TR": "",
   "OBRIGACOES_CONTRATADA": "",
@@ -178,19 +181,19 @@ ${diretrizModalidade}`;
   "GARANTIAS_TR": "",
   "EXECUCAO": "",
   "PRAZO_EXEC": "",
-  "LOCAL": "",
-  "AMOSTRA_TR": ""
+  "LOCAL": ""${exigeAmostra ? `,
+  "AMOSTRA_TR": ""` : ""}
 }`;
         const diretrizExecucao = execucaoRaw && execucaoRaw !== "[Condições de execução não informadas]" ? `O campo EXECUCAO deve obrigatoriamente aprimorar o seguinte texto base: ${execucaoRaw}` : "Elabore condições completas de execução compatíveis com o objeto.";
-        const instrucaoAmostraTr = amostraFormatada === "Não" ? `AMOSTRA_TR: Retorne expressamente e exclusivamente a frase "Não há exigência de amostra para esta contratação."` : `AMOSTRA_TR: Detalhe a parte prática da exigência de amostra conforme as regras mínimas.`;
+        const instrucaoAmostraTr = exigeAmostra ? `AMOSTRA_TR: Detalhe a parte prática da exigência de amostra conforme as regras mínimas.` : "";
+        const instrucoesCondicionaisTr = [instrucaoAmostraTr, diretrizExecucao].filter(Boolean).join("\n");
         diretrizEtapa = `ETAPA: TERMO DE REFERÊNCIA.
 Os textos devem possuir caráter normativo e operacional.
 Os requisitos devem ser objetivos, proporcionais e compatíveis com o objeto. É vedada exigência excessiva de qualificação técnica.
 Observe entendimentos consolidados do TCE-SP quando pertinentes, sem citar número de processo não confirmado nas referências disponíveis.
 
 INSTRUÇÕES CONDICIONAIS DIRETAS:
-${instrucaoAmostraTr}
-${diretrizExecucao}`;
+${instrucoesCondicionaisTr}`;
     }
     const chavesEtapa = STAGE_CHAVES[etapa] || [];
     const regrasMinimas = montarRegrasMinimas(chavesEtapa, dadosUsuario, camposExcluidos);

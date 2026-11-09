@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 from fila import MAX_ATTEMPTS, POLL_INTERVAL_SECONDS, QUEUE_DIR, SMTP_FROM, SMTP_USERNAME, _artifact_path, _claim_next_job, _enviar_email, _enviar_email_alerta_falha, _finalizar_etapa, _finalizar_tentativa, _iniciar_etapa, _job_path, _retry_delay_seconds, _write_json, gerar_zip
 from fila_pipeline import ErroPermanente, _aplicar_auditoria_marcas, _chamar_ia as _chamar_ia_primaria, _substituir_contextos, _validar_json_geracao, limite_prompt_chars
-from montador_variaveis import calcular_valor_estimado_decimal
+from montador_variaveis import amostra_exigida, calcular_valor_estimado_decimal
 
 
 class JobCancelado(Exception):
@@ -300,10 +300,15 @@ A resposta deve ser exclusivamente um objeto JSON válido que corresponda integr
 """.strip()
 
 
-def _json_schema_fase_preparatoria() -> dict:
-    """Contrato JSON Schema estrito para a resposta integrada DFD/ETP/TR."""
+def _json_schema_fase_preparatoria(exigir_amostra_tr: bool = True) -> dict:
+    """Contrato JSON Schema estrito para a resposta integrada DFD/ETP/TR.
+
+    Sem exigência de amostra, AMOSTRA_TR sai do contrato: o texto é fixo e não passa pela IA.
+    """
     blocos = {}
     for nome, campos in _FASE_PREPARATORIA_CAMPOS.items():
+        if nome == "TR" and not exigir_amostra_tr:
+            campos = tuple(campo for campo in campos if campo != "AMOSTRA_TR")
         blocos[nome] = {
             "type": "object",
             "properties": {campo: {"type": "string"} for campo in campos},
@@ -384,7 +389,7 @@ def _json_schema_itens_tr() -> dict:
     )
 
 
-def _opcoes_chamada_ia_etapa(etapa_tipo: str, etapa_id: str = "") -> dict:
+def _opcoes_chamada_ia_etapa(etapa_tipo: str, etapa_id: str = "", *, exigir_amostra_tr: bool = True) -> dict:
     """Saída estruturada nas etapas de JSON fechado; sem ferramentas nas etapas puramente mecânicas.
 
     A consulta de habilitação (que usa pesquisa web) e a contratação direta (que ainda descreve o
@@ -405,7 +410,7 @@ def _opcoes_chamada_ia_etapa(etapa_tipo: str, etapa_id: str = "") -> dict:
     if tipo != "geracao_unificada":
         return {}
     return {
-        "response_format": _json_schema_fase_preparatoria(),
+        "response_format": _json_schema_fase_preparatoria(exigir_amostra_tr),
         "enable_tools": False,
         "system_prompt": _FASE_PREPARATORIA_SYSTEM_PROMPT,
     }
@@ -434,8 +439,12 @@ def _chamar_ia(
     )
 
 
-def _validar_json_unificado(resultado: dict) -> dict:
-    """Exige os três blocos DFD/ETP/TR completos em um único objeto JSON."""
+def _validar_json_unificado(resultado: dict, exigir_amostra_tr: bool = True) -> dict:
+    """Exige os três blocos DFD/ETP/TR completos em um único objeto JSON.
+
+    Sem exigência de amostra, AMOSTRA_TR não é esperado (texto fixo); se a IA o devolver mesmo assim,
+    é descartado em vez de reprovar a resposta.
+    """
     resultado = _validar_json_geracao(resultado)
     esperados = {"DFD", "ETP", "TR"}
     recebidos = set(resultado)
@@ -463,6 +472,10 @@ def _validar_json_unificado(resultado: dict) -> dict:
             "GARANTIAS_TR", "EXECUCAO", "PRAZO_EXEC", "LOCAL", "AMOSTRA_TR",
         },
     }
+    if not exigir_amostra_tr:
+        campos_esperados["TR"].discard("AMOSTRA_TR")
+        if isinstance(resultado["TR"], dict) and "AMOSTRA_TR" in resultado["TR"]:
+            resultado["TR"] = {chave: valor for chave, valor in resultado["TR"].items() if chave != "AMOSTRA_TR"}
     for nome in ("DFD", "ETP", "TR"):
         bloco = resultado[nome]
         if not isinstance(bloco, dict) or not bloco:
@@ -743,7 +756,8 @@ def _process_pipeline(job: dict) -> None:
                 f"O prompt desta etapa excede o limite seguro ({len(prompt_processado):,} caracteres; limite {limite_prompt:,})."
             )
         _checar_cancelamento(job)
-        opcoes_chamada = _opcoes_chamada_ia_etapa(etapa_tipo, etapa_id)
+        exigir_amostra_tr = amostra_exigida(dados_usuario)
+        opcoes_chamada = _opcoes_chamada_ia_etapa(etapa_tipo, etapa_id, exigir_amostra_tr=exigir_amostra_tr)
         temperatura_etapa = _temperatura_valida(etapa.get("temperature"), temperatura)
         if opcoes_chamada:
             resultado, modelo_resolvido = _chamar_ia(prompt_processado, modelo, temperatura_etapa, **opcoes_chamada)
@@ -758,7 +772,7 @@ def _process_pipeline(job: dict) -> None:
             dados_usuario, resultado_final = _aplicar_auditoria_marcas(dados_usuario, resultado)
             resultados[etapa_id] = resultado_final
         elif etapa_tipo == "geracao_unificada":
-            resultado_final = _validar_json_unificado(resultado)
+            resultado_final = _validar_json_unificado(resultado, exigir_amostra_tr)
             resultados[etapa_id] = resultado_final
         elif etapa_tipo == "geracao_contratacao_direta":
             resultados[etapa_id] = _validar_json_contratacao_direta(resultado)

@@ -16,7 +16,7 @@ from email.message import EmailMessage
 from pathlib import Path
 
 import config
-from montador_variaveis import filtrar_chaves_docx, formatar_moeda, montar_variaveis_fixas, total_linha_item, valor_decimal, validar_consistencia_dados
+from montador_variaveis import amostra_exigida, filtrar_chaves_docx, formatar_moeda, montar_variaveis_fixas, total_linha_item, valor_decimal, validar_consistencia_dados
 from processador_docx import extrair_placeholders_documento, modificar_documento
 
 logger = logging.getLogger(__name__)
@@ -276,6 +276,9 @@ def gerar_zip(dados_usuario: dict, dados_ia: dict, session_id: str) -> tuple[Pat
             if chave_docx == "{{PRAZO REFAZIMENTO}}":
                 continue
             if chave_docx == "{{PAGAMENTO}}" and pagamento_tipo != "POR_ETAPAS":
+                continue
+            if chave_docx == "{{AMOSTRA_TR}}" and not amostra_exigida(dados_usuario):
+                # Sem amostra o item do TR é o texto fixo do montador; a IA não o reescreve.
                 continue
             modificacoes[chave_docx] = (
                 _normalizar_texto_gerado(valor)
