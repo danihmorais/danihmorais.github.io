@@ -12,12 +12,11 @@ import tempfile
 import uuid
 import zipfile
 from datetime import datetime, timezone
-from decimal import Decimal
 from email.message import EmailMessage
 from pathlib import Path
 
 import config
-from montador_variaveis import amostra_exigida, arredondar_valor_estimado_decimal, calcular_valor_estimado_decimal, filtrar_chaves_docx, formatar_moeda, montar_variaveis_fixas, total_linha_item, valor_decimal, validar_consistencia_dados
+from montador_variaveis import amostra_exigida, filtrar_chaves_docx, formatar_moeda, montar_variaveis_fixas, total_linha_item, valor_decimal, validar_consistencia_dados
 from processador_docx import extrair_placeholders_documento, modificar_documento
 
 logger = logging.getLogger(__name__)
@@ -338,39 +337,7 @@ def gerar_zip(dados_usuario: dict, dados_ia: dict, session_id: str) -> tuple[Pat
             cam_origem = os.path.join(config.PASTA_MODELOS, arq)
             cam_destino = temp_dir / f"Pronto_{arq}"
             if os.path.exists(cam_origem):
-                modificacoes_documento = dict(modificacoes)
-                nome_modelo = Path(arq).stem.strip().casefold()
-                eh_dfd = nome_modelo.startswith("dfd")
-                eh_etp = nome_modelo.startswith("etp")
-
-                if eh_etp:
-                    # O ETP sempre recebe a tabela sem preços, mesmo que o modelo use {{ITENS}}.
-                    tabela_sem_valor = modificacoes_documento.get("{{ITENS_SEMVALOR}}")
-                    if not _valor_vazio(tabela_sem_valor):
-                        modificacoes_documento["{{ITENS}}"] = tabela_sem_valor
-
-                    # O valor global do ETP deve ser o aproximado e arredondado calculado pelo backend.
-                    valor_estimado_etp = modificacoes_documento.get("{{VALOR_ESTIMADO_APROXIMADO}}")
-                    if _valor_vazio(valor_estimado_etp):
-                        total_itens = calcular_valor_estimado_decimal(dados_usuario)
-                        if total_itens > 0:
-                            valor_estimado_etp = formatar_moeda(
-                                arredondar_valor_estimado_decimal(total_itens * Decimal("1.05"))
-                            )
-                    if not _valor_vazio(valor_estimado_etp):
-                        modificacoes_documento["{{VALOR_ESTIMADO}}"] = valor_estimado_etp
-                        modificacoes_documento["{{VALOR_ESTIMADO_APROXIMADO}}"] = valor_estimado_etp
-
-                if eh_dfd or eh_etp:
-                    # As tabelas inseridas nesses documentos ficam centralizadas, com parágrafos justificados.
-                    for chave_tabela in ("{{ITENS}}", "{{ITENS_SEMVALOR}}"):
-                        tabela = modificacoes_documento.get(chave_tabela)
-                        if isinstance(tabela, str) and tabela.startswith("__TABLE__"):
-                            modificacoes_documento[chave_tabela] = (
-                                "__TABLE_CENTER_JUSTIFY__" + tabela[len("__TABLE__"):]
-                            )
-
-                modificar_documento(cam_origem, str(cam_destino), modificacoes_documento)
+                modificar_documento(cam_origem, str(cam_destino), modificacoes)
                 arquivos_gerados.append(cam_destino)
                 _avisar_placeholders_residuais(cam_destino, session_id, arq)
 
