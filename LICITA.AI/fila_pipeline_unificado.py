@@ -8,14 +8,14 @@ import shutil
 import threading
 import time
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_CEILING, ROUND_HALF_UP
 import unicodedata
 
 logger = logging.getLogger(__name__)
 
 from fila import MAX_ATTEMPTS, POLL_INTERVAL_SECONDS, QUEUE_DIR, SMTP_FROM, SMTP_USERNAME, _artifact_path, _claim_next_job, _enviar_email, _enviar_email_alerta_falha, _finalizar_etapa, _finalizar_tentativa, _iniciar_etapa, _job_path, _retry_delay_seconds, _write_json, gerar_zip
 from fila_pipeline import ErroPermanente, _aplicar_auditoria_marcas, _chamar_ia as _chamar_ia_primaria, _substituir_contextos, _validar_json_geracao, limite_prompt_chars
-from montador_variaveis import amostra_exigida, arredondar_valor_estimado_decimal, calcular_valor_estimado_decimal
+from montador_variaveis import amostra_exigida, calcular_valor_estimado_decimal
 
 
 class JobCancelado(Exception):
@@ -207,9 +207,10 @@ def _calcular_valor_estimado_aproximado(
 
     # Arredonda para cima em incrementos compatíveis com a ordem de grandeza:
     # R$ 1.296 -> dezenas; R$ 12.962 -> centenas; R$ 129.628 -> milhares.
-    aproximado = arredondar_valor_estimado_decimal(alvo).quantize(
-        Decimal("0.01"), rounding=ROUND_HALF_UP
-    )
+    expoente = alvo.adjusted()
+    passo = max(Decimal("5"), Decimal("10") ** (expoente - 2))
+    aproximado = (alvo / passo).to_integral_value(rounding=ROUND_CEILING) * passo
+    aproximado = aproximado.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
     centavos = int((aproximado * 100).to_integral_value(rounding=ROUND_HALF_UP))
     inteiro, fracao = divmod(centavos, 100)

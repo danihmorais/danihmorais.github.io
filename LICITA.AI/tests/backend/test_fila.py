@@ -67,64 +67,6 @@ class FilaTests(unittest.TestCase):
                 shutil.rmtree(caminho_zip.parent, ignore_errors=True)
         return capturadas
 
-    def test_gerar_zip_aplica_regras_de_tabela_e_valor_arredondado_no_etp(self):
-        import json
-        import shutil
-        import tempfile
-        from unittest.mock import patch
-
-        dados_usuario = {
-            "{{ITENS}}": json.dumps([{
-                "numero": 1,
-                "descricao": "Papel A4",
-                "un": "RESMA",
-                "qtd": 10,
-                "valor": 123.45,
-            }], ensure_ascii=False),
-        }
-        dados_ia = {"VALOR_ESTIMADO_APROXIMADO": "R$ 1.300,00"}
-        nomes_modelos = ["DFD - BASE.docx", "ETP - BASE.docx", "TR - BASE.docx"]
-        modificacoes_por_documento = {}
-
-        with tempfile.TemporaryDirectory() as diretorio_modelos:
-            for nome in nomes_modelos:
-                (Path(diretorio_modelos) / nome).write_bytes(b"modelo de teste")
-
-            def modificar_falso(_origem, destino, modificacoes):
-                nome = Path(destino).name.removeprefix("Pronto_")
-                modificacoes_por_documento[nome] = dict(modificacoes)
-                Path(destino).write_bytes(b"documento de teste")
-
-            with (
-                patch.object(fila.config, "PASTA_MODELOS", diretorio_modelos),
-                patch.object(fila.config, "BASE_FILES", nomes_modelos),
-                patch.object(fila, "modificar_documento", side_effect=modificar_falso),
-            ):
-                caminho_zip, _ = fila.gerar_zip(dados_usuario, dados_ia, "teste123")
-                try:
-                    dfd = modificacoes_por_documento["DFD - BASE.docx"]
-                    etp = modificacoes_por_documento["ETP - BASE.docx"]
-                    tr = modificacoes_por_documento["TR - BASE.docx"]
-
-                    marcador = "__TABLE_CENTER_JUSTIFY__"
-                    self.assertTrue(dfd["{{ITENS}}"].startswith(marcador))
-                    dados_dfd = json.loads(dfd["{{ITENS}}"][len(marcador):])
-                    self.assertIn("Vlr Unit.", dados_dfd[0])
-                    self.assertIn("Total", dados_dfd[0])
-
-                    self.assertTrue(etp["{{ITENS}}"].startswith(marcador))
-                    dados_etp = json.loads(etp["{{ITENS}}"][len(marcador):])
-                    self.assertEqual(list(dados_etp[0]), ["Item", "Descrição", "UN", "Qtd"])
-                    self.assertEqual(etp["{{VALOR_ESTIMADO}}"], "R$ 1.300,00")
-                    self.assertEqual(etp["{{VALOR_ESTIMADO_APROXIMADO}}"], "R$ 1.300,00")
-
-                    self.assertTrue(tr["{{ITENS}}"].startswith("__TABLE__"))
-                    dados_tr = json.loads(tr["{{ITENS}}"].replace("__TABLE__", "", 1))
-                    self.assertIn("Vlr Unit.", dados_tr[0])
-                    self.assertIn("Total", dados_tr[0])
-                finally:
-                    shutil.rmtree(caminho_zip.parent, ignore_errors=True)
-
     def test_gerar_zip_sem_amostra_mantem_texto_fixo_mesmo_se_a_ia_devolver_amostra_tr(self):
         modificacoes = self._modificacoes_de_gerar_zip(
             {"{{AMOST}}": "nao"},

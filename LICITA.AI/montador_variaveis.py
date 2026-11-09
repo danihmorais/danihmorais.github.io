@@ -1,5 +1,5 @@
 import json
-from decimal import Decimal, InvalidOperation, ROUND_CEILING, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 import config
 
@@ -167,17 +167,6 @@ def total_linha_item(item: dict) -> Decimal:
     return (valor_decimal(item.get("qtd", 0)) * valor_decimal(item.get("valor", 0))).quantize(
         _CENTAVOS, rounding=ROUND_HALF_UP
     )
-
-
-def arredondar_valor_estimado_decimal(valor) -> Decimal:
-    """Arredonda uma estimativa global para cima, em incrementos compatíveis com sua ordem de grandeza."""
-    numero = valor if isinstance(valor, Decimal) else valor_decimal(valor)
-    if not numero.is_finite() or numero <= 0:
-        return Decimal("0")
-
-    expoente = numero.adjusted()
-    passo = max(Decimal("5"), Decimal("10") ** (expoente - 2))
-    return (numero / passo).to_integral_value(rounding=ROUND_CEILING) * passo
 
 
 def formatar_moeda(valor) -> str:
