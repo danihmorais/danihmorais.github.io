@@ -34,7 +34,7 @@ export default function Wizard() {
     gestores: [{ nome: "", cargo: "" }],
     fiscais: [{ nome: "", cargo: "" }],
     execucao: "",
-    prazoDevolucao: "",
+    recebimento: "",
     especificacoesEspeciais: "",
     vistoria: false,
     textoVistoria: "",
@@ -280,7 +280,7 @@ function numeroProcessoValido(valor: string): boolean {
           (dados.dotacao || dados.dotacaoBlocos) &&
           dados.objeto &&
           dados.execucao &&
-          dados.prazoDevolucao &&
+          dados.recebimento &&
           hasG &&
           hasF
         );

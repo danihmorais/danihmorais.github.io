@@ -102,7 +102,10 @@ export function criarDadosTeste(modalidade: ModalidadeTeste) {
       modalidade === "LEILAO_ELETRONICO"
         ? ""
         : "A execução deverá observar as condições, prazos e demais exigências previstas no Termo de Referência de teste.",
-    prazoDevolucao: modalidade === "LEILAO_ELETRONICO" ? "" : "5",
+    recebimento:
+      modalidade === "LEILAO_ELETRONICO"
+        ? ""
+        : "O recebimento do objeto será realizado provisoriamente e, após a verificação da conformidade com as especificações do Termo de Referência, definitivamente, nos prazos e condições nele estabelecidos.",
     especificacoesEspeciais: "",
     vistoria: modalidade === "LEILAO_ELETRONICO",
     textoVistoria:

@@ -419,18 +419,8 @@ def montar_variaveis_fixas(dados_usuario: dict) -> dict:
     retirada = dados_usuario.get("{{RETIRADA}}", "")
     resultado["{{RETIRADA}}"] = retirada
 
-    prazo_dev = resultado.get("{{PRAZO DEVOLUCAO}}", resultado.get("PRAZO DEVOLUCAO", ""))
-    if prazo_dev:
-        try:
-            num_match = re.search(r'\d+', str(prazo_dev))
-            if num_match:
-                num = int(num_match.group())
-                extenso = _numero_por_extenso(num)
-                resultado["{{PRAZO DEVOLUCAO}}"] = f"{num} ({extenso})"
-            else:
-                resultado["{{PRAZO DEVOLUCAO}}"] = str(prazo_dev)
-        except Exception:
-            resultado["{{PRAZO DEVOLUCAO}}"] = str(prazo_dev)
+    recebimento = dados_usuario.get("{{RECEBIMENTO}}", dados_usuario.get("RECEBIMENTO", ""))
+    resultado["{{RECEBIMENTO}}"] = recebimento
 
     esp_esp = resultado.get("{{ESPECIFICACOES ESPECIAIS}}", resultado.get("ESPECIFICACOES ESPECIAIS", ""))
     resultado["{{ESPECIFICACOES ESPECIAIS}}"] = esp_esp
