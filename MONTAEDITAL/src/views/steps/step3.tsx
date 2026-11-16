@@ -1,5 +1,6 @@
 import React from "react";
 import { limparNumeracao } from "../../utils/limparNumeracao";
+import { sanitizarDocumentoAdicional } from "../../utils/sanitizarDocumentoAdicional";
 
 export default function Step3({ dados, atualizarDados }: any) {
   const isLeilao = dados.modalidade === "LEILAO_ELETRONICO";
@@ -274,7 +275,7 @@ export default function Step3({ dados, atualizarDados }: any) {
                           value={doc}
                           onChange={(e) => {
                             const novosDocs = [...(dados.documentosAdicionais || [])];
-                            novosDocs[index] = e.target.value;
+                            novosDocs[index] = sanitizarDocumentoAdicional(e.target.value);
                             atualizarDados({ documentosAdicionais: novosDocs });
                           }}
                           placeholder="Descreva o documento adicional..."
