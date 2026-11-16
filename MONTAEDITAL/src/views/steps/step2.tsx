@@ -171,7 +171,7 @@ export default function Step2({ dados, atualizarDados }: any) {
             <div className="wiz-card-title">Prazos e Locais</div>
             <div className="wiz-card-subtitle">
               {!isLeilao
-                ? "Execução, entrega e devoluções"
+                ? "Execução, recebimento e locais"
                 : "Condições de retirada do bem"}
             </div>
             </div>
