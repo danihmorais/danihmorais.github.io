@@ -34,7 +34,7 @@ export default function Wizard() {
     gestores: [{ nome: "", cargo: "" }],
     fiscais: [{ nome: "", cargo: "" }],
     execucao: "",
-    prazoDevolucao: "",
+    recebimento: "",
     especificacoesEspeciais: "",
     vistoria: false,
     textoVistoria: "",
