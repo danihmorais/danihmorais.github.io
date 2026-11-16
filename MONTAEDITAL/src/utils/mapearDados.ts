@@ -1,3 +1,5 @@
+import { sanitizarDocumentoAdicional } from "./sanitizarDocumentoAdicional";
+
 function numeroPorExtenso(numero: number): string {
   if (isNaN(numero)) return "";
   if (numero === 0) return "zero";
@@ -68,12 +70,12 @@ export const mapearDadosWizard = async (dados: any) => {
   let docCount = 12;
   const docs = dados.documentosAdicionais || [];
   for (const doc of docs) {
-    if (doc.trim()) {
-      docText += `***(Documento ${docCount.toString().padStart(2, '0')})*** ${doc.trim()}\n`;
+    const documentoSanitizado = sanitizarDocumentoAdicional(doc);
+    if (documentoSanitizado) {
+      docText += `***(Documento ${docCount.toString().padStart(2, '0')})*** ${documentoSanitizado}\n`;
       docCount++;
     }
   }
-  
   const declNum = docCount.toString().padStart(2, '0');
   const propNum = (docCount + 1).toString().padStart(2, '0');
 
