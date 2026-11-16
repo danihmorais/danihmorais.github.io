@@ -280,7 +280,7 @@ function numeroProcessoValido(valor: string): boolean {
           (dados.dotacao || dados.dotacaoBlocos) &&
           dados.objeto &&
           dados.execucao &&
-          dados.prazoDevolucao &&
+          dados.recebimento &&
           hasG &&
           hasF
         );
