@@ -177,17 +177,21 @@ export default function Step2({ dados, atualizarDados }: any) {
             </div>
         </div>
         {!isLeilao && (
-          <div className="wiz-field" style={{ marginBottom: "16px" }}>
-            <label className="wiz-label">
-              Prazo de Devolução <span className="req-star">*</span>
-            </label>
-            <input
-              type="number"
-              className="wiz-input"
-              value={dados.prazoDevolucao || ""}
-              onChange={(e) => atualizarDados({ prazoDevolucao: e.target.value })}
-              placeholder="Ex: 5 (dias)"
-            />
+          <div className="wiz-grid-1" style={{ marginBottom: "16px" }}>
+            <div className="wiz-field">
+              <label className="wiz-label">
+                Do Recebimento <span className="req-star">*</span>
+              </label>
+              <div style={{ marginBottom: "8px", color: "var(--wiz-text-3)", fontSize: "13px" }}>
+                Insira <strong>TODAS as cláusulas</strong> que constarem na seção DO RECEBIMENTO do Termo de Referência. A numeração colada no início das cláusulas será removida automaticamente.
+              </div>
+              <textarea
+                className="wiz-textarea"
+                value={dados.recebimento || ""}
+                onChange={(e) => atualizarDados({ recebimento: limparNumeracao(e.target.value) })}
+                placeholder="Cole TODAS as cláusulas da seção DO RECEBIMENTO do TR. A numeração será removida automaticamente..."
+              />
+            </div>
           </div>
         )}
         <div className="wiz-grid-1" style={{ marginBottom: "16px" }}>
