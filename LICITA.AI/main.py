@@ -820,7 +820,7 @@ def _ler_itens_csv(conteudo: bytes) -> list[dict]:
     except UnicodeDecodeError:
         texto = conteudo.decode("cp1252")
     primeira_linha = texto.splitlines()[0] if texto.splitlines() else ""
-    delimitadores = (";", ",", "\\t")
+    delimitadores = (";", ",", "\t")
     delimitador = max(delimitadores, key=lambda candidato: primeira_linha.count(candidato))
     if primeira_linha.count(delimitador) == 0:
         raise ValueError("Não foi possível identificar o separador da planilha.")
