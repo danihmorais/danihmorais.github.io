@@ -337,6 +337,7 @@ class FilaTests(unittest.TestCase):
                     with zipfile.ZipFile(caminho_zip) as arquivo:
                         self.assertIn("RELATORIO_CONFORMIDADE.json", arquivo.namelist())
                         self.assertIn("RELATORIO_CONFORMIDADE.txt", arquivo.namelist())
+                        self.assertIn("RELATORIO_REFERENCIAS_LEGAIS.txt", arquivo.namelist())
                         relatorio = json.loads(arquivo.read("RELATORIO_CONFORMIDADE.json"))
                     self.assertEqual(relatorio["summary"]["pendencias"], 0)
                 finally:
