@@ -433,7 +433,8 @@ async def _ler_payload_fase_preparatoria(request: Request) -> tuple[FasePreparat
             req = FasePreparatoriaRequest.model_validate(payload)
         except (ValueError, TypeError) as exc:
             raise HTTPException(status_code=400, detail="Payload JSON inválido ou contém campos não permitidos.") from exc
-        _, dados_ia = _montar_pipeline_requisicao(req)
+        dados_usuario, dados_ia = _montar_pipeline_requisicao(req)
+        req = req.model_copy(update={"dados_usuario": dados_usuario})
         return req, None, dados_ia
 
     try:
@@ -480,7 +481,8 @@ async def _ler_payload_fase_preparatoria(request: Request) -> tuple[FasePreparat
             raise HTTPException(status_code=422, detail=f"Não foi possível processar os documentos de referência: {exc}") from exc
 
     documentos = contexto["documentos"] if contexto else None
-    _, dados_ia = _montar_pipeline_requisicao(req, documentos)
+    dados_usuario, dados_ia = _montar_pipeline_requisicao(req, documentos)
+    req = req.model_copy(update={"dados_usuario": dados_usuario})
     resumo = None
     if contexto:
         resumo = {
@@ -506,10 +508,9 @@ async def agendar_fase_preparatoria(request: Request):
     _check_queue_rate_limit(request, email)
 
     try:
-        dados_usuario, _ = _montar_pipeline_requisicao(req, (dados_ia.get("__LICITA_PIPELINE__") or {}).get("documentos_anteriores"))
         job = enqueue_job(
             email=email,
-            dados_usuario=dados_usuario,
+            dados_usuario=req.dados_usuario,
             dados_ia=dados_ia,
             instrucoes=req.instrucoes,
         )
