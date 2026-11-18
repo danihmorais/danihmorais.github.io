@@ -853,6 +853,37 @@ class TestRevisaoPreviaDocumentos(unittest.TestCase):
         self.assertEqual(job["review_results"]["GERACAO_DFD"]["DFD"]["OBJETO"], "Objeto revisado")
         self.assertEqual(job["review_stale_documents"], ["ETP", "TR"])
 
+    def test_regeneracao_de_dfd_usa_schema_estrito_e_marca_dependencias(self):
+        import fila_pipeline as provedor_ia
+        import fila_pipeline_unificado as pipeline
+        import pipeline_prompts
+
+        job = self.job_revisao()
+
+        def resposta_ia(prompt, modelo, **kwargs):
+            self.assertTrue(kwargs.get("response_format") is not None)
+            return ({"DFD": {"OBJETO": "Objeto regenerado"}}, "modelo-teste")
+
+        with (
+            patch.object(main, "get_job", return_value=job),
+            patch.object(main, "_token_matches", return_value=True),
+            patch.object(provedor_ia, "_chamar_ia", side_effect=resposta_ia),
+            patch.object(pipeline, "_json_schema_documento", return_value={"type": "json_schema"}),
+            patch.object(pipeline, "_validar_json_documento", return_value={"DFD": {"OBJETO": "Objeto regenerado"}}),
+            patch.object(pipeline_prompts, "_prompt_documento", return_value="Prompt de DFD"),
+            patch.object(main, "_write_json"),
+            patch.object(main, "_job_path", return_value=Path("job.review.json")),
+            TestClient(app) as client,
+        ):
+            resposta = client.post(
+                f"/api/fila/{job['job_id']}/preview/regenerar",
+                headers={"X-Status-Token": "token-revisao"},
+                json={"documento": "DFD", "instrucoes": "Preservar o objeto"},
+            )
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual(job["dados_ia_final"]["DFD"]["OBJETO"], "Objeto regenerado")
+        self.assertEqual(job["review_stale_documents"], ["ETP", "TR"])
+
     def test_aprovacao_bloqueia_documentos_dependentes_desatualizados(self):
         job = self.job_revisao()
         job["review_stale_documents"] = ["TR"]
