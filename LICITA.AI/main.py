@@ -1409,7 +1409,7 @@ async def regenerar_documento_fila(job_id: str, request: Request, req: PreviewRe
     if str(job.get("status", "")).lower() != "awaiting_review":
         raise HTTPException(status_code=409, detail="O documento não está aguardando revisão.")
     documentos = job.get("dados_ia_final")
-    dados_usuario = job.get("dados_usuario_processados") or job.get("dados_usuario")
+    dados_usuario = job.get("dados_usuario_processados") or job.get("pipeline_dados_usuario") or job.get("dados_usuario") or {}
     if not isinstance(documentos, dict) or not isinstance(dados_usuario, dict):
         raise HTTPException(status_code=409, detail="Os dados necessários para regenerar o documento não estão disponíveis.")
     try:
