@@ -1,8 +1,11 @@
+import ImportarItensPlanilha from "../../components/ImportarItensPlanilha";
 import React from "react";
 
 export default function Step2({ dados, atualizarDados }: any) {
   return (
     <div className="step-form step-form--execution" style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+      <ImportarItensPlanilha onImport={(itens) => atualizarDados("itens", itens)} />
+
       <div className="step-section-heading">
         <h2 style={{ fontSize: "16px", margin: "0 0 8px 0", color: "var(--text-main)" }}>
           Condições de Execução e Prazos <span style={{ color: "var(--btn-danger)" }}>*</span>
@@ -36,7 +39,7 @@ export default function Step2({ dados, atualizarDados }: any) {
         <textarea 
           required
           value={dados.execucao}
-          onChange={(e) => atualizarDados({ execucao: e.target.value })}
+          onChange={(e) = aria-label="Campo de descrição da etapa 2"> atualizarDados({ execucao: e.target.value })}
           placeholder="Descreva aqui as regras de entrega, prazos, locais, garantias e demais condições..."
           style={{ padding: "16px", borderRadius: "var(--radius-lg)", borderColor: dados.execucao.trim() === "" ? "var(--btn-danger)" : "var(--input-border)", minHeight: "220px", resize: "vertical" }}
         />

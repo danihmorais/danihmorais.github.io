@@ -2,7 +2,11 @@ import React, { useState, useEffect } from "react";
 import { useToast } from "../../components/toast";
 import { lerDadosUsuario, salvarDadosUsuario } from "../../utils/storageLocal";
 
-export default function Step4({ dados, atualizarDados }: any) {
+export default function Step4({
+
+ dados, atualizarDados }: any) {
+
+
   const { showToast } = useToast();
   const [gestorNome, setGestorNome] = useState("");
   const [gestorCargo, setGestorCargo] = useState("");
@@ -16,6 +20,66 @@ export default function Step4({ dados, atualizarDados }: any) {
   const [modalFiscalAberto, setModalFiscalAberto] = useState(false);
 
   useEffect(() => {
+    if (!modalGestorAberto) return;
+    const elementoAnterior = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const selecionarPrimeiroCampo = () => {
+      const dialogo = document.querySelector('[role="dialog"][aria-modal="true"]') as HTMLElement | null;
+      const primeiro = dialogo?.querySelector<HTMLElement>('input:not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled]), [tabindex="0"]');
+      primeiro?.focus();
+    };
+    const tratarTecla = (evento: KeyboardEvent) => {
+      if (evento.key === "Escape") {
+        evento.preventDefault();
+        setModalGestorAberto(false);
+      }
+      if (evento.key === "Tab") {
+        const dialogo = document.querySelector('[role="dialog"][aria-modal="true"]') as HTMLElement | null;
+        const campos = dialogo ? [...dialogo.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')] : [];
+        if (campos.length === 0) {
+          evento.preventDefault();
+          dialogo?.focus();
+        } else if (evento.shiftKey && document.activeElement === campos[0]) {
+          evento.preventDefault();
+          campos[campos.length - 1].focus();
+        } else if (!evento.shiftKey && document.activeElement === campos[campos.length - 1]) {
+          evento.preventDefault();
+          campos[0].focus();
+        }
+      }
+    };
+    window.addEventListener("keydown", tratarTecla);
+    const foco = window.setTimeout(selecionarPrimeiroCampo, 0);
+    return () => {
+      window.clearTimeout(foco);
+      window.removeEventListener("keydown", tratarTecla);
+      elementoAnterior?.focus();
+    };
+  }, [modalGestorAberto]);
+
+  useEffect(() => {
+    if (!modalFiscalAberto) return;
+    const elementoAnterior = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const selecionarPrimeiroCampo = () => {
+      const dialogo = document.querySelector('[role="dialog"][aria-modal="true"]') as HTMLElement | null;
+      const primeiro = dialogo?.querySelector<HTMLElement>('input:not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled]), [tabindex="0"]');
+      primeiro?.focus();
+    };
+    const tratarTecla = (evento: KeyboardEvent) => {
+      if (evento.key === "Escape") {
+        evento.preventDefault();
+        setModalFiscalAberto(false);
+      }
+    };
+    window.addEventListener("keydown", tratarTecla);
+    const foco = window.setTimeout(selecionarPrimeiroCampo, 0);
+    return () => {
+      window.clearTimeout(foco);
+      window.removeEventListener("keydown", tratarTecla);
+      elementoAnterior?.focus();
+    };
+  }, [modalFiscalAberto]);
+
+  useEffect(() => {
     const dadosSalvos = lerDadosUsuario();
     if (dadosSalvos) {
       if (dadosSalvos.gestores_salvos) setGestoresSalvos(dadosSalvos.gestores_salvos);
@@ -23,7 +87,7 @@ export default function Step4({ dados, atualizarDados }: any) {
     }
   }, []);
 
-  const salvarGestoresNoBackend = (novosGestores: any[]) => {
+  const salvarGestoresLocal = (novosGestores: any[]) => {
     try {
       const dados_usuario = lerDadosUsuario() || {};
       dados_usuario.gestores_salvos = novosGestores;
@@ -33,7 +97,7 @@ export default function Step4({ dados, atualizarDados }: any) {
     }
   };
 
-  const salvarFiscaisNoBackend = (novosFiscais: any[]) => {
+  const salvarFiscaisLocal = (novosFiscais: any[]) => {
     try {
       const dados_usuario = lerDadosUsuario() || {};
       dados_usuario.fiscais_salvos = novosFiscais;
@@ -75,7 +139,7 @@ export default function Step4({ dados, atualizarDados }: any) {
     }
     const novosSalvos = [...gestoresSalvos, gestor];
     setGestoresSalvos(novosSalvos);
-    salvarGestoresNoBackend(novosSalvos);
+    salvarGestoresLocal(novosSalvos);
     showToast("Gestor salvo com sucesso!", "success");
   };
 
@@ -87,7 +151,7 @@ export default function Step4({ dados, atualizarDados }: any) {
     }
     const novosSalvos = [...fiscaisSalvos, fiscal];
     setFiscaisSalvos(novosSalvos);
-    salvarFiscaisNoBackend(novosSalvos);
+    salvarFiscaisLocal(novosSalvos);
     showToast("Fiscal salvo com sucesso!", "success");
   };
 
@@ -104,13 +168,13 @@ export default function Step4({ dados, atualizarDados }: any) {
   const handleApagarGestorSalvo = (index: number) => {
     const novosSalvos = gestoresSalvos.filter((_, i) => i !== index);
     setGestoresSalvos(novosSalvos);
-    salvarGestoresNoBackend(novosSalvos);
+    salvarGestoresLocal(novosSalvos);
   };
 
   const handleApagarFiscalSalvo = (index: number) => {
     const novosSalvos = fiscaisSalvos.filter((_, i) => i !== index);
     setFiscaisSalvos(novosSalvos);
-    salvarFiscaisNoBackend(novosSalvos);
+    salvarFiscaisLocal(novosSalvos);
   };
 
   return (
@@ -143,14 +207,14 @@ export default function Step4({ dados, atualizarDados }: any) {
               />
             </div>
             <div style={{ display: "flex", gap: "6px" }}>
-              <button 
+              <button type="button" 
                 onClick={handleAddGestor}
                 disabled={!gestorNome || !gestorCargo}
                 style={{ padding: "0 16px", height: "40px", background: (!gestorNome || !gestorCargo) ? "var(--text-light)" : "var(--btn-primary)", color: "var(--bg-panel)", border: "none", fontSize: "13px", cursor: (!gestorNome || !gestorCargo) ? "not-allowed" : "pointer" }}
               >
                 Adicionar Gestor
               </button>
-              <button 
+              <button type="button" 
                 onClick={() => setModalGestorAberto(true)}
                 style={{ padding: "0 12px", height: "40px", background: "var(--bg-panel)", color: "var(--text-main)", border: "1px solid var(--border)", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}
               >
@@ -164,11 +228,11 @@ export default function Step4({ dados, atualizarDados }: any) {
               <div style={{ padding: "20px", textAlign: "center", color: "var(--text-light)", fontSize: "13px" }}>Nenhum gestor adicionado.</div>
             )}
             {dados.gestores.map((gestor: any, index: number) => (
-              <div key={index} className="person-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--bg-subtle)", padding: "8px 16px", borderRadius: "var(--radius)", border: "1px solid var(--border)" }}>
+              <div key={item.id ?? item.nome ?? item.descricao ?? item.value ?? JSON.stringify(item)} className="person-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--bg-subtle)", padding: "8px 16px", borderRadius: "var(--radius)", border: "1px solid var(--border)" }}>
                 <span style={{ fontSize: "13px", color: "var(--text-main)", fontWeight: "500" }}>{gestor.nome} — {gestor.cargo}</span>
                 <div style={{ display: "flex", gap: "6px" }}>
                   <div style={{ display: "flex", gap: "6px" }}>
-                    <button 
+                    <button type="button" 
                       onClick={() => handleSalvarGestor(gestor)}
                       disabled={gestoresSalvos.some(g => g.nome === gestor.nome && g.cargo === gestor.cargo)}
                       style={{ 
@@ -183,7 +247,7 @@ export default function Step4({ dados, atualizarDados }: any) {
                       {gestoresSalvos.some(g => g.nome === gestor.nome && g.cargo === gestor.cargo) ? "Já Salvo" : "Salvar Gestor"}
                     </button>
                   </div>
-                  <button 
+                  <button type="button" 
                     onClick={() => handleRemoveGestor(index)}
                     style={{ padding: "6px 12px", background: "var(--btn-danger)", color: "var(--bg-panel)", border: "none", fontSize: "11px" }}
                   >
@@ -223,14 +287,14 @@ export default function Step4({ dados, atualizarDados }: any) {
               />
             </div>
             <div style={{ display: "flex", gap: "6px" }}>
-              <button 
+              <button type="button" 
                 onClick={handleAddFiscal}
                 disabled={!fiscalNome || !fiscalCargo}
                 style={{ padding: "0 16px", height: "40px", background: (!fiscalNome || !fiscalCargo) ? "var(--text-light)" : "var(--btn-primary)", color: "var(--bg-panel)", border: "none", fontSize: "13px", cursor: (!fiscalNome || !fiscalCargo) ? "not-allowed" : "pointer" }}
               >
                 Adicionar Fiscal
               </button>
-              <button 
+              <button type="button" 
                 onClick={() => setModalFiscalAberto(true)}
                 style={{ padding: "0 12px", height: "40px", background: "var(--bg-panel)", color: "var(--text-main)", border: "1px solid var(--border)", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}
               >
@@ -244,11 +308,11 @@ export default function Step4({ dados, atualizarDados }: any) {
               <div style={{ padding: "20px", textAlign: "center", color: "var(--text-light)", fontSize: "13px" }}>Nenhum fiscal adicionado.</div>
             )}
             {dados.fiscais.map((fiscal: any, index: number) => (
-              <div key={index} className="person-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--bg-subtle)", padding: "8px 16px", borderRadius: "var(--radius)", border: "1px solid var(--border)" }}>
+              <div key={item.id ?? item.nome ?? item.descricao ?? item.value ?? JSON.stringify(item)} className="person-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--bg-subtle)", padding: "8px 16px", borderRadius: "var(--radius)", border: "1px solid var(--border)" }}>
                 <span style={{ fontSize: "13px", color: "var(--text-main)", fontWeight: "500" }}>{fiscal.nome} — {fiscal.cargo}</span>
                 <div style={{ display: "flex", gap: "6px" }}>
                   <div style={{ display: "flex", gap: "6px" }}>
-                    <button 
+                    <button type="button" 
                       onClick={() => handleSalvarFiscal(fiscal)}
                       disabled={fiscaisSalvos.some(f => f.nome === fiscal.nome && f.cargo === fiscal.cargo)}
                       style={{ 
@@ -263,7 +327,7 @@ export default function Step4({ dados, atualizarDados }: any) {
                       {fiscaisSalvos.some(f => f.nome === fiscal.nome && f.cargo === fiscal.cargo) ? "Já Salvo" : "Salvar Fiscal"}
                     </button>
                   </div>
-                  <button 
+                  <button type="button" 
                     onClick={() => handleRemoveFiscal(index)}
                     style={{ padding: "6px 12px", background: "var(--btn-danger)", color: "var(--bg-panel)", border: "none", fontSize: "11px" }}
                   >
@@ -277,11 +341,11 @@ export default function Step4({ dados, atualizarDados }: any) {
       </div>
 
       {modalGestorAberto && (
-        <div className="step-modal-overlay" style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
-          <div className="step-modal" style={{ background: "var(--bg-panel)", padding: "24px", borderRadius: "var(--radius-xl)", width: "100%", maxWidth: "450px", boxShadow: "var(--shadow-lg)" }}>
+        <div className="step-modal-overlay" style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }} role="dialog" aria-modal="true" aria-label="Diálogo de edição">
+          <div className="step-modal" style={{ background: "var(--bg-panel)", padding: "24px", borderRadius: "var(--radius-xl)", width: "100%", maxWidth: "450px", boxShadow: "var(--shadow-lg)" }} role="dialog" aria-modal="true" aria-label="Diálogo de edição">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
               <h3 style={{ margin: 0, color: "var(--text-main)", fontSize: "18px" }}>Gestores Salvos</h3>
-              <button onClick={() => setModalGestorAberto(false)} style={{ background: "none", border: "none", fontSize: "20px", color: "var(--text-muted)" }}>×</button>
+              <button type="button" onClick={() => setModalGestorAberto(false)} style={{ background: "none", border: "none", fontSize: "20px", color: "var(--text-muted)" }}>×</button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "300px", overflowY: "auto" }}>
               {gestoresSalvos.length === 0 ? (
@@ -297,14 +361,14 @@ export default function Step4({ dados, atualizarDados }: any) {
                         <div>{g.cargo}</div>
                       </div>
                       <div style={{ display: "flex", gap: "8px" }}>
-                        <button 
+                        <button type="button" 
                           onClick={() => handleUsarGestorSalvo(g)} 
                           disabled={emUso}
                           style={{ padding: "6px 12px", background: emUso ? "var(--text-light)" : "var(--btn-primary)", color: "var(--bg-panel)", border: "none", fontSize: "12px", cursor: emUso ? "not-allowed" : "pointer" }}
                         >
                           {emUso ? "Em uso" : "Usar"}
                         </button>
-                        <button onClick={() => handleApagarGestorSalvo(i)} style={{ padding: "6px 8px", background: "rgba(220,38,38,0.15)", color: "var(--btn-danger)", border: "none", fontSize: "12px" }}>Apagar</button>
+                        <button type="button" onClick={() => handleApagarGestorSalvo(i)} style={{ padding: "6px 8px", background: "rgba(220,38,38,0.15)", color: "var(--btn-danger)", border: "none", fontSize: "12px" }}>Apagar</button>
                       </div>
                     </div>
                   );
@@ -312,18 +376,18 @@ export default function Step4({ dados, atualizarDados }: any) {
               )}
             </div>
             <div style={{ marginTop: "20px", textAlign: "right" }}>
-              <button onClick={() => setModalGestorAberto(false)} style={{ padding: "8px 16px", background: "var(--bg-subtle)", color: "var(--text-main)", border: "none" }}>Fechar</button>
+              <button type="button" onClick={() => setModalGestorAberto(false)} style={{ padding: "8px 16px", background: "var(--bg-subtle)", color: "var(--text-main)", border: "none" }}>Fechar</button>
             </div>
           </div>
         </div>
       )}
 
       {modalFiscalAberto && (
-        <div className="step-modal-overlay" style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
-          <div className="step-modal" style={{ background: "var(--bg-panel)", padding: "24px", borderRadius: "var(--radius-xl)", width: "100%", maxWidth: "450px", boxShadow: "var(--shadow-lg)" }}>
+        <div className="step-modal-overlay" style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }} role="dialog" aria-modal="true" aria-label="Diálogo de edição">
+          <div className="step-modal" style={{ background: "var(--bg-panel)", padding: "24px", borderRadius: "var(--radius-xl)", width: "100%", maxWidth: "450px", boxShadow: "var(--shadow-lg)" }} role="dialog" aria-modal="true" aria-label="Diálogo de edição">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
               <h3 style={{ margin: 0, color: "var(--text-main)", fontSize: "18px" }}>Fiscais Salvos</h3>
-              <button onClick={() => setModalFiscalAberto(false)} style={{ background: "none", border: "none", fontSize: "20px", color: "var(--text-muted)" }}>×</button>
+              <button type="button" onClick={() => setModalFiscalAberto(false)} style={{ background: "none", border: "none", fontSize: "20px", color: "var(--text-muted)" }}>×</button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "300px", overflowY: "auto" }}>
               {fiscaisSalvos.length === 0 ? (
@@ -339,14 +403,14 @@ export default function Step4({ dados, atualizarDados }: any) {
                         <div>{f.cargo}</div>
                       </div>
                       <div style={{ display: "flex", gap: "8px" }}>
-                        <button 
+                        <button type="button" 
                           onClick={() => handleUsarFiscalSalvo(f)} 
                           disabled={emUso}
                           style={{ padding: "6px 12px", background: emUso ? "var(--text-light)" : "var(--btn-primary)", color: "var(--bg-panel)", border: "none", fontSize: "12px", cursor: emUso ? "not-allowed" : "pointer" }}
                         >
                           {emUso ? "Em uso" : "Usar"}
                         </button>
-                        <button onClick={() => handleApagarFiscalSalvo(i)} style={{ padding: "6px 8px", background: "rgba(220,38,38,0.15)", color: "var(--btn-danger)", border: "none", fontSize: "12px" }}>Apagar</button>
+                        <button type="button" onClick={() => handleApagarFiscalSalvo(i)} style={{ padding: "6px 8px", background: "rgba(220,38,38,0.15)", color: "var(--btn-danger)", border: "none", fontSize: "12px" }}>Apagar</button>
                       </div>
                     </div>
                   );
@@ -354,7 +418,7 @@ export default function Step4({ dados, atualizarDados }: any) {
               )}
             </div>
             <div style={{ marginTop: "20px", textAlign: "right" }}>
-              <button onClick={() => setModalFiscalAberto(false)} style={{ padding: "8px 16px", background: "var(--bg-subtle)", color: "var(--text-main)", border: "none" }}>Fechar</button>
+              <button type="button" onClick={() => setModalFiscalAberto(false)} style={{ padding: "8px 16px", background: "var(--bg-subtle)", color: "var(--text-main)", border: "none" }}>Fechar</button>
             </div>
           </div>
         </div>

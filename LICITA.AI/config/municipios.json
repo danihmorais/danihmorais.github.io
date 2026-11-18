@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "municipio_padrao": "sao-francisco-sp",
+  "parametros": {
+    "limite_exclusividade_me_epp_centavos": 8000000
+  },
+  "municipios": {
+    "sao-francisco-sp": {
+      "id": "sao-francisco-sp",
+      "nome": "São Francisco",
+      "uf": "SP",
+      "decreto": "Decreto Municipal nº 2.056/2024",
+      "campos": {}
+    }
+  }
+}
