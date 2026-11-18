@@ -252,27 +252,27 @@ export default function DotacaoEditor({ value, onChange, placeholder }: DotacaoE
           data-placeholder={placeholder}
           onInput={sincronizar}
           onBlur={sincronizar}
-        / onPaste={(evento) => {
-    const html = evento.clipboardData.getData("text/html");
-    if (!html) return;
-    evento.preventDefault();
-    const editor = evento.currentTarget as HTMLElement;
-    const imagensAtuais = editor.querySelectorAll("img").length;
-    const container = document.createElement("div");
-    container.innerHTML = sanitizarHtmlColado(html);
-    const imagens = [...container.querySelectorAll("img")];
-    imagens.slice(Math.max(0, MAX_DOTACAO_IMAGES - imagensAtuais)).forEach(imagem => imagem.remove());
-    const fragmento = document.createDocumentFragment();
-    while (container.firstChild) fragmento.appendChild(container.firstChild);
-    const selecao = window.getSelection();
-    if (selecao && selecao.rangeCount > 0 && editor.contains(selecao.getRangeAt(0).commonAncestorContainer)) {
-      const range = selecao.getRangeAt(0);
-      range.deleteContents();
-      range.insertNode(fragmento);
-    } else {
-      editor.appendChild(fragmento);
-    }
-  }}>
+        onPaste={(evento) => {
+      const html = evento.clipboardData.getData("text/html");
+      if (!html) return;
+      evento.preventDefault();
+      const editor = evento.currentTarget as HTMLElement;
+      const imagensAtuais = editor.querySelectorAll("img").length;
+      const container = document.createElement("div");
+      container.innerHTML = sanitizarHtmlColado(html);
+      const imagens = [...container.querySelectorAll("img")];
+      imagens.slice(Math.max(0, MAX_DOTACAO_IMAGES - imagensAtuais)).forEach(imagem => imagem.remove());
+      const fragmento = document.createDocumentFragment();
+      while (container.firstChild) fragmento.appendChild(container.firstChild);
+      const selecao = window.getSelection();
+      if (selecao && selecao.rangeCount > 0 && editor.contains(selecao.getRangeAt(0).commonAncestorContainer)) {
+        const range = selecao.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(fragmento);
+      } else {
+        editor.appendChild(fragmento);
+      }
+          }}>
         <div style={{ position: "absolute", bottom: "8px", left: "8px", display: "flex", gap: "6px" }}>
           <button
             type="button"
