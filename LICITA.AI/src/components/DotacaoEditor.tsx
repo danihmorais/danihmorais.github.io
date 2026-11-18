@@ -273,7 +273,7 @@ export default function DotacaoEditor({ value, onChange, placeholder }: DotacaoE
               editor.appendChild(fragmento);
             }
           }}
-        >
+        ></div>
         <div style={{ position: "absolute", bottom: "8px", left: "8px", display: "flex", gap: "6px" }}>
           <button
             type="button"
