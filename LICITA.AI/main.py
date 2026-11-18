@@ -1374,6 +1374,15 @@ async def editar_documento_fila(job_id: str, request: Request, req: PreviewEdica
     bloco[req.campo] = req.conteudo.strip()
     if not bloco[req.campo]:
         raise HTTPException(status_code=400, detail="O conteúdo não pode ficar vazio.")
+    resultados = job.get("review_results")
+    if isinstance(resultados, dict):
+        if isinstance(resultados.get(req.documento), dict):
+            resultados[req.documento][req.campo] = bloco[req.campo]
+        etapa_id = {"DFD": "GERACAO_DFD", "ETP": "GERACAO_ETP", "TR": "GERACAO_TR"}[req.documento]
+        etapa_resultado = resultados.get(etapa_id)
+        if isinstance(etapa_resultado, dict) and isinstance(etapa_resultado.get(req.documento), dict):
+            etapa_resultado[req.documento][req.campo] = bloco[req.campo]
+    job["review_results"] = resultados if isinstance(resultados, dict) else job.get("review_results")
     job["dados_ia_final"] = documentos
     job["review_edits"] = int(job.get("review_edits", 0)) + 1
     job["updated_at"] = datetime.now(timezone.utc).isoformat()
