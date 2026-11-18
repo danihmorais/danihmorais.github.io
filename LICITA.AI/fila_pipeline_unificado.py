@@ -1096,6 +1096,8 @@ def _process_pipeline(job: dict) -> None:
 
     _finalizar_etapa(job, "GERACAO_DOCUMENTOS", "completed")
     job["dados_usuario_processados"] = dados_usuario
+    job["dados_ia_final"] = dados_ia_final
+    _write_json(_job_path(job["job_id"], ".processing"), job)
     _checar_cancelamento(job)
     _iniciar_etapa(job, "ENVIO_EMAIL")
     job["email_started_at"] = _utc_now()
@@ -1111,7 +1113,6 @@ def _process_pipeline(job: dict) -> None:
     _finalizar_tentativa(job, "sent")
     job.update({"status": "sent", "completed_at": _utc_now(), "current_stage": "CONCLUIDO", "result": {"filename": zip_filename, "recipient": job["email"]}})
     _write_json(_job_path(job["job_id"], ".done"), job)
-    artifact_path.unlink(missing_ok=True)
     _job_path(job["job_id"], ".processing").unlink(missing_ok=True)
 
 
@@ -1119,7 +1120,7 @@ def _process_pipeline(job: dict) -> None:
 def _process_email_only_retry(job: dict) -> None:
     """Reenvia arquivos já gerados em registros antigos cuja falha ocorreu apenas no SMTP."""
     dados_usuario = job.get("dados_usuario_processados")
-    dados_ia = job.get("dados_ia")
+    dados_ia = job.get("dados_ia_final") or job.get("dados_ia")
     if not isinstance(dados_usuario, dict) or not isinstance(dados_ia, dict) or not dados_ia:
         raise RuntimeError("Não há documentos gerados suficientes para refazer somente o envio de e-mail.")
 
@@ -1152,7 +1153,6 @@ def _process_email_only_retry(job: dict) -> None:
         "result": {"filename": zip_filename, "recipient": job["email"]},
     })
     _write_json(_job_path(job["job_id"], ".done"), job)
-    artifact_path.unlink(missing_ok=True)
     _job_path(job["job_id"], ".processing").unlink(missing_ok=True)
 
 
@@ -1238,7 +1238,8 @@ def _process_one_job() -> None:
                 )
             _write_json(_job_path(job["job_id"], ".failed"), job)
             processing_path.unlink(missing_ok=True)
-            _artifact_path(job["job_id"]).unlink(missing_ok=True)
+            if str(job.get("current_stage") or "").upper() != "ENVIO_EMAIL":
+                _artifact_path(job["job_id"]).unlink(missing_ok=True)
     finally:
         heartbeat_stop.set()
         heartbeat_thread.join(timeout=2)
