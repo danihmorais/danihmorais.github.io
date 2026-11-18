@@ -349,6 +349,13 @@ def _timeout_ia() -> httpx.Timeout:
     return httpx.Timeout(AI_TIMEOUT_SECONDS, connect=AI_CONNECT_TIMEOUT_SECONDS)
 
 
+def _erro_http_provedor(status: int, detalhe: str) -> RuntimeError:
+    mensagem = f"IA HTTP {status}: {str(detalhe or '')[:500]}"
+    if status in {408, 425, 429} or status >= 500:
+        return RuntimeError(mensagem)
+    return ErroPermanente(mensagem)
+
+
 def _post_ia(client, url: str, **kwargs):
     """POST ao provedor de IA convertendo falhas de rede em erros com mensagem legível."""
     try:
@@ -406,7 +413,7 @@ def _chamar_ia(
             try:
                 lista_modelos = client.get(f"{base_url}/models", headers=headers)
                 if lista_modelos.status_code >= 400:
-                    raise RuntimeError(f"HTTP {lista_modelos.status_code}")
+                    raise _erro_http_provedor(lista_modelos.status_code, lista_modelos.text)
                 dados_modelos = lista_modelos.json()
                 itens_modelos = dados_modelos.get("data", []) if isinstance(dados_modelos, dict) else []
                 disponiveis = [
@@ -427,7 +434,7 @@ def _chamar_ia(
             payload["model"] = modelo
             response = _post_ia(client, f"{base_url}/chat/completions", headers=headers, json=payload)
     if response.status_code >= 400:
-        raise RuntimeError(f"IA HTTP {response.status_code}: {response.text[:500]}")
+        raise _erro_http_provedor(response.status_code, response.text)
     try:
         data = response.json()
     except ValueError as exc:
@@ -447,10 +454,9 @@ def _chamar_ia(
     # de contexto ou geração. A aplicação não impõe um teto fixo de tokens de saída.
     # Não tente "reparar" uma resposta truncada: isso poderia inventar ou omitir conteúdo.
     if choice.get("finish_reason") == "length":
-        raise RuntimeError(
-            "A resposta da IA foi truncada ao atingir o limite de contexto/geração do modelo ou servidor. "
-            "A aplicação não impõe um teto fixo de tokens de saída; confira o contexto disponível no Unsloth "
-            "e, se necessário, divida a geração em etapas."
+        raise ErroPermanente(
+            "A resposta desta etapa documental foi truncada pelo limite de contexto/geração do modelo ou servidor. "
+            "A geração já foi dividida por documento; reduza os anexos ou o conteúdo do documento e tente novamente."
         )
 
     try:
@@ -494,9 +500,9 @@ def _chamar_ia(
                 json=payload_correcao,
             )
         if resposta_correcao.status_code >= 400:
-            raise RuntimeError(
-                f"{erro_json}. A tentativa automática de correção falhou com HTTP "
-                f"{resposta_correcao.status_code}."
+            raise _erro_http_provedor(
+                resposta_correcao.status_code,
+                f"{erro_json}. A tentativa automática de correção falhou: {resposta_correcao.text}",
             ) from erro_json
         try:
             dados_correcao = resposta_correcao.json()
