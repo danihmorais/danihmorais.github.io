@@ -17,7 +17,7 @@ from email.message import EmailMessage
 from pathlib import Path
 
 import config
-from conformidade import avaliar_conformidade, formatar_relatorio_conformidade
+from conformidade import avaliar_conformidade, formatar_relatorio_conformidade, formatar_relatorio_referencias
 from montador_variaveis import amostra_exigida, arredondar_valor_estimado_decimal, calcular_valor_estimado_decimal, filtrar_chaves_docx, formatar_moeda, montar_variaveis_fixas, total_linha_item, valor_decimal, validar_consistencia_dados
 from processador_docx import extrair_placeholders_documento, modificar_documento
 
@@ -389,6 +389,7 @@ def gerar_zip(dados_usuario: dict, dados_ia: dict, session_id: str) -> tuple[Pat
                 relatorio = avaliar_conformidade(dados_ia, dados_usuario)
                 zipf.writestr("RELATORIO_CONFORMIDADE.json", json.dumps(relatorio, ensure_ascii=False, indent=2))
                 zipf.writestr("RELATORIO_CONFORMIDADE.txt", formatar_relatorio_conformidade(relatorio))
+                zipf.writestr("RELATORIO_REFERENCIAS_LEGAIS.txt", formatar_relatorio_referencias(dados_ia))
         return caminho_zip, zip_filename
     except Exception:
         shutil.rmtree(temp_dir, ignore_errors=True)
