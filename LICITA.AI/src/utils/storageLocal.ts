@@ -1,6 +1,6 @@
 const storageGet = (key: string): string | null => {
   try {
-    return window.storageGet(key);
+    return window.localStorage.getItem(key);
   } catch {
     return null;
   }
@@ -23,7 +23,7 @@ const storageSet = (key: string, value: string): boolean => {
 
 const storageRemove = (key: string): void => {
   try {
-    window.storageRemove(key);
+    window.localStorage.removeItem(key);
   } catch {}
 };
 
