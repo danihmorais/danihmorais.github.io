@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import atexit
 import json
 import logging
 import os
@@ -1068,11 +1069,36 @@ def _process_email_only_retry(job: dict) -> None:
     _job_path(job["job_id"], ".processing").unlink(missing_ok=True)
 
 
+def _heartbeat_processing_file(caminho: Path) -> bool:
+    try:
+        os.utime(caminho, None)
+        return True
+    except OSError:
+        return False
+
+
+def _heartbeat_processing_loop(caminho: Path, encerramento: threading.Event) -> None:
+    while not encerramento.wait(HEARTBEAT_INTERVAL_SECONDS):
+        if not _heartbeat_processing_file(caminho):
+            return
+
+
+HEARTBEAT_INTERVAL_SECONDS = max(15, int(os.getenv("LICITA_QUEUE_HEARTBEAT_SECONDS", "45")))
+
+
 def _process_one_job() -> None:
     claimed = _claim_next_job()
     if claimed is None:
         return
     processing_path, job = claimed
+    heartbeat_stop = threading.Event()
+    heartbeat_thread = threading.Thread(
+        target=_heartbeat_processing_loop,
+        args=(processing_path, heartbeat_stop),
+        name=f"licita-heartbeat-{job.get('job_id', 'job')}",
+        daemon=True,
+    )
+    heartbeat_thread.start()
     try:
         _process_pipeline(job)
     except JobCancelado:
@@ -1126,9 +1152,12 @@ def _process_one_job() -> None:
             _write_json(_job_path(job["job_id"], ".failed"), job)
             processing_path.unlink(missing_ok=True)
             _artifact_path(job["job_id"]).unlink(missing_ok=True)
+    finally:
+        heartbeat_stop.set()
+        heartbeat_thread.join(timeout=2)
 
 
-STALE_PROCESSING_SECONDS = max(600, int(os.getenv("LICITA_QUEUE_STALE_PROCESSING_SECONDS", "3600")))
+STALE_PROCESSING_SECONDS = max(120, int(os.getenv("LICITA_QUEUE_STALE_PROCESSING_SECONDS", "300")))
 _RECUPERACAO_A_CADA_CICLOS = 20
 
 
@@ -1180,21 +1209,42 @@ def _recuperar_orfaos(agora: float | None = None) -> int:
     return recuperados
 
 
+_worker_thread: threading.Thread | None = None
+_worker_stop_event = threading.Event()
+
+
 def _worker_loop() -> None:
     ciclo = 0
-    while True:
+    while not _worker_stop_event.is_set():
         try:
             if ciclo % _RECUPERACAO_A_CADA_CICLOS == 0:
                 _recuperar_orfaos()
             _process_one_job()
         except Exception:
-            # Nunca derrube o worker, mas também nunca engula o erro em silêncio.
             logger.exception("Erro inesperado no worker da fila.")
         ciclo += 1
-        time.sleep(POLL_INTERVAL_SECONDS)
+        _worker_stop_event.wait(POLL_INTERVAL_SECONDS)
 
 
-_worker_thread: threading.Thread | None = None
+def parar_worker(timeout: float | None = None) -> bool:
+    global _worker_thread
+    _worker_stop_event.set()
+    thread = _worker_thread
+    if thread is None:
+        return True
+    if thread is threading.current_thread():
+        return False
+    limite = (
+        max(1, int(os.getenv("LICITA_QUEUE_SHUTDOWN_TIMEOUT_SECONDS", "1250")))
+        if timeout is None
+        else max(0, float(timeout))
+    )
+    thread.join(timeout=limite)
+    if thread.is_alive():
+        logger.warning("O worker da fila não encerrou dentro do prazo de shutdown configurado.")
+        return False
+    _worker_thread = None
+    return True
 
 
 def iniciar_worker() -> None:
@@ -1202,5 +1252,9 @@ def iniciar_worker() -> None:
     if _worker_thread is not None and _worker_thread.is_alive():
         return
     QUEUE_DIR.mkdir(parents=True, exist_ok=True)
+    _worker_stop_event.clear()
     _worker_thread = threading.Thread(target=_worker_loop, name="licita-ai-pipeline-unificado", daemon=True)
     _worker_thread.start()
+
+
+atexit.register(parar_worker)
