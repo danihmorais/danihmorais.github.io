@@ -480,7 +480,7 @@ def enqueue_job(
     instrucoes: str = "",
     retry_of: str | None = None,
     retry_mode: str | None = None,
-    dados_usuario_processados: dict | None = None,, request_id: str | None = None, require_review: bool = False) -> dict:
+    dados_usuario_processados: dict | None = None, request_id: str | None = None, require_review: bool = False) -> dict:
     email = email.strip()
     if not EMAIL_RE.fullmatch(email):
         raise ValueError("Informe um e-mail válido para receber os documentos.")
