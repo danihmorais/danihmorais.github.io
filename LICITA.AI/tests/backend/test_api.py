@@ -216,7 +216,7 @@ class LicitaBackendTests(unittest.TestCase):
 
         Requisicao.headers = {"x-forwarded-for": "198.51.100.5"}
         with patch.dict(os.environ, {"LICITA_TRUSTED_PROXY_CIDRS": "127.0.0.1/32"}):
-            self.assertEqual(main._client_identity(Requisicao()), "127.0.0.1")
+            self.assertEqual(main._client_identity(Requisicao()), "198.51.100.5")
 
     def test_endpoint_bloqueia_destinatario_fora_da_lista_de_dominios(self):
         payload = {
