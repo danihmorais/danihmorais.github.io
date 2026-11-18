@@ -1,8 +1,11 @@
+import ImportarItensPlanilha from "../../components/ImportarItensPlanilha";
 import React from "react";
 
 export default function Step2({ dados, atualizarDados }: any) {
   return (
     <div className="step-form step-form--execution" style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+      <ImportarItensPlanilha onImport={(itens) => atualizarDados("itens", itens)} />
+
       <div className="step-section-heading">
         <h2 style={{ fontSize: "16px", margin: "0 0 8px 0", color: "var(--text-main)" }}>
           Condições de Execução e Prazos <span style={{ color: "var(--btn-danger)" }}>*</span>
