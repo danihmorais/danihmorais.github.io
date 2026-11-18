@@ -725,11 +725,10 @@ def _ler_itens_csv(conteudo: bytes) -> list[dict]:
         texto = conteudo.decode("cp1252")
     amostra = texto[:4096]
     try:
-        dialecto = csv.Sniffer().sniff(amostra, delimiters=";,\\t")
+        dialecto = csv.Sniffer().sniff(amostra, delimiters=";,\t")
+        leitor = csv.reader(io.StringIO(texto), dialect=dialecto)
     except csv.Error:
-        dialecto = csv.excel
-        dialecto.delimiter = ";"
-    leitor = csv.reader(io.StringIO(texto), dialect=dialecto)
+        leitor = csv.reader(io.StringIO(texto), delimiter=";")
     linhas = list(leitor)
     if not linhas:
         raise ValueError("A planilha está vazia.")
