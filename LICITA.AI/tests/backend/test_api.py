@@ -854,14 +854,16 @@ class TestRevisaoPreviaDocumentos(unittest.TestCase):
         self.assertEqual(job["review_stale_documents"], ["ETP", "TR"])
 
     def test_regeneracao_de_dfd_usa_schema_estrito_e_marca_dependencias(self):
+        from pathlib import Path
         import fila_pipeline as provedor_ia
         import fila_pipeline_unificado as pipeline
         import pipeline_prompts
 
         job = self.job_revisao()
 
-        def resposta_ia(prompt, modelo, **kwargs):
-            self.assertTrue(kwargs.get("response_format") is not None)
+        def resposta_ia(prompt, modelo, temperature=None, response_format=None, enable_tools=None, enable_thinking=None):
+            self.assertIsNotNone(response_format)
+            self.assertFalse(enable_tools)
             return ({"DFD": {"OBJETO": "Objeto regenerado"}}, "modelo-teste")
 
         with (
