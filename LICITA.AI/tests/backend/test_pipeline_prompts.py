@@ -2,6 +2,7 @@ import json
 import unittest
 
 from pipeline_prompts import montar_pipeline
+from fila_pipeline import _dados_para_prompt
 
 
 class TestPipelinePromptsNoServidor(unittest.TestCase):
@@ -53,6 +54,24 @@ class TestPipelinePromptsNoServidor(unittest.TestCase):
             self.assertNotIn(objeto, etapa["prompt"])
             self.assertNotIn(instrucao, etapa["prompt"])
         self.assertNotIn("ADMIN_PASSWORD", json.dumps(resultado, ensure_ascii=False))
+
+    def test_sanitizacao_preserva_campos_que_alimentam_templates_do_servidor(self):
+        dados = {
+            "PAGAMENTO_ETAPAS_RAW": "40% após a etapa 1.",
+            "RAW_EXECUCAO": "Entrega parcelada.",
+            "RAW_MOTIVO_CRITERIO": "Padronização técnica.",
+            "RAW_MOTIVO_MODALIDADE": "Hipótese legal informada.",
+            "RAW_PAC": "Demanda superveniente.",
+            "{{DOTACAO}}": "__IMG__ZmFrZQ==\nFonte orçamentária",
+            "{{CAMINHO_IMAGEM_DOTACAO}}": "data:image/png;base64,ZmFrZQ==",
+        }
+        resultado = _dados_para_prompt(dados)
+        for campo in (
+            "PAGAMENTO_ETAPAS_RAW", "RAW_EXECUCAO", "RAW_MOTIVO_CRITERIO",
+            "RAW_MOTIVO_MODALIDADE", "RAW_PAC",
+        ):
+            self.assertEqual(resultado[campo], dados[campo])
+        self.assertNotIn("ZmFrZQ==", json.dumps(resultado, ensure_ascii=False))
 
     def test_contratacao_direta_usa_somente_etapa_propria(self):
         dados = self.dados_base()
