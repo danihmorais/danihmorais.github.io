@@ -19,7 +19,16 @@ export default function PromptModal({
   const dialogRef = useRef<HTMLDivElement>(null);
   const inputArquivoRefs = useRef<Partial<Record<keyof DocumentosReferenciaUpload, HTMLInputElement | null>>>({});
   const onCloseRef = useRef(onClose);
+  const [codigo, setCodigo] = useState("");
+  const [codigoEnviado, setCodigoEnviado] = useState(false);
+  const [verificacaoToken, setVerificacaoToken] = useState("");
+  const [emailVerificado, setEmailVerificado] = useState("");
+  const [enviandoCodigo, setEnviandoCodigo] = useState(false);
+  const [confirmandoCodigo, setConfirmandoCodigo] = useState(false);
+  const [erroVerificacao, setErroVerificacao] = useState("");
+  const [mensagemVerificacao, setMensagemVerificacao] = useState("");
   onCloseRef.current = onClose;
+  const emailVerificadoAtual = Boolean(verificacaoToken) && emailVerificado === email.trim().toLowerCase();
   const emailValido = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(email.trim());
 
   useEffect(() => {
