@@ -134,6 +134,7 @@ Na pré-visualização de DFD, ETP e TR, o LICITA.AI apresenta um checklist estr
 
 - `RELATORIO_CONFORMIDADE.txt`: checklist legível, verificações e limites.
 - `RELATORIO_CONFORMIDADE.json`: resultado estruturado para auditoria ou integração.
+- `RELATORIO_REFERENCIAS_LEGAIS.txt`: campos estruturais, fontes com URL e referências a artigos identificadas; a checagem numérica é limitada e exige conferência humana.
 
 O checklist identifica campos obrigatórios vazios, marcadores de preenchimento, diferenças entre documentos adicionais de habilitação no ETP e TR, referências legais que precisam de verificação humana, consistência da amostra e preservação de números/percentuais em pagamento por etapas.
 
