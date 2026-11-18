@@ -13,13 +13,14 @@ import re
 import secrets
 import threading
 import time
+import uuid
 from collections import deque
 from datetime import datetime, timezone
 from email.message import EmailMessage
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 from typing import Literal
 from starlette.datastructures import UploadFile
@@ -452,6 +453,71 @@ def _preparar_ia_item(req: IAItemRequest) -> tuple[str, str, dict, float]:
         ensure_ascii=False,
     )
     return sistema, dados, _schema_ia_item(req.tarefa), 0.2
+
+
+
+
+_METRICAS_HTTP_LOCK = threading.Lock()
+_METRICAS_HTTP: dict[tuple[str, str, int], dict[str, float]] = {}
+
+
+def _rota_metrica(path: str) -> str:
+    partes = []
+    for parte in str(path or "").split("/"):
+        if re.fullmatch(r"[0-9a-f]{24,64}", parte, re.IGNORECASE):
+            partes.append("{id}")
+        elif parte.isdigit():
+            partes.append("{id}")
+        else:
+            partes.append(parte)
+    return "/".join(partes) or "/"
+
+
+@app.middleware("http")
+async def correlacionar_requisicao_e_medir(request: Request, call_next):
+    request_id = uuid.uuid4().hex
+    request.state.request_id = request_id
+    inicio = time.perf_counter()
+    status_code = 500
+    try:
+        resposta = await call_next(request)
+        status_code = resposta.status_code
+        resposta.headers["X-Request-ID"] = request_id
+        return resposta
+    finally:
+        duracao = max(0.0, time.perf_counter() - inicio)
+        chave = (request.method.upper(), _rota_metrica(request.url.path), int(status_code))
+        with _METRICAS_HTTP_LOCK:
+            registro = _METRICAS_HTTP.setdefault(chave, {"count": 0.0, "duration": 0.0})
+            registro["count"] += 1
+            registro["duration"] += duracao
+        logger.info(
+            "http_request_completed",
+            extra={
+                "request_id": request_id,
+                "method": request.method.upper(),
+                "path": chave[1],
+                "status_code": int(status_code),
+                "duration_seconds": round(duracao, 6),
+            },
+        )
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metricas_prometheus():
+    linhas = [
+        "# HELP licita_ai_http_requests_total Total de requisicoes HTTP processadas.",
+        "# TYPE licita_ai_http_requests_total counter",
+        "# HELP licita_ai_http_request_duration_seconds_total Duracao acumulada das requisicoes HTTP.",
+        "# TYPE licita_ai_http_request_duration_seconds_total counter",
+    ]
+    with _METRICAS_HTTP_LOCK:
+        registros = sorted(_METRICAS_HTTP.items(), key=lambda item: item[0])
+    for (metodo, rota, status_code), valores in registros:
+        labels = f'method="{metodo}",path="{rota}",status="{status_code}"'
+        linhas.append(f"licita_ai_http_requests_total{{{labels}}} {int(valores['count'])}")
+        linhas.append(f"licita_ai_http_request_duration_seconds_total{{{labels}}} {valores['duration']:.6f}")
+    return Response(content="\n".join(linhas) + "\n", media_type="text/plain; version=0.0.4; charset=utf-8")
 
 
 @app.post("/api/ia/item")
