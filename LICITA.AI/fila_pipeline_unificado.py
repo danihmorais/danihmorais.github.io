@@ -332,6 +332,33 @@ def _json_schema_fase_preparatoria(exigir_amostra_tr: bool = True) -> dict:
     }
 
 
+def _json_schema_documento(nome: str, exigir_amostra_tr: bool = True) -> dict:
+    if nome not in _FASE_PREPARATORIA_CAMPOS:
+        raise ErroPermanente("Documento sem esquema JSON configurado.")
+    campos = _FASE_PREPARATORIA_CAMPOS[nome]
+    if nome == "TR" and not exigir_amostra_tr:
+        campos = tuple(campo for campo in campos if campo != "AMOSTRA_TR")
+    bloco = {
+        "type": "object",
+        "properties": {campo: {"type": "string", "minLength": 1} for campo in campos},
+        "required": list(campos),
+        "additionalProperties": False,
+    }
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "documento_" + nome.casefold(),
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "properties": {nome: bloco},
+                "required": [nome],
+                "additionalProperties": False,
+            },
+        },
+    }
+
+
 _JSON_ESTRUTURADO_SYSTEM_PROMPT = """
 Você é um assistente jurídico-administrativo especializado em contratações públicas brasileiras.
 Esta é uma tarefa de redação ou extração sobre o texto fornecido no prompt do usuário. Não use ferramentas nem faça pesquisa; não invente fatos, valores, normas ou documentos.
@@ -514,6 +541,18 @@ def _opcoes_chamada_ia_etapa(etapa_tipo: str, etapa_id: str = "", *, exigir_amos
             "system_prompt": _JSON_ESTRUTURADO_SYSTEM_PROMPT,
             "enable_thinking": False,
         }
+    if tipo in {"geracao_dfd", "geracao_etp", "geracao_tr"}:
+        documento = {
+            "geracao_dfd": "DFD",
+            "geracao_etp": "ETP",
+            "geracao_tr": "TR",
+        }[tipo]
+        return {
+            "response_format": _json_schema_documento(documento, exigir_amostra_tr),
+            "enable_tools": False,
+            "system_prompt": _FASE_PREPARATORIA_SYSTEM_PROMPT,
+            "enable_thinking": True,
+        }
     if tipo == "geracao_contratacao_direta":
         return {
             "response_format": _json_schema_contratacao_direta(),
@@ -622,7 +661,8 @@ def _validar_json_unificado(resultado: dict, exigir_amostra_tr: bool = True) -> 
 # O pipeline chega do navegador (dados_ia.__LICITA_PIPELINE__). O servidor só aceita os tipos
 # de etapa que o próprio front gera e limita quantidade, identificadores e temperatura.
 TIPOS_ETAPA_PERMITIDOS = frozenset({
-    "auditoria_marcas", "geracao_json", "consulta_habilitacao", "geracao_unificada", "geracao_contratacao_direta",
+    "auditoria_marcas", "geracao_json", "consulta_habilitacao", "geracao_unificada",
+    "geracao_contratacao_direta", "geracao_dfd", "geracao_etp", "geracao_tr",
 })
 MAX_ETAPAS = 8
 _ETAPA_ID_RE = re.compile(r"[A-Z0-9_]{1,40}")
@@ -659,6 +699,39 @@ def _validar_etapas(etapas: list) -> None:
             raise ErroPermanente(f"Tipo de etapa de IA não permitido: {tipo[:60]!r}.")
         if not _ETAPA_ID_RE.fullmatch(str(etapa.get("id", "")).strip().upper()):
             raise ErroPermanente("Identificador de etapa de IA inválido.")
+
+
+def _validar_json_documento(resultado: dict, nome: str, exigir_amostra_tr: bool = True) -> dict:
+    if nome not in _FASE_PREPARATORIA_CAMPOS:
+        raise ErroPermanente("Documento sem validador JSON configurado.")
+    resultado = _validar_json_geracao(resultado)
+    if set(resultado) != {nome}:
+        raise RuntimeError(f"A resposta da etapa deve conter exclusivamente o bloco {nome}.")
+    bloco = resultado[nome]
+    campos = _FASE_PREPARATORIA_CAMPOS[nome]
+    if nome == "TR" and not exigir_amostra_tr:
+        campos = tuple(campo for campo in campos if campo != "AMOSTRA_TR")
+        if isinstance(bloco, dict):
+            bloco = {chave: valor for chave, valor in bloco.items() if chave != "AMOSTRA_TR"}
+    if not isinstance(bloco, dict) or set(bloco) != set(campos):
+        recebidos = set(bloco) if isinstance(bloco, dict) else set()
+        ausentes = sorted(set(campos) - recebidos)
+        extras = sorted(recebidos - set(campos))
+        detalhe = []
+        if ausentes:
+            detalhe.append("campos ausentes: " + ", ".join(ausentes))
+        if extras:
+            detalhe.append("campos extras: " + ", ".join(str(campo) for campo in extras))
+        raise RuntimeError(
+            f"O bloco {nome} não corresponde ao esquema JSON obrigatório (" + "; ".join(detalhe) + ")."
+        )
+    invalidos = [
+        str(chave) for chave, valor in bloco.items()
+        if not isinstance(valor, str) or not valor.strip()
+    ]
+    if invalidos:
+        raise RuntimeError(f"O bloco {nome} contém campos não textuais ou vazios: {', '.join(invalidos)}.")
+    return {nome: bloco}
 
 
 def _validar_json_consulta_habilitacao(resultado: dict) -> dict:
@@ -903,7 +976,7 @@ def _process_pipeline(job: dict) -> None:
         _write_json(_job_path(job["job_id"], ".processing"), job)
 
         prompt_processado = _substituir_contextos(prompt, dados_usuario, resultados)
-        if etapa_tipo in {"consulta_habilitacao", "geracao_unificada", "geracao_contratacao_direta", "geracao_json"}:
+        if etapa_tipo in {"consulta_habilitacao", "geracao_unificada", "geracao_dfd", "geracao_etp", "geracao_tr", "geracao_contratacao_direta", "geracao_json"}:
             prompt_processado = _adicionar_documentos_de_referencia(prompt_processado, documentos_anteriores)
 
         limite_prompt = limite_prompt_chars()
@@ -930,6 +1003,11 @@ def _process_pipeline(job: dict) -> None:
         elif etapa_tipo == "geracao_unificada":
             resultado_final = _validar_json_unificado(resultado, exigir_amostra_tr)
             resultados[etapa_id] = resultado_final
+        elif etapa_tipo in {"geracao_dfd", "geracao_etp", "geracao_tr"}:
+            documento = {"geracao_dfd": "DFD", "geracao_etp": "ETP", "geracao_tr": "TR"}[etapa_tipo]
+            resultado_final = _validar_json_documento(resultado, documento, exigir_amostra_tr)
+            resultados[etapa_id] = resultado_final
+            resultados[documento] = resultado_final[documento]
         elif etapa_tipo == "geracao_contratacao_direta":
             resultados[etapa_id] = _validar_json_contratacao_direta(resultado)
         elif etapa_tipo == "consulta_habilitacao":
@@ -948,9 +1026,17 @@ def _process_pipeline(job: dict) -> None:
 
     dados_ia_final: dict = {}
     for etapa_id, resultado in resultados.items():
-        if etapa_id in {"AUDITORIA_MARCAS", "CONSULTA_HABILITACAO"} or not isinstance(resultado, dict):
+        if etapa_id in {"AUDITORIA_MARCAS", "CONSULTA_HABILITACAO", "DFD", "ETP", "TR"} or not isinstance(resultado, dict):
             continue
-        blocos = resultado if etapa_id == "FASE_PREPARATORIA" and all(isinstance(resultado.get(bloco), dict) for bloco in ("DFD", "ETP", "TR")) else {"_": resultado}
+        documento_etapa = {
+            "GERACAO_DFD": "DFD",
+            "GERACAO_ETP": "ETP",
+            "GERACAO_TR": "TR",
+        }.get(etapa_id)
+        if documento_etapa:
+            blocos = {documento_etapa: resultado[documento_etapa]} if isinstance(resultado.get(documento_etapa), dict) else {}
+        else:
+            blocos = resultado if etapa_id == "FASE_PREPARATORIA" and all(isinstance(resultado.get(bloco), dict) for bloco in ("DFD", "ETP", "TR")) else {"_": resultado}
         for bloco in blocos.values():
             if not isinstance(bloco, dict):
                 continue
