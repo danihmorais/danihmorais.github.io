@@ -43,8 +43,8 @@ export function loadTsModule(relativePath, { globals = {}, replacements = [] } =
 
   const transpiled = ts.transpileModule(source, {
     compilerOptions: {
-      target: ts.ScriptTarget.ES2022,
-      module: ts.ModuleKind.CommonJS,
+      target: 9,
+      module: 1,
       esModuleInterop: true,
     },
     fileName: filename,
