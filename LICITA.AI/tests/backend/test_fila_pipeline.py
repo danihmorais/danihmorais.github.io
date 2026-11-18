@@ -69,7 +69,7 @@ class TestFilaPipeline(unittest.TestCase):
         self.assertIn("2 imagem(ns)", saneado["{{DOTACAO}}"])
         self.assertIn("Fonte 123.456.789/0001-00", saneado["{{DOTACAO}}"])
         self.assertNotIn("{{CAMINHO_IMAGEM_DOTACAO}}", saneado)
-        self.assertNotIn("RAW_PAC", saneado)
+        self.assertEqual(saneado["RAW_PAC"], "campo interno")
 
         prompt = _substituir_contextos("__LICITA_PIPE_DADOS_USUARIO__", dados, {})
         self.assertNotIn(segredo, prompt)
@@ -513,7 +513,7 @@ class TestPipelineUnificado(unittest.TestCase):
         chamadas_modelo = []
         job_id = "a" * 32
 
-        def chamar_ia(prompt, model, temperature=0.3):
+        def chamar_ia(prompt, model, temperature=0.3, **opcoes):
             chamadas_modelo.append(model)
             return {"CAMPO": f"resultado de {prompt}"}, "modelo-resolvido"
 
