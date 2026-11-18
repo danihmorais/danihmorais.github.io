@@ -37,6 +37,16 @@ from main import app
 
 
 class LicitaBackendTests(unittest.TestCase):
+    def test_configuracao_municipal_publica(self):
+        with TestClient(app) as client:
+            resposta = client.get("/api/configuracao")
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        payload = resposta.json()
+        self.assertEqual(payload["municipio"]["id"], "sao-francisco-sp")
+        self.assertEqual(payload["municipio"]["display"], "São Francisco/SP")
+        self.assertEqual(payload["limite_exclusividade_me_epp_centavos"], 8000000)
+        self.assertIn("endereco_prefeitura", payload["municipio"]["campos")
+
     def _headers_verificacao(self, email: str) -> dict:
         return {"X-Email-Verification": main._emitir_token_email_verificado(email)}
 
