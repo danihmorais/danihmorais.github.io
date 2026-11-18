@@ -198,7 +198,7 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDis
       <div className="queue-delivery-heading">
         <strong>Acompanhamento da solicitação</strong>
         <span className={`queue-delivery-status status-${status || "loading"}`}>
-          {status === "sent" ? "Concluída" : status === "failed" ? "Falha" : status === "cancelled" ? "Cancelada" : status === "processing" ? "Em processamento" : status === "queued" ? "Na fila" : "Consultando"}
+          {status === "sent" ? "Concluída" : status === "failed" ? "Falha" : status === "cancelled" ? "Cancelada" : status === "processing" ? "Em processamento" : status === "queued" ? "Na fila" : status === "awaiting_review" ? "Aguardando revisão" : "Consultando"}
         </span>
       </div>
       <p>Solicitação: <code>{jobId}</code></p>
