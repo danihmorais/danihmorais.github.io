@@ -24,7 +24,7 @@ import PromptModal from "../components/promptModal";
 import ConfirmDialog from "../components/ConfirmDialog";
 import AdminPedidosModal from "../components/AdminPedidosModal";
 import { ThemeContext } from "../context/ThemeContext";
-import { cancelarFilaFasePreparatoria, consultarFilaFasePreparatoria, gerarFasePreparatoria, type DocumentosReferenciaUpload, type FasePreparatoriaJob } from "../api";
+import { carregarConfiguracaoMunicipal, cancelarFilaFasePreparatoria, consultarFilaFasePreparatoria, gerarFasePreparatoria, type DocumentosReferenciaUpload, type FasePreparatoriaJob } from "../api";
 import { criarDadosTeste, TipoTesteContratacao } from "../utils/dadosTeste";
 import { obterLotes, distribuicaoLotesValida } from "../utils/lotes";
 
@@ -255,8 +255,11 @@ export default function Wizard() {
       onConfirm: carregar,
     });
   };
+   useEffect(() => {
+     void carregarConfiguracaoMunicipal();
+   }, []);
 
-  useEffect(() => {
+   useEffect(() => {
     // A rolagem deve ocorrer ao trocar de etapa, não na abertura inicial da página.
     if (etapaAnteriorRef.current === etapaAtual) return;
     etapaAnteriorRef.current = etapaAtual;
