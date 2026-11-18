@@ -25,6 +25,30 @@ class JobCancelado(Exception):
     """Cancelamento solicitado; o worker deve interromper entre etapas."""
 
 
+def _classificar_erro_permanente(exc: Exception) -> bool:
+    if isinstance(exc, ErroPermanente):
+        return True
+    status = getattr(exc, "status_code", None)
+    if status is not None:
+        try:
+            status = int(status)
+        except (TypeError, ValueError):
+            status = None
+        if status is not None:
+            return 400 <= status < 500 and status not in {408, 425, 429}
+    nome = type(exc).__name__.casefold()
+    if isinstance(exc, (TimeoutError, ConnectionError)) or any(token in nome for token in ("timeout", "connecterror", "networkerror", "requesterror")):
+        return False
+    if isinstance(exc, (ValueError, TypeError, KeyError, IndexError, AssertionError, OSError)):
+        return True
+    if isinstance(exc, RuntimeError):
+        mensagem = str(exc).casefold()
+        if any(token in mensagem for token in ("http 5", "http 429", "http 408", "http 425", "timeout", "timed out", "falha de comunicacao", "falha de comunicação", "conexao", "conexão")):
+            return False
+        return True
+    return True
+
+
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -1198,7 +1222,7 @@ def _process_one_job() -> None:
         attempts = int(job.get("attempts", 1))
         # str() de algumas exceções (ex.: timeouts) é vazio; registre ao menos o tipo.
         erro_texto = str(exc) or type(exc).__name__
-        permanente = isinstance(exc, ErroPermanente)
+        permanente = _classificar_erro_permanente(exc)
         logger.warning(
             "Solicitação %s falhou na tentativa %s (%s): %s",
             job.get("job_id"), attempts, "permanente" if permanente else "transitória", erro_texto,
