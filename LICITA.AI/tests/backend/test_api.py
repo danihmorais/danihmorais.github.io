@@ -390,7 +390,7 @@ class LicitaBackendTests(unittest.TestCase):
                 email="admin-cancelar@example.com",
                 dados_usuario={
                     "{{OBJETO}}": "Objeto com dotação em imagem",
-                    "{{DOTACAO}}": "__IMG__" + segredo + "\\nFonte 123.456.789/0001-00",
+                    "{{DOTACAO}}": "__IMG__" + segredo + "\nFonte 123.456.789/0001-00",
                     "{{CAMINHO_IMAGEM_DOTACAO}}": "data:image/png;base64," + segredo,
                 },
                 dados_ia={"__LICITA_PIPELINE__": {"model": "unsloth-auto", "etapas": []}},
@@ -748,9 +748,9 @@ class TestEntregaZipAutenticada(unittest.TestCase):
 class TestImportacaoItensPlanilha(unittest.TestCase):
     def test_csv_separado_por_ponto_e_virgula_normaliza_cabecalhos(self):
         conteudo = (
-            "Nº;Descrição;Unidade;Quantidade;Valor Unitário\\n"
-            "1;Papel A4;RESMA;10;32,50\\n"
-            "2;Caneta azul;CAIXA;5;18,90\\n"
+            "Nº;Descrição;Unidade;Quantidade;Valor Unitário\n"
+            "1;Papel A4;RESMA;10;32,50\n"
+            "2;Caneta azul;CAIXA;5;18,90\n"
         ).encode("utf-8")
         itens = main._ler_itens_csv(conteudo)
         self.assertEqual(len(itens), 2)
@@ -761,7 +761,7 @@ class TestImportacaoItensPlanilha(unittest.TestCase):
 
     def test_csv_rejeita_planilha_sem_coluna_de_descricao(self):
         with self.assertRaisesRegex(ValueError, "coluna de descrição"):
-            main._ler_itens_csv(b"Codigo;Quantidade\\n01;10\\n")
+            main._ler_itens_csv(b"Codigo;Quantidade\n01;10\n")
 
     def test_xlsx_le_cabecalhos_em_portugues(self):
         from openpyxl import Workbook
@@ -781,7 +781,7 @@ class TestImportacaoItensPlanilha(unittest.TestCase):
         )
 
     def test_endpoint_recebe_csv_e_aplica_limites_de_upload(self):
-        csv_data = b"Item;Descricao;Unidade;Quantidade;Valor\\n1;Papel A4;RESMA;10;32.50\\n"
+        csv_data = b"Item;Descricao;Unidade;Quantidade;Valor\n1;Papel A4;RESMA;10;32.50\n"
         with TestClient(app) as client:
             resposta = client.post(
                 "/api/importar-itens-planilha",
