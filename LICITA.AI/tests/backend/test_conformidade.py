@@ -81,6 +81,12 @@ class ConformidadeTests(unittest.TestCase):
         self.assertEqual(verificacao["status"], "revisao")
         self.assertIn("não verifica automaticamente", verificacao["detalhe"])
 
+    def test_sinaliza_amostra_dispensa_quando_formulario_exige(self):
+        documentos = documentos_base()
+        documentos["TR"]["AMOSTRA_TR"] = "A amostra está dispensada."
+        relatorio = avaliar_conformidade(documentos, {"{{AMOST}}": "sim"})
+        self.assertTrue(any(a["tipo"] == "amostra_incoerente" for a in relatorio["alertas"]))
+
     def test_sinaliza_amostra_incompativel_com_formulario(self):
         documentos = documentos_base()
         documentos["TR"]["AMOSTRA_TR"] = "A amostra será obrigatória."
