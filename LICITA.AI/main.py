@@ -1,6 +1,4 @@
-import unicodedata
-import io
-import csv
+from fila import listar_jobs_sqlite
 from __future__ import annotations
 
 import base64
@@ -1606,3 +1604,19 @@ def _limpar_fila_antiga() -> None:
 
 iniciar_worker()
 threading.Thread(target=_limpar_fila_antiga, name="licita-retencao", daemon=True).start()
+
+_queue_position_arquivos = _queue_position
+
+
+def _queue_position(job_id: str) -> tuple[int, int]:
+    try:
+        jobs = listar_jobs_sqlite("queued", limite=5000)
+        total = len(jobs)
+        for posicao, job in enumerate(jobs, start=1):
+            if str(job.get("job_id") or "") == str(job_id):
+                return posicao, total
+        return 0, total
+    except Exception:
+        logger.exception("Falha ao consultar posição pelo índice SQLite.", extra={"job_id": job_id})
+        return _queue_position_arquivos(job_id)
+
