@@ -119,7 +119,7 @@ def avaliar_conformidade(documentos: dict, dados_usuario: dict | None = None) ->
     menciona_amostra = bool(re.search(r"(?i)amostra|prot[oó]tipo", texto_amostra))
     dispensa_amostra = bool(re.search(r"(?i)dispensad|n[aã]o\s+(?:ser[aá]\s+)?exigid|n[aã]o\s+necess[aá]ri|inexig", texto_amostra))
     exige_no_texto = bool(re.search(r"(?i)obrigat|exigid|dever[aá]\s+apresent|apresentar\s+(?:a\s+)?amostra", texto_amostra)) and not dispensa_amostra
-    amostra_contem = menciona_amostra if exige_amostra else exige_no_texto
+    amostra_contem = (menciona_amostra and not dispensa_amostra) if exige_amostra else exige_no_texto
     amostra_status = "ok" if (exige_amostra == amostra_contem) else "alerta"
     verificacoes.append({
         "id": "amostra",
