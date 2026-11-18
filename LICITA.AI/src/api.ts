@@ -189,6 +189,51 @@ export async function importarItensPlanilha(arquivo: File): Promise<{ items: Ite
   return payload;
 }
 
+export type PreviewDocumentosFila = {
+  job_id: string;
+  status: "awaiting_review";
+  documentos: Record<"DFD" | "ETP" | "TR", Record<string, string>>;
+  updated_at?: string;
+  message: string;
+};
+
+export async function consultarPreviewFila(jobId: string, statusToken: string): Promise<PreviewDocumentosFila> {
+  const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}/preview`, {
+    headers: { "X-Status-Token": statusToken },
+  });
+  let payload: any = {};
+  try { payload = await response.json(); } catch {}
+  if (!response.ok) throw new Error(payload?.detail || "Não foi possível carregar a pré-visualização.");
+  return payload;
+}
+
+export async function salvarCampoPreviewFila(
+  jobId: string,
+  statusToken: string,
+  documento: "DFD" | "ETP" | "TR",
+  campo: string,
+  conteudo: string,
+): Promise<void> {
+  const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}/preview`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", "X-Status-Token": statusToken },
+    body: JSON.stringify({ documento, campo, conteudo }),
+  });
+  let payload: any = {};
+  try { payload = await response.json(); } catch {}
+  if (!response.ok) throw new Error(payload?.detail || "Não foi possível salvar a alteração.");
+}
+
+export async function aprovarPreviewFila(jobId: string, statusToken: string): Promise<void> {
+  const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}/approve`, {
+    method: "POST",
+    headers: { "X-Status-Token": statusToken },
+  });
+  let payload: any = {};
+  try { payload = await response.json(); } catch {}
+  if (!response.ok) throw new Error(payload?.detail || "Não foi possível aprovar os documentos.");
+}
+
 export type AcompanhamentoJobSalvo = { job_id: string; status_token: string; saved_at: number };
 
 const CHAVE_ACOMPANHAMENTO_JOB = "licita-ai-acompanhamento-job-v1";
