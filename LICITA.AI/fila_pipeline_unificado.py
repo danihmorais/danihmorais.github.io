@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 from fila import MAX_ATTEMPTS, POLL_INTERVAL_SECONDS, QUEUE_DIR, SMTP_FROM, SMTP_USERNAME, _artifact_path, _claim_next_job, _enviar_email, _enviar_email_alerta_falha, _finalizar_etapa, _finalizar_tentativa, _iniciar_etapa, _job_path, _retry_delay_seconds, _write_json, gerar_zip
 from fila_pipeline import ErroPermanente, _aplicar_auditoria_marcas, _chamar_ia as _chamar_ia_primaria, _substituir_contextos, _validar_json_geracao, limite_prompt_chars
 from montador_variaveis import amostra_exigida, arredondar_valor_estimado_decimal, calcular_valor_estimado_decimal
+from conformidade import formatar_relatorio_referencias
 
 
 class JobCancelado(Exception):
@@ -1346,3 +1347,7 @@ def iniciar_worker() -> None:
 
 
 atexit.register(parar_worker)
+
+
+def _gerar_relatorio_conformidade(resultado: dict) -> str:
+    return formatar_relatorio_referencias(resultado)
