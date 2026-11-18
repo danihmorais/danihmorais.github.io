@@ -344,11 +344,19 @@ class TestStaleQueueCancellation(unittest.TestCase):
         resultado = _validar_json_unificado(com_extra, exigir_amostra_tr=False)
         self.assertNotIn("AMOSTRA_TR", resultado["TR"])
 
-    def test_json_schema_nao_e_ativado_nas_etapas_de_consulta(self):
-        self.assertEqual(_opcoes_chamada_ia_etapa("consulta_habilitacao"), {})
-        self.assertEqual(_opcoes_chamada_ia_etapa("geracao_json"), {})
-        self.assertEqual(_opcoes_chamada_ia_etapa("geracao_json", "OUTRA_ETAPA"), {})
-        self.assertEqual(_opcoes_chamada_ia_etapa("geracao_contratacao_direta", "CONTRATACAO_DIRETA"), {})
+    def test_todas_as_etapas_juridicas_e_de_consulta_usam_formato_estrito(self):
+        consulta = _opcoes_chamada_ia_etapa("consulta_habilitacao")
+        self.assertTrue(consulta["enable_tools"])
+        self.assertTrue(consulta["response_format"]["json_schema"]["strict"])
+        pagamento = _opcoes_chamada_ia_etapa("geracao_json", "PAGAMENTO_ETAPAS")
+        self.assertFalse(pagamento["enable_tools"])
+        self.assertTrue(pagamento["response_format"]["json_schema"]["strict"])
+        contratacao = _opcoes_chamada_ia_etapa("geracao_contratacao_direta", "CONTRATACAO_DIRETA")
+        self.assertFalse(contratacao["enable_tools"])
+        self.assertTrue(contratacao["response_format"]["json_schema"]["strict"])
+        legado = _opcoes_chamada_ia_etapa("geracao_json", "OUTRA_ETAPA")
+        self.assertFalse(legado["enable_tools"])
+        self.assertNotIn("response_format", legado)
 
     def test_pagamento_por_etapas_usa_json_schema_estrito_sem_ferramentas(self):
         opcoes = _opcoes_chamada_ia_etapa("geracao_json", "PAGAMENTO_ETAPAS")
