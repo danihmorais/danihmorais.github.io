@@ -1,15 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   baixarZipFila,
   consultarFilaFasePreparatoria,
   reenviarFilaFasePreparatoria,
-  type FasePreparatoriaJob,
 } from "../api";
 
 type Props = {
   jobId: string;
   statusToken: string;
-  onResent: (job: FasePreparatoriaJob) => void;
+  onResent: (job: { job_id: string; status_token: string }) => void;
   onDismiss: () => void;
 };
 
@@ -28,10 +27,7 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDis
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
-  const atualizar = useCallback(async () => {
-    const status = await consultarFilaFasePreparatoria(jobId, statusToken);
-    setJob(status as JobStatus);
-  }, [jobId, statusToken]);
+
 
   useEffect(() => {
     let ativo = true;
