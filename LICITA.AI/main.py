@@ -21,7 +21,7 @@ from starlette.datastructures import UploadFile
 
 from documentos_contexto import MAX_CONTEXT_CHARS, extrair_contexto_documentos
 from fila import EMAIL_RE, MAX_ATTEMPTS, QUEUE_DIR, _artifact_path, _job_path, cancel_job, enqueue_job, get_job
-from fila_pipeline import limite_prompt_chars
+from fila_pipeline import _dados_para_prompt, limite_prompt_chars
 from fila_pipeline_unificado import iniciar_worker
 from pipeline_prompts import montar_pipeline
 
@@ -403,22 +403,23 @@ def _montar_pipeline_requisicao(req: FasePreparatoriaRequest, documentos: list[d
     except (TypeError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    pipeline = dados_ia["__LICITA_PIPELINE__"]
+    etapas = pipeline.get("etapas") or []
+    maior_prompt = max((len(str(etapa.get("prompt", ""))) for etapa in etapas if isinstance(etapa, dict)), default=0)
+    dados_prompt = json.dumps(_dados_para_prompt(dados_usuario), ensure_ascii=False, indent=2)
+    caracteres_documentos = sum(len(str(item.get("texto", ""))) + 200 for item in documentos or [])
+    limite = limite_prompt_chars()
+    excesso = maior_prompt + len(dados_prompt) + caracteres_documentos - limite
+    if excesso > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Os dados e documentos de referência, somados às instruções da geração, ultrapassam o limite de "
+                f"contexto da IA. Reduza o conteúdo em pelo menos {excesso:,} caracteres "
+                "(por exemplo, removendo anexos ou páginas desnecessárias).".replace(",", ".")
+            ),
+        )
     if documentos:
-        pipeline = dados_ia["__LICITA_PIPELINE__"]
-        etapas = pipeline.get("etapas") or []
-        maior_prompt = max((len(str(etapa.get("prompt", ""))) for etapa in etapas if isinstance(etapa, dict)), default=0)
-        caracteres_documentos = sum(len(str(item.get("texto", ""))) + 200 for item in documentos)
-        limite = limite_prompt_chars()
-        excesso = maior_prompt + caracteres_documentos - limite
-        if excesso > 0:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "Os documentos de referência, somados às instruções da geração, ultrapassam o limite de "
-                    f"contexto da IA. Reduza os documentos em pelo menos {excesso:,} caracteres "
-                    "(por exemplo, anexando apenas as páginas necessárias).".replace(",", ".")
-                ),
-            )
         pipeline["documentos_anteriores"] = documentos
 
     return dados_usuario, dados_ia
