@@ -46,7 +46,7 @@ test("mapearDadosWizard injeta contexto municipal configurado", () => {
   assert.equal(dados["{{MUNICIPIO_UF}}"], "Cidade Teste/SP");
   assert.equal(dados["{{PREFEITURA}}"], "Prefeitura de Cidade Teste");
   assert.equal(dados["{{ENDERECO_PREFEITURA}}"], "Rua Teste, 1");
-  assert.equal(dados["{{LIMITE_ME_EPP}}"], "R$ 50.000,00");
+  assert.equal(dados["{{LIMITE_ME_EPP}}"].replace(/\u00a0/g, " "), "R$ 50.000,00");
   config.definirConfigMunicipal({
     municipio: {
       id: "sao-francisco-sp", nome: "São Francisco", uf: "SP", display: "São Francisco/SP", decreto: "",
