@@ -23,8 +23,8 @@ Configure as variáveis no serviço do backend. Não grave senhas, chaves ou tok
 
 | Variável | Finalidade |
 | --- | --- |
-| `UNSLOTH_API_URL` / `API_UNSLOTH_URL` | URL do servidor de modelos compatível com OpenAI. Use o nome efetivamente lido pelo arquivo de configuração do serviço. |
-| `UNSLOTH_API_KEY` / `LICITA_UNSLOTH_KEY` | Chave de acesso ao servidor de modelos, conforme o nome utilizado no ambiente. |
+| `API_UNSLOTH_URL` | URL do servidor de modelos compatível com OpenAI. |
+| `API_UNSLOTH_KEY` | Chave de acesso ao servidor de modelos. |
 | `AI_TIMEOUT_SECONDS` | Timeout geral das chamadas de IA. O valor recomendado para a configuração atual é 1200 segundos. |
 | `VITE_API_URL` | URL-base da API usada na compilação do front-end. |
 
@@ -74,7 +74,9 @@ Os arquivos da fila e os ZIPs precisam estar em volume persistente, com permiss�
 3. O backend monta as etapas e prompts. O cliente não pode substituir o prompt ou o schema.
 4. As chamadas de IA retornam dados estruturados em JSON Schema estrito.
 5. DFD, ETP e TR são gerados em etapas separadas; ETP recebe DFD e TR recebe DFD e ETP.
-6. O worker monta os documentos DOCX e o ZIP. Falhas ao inserir tabelas ou imagens interrompem a geração.
+6. O usuário pode acompanhar o job após recarregar a página, baixar o ZIP com o token de status no cabeçalho e solicitar reenvio somente quando os documentos já foram gerados e o envio SMTP falhou. Os ZIPs permanecem no diretório da fila até a rotina de retenção removê-los.
+
+O worker monta os documentos DOCX e o ZIP. Falhas ao inserir tabelas ou imagens interrompem a geração.
 7. O ZIP é enviado por e-mail e permanece disponível na fila durante o período de retenção para download autenticado.
 
 Tokens de status e confirmação são enviados em cabeçalhos, não na URL. O token de status deve ser tratado como credencial: não o grave em logs nem o compartilhe.
