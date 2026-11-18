@@ -252,7 +252,7 @@ export default function DotacaoEditor({ value, onChange, placeholder }: DotacaoE
           data-placeholder={placeholder}
           onInput={sincronizar}
           onBlur={sincronizar}
-        / onPaste={(evento) => {
+        onPaste={(evento) => {
     const html = evento.clipboardData.getData("text/html");
     if (!html) return;
     evento.preventDefault();
@@ -272,7 +272,8 @@ export default function DotacaoEditor({ value, onChange, placeholder }: DotacaoE
     } else {
       editor.appendChild(fragmento);
     }
-  }}>
+  }}
+        >
         <div style={{ position: "absolute", bottom: "8px", left: "8px", display: "flex", gap: "6px" }}>
           <button
             type="button"
