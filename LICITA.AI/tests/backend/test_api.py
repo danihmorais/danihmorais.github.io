@@ -830,6 +830,20 @@ class TestRevisaoPreviaDocumentos(unittest.TestCase):
             resposta = client.get(f"/api/fila/{job['job_id']}/preview", headers={"X-Status-Token": "errado"})
         self.assertEqual(resposta.status_code, 403)
 
+    def test_previsualizacao_retorna_checklist_de_conformidade(self):
+        job = self.job_revisao()
+        with (
+            patch.object(main, "get_job", return_value=job),
+            patch.object(main, "_token_matches", return_value=True),
+            TestClient(app) as client,
+        ):
+            resposta = client.get(f"/api/fila/{job['job_id']}/preview", headers={"X-Status-Token": "token-revisao"})
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        relatorio = resposta.json()["conformidade"]
+        self.assertEqual(relatorio["version"], 1)
+        self.assertIn("summary", relatorio)
+        self.assertTrue(relatorio["verificacoes"])
+
     def test_edicao_de_dfd_marca_etp_e_tr_para_regeneracao(self):
         from tempfile import TemporaryDirectory
         from pathlib import Path
