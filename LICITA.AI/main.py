@@ -4,6 +4,8 @@ import unicodedata
 import io
 import csv
 
+import config
+
 import base64
 import hashlib
 import hmac
