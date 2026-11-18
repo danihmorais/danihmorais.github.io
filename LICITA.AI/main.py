@@ -1438,7 +1438,9 @@ async def regenerar_documento_fila(job_id: str, request: Request, req: PreviewRe
             "enable_thinking": True,
         }
         assinatura = inspect.signature(provedor_ia._chamar_ia)
-        opcoes = {chave: valor for chave, valor in opcoes.items() if chave in assinatura.parameters}
+        aceita_kwargs = any(parametro.kind == inspect.Parameter.VAR_KEYWORD for parametro in assinatura.parameters.values())
+        if not aceita_kwargs:
+            opcoes = {chave: valor for chave, valor in opcoes.items() if chave in assinatura.parameters}
         resultado = await asyncio.to_thread(provedor_ia._chamar_ia, prompt, modelo, **opcoes)
         if isinstance(resultado, tuple):
             resultado = resultado[0]
