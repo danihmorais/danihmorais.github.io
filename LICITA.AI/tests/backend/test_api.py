@@ -797,5 +797,106 @@ class TestImportacaoItensPlanilha(unittest.TestCase):
         self.assertEqual(resposta.status_code, 400)
 
 
+class TestRevisaoPreviaDocumentos(unittest.TestCase):
+    def job_revisao(self):
+        return {
+            "job_id": "e" * 32,
+            "status_token": "token-revisao",
+            "status": "awaiting_review",
+            "current_stage": "REVISAO_USUARIO",
+            "dados_ia_final": {
+                "DFD": {"OBJETO": "Objeto inicial"},
+                "ETP": {"JUSTIFICATIVA": "Justificativa inicial"},
+                "TR": {"DESCRICAO": "Descrição inicial"},
+            },
+            "review_results": {
+                "DFD": {"OBJETO": "Objeto inicial"},
+                "ETP": {"JUSTIFICATIVA": "Justificativa inicial"},
+                "TR": {"DESCRICAO": "Descrição inicial"},
+                "GERACAO_DFD": {"DFD": {"OBJETO": "Objeto inicial"}},
+                "GERACAO_ETP": {"ETP": {"JUSTIFICATIVA": "Justificativa inicial"}},
+                "GERACAO_TR": {"TR": {"DESCRICAO": "Descrição inicial"}},
+            },
+            "review_stale_documents": [],
+        }
+
+    def test_previsualizacao_exige_token_de_status(self):
+        job = self.job_revisao()
+        with (
+            patch.object(main, "get_job", return_value=job),
+            patch.object(main, "_token_matches", return_value=False),
+            TestClient(app) as client,
+        ):
+            resposta = client.get(f"/api/fila/{job['job_id']}/preview", headers={"X-Status-Token": "errado"})
+        self.assertEqual(resposta.status_code, 403)
+
+    def test_edicao_de_dfd_marca_etp_e_tr_para_regeneracao(self):
+        from tempfile import TemporaryDirectory
+        from pathlib import Path
+
+        job = self.job_revisao()
+        with TemporaryDirectory() as diretorio:
+            arquivo = Path(diretorio) / "job.review.json"
+            with (
+                patch.object(main, "get_job", return_value=job),
+                patch.object(main, "_token_matches", return_value=True),
+                patch.object(main, "_job_path", return_value=arquivo),
+                TestClient(app) as client,
+            ):
+                resposta = client.put(
+                    f"/api/fila/{job['job_id']}/preview",
+                    headers={"X-Status-Token": "token-revisao"},
+                    json={"documento": "DFD", "campo": "OBJETO", "conteudo": "Objeto revisado"},
+                )
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual(job["dados_ia_final"]["DFD"]["OBJETO"], "Objeto revisado")
+        self.assertEqual(job["review_results"]["GERACAO_DFD"]["DFD"]["OBJETO"], "Objeto revisado")
+        self.assertEqual(job["review_stale_documents"], ["ETP", "TR"])
+
+    def test_aprovacao_bloqueia_documentos_dependentes_desatualizados(self):
+        job = self.job_revisao()
+        job["review_stale_documents"] = ["TR"]
+        with (
+            patch.object(main, "get_job", return_value=job),
+            patch.object(main, "_token_matches", return_value=True),
+            TestClient(app) as client,
+        ):
+            resposta = client.post(
+                f"/api/fila/{job['job_id']}/approve",
+                headers={"X-Status-Token": "token-revisao"},
+            )
+        self.assertEqual(resposta.status_code, 409)
+        self.assertIn("TR", resposta.json()["detail"])
+
+    def test_aprovacao_move_job_de_review_para_queued(self):
+        from tempfile import TemporaryDirectory
+        from pathlib import Path
+
+        job = self.job_revisao()
+        with TemporaryDirectory() as diretorio:
+            revisao = Path(diretorio) / "job.review.json"
+            queued = Path(diretorio) / "job.queued.json"
+            revisao.write_text("{}", encoding="utf-8")
+
+            def caminho(_job_id, extensao):
+                return queued if extensao == ".queued" else revisao
+
+            with (
+                patch.object(main, "get_job", return_value=job),
+                patch.object(main, "_token_matches", return_value=True),
+                patch.object(main, "_job_path", side_effect=caminho),
+                TestClient(app) as client,
+            ):
+                resposta = client.post(
+                    f"/api/fila/{job['job_id']}/approve",
+                    headers={"X-Status-Token": "token-revisao"},
+                )
+            self.assertEqual(resposta.status_code, 200, resposta.text)
+            self.assertTrue(queued.is_file())
+            self.assertFalse(revisao.exists())
+        self.assertTrue(job["review_approved"])
+        self.assertEqual(job["status"], "queued")
+
+
 if __name__ == "__main__":
     unittest.main()
