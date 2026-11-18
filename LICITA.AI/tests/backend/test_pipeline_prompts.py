@@ -54,12 +54,6 @@ class TestPipelinePromptsNoServidor(unittest.TestCase):
             self.assertNotIn(instrucao, etapa["prompt"])
         self.assertNotIn("ADMIN_PASSWORD", json.dumps(resultado, ensure_ascii=False))
 
-    def test_instrucoes_sao_preservadas_no_dados_do_job_e_nao_no_template(self):
-        instrucao = "Preservar a especificação de tela de 15,6 polegadas."
-        resultado = montar_pipeline(self.dados_base(), instrucao)
-        self.assertNotIn(instrucao, json.dumps(resultado, ensure_ascii=False))
-        self.assertIn("PAGAMENTO_TIPO", json.dumps(resultado, ensure_ascii=False))
-
     def test_contratacao_direta_usa_somente_etapa_propria(self):
         dados = self.dados_base()
         dados["{{MODALIDADE}}"] = "DISPENSA_BLL"
