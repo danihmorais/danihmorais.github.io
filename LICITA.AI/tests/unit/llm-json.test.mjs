@@ -31,7 +31,7 @@ test("escape inválido é rejeitado em vez de descartado", () => {
 });
 
 test("quebra de linha crua dentro de string é rejeitada", () => {
-  assert.throws(() => extrairEConverterJSON('{"A":"linha1\\nlinha2"}'), /JSON válido/);
+  assert.throws(() => extrairEConverterJSON('{"A":"linha1\nlinha2"}'), /JSON válido/);
 });
 
 test("texto sem JSON levanta erro de JSON inválido", () => {
