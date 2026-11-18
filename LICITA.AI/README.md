@@ -1,0 +1,109 @@
+# LICITA.AI
+
+Aplicação web para preparação de documentos de contratação pública, com interface React/Vite, API FastAPI, fila de processamento e integração com servidor de modelos compatível com a API OpenAI.
+
+## Arquitetura
+
+- `src/`: aplicação React, validação e interação com o usuário.
+- `main.py`: API FastAPI do LICITA.AI, montada pelo agregador na rota `/licita`.
+- `fila.py`: persistência e operações da fila em arquivos JSON.
+- `fila_pipeline.py`: integração com o servidor de IA, controle de timeout e validação de respostas.
+- `fila_pipeline_unificado.py`: worker, etapas da geração, persistência de resultados e montagem do ZIP.
+- `pipeline_prompts.py`: templates de instrução mantidos no servidor. Dados do processo são enviados como conteúdo JSON, não como instruções de sistema.
+- `processador_docx.py`: preenchimento dos modelos DOCX.
+- `tests/backend` e `tests/unit`: testes de backend e front-end.
+
+A fila atual utiliza arquivos JSON e um worker por processo. O heartbeat atualiza o arquivo `.processing`; jobs abandonados são recuperados após o limite configurado. A fila ainda não usa SQLite e não deve ser compartilhada entre vários servidores sem armazenamento e coordenação comuns.
+
+## Configuração
+
+Configure as variáveis no serviço do backend. Não grave senhas, chaves ou tokens no repositório.
+
+### API e IA
+
+| Variável | Finalidade |
+| --- | --- |
+| `UNSLOTH_API_URL` / `API_UNSLOTH_URL` | URL do servidor de modelos compatível com OpenAI. Use o nome efetivamente lido pelo arquivo de configuração do serviço. |
+| `UNSLOTH_API_KEY` / `LICITA_UNSLOTH_KEY` | Chave de acesso ao servidor de modelos, conforme o nome utilizado no ambiente. |
+| `AI_TIMEOUT_SECONDS` | Timeout geral das chamadas de IA. O valor recomendado para a configuração atual é 1200 segundos. |
+| `VITE_API_URL` | URL-base da API usada na compilação do front-end. |
+
+### SMTP e confirmação do destinatário
+
+| Variável | Finalidade |
+| --- | --- |
+| `SMTP_HOST` | Servidor SMTP. |
+| `SMTP_PORT` | Porta SMTP. |
+| `SMTP_USERNAME` | Usuário de autenticação SMTP. |
+| `SMTP_PASSWORD` | Senha SMTP. |
+| `SMTP_FROM` | Endereço remetente dos e-mails. |
+| `LICITA_EMAIL_ALLOWED_DOMAINS` | Domínios autorizados, separados por vírgula. O padrão é `gov.br`; ajuste-o aos domínios institucionais efetivamente utilizados. |
+| `LICITA_EMAIL_VERIFICATION_SECRET` | **Obrigatório em produção:** segredo aleatório estável, compartilhado por todos os workers e reinícios, usado para assinar tokens de confirmação. Não use uma chave diferente por processo. |
+| `LICITA_EMAIL_VERIFICATION_TTL` | Validade do código de seis dígitos. Padrão: 600 segundos. |
+| `LICITA_EMAIL_VERIFICATION_TOKEN_TTL` | Validade do token de endereço confirmado. Padrão: 3600 segundos. |
+| `LICITA_EMAIL_VERIFICATION_RATE_LIMIT` | Solicitações de código permitidas por endereço na janela de uma hora. Padrão: 3. |
+
+Os desafios de confirmação ficam em memória no processo. Após reinício, o usuário deverá solicitar novo código. Para executar vários workers, além de compartilhar o segredo, será necessário substituir o armazenamento em memória dos desafios por armazenamento compartilhado.
+
+### Rate limit e proxy reverso
+
+| Variável | Finalidade |
+| --- | --- |
+| `LICITA_TRUSTED_PROXY_CIDRS` | CIDRs dos proxies reversos confiáveis, separados por vírgula. Configure somente os endereços reais do proxy que conecta diretamente à API. |
+| `LICITA_QUEUE_GLOBAL_RATE_LIMIT` | Limite global de novas solicitações da fila na janela configurada. Padrão: 40. |
+| `LICITA_IA_GLOBAL_RATE_LIMIT` | Limite global de operações pontuais de IA. Padrão: 120. |
+| `LICITA_IA_RATE_LIMIT` | Limite de chamadas pontuais por identidade de cliente. |
+| `LICITA_QUEUE_DIR` | Diretório de persistência dos jobs e arquivos ZIP, conforme `fila.py`. |
+
+Não confie em `X-Forwarded-For` de clientes que não pertençam a `LICITA_TRUSTED_PROXY_CIDRS`. O Uvicorn também deve receber apenas os headers de proxy da infraestrutura confiável.
+
+### Worker e retenção
+
+| Variável | Finalidade |
+| --- | --- |
+| `LICITA_QUEUE_HEARTBEAT_SECONDS` | Intervalo do heartbeat de jobs em processamento. Padrão: 45 segundos. |
+| `LICITA_QUEUE_STALE_PROCESSING_SECONDS` | Tempo sem heartbeat para considerar um job órfão. Padrão: 300 segundos. |
+| `LICITA_QUEUE_SHUTDOWN_TIMEOUT_SECONDS` | Tempo máximo de espera para encerramento gracioso do worker. Padrão: 1250 segundos. |
+
+Os arquivos da fila e os ZIPs precisam estar em volume persistente, com permissões de leitura e escrita para o usuário do serviço. O procedimento de backup deve incluir o diretório inteiro da fila.
+
+## Fluxo de geração
+
+1. O front-end envia e-mail, instruções e dados estruturados do formulário.
+2. O backend exige que o endereço institucional seja confirmado por código enviado ao próprio e-mail.
+3. O backend monta as etapas e prompts. O cliente não pode substituir o prompt ou o schema.
+4. As chamadas de IA retornam dados estruturados em JSON Schema estrito.
+5. DFD, ETP e TR são gerados em etapas separadas; ETP recebe DFD e TR recebe DFD e ETP.
+6. O worker monta os documentos DOCX e o ZIP. Falhas ao inserir tabelas ou imagens interrompem a geração.
+7. O ZIP é enviado por e-mail e permanece disponível na fila durante o período de retenção para download autenticado.
+
+Tokens de status e confirmação são enviados em cabeçalhos, não na URL. O token de status deve ser tratado como credencial: não o grave em logs nem o compartilhe.
+
+## Desenvolvimento e testes
+
+Na pasta `LICITA.AI`:
+
+```bash
+npm ci
+npm test
+npm run build
+node tests/dist-smoke.mjs
+```
+
+Para o backend, instale as dependências de `requirements.txt` e execute:
+
+```bash
+python -m unittest discover -s tests/backend -p 'test_*.py' -v
+```
+
+O workflow `LICITA.AI checks` executa os testes front-end, build, smoke test e testes backend. Os workflows de publicação do Pages e deploy do FastAPI são acionados após o sucesso do workflow de validação na branch `main`.
+
+## Deploy e rollback
+
+1. Faça a alteração por branch e Pull Request.
+2. Aguarde os jobs de validação concluírem com sucesso.
+3. A publicação do Pages e o deploy do FastAPI são acionados a partir do SHA que passou nos testes.
+4. Verifique o estado do deploy, `/health`, os namespaces da API e os headers CORS.
+5. Em falha, interrompa novas publicações, restaure o último SHA conhecido como funcional e faça rollback do código pelo fluxo de deploy da infraestrutura. Preserve o diretório persistente da fila e os ZIPs; não remova jobs em processamento durante o rollback.
+
+O repositório não contém segredos de deploy. O webhook de deploy e a URL pública da API permanecem configurados como secrets do GitHub Actions.
