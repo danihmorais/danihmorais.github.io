@@ -173,11 +173,11 @@ export async function gerarTextoIA(tarefa: TarefaIAItem, dados: Record<string, a
       tentativaAtual++;
       if (ultimoErro.startsWith("FATAL:")) {
         await salvarLogErro("llm-erro-fatal", erro);
-        throw new Error(ultimoErro.replace(/^FATAL:/, "").replace(/^\\d+:/, "").trim());
+        throw new Error(ultimoErro.replace(/^FATAL:/, "").replace(/^\d+:/, "").trim());
       }
       if (tentativaAtual >= MAX_TENTATIVAS) {
         await salvarLogErro("llm-falha-limite", erro);
-        throw new Error(`O sistema tentou ${MAX_TENTATIVAS} vezes, mas a inteligência artificial não conseguiu concluir a tarefa.\\nÚltimo erro: ${ultimoErro}`);
+        throw new Error(`O sistema tentou ${MAX_TENTATIVAS} vezes, mas a inteligência artificial não conseguiu concluir a tarefa.\nÚltimo erro: ${ultimoErro}`);
       }
       await new Promise((resolve) => setTimeout(resolve, tentativaAtual * 2000));
     }
