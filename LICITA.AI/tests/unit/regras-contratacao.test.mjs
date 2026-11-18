@@ -21,7 +21,7 @@ test("limite ME/EPP acompanha configuração municipal carregada", () => {
 
   assert.equal(exclusividadeMeeppPermitida([{ qtd: 1, valor: 50000 }]), true);
   assert.equal(exclusividadeMeeppPermitida([{ qtd: 1, valor: 50000.01 }]), false);
-  assert.equal(formatarLimiteMeepp().replace(/\\u00a0/g, " "), "R$ 50.000,00");
+  assert.equal(formatarLimiteMeepp().replace(/\u00a0/g, " "), "R$ 50.000,00");
 
   config.definirConfigMunicipal({
     municipio: { id: "sao-francisco-sp", nome: "São Francisco", uf: "SP", display: "São Francisco/SP", decreto: "", campos: {} },
