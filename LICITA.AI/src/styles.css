@@ -91,6 +91,12 @@ th { color: var(--text-muted); font-size: 12px; font-weight: 600; text-transform
   border-bottom: 1px solid var(--border);
   background: var(--bg-panel);
 }
+.wizard-municipio {
+  flex: 1;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
 .wizard-brand {
   color: var(--text-main);
   text-decoration: none;
