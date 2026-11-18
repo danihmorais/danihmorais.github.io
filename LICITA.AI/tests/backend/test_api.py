@@ -119,8 +119,12 @@ class LicitaBackendTests(unittest.TestCase):
         self.assertEqual(len(documentos), 1)
         self.assertEqual(documentos[0]["tipo"], "DFD")
         self.assertIn("Objeto anterior usado como referência", documentos[0]["texto"])
-        self.assertEqual([etapa["id"] for etapa in pipeline["etapas"]], ["CONSULTA_HABILITACAO", "FASE_PREPARATORIA"])
+        self.assertEqual([etapa["id"] for etapa in pipeline["etapas"]], ["CONSULTA_HABILITACAO", "GERACAO_DFD", "GERACAO_ETP", "GERACAO_TR"])
         self.assertTrue(all("__LICITA_PIPE_DADOS_USUARIO__" in etapa["prompt"] for etapa in pipeline["etapas"]))
+        prompts_por_id = {etapa["id"]: etapa["prompt"] for etapa in pipeline["etapas"]}
+        self.assertIn("__LICITA_PIPE_DFD__", prompts_por_id["GERACAO_ETP"])
+        self.assertIn("__LICITA_PIPE_DFD__", prompts_por_id["GERACAO_TR"])
+        self.assertIn("__LICITA_PIPE_ETP__", prompts_por_id["GERACAO_TR"])
         self.assertTrue(all("Objeto atual" not in etapa["prompt"] for etapa in pipeline["etapas"]))
 
     def test_endpoint_rejeita_no_envio_documentos_que_estouram_o_contexto(self):
