@@ -75,7 +75,7 @@ CHAVES_RAW = {
     "FISCAIS_DADOS",
 }
 
-LIMITE_EXCLUSIVIDADE_MEEPP = 80000
+LIMITE_EXCLUSIVIDADE_MEEPP = Decimal(config.LIMITE_EXCLUSIVIDADE_ME_EPP_CENTAVOS) / Decimal(100)
 SIM_VALORES = {"sim", "s", "x", "true", "1"}
 
 # Texto fixo do item de amostra do TR quando a amostra não é exigida: não passa pela IA.
@@ -295,6 +295,14 @@ def montar_variaveis_fixas(dados_usuario: dict) -> dict:
         resultado["{{VALOR_ESTIMADO}}"] = formatar_moeda(total_itens)
     resultado["{{GESTORES}}"] = "; ".join(_formatar_lista_assinaturas(gestores)) or "[Não informado]"
     resultado["{{FISCAIS}}"] = "; ".join(_formatar_lista_assinaturas(fiscais)) or "[Não informado]"
+    resultado["{{MUNICIPIO}}"] = config.MUNICIPIO_NOME
+    resultado["{{MUNICIPIO_UF}}"] = config.MUNICIPIO_DISPLAY
+    resultado["{{PREFEITURA}}"] = str(config.CAMPOS_MUNICIPAIS.get("nome_completo") or f"Prefeitura Municipal de {config.MUNICIPIO_NOME}")
+    resultado["{{ENDERECO_PREFEITURA}}"] = str(config.CAMPOS_MUNICIPAIS.get("endereco_prefeitura") or "")
+    resultado["{{TELEFONE}}"] = str(config.CAMPOS_MUNICIPAIS.get("telefone") or "")
+    resultado["{{EMAIL_LICITACAO}}"] = str(config.CAMPOS_MUNICIPAIS.get("email_licitacao") or "")
+    resultado["{{DECRETO}}"] = config.DECRETO_MUNICIPAL
+    resultado["{{LIMITE_ME_EPP}}"] = config.TEXTOS.get("limite_me_epp", "")
 
     return resultado
 
