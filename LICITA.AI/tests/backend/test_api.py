@@ -166,6 +166,38 @@ class LicitaBackendTests(unittest.TestCase):
                 },
             )
 
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertFalse(captura)
+        return
+
+    def test_ia_item_usa_modelo_e_schema_controlados_pelo_servidor(self):
+        captura = {}
+
+        async def mock_upstream(base_url, api_key, payload):
+            captura.update(payload)
+            return {
+                "choices": [{"message": {"content": json.dumps({"itens": [{
+                    "numero": "1",
+                    "nome_revisado": "Caderno universitário",
+                    "motivo": "Marca identificada e removida.",
+                }]})}}],
+                "model": "modelo-teste",
+            }, 200
+
+        with (
+            patch.object(main, "API_UNSLOTH_URL", "http://unsloth.test/v1"),
+            patch.object(main, "_upstream_chat", side_effect=mock_upstream),
+            TestClient(app) as client,
+        ):
+            response = client.post(
+                "/api/ia/item",
+                json={
+                    "tarefa": "auditoria_marcas",
+                    "itens": [{"numero": 1, "descricao": "Caderno Tilibra universitário"}],
+                    "instrucoes": "Preservar as demais características.",
+                },
+            )
+
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(captura["model"], "unsloth-auto")
         self.assertFalse(captura["enable_thinking"])
