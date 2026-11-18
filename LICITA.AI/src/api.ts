@@ -46,6 +46,29 @@ export const consultarFilaFasePreparatoria = async (jobId: string, statusToken?:
   return response.json();
 };
 
+export async function baixarZipFila(jobId: string, statusToken: string): Promise<Blob> {
+  const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}/download`, {
+    headers: { "X-Status-Token": statusToken },
+  });
+  if (!response.ok) {
+    let detalhe = "Não foi possível baixar o arquivo.";
+    try { const payload = await response.json(); if (payload?.detail) detalhe = String(payload.detail); } catch {}
+    throw new Error(detalhe);
+  }
+  return await response.blob();
+}
+
+export async function reenviarFilaFasePreparatoria(jobId: string, statusToken: string): Promise<FasePreparatoriaJob> {
+  const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}/reenviar`, {
+    method: "POST",
+    headers: { "X-Status-Token": statusToken },
+  });
+  let payload: any = {};
+  try { payload = await response.json(); } catch {}
+  if (!response.ok) throw new Error(payload?.detail || "Não foi possível reenviar os documentos.");
+  return payload;
+}
+
 export async function cancelarFilaFasePreparatoria(jobId: string, statusToken: string): Promise<{ job_id: string; status: string; message: string }> {
   const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}/cancelar`, { method: "POST", headers: { "X-Status-Token": statusToken } });
   let payload: any = {};
