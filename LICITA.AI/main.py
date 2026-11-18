@@ -46,6 +46,8 @@ class IAChatRequest(BaseModel):
 
 
 class IAItemRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
     tarefa: Literal["auditoria_marcas", "melhorar_descricao"]
     itens: list[dict] = Field(default_factory=list, max_length=200)
     instrucoes: str = Field(default="", max_length=6000)
@@ -66,6 +68,7 @@ API_UNSLOTH_KEY = os.getenv("LICITA_UNSLOTH_KEY", os.getenv("API_UNSLOTH", "")).
 
 IA_RATE_WINDOW_SECONDS = max(10, int(os.getenv("LICITA_IA_RATE_WINDOW", "60")))
 IA_RATE_LIMIT = max(1, int(os.getenv("LICITA_IA_RATE_LIMIT", "20")))
+IA_GLOBAL_RATE_LIMIT = max(1, int(os.getenv("LICITA_IA_GLOBAL_RATE_LIMIT", "120")))
 _ia_rate_lock = threading.Lock()
 _ia_rate_buckets: dict[str, deque[float]] = {}
 QUEUE_RATE_WINDOW_SECONDS = max(60, int(os.getenv("LICITA_QUEUE_RATE_WINDOW", "600")))
@@ -129,6 +132,7 @@ def _check_rate_limit(buckets: dict[str, deque[float]], lock: threading.Lock, id
 
 def _check_ia_rate_limit(request: Request) -> None:
     _check_rate_limit(_ia_rate_buckets, _ia_rate_lock, _client_identity(request), IA_RATE_LIMIT, IA_RATE_WINDOW_SECONDS, "Limite de requisições de IA excedido. Tente novamente em instantes.")
+    _check_rate_limit(_ia_rate_buckets, _ia_rate_lock, "__global__", IA_GLOBAL_RATE_LIMIT, IA_RATE_WINDOW_SECONDS, "O limite global de requisições de IA foi atingido. Tente novamente em instantes.")
 
 
 def _check_queue_rate_limit(request: Request, email: str) -> None:
