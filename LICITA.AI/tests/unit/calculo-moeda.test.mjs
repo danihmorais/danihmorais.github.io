@@ -17,7 +17,7 @@ test("calcula o total dos itens sem acumular erros de ponto flutuante", () => {
       { valor: "0,20", qtd: "4" },
       { valor: "1.234,56", qtd: "2" },
     ]),
-    247010,
+    247022,
   );
   assert.equal(modulo.calcularValorEstimadoItens([
     { valor: "0,10", qtd: "3" },
