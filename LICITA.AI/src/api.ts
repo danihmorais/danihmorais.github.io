@@ -197,6 +197,12 @@ export type RelatorioConformidadePreview = {
   verificacoes: Array<{ id: string; titulo: string; status: "ok" | "alerta" | "revisao"; detalhe: string }>;
   alertas: Array<Record<string, unknown>>;
   limites: string[];
+  matriz_conformidade: {
+    fonte: string;
+    summary: { total: number; alertas: number; revisao: number };
+    itens: Array<{ id: string; base: string; titulo: string; status: "alerta" | "revisao"; campos: string[]; detalhe: string; nota?: string }>;
+    limite: string;
+  };
 };
 
 export type PreviewDocumentosFila = {
