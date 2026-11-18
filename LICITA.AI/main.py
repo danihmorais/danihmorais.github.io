@@ -815,7 +815,7 @@ async def login_admin(request: Request, req: AdminLoginRequest):
         ADMIN_LOGIN_RATE_WINDOW_SECONDS,
         "Muitas tentativas de acesso ao painel. Aguarde antes de tentar novamente.",
     )
-    if not hmac.compare_digest(req.password, ADMIN_PASSWORD):
+    if not _token_matches(req.password, ADMIN_PASSWORD):
         raise HTTPException(status_code=401, detail="Senha administrativa incorreta.")
     return {"token": _criar_token_admin(), "expires_in": ADMIN_SESSION_TTL_SECONDS}
 
