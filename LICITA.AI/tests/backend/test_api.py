@@ -334,7 +334,6 @@ class LicitaBackendTests(unittest.TestCase):
 
     def test_endpoint_aplica_rate_limit_por_email(self):
         payload_base = {
-            "dados_ia": {},
             "dados_usuario": {"{{OBJETO}}": "Objeto de teste"},
         }
 
