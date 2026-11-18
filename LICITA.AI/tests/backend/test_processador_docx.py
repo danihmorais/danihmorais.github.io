@@ -66,6 +66,20 @@ class ProcessadorDocxTests(unittest.TestCase):
             )
         )
 
+    def test_tabela_invalida_interrompe_a_geracao_do_documento(self):
+        doc = Document()
+        paragraph = doc.add_paragraph("{{ITENS}}")
+        with self.assertRaisesRegex(RuntimeError, "inserir uma tabela"):
+            replace_text_in_paragraph(paragraph, {"{{ITENS}}": "__TABLE__{json inválido"})
+
+    def test_imagem_de_dotacao_indisponivel_interrompe_a_geracao_do_documento(self):
+        doc = Document()
+        paragraph = doc.add_paragraph("{{DOTACAO}}")
+        with tempfile.TemporaryDirectory() as diretorio:
+            inexistente = Path(diretorio) / "imagem-inexistente.png"
+            with self.assertRaisesRegex(RuntimeError, "imagem de dotação"):
+                replace_text_in_paragraph(paragraph, {"{{DOTACAO}}": "__IMG__" + str(inexistente)})
+
     def test_placeholder_dividido_em_runs_preserva_formatacao_ao_redor(self):
         doc = Document()
         paragraph = doc.add_paragraph()

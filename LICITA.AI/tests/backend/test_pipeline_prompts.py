@@ -30,15 +30,15 @@ class TestPipelinePromptsNoServidor(unittest.TestCase):
         dados, = (self.dados_base(),)
         resultado = montar_pipeline(dados, "Preservar o objeto e não acrescentar marca.")
         pipeline = resultado["__LICITA_PIPELINE__"]
-        self.assertEqual(pipeline["version"], 7)
+        self.assertEqual(pipeline["version"], 8)
         self.assertEqual(pipeline["model"], "unsloth-auto")
         self.assertEqual(
             [etapa["id"] for etapa in pipeline["etapas"]],
-            ["AUDITORIA_MARCAS", "CONSULTA_HABILITACAO", "FASE_PREPARATORIA"],
+            ["AUDITORIA_MARCAS", "CONSULTA_HABILITACAO", "GERACAO_DFD", "GERACAO_ETP", "GERACAO_TR"],
         )
         self.assertEqual(
             [etapa["tipo"] for etapa in pipeline["etapas"]],
-            ["auditoria_marcas", "consulta_habilitacao", "geracao_unificada"],
+            ["auditoria_marcas", "consulta_habilitacao", "geracao_dfd", "geracao_etp", "geracao_tr"],
         )
 
     def test_campos_e_instrucoes_nao_sao_concatenados_ao_prompt(self):
@@ -72,6 +72,18 @@ class TestPipelinePromptsNoServidor(unittest.TestCase):
         ):
             self.assertEqual(resultado[campo], dados[campo])
         self.assertNotIn("ZmFrZQ==", json.dumps(resultado, ensure_ascii=False))
+
+    def test_etp_e_tr_recebem_documentos_anteriores_da_mesma_solicitacao(self):
+        etapas = montar_pipeline(self.dados_base())["__LICITA_PIPELINE__"]["etapas"]
+        por_id = {etapa["id"]: etapa["prompt"] for etapa in etapas}
+        self.assertIn("__LICITA_PIPE_DADOS_USUARIO__", por_id["GERACAO_DFD"])
+        self.assertNotIn("__LICITA_PIPE_DFD__", por_id["GERACAO_DFD"])
+        self.assertIn("__LICITA_PIPE_DFD__", por_id["GERACAO_ETP"])
+        self.assertNotIn("__LICITA_PIPE_ETP__", por_id["GERACAO_ETP"])
+        self.assertIn("__LICITA_PIPE_DFD__", por_id["GERACAO_TR"])
+        self.assertIn("__LICITA_PIPE_ETP__", por_id["GERACAO_TR"])
+        self.assertNotIn("ETAPA: ESTUDO TÉCNICO PRELIMINAR.", por_id["GERACAO_DFD"])
+        self.assertNotIn("ETAPA: TERMO DE REFERÊNCIA.", por_id["GERACAO_ETP"])
 
     def test_contratacao_direta_usa_somente_etapa_propria(self):
         dados = self.dados_base()

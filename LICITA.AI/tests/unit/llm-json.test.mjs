@@ -6,32 +6,36 @@ const modulo = loadTsModule("src/providers/llm.ts");
 // O módulo roda em um contexto vm; normaliza para comparar sem diferença de protótipo.
 const extrairEConverterJSON = (texto) => JSON.parse(JSON.stringify(modulo.extrairEConverterJSON(texto)));
 
-test("preâmbulo com chaves não quebra a extração", () => {
-  assert.deepEqual(extrairEConverterJSON('Plano: {{OBJETO}} e {x}.\n{"A":"ok"}'), { A: "ok" });
+test("JSON válido é convertido sem transformação", () => {
+  assert.deepEqual(extrairEConverterJSON('{"A":"ok","B":2}'), { A: "ok", B: 2 });
 });
 
-test("bloco <think> com JSON de rascunho é ignorado", () => {
-  assert.deepEqual(extrairEConverterJSON('<think>rascunho {"A":"x"}</think>{"A":"final"}'), { A: "final" });
+test("texto anterior ao JSON é rejeitado", () => {
+  assert.throws(() => extrairEConverterJSON('Plano: {{OBJETO}} e {x}.\\n{"A":"ok"}'), /JSON válido/);
 });
 
-test("cerca de código markdown é removida", () => {
-  assert.deepEqual(extrairEConverterJSON('```json\n{"A":"x"}\n```'), { A: "x" });
+test("bloco de pensamento antes do JSON é rejeitado", () => {
+  assert.throws(() => extrairEConverterJSON('<think>rascunho {"A":"x"}</think>{"A":"final"}'), /JSON válido/);
 });
 
-test("vírgula final não altera o conteúdo das strings", () => {
-  assert.deepEqual(extrairEConverterJSON('{"A":"lista [1, ] fim, }","B":"x",}'), { A: "lista [1, ] fim, }", B: "x" });
+test("cerca markdown é rejeitada", () => {
+  assert.throws(() => extrairEConverterJSON('```json\\n{"A":"x"}\\n```'), /JSON válido/);
 });
 
-test("barra inválida é preservada em vez de descartada", () => {
-  assert.deepEqual(extrairEConverterJSON('{"A":"C:\\Licita\\edital.docx"}'), { A: "C:\\Licita\\edital.docx" });
+test("vírgula final é rejeitada em vez de reparada", () => {
+  assert.throws(() => extrairEConverterJSON('{"A":"lista [1, ] fim, }","B":"x",}'), /JSON válido/);
 });
 
-test("quebra de linha crua dentro de string é escapada", () => {
-  assert.deepEqual(extrairEConverterJSON('{"A":"linha1\nlinha2"}'), { A: "linha1\nlinha2" });
+test("escape inválido é rejeitado em vez de descartado", () => {
+  assert.throws(() => extrairEConverterJSON('{"A":"C:\\Licita\\edital.docx"}'), /JSON válido/);
 });
 
-test("texto sem JSON levanta erro de JSON corrompido", () => {
-  assert.throws(() => extrairEConverterJSON("sem json nenhum"), /corrompido/);
+test("quebra de linha crua dentro de string é rejeitada", () => {
+  assert.throws(() => extrairEConverterJSON('{"A":"linha1\nlinha2"}'), /JSON válido/);
+});
+
+test("texto sem JSON levanta erro de JSON inválido", () => {
+  assert.throws(() => extrairEConverterJSON("sem json nenhum"), /JSON válido/);
 });
 
 test("prompt legado instrui \\n literal; prompts com json_schema não repetem a regra", async () => {

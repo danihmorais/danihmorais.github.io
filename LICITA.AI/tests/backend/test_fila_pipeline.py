@@ -199,10 +199,65 @@ class TestAutomaticModelResolution(unittest.TestCase):
             patch.object(pipeline.httpx, "Client") as cliente_http,
         ):
             cliente_http.return_value.__enter__.return_value.post.return_value = resposta
-            with self.assertRaisesRegex(RuntimeError, "limite de contexto/geração do modelo ou servidor"):
+            with self.assertRaisesRegex(pipeline.ErroPermanente, "geração já foi dividida por documento"):
                 pipeline._chamar_ia("prompt de teste", "modelo-teste")
 
         cliente_http.return_value.__enter__.return_value.post.assert_called_once()
+
+    def test_erro_400_do_provedor_e_permanente(self):
+        from unittest.mock import MagicMock, patch
+        import fila_pipeline as pipeline
+
+        resposta = MagicMock()
+        resposta.status_code = 400
+        resposta.text = '{"error":"invalid schema"}'
+
+        with (
+            patch.object(pipeline, "API_UNSLOTH_URL", "http://unsloth.test/v1"),
+            patch.object(pipeline, "API_UNSLOTH_KEY", "chave-de-teste"),
+            patch.object(pipeline.httpx, "Client") as cliente_http,
+        ):
+            cliente_http.return_value.__enter__.return_value.post.return_value = resposta
+            with self.assertRaises(pipeline.ErroPermanente):
+                pipeline._chamar_ia("prompt de teste", "modelo-teste")
+
+    def test_erro_503_do_provedor_permanece_retentavel(self):
+        from unittest.mock import MagicMock, patch
+        import fila_pipeline as pipeline
+
+        resposta = MagicMock()
+        resposta.status_code = 503
+        resposta.text = '{"error":"temporarily unavailable"}'
+
+        with (
+            patch.object(pipeline, "API_UNSLOTH_URL", "http://unsloth.test/v1"),
+            patch.object(pipeline, "API_UNSLOTH_KEY", "chave-de-teste"),
+            patch.object(pipeline.httpx, "Client") as cliente_http,
+        ):
+            cliente_http.return_value.__enter__.return_value.post.return_value = resposta
+            with self.assertRaises(RuntimeError) as contexto:
+                pipeline._chamar_ia("prompt de teste", "modelo-teste")
+        self.assertNotIsInstance(contexto.exception, pipeline.ErroPermanente)
+
+    def test_schema_estrito_nao_dispara_reparo_json_automatico(self):
+        from unittest.mock import MagicMock, patch
+        import fila_pipeline as pipeline
+
+        resposta = MagicMock()
+        resposta.status_code = 200
+        resposta.json.return_value = {
+            "choices": [{"message": {"content": "{json incompleto"}}],
+            "model": "modelo-teste",
+        }
+        with patch.object(pipeline, "_post_ia", return_value=resposta) as chamada:
+            with self.assertRaises(pipeline.ErroPermanente):
+                pipeline._chamar_ia(
+                    "prompt",
+                    "modelo-teste",
+                    response_format={"type": "json_schema", "json_schema": {"strict": True}},
+                    enable_tools=False,
+                )
+        chamada.assert_called_once()
 
     def test_auto_model_falls_back_to_first_model_reported_by_unsloth(self):
         from unittest.mock import MagicMock, patch
@@ -692,7 +747,7 @@ class TestConfiguracaoThinking(unittest.TestCase):
         self.assertNotIn("max_completion_tokens", payload)
         self.assertNotIn("response_format", payload)
         self.assertEqual(payload["messages"][0]["role"], "system")
-        self.assertIn("600 segundos", payload["messages"][0]["content"])
+        self.assertIn("1200 segundos", payload["messages"][0]["content"])
         self.assertIn("pesquisa na web", payload["messages"][0]["content"])
         self.assertEqual(payload["model"], "qwen-modelo-de-teste")
         self.assertEqual(resultado, {"ok": True})

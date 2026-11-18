@@ -31,116 +31,15 @@ async function salvarLogErro(prefixo: string, erro: any) {
 // Corrige strings JSON com barras sem escape válido (ex.: C:\Licita\edital.docx) e com
 // quebras/controles crus, preservando os escapes válidos. A barra inválida é mantida
 // (duplicada), nunca descartada.
-function sanitizarJSON(texto: string): string {
-  const hexadecimal = /^[0-9a-fA-F]{4}$/;
-  let emString = false;
-  let saida = "";
-  for (let i = 0; i < texto.length; i++) {
-    const char = texto[i];
-    if (!emString) {
-      saida += char;
-      if (char === '"') emString = true;
-      continue;
-    }
-    if (char === '"') { saida += char; emString = false; continue; }
-    if (char === "\\") {
-      const proximo = texto[i + 1] ?? "";
-      if (proximo && '"\\/bfnrt'.includes(proximo)) { saida += char + proximo; i++; continue; }
-      if (proximo === "u" && hexadecimal.test(texto.slice(i + 2, i + 6))) { saida += texto.slice(i, i + 6); i += 5; continue; }
-      saida += "\\\\";
-      continue;
-    }
-    if (char === "\n") saida += "\\n";
-    else if (char === "\r") saida += "\\r";
-    else if (char === "\t") saida += "\\t";
-    else if (char.charCodeAt(0) < 32) saida += "\\u" + char.charCodeAt(0).toString(16).padStart(4, "0");
-    else saida += char;
-  }
-  return saida;
-}
-
-// Remove vírgulas antes de } ou ] sem tocar no conteúdo das strings.
-function removerVirgulasFinais(texto: string): string {
-  let saida = "";
-  let emString = false;
-  let escapado = false;
-  for (let i = 0; i < texto.length; i++) {
-    const char = texto[i];
-    if (emString) {
-      saida += char;
-      if (escapado) escapado = false;
-      else if (char === "\\") escapado = true;
-      else if (char === '"') emString = false;
-      continue;
-    }
-    if (char === '"') emString = true;
-    else if (char === ",") {
-      let j = i + 1;
-      while (j < texto.length && /\s/.test(texto[j])) j++;
-      if (texto[j] === "}" || texto[j] === "]") continue;
-    }
-    saida += char;
-  }
-  return saida;
-}
-
-function objetoBalanceado(texto: string, inicio: number): string | null {
-  let profundidade = 0;
-  let emString = false;
-  let escapado = false;
-  for (let i = inicio; i < texto.length; i++) {
-    const char = texto[i];
-    if (emString) {
-      if (escapado) escapado = false;
-      else if (char === "\\") escapado = true;
-      else if (char === '"') emString = false;
-      continue;
-    }
-    if (char === '"') emString = true;
-    else if (char === "{") profundidade++;
-    else if (char === "}" && --profundidade === 0) return texto.slice(inicio, i + 1);
-  }
-  return null;
-}
-
-// Procura objetos estritamente válidos em qualquer posição: tolera preâmbulos com chaves
-// ({{OBJETO}}, {x}) que quebrariam o recorte entre a primeira "{" e a última "}".
-function melhorObjetoValido(texto: string): any | undefined {
-  let melhor: { tamanho: number; valor: any } | undefined;
-  let tentativas = 0;
-  for (let inicio = texto.indexOf("{"); inicio !== -1 && tentativas < 50; inicio = texto.indexOf("{", inicio + 1)) {
-    tentativas++;
-    const candidato = objetoBalanceado(texto, inicio);
-    if (!candidato) continue;
-    try {
-      const valor = JSON.parse(candidato);
-      if (valor && typeof valor === "object" && !Array.isArray(valor) && (!melhor || candidato.length > melhor.tamanho)) {
-        melhor = { tamanho: candidato.length, valor };
-      }
-    } catch {}
-  }
-  return melhor?.valor;
-}
-
 export function extrairEConverterJSON(rawText: string): any {
-  let texto = String(rawText ?? "").trim();
-  // Modelos com raciocínio podem devolver o "pensamento" no conteúdo.
-  texto = texto.replace(/<think>[\s\S]*?<\/think>|^[\s\S]*?<\/think>/i, "").trim();
-  const cerca = /```(?:json)?\s*([\s\S]*?)```/i.exec(texto);
-  if (cerca && cerca[1].includes("{")) texto = cerca[1].trim();
-
-  const valido = melhorObjetoValido(texto);
-  if (valido !== undefined) return valido;
-
-  const inicio = texto.indexOf("{");
-  const fim = texto.lastIndexOf("}");
-  const recorte = inicio !== -1 && fim > inicio ? texto.substring(inicio, fim + 1) : texto;
-  let ultimoErro: unknown;
-  for (const preparar of [() => removerVirgulasFinais(recorte), () => removerVirgulasFinais(sanitizarJSON(recorte))]) {
-    try { return JSON.parse(preparar()); } catch (e) { ultimoErro = e; }
+  try {
+    return JSON.parse(String(rawText ?? "").trim());
+  } catch (erro) {
+    const detalhe = erro instanceof Error ? erro.message : String(erro);
+    throw new Error(`FATAL:O backend não retornou JSON válido conforme o schema estrito. ${detalhe}`);
   }
-  throw new Error(`O texto gerado pela IA está corrompido.\nErro técnico: ${ultimoErro instanceof Error ? ultimoErro.message : ultimoErro}`);
 }
+
 
 async function chamarBackend(payload: Record<string, any>): Promise<any> {
   if (!API_URL) throw new Error("API do Licita.AI não configurada.");

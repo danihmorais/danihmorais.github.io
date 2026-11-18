@@ -115,6 +115,24 @@ test("llm usa endpoint tipado do backend sem enviar prompts ou configuração do
   assert.equal("response_format" in body, false);
 });
 
+test("llm não tenta corrigir nem repetir JSON inválido do schema estrito", async () => {
+  let chamadas = 0;
+  const modulo = loadTsModule("src/providers/llm.ts", {
+    globals: {
+      localStorage: new MemoryStorage(),
+      fetch: async () => {
+        chamadas += 1;
+        return response({ json: { model: "modelo-backend", content: "{json incompleto" } });
+      },
+    },
+  });
+  await assert.rejects(
+    modulo.gerarTextoIA("melhorar_descricao", { descricao: "Cadeira", unidade: "UN" }),
+    /schema estrito/,
+  );
+  assert.equal(chamadas, 1);
+});
+
 test("llm repete falha temporária e encerra em erro fatal", async () => {
   const respostas = [
     response({ ok: false, status: 503, text: "indisponível" }),

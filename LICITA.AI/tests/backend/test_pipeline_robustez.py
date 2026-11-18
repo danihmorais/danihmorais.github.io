@@ -109,6 +109,26 @@ class TestFerramentasEmEtapasMecanicas(unittest.TestCase):
         self.assertTrue(opcoes["enable_thinking"])
         self.assertTrue(opcoes["response_format"]["json_schema"]["strict"])
 
+    def test_schemas_por_documento_sao_estritos_e_exigem_campos_nao_vazios(self):
+        for tipo, nome in (("geracao_dfd", "DFD"), ("geracao_etp", "ETP"), ("geracao_tr", "TR")):
+            with self.subTest(documento=nome):
+                opcoes = pipeline._opcoes_chamada_ia_etapa(tipo)
+                self.assertFalse(opcoes["enable_tools"])
+                self.assertTrue(opcoes["enable_thinking"])
+                formato = opcoes["response_format"]
+                self.assertTrue(formato["json_schema"]["strict"])
+                bloco = formato["json_schema"]["schema"]["properties"][nome]
+                self.assertTrue(bloco["required"])
+                self.assertTrue(all(item["minLength"] == 1 for item in bloco["properties"].values()))
+
+    def test_validador_rejeita_campo_vazio_em_documento_individual(self):
+        campos = pipeline._FASE_PREPARATORIA_CAMPOS["DFD"]
+        resultado = {"DFD": {campo: "Conteúdo suficiente." for campo in campos}}
+        self.assertEqual(pipeline._validar_json_documento(resultado, "DFD"), resultado)
+        resultado["DFD"]["JUSTIFICATIVA"] = "  "
+        with self.assertRaisesRegex(RuntimeError, "vazios"):
+            pipeline._validar_json_documento(resultado, "DFD")
+
     def test_consulta_de_habilitacao_valida_campos_e_listas(self):
         resposta = {
             "ENQUADRAMENTO_DO_OBJETO": "Bem comum.",
@@ -271,6 +291,28 @@ class TestAnaliseDoTrPersistida(unittest.TestCase):
             analisar.assert_called_once()
             self.assertEqual(job["status"], "sent")
             self.assertEqual(job["dados_ia"]["VALOR_ESTIMADO_APROXIMADO"], "R$ 1.050,00")
+
+
+class TestHeartbeatEFimDeWorker(unittest.TestCase):
+    def test_heartbeat_atualiza_mtime_do_job_em_processamento(self):
+        with tempfile.TemporaryDirectory() as diretorio:
+            caminho = Path(diretorio) / "job.processing.json"
+            caminho.write_text("{}", encoding="utf-8")
+            antigo = time.time() - 180
+            os.utime(caminho, (antigo, antigo))
+            self.assertTrue(pipeline._heartbeat_processing_file(caminho))
+            self.assertGreater(caminho.stat().st_mtime, antigo)
+
+    def test_recuperacao_de_orfaos_tem_limite_de_cinco_minutos(self):
+        self.assertGreaterEqual(pipeline.STALE_PROCESSING_SECONDS, 300)
+        self.assertLessEqual(pipeline.STALE_PROCESSING_SECONDS, 600)
+
+    def test_worker_aceita_sinal_de_encerramento(self):
+        pipeline._worker_stop_event.clear()
+        with patch.object(pipeline, "_worker_thread", None):
+            self.assertTrue(pipeline.parar_worker(timeout=0))
+        self.assertTrue(pipeline._worker_stop_event.is_set())
+        pipeline._worker_stop_event.clear()
 
 
 if __name__ == "__main__":

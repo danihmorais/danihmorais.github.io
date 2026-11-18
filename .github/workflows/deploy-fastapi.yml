@@ -1,20 +1,22 @@
 name: Deploy FastAPI to Ubuntu
 
 on:
-  push:
+  workflow_run:
+    workflows: ["LICITA.AI checks"]
+    types: [completed]
     branches: ["main"]
-  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
   group: "deploy-fastapi"
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
     name: Deploy FastAPI to Ubuntu
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
 
     steps:
@@ -22,12 +24,11 @@ jobs:
         env:
           WEBHOOK_SECRET: ${{ secrets.DEPLOY_WEBHOOK_SECRET }}
           API_URL: ${{ secrets.API_URL }}
-          SHA: ${{ github.sha }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
           REPOSITORY: ${{ github.repository }}
           PROJECT: DANIHMORAIS-GITHUB-PAGES
         run: |
           set -euo pipefail
-          # O endereço de implantação é obtido exclusivamente dos secrets do workflow.
           test -n "$WEBHOOK_SECRET" || { echo 'Secret DEPLOY_WEBHOOK_SECRET não configurado.'; exit 1; }
           test -n "$API_URL" || { echo 'Secret API_URL não configurado.'; exit 1; }
 
@@ -54,7 +55,7 @@ jobs:
       - name: Wait for deployment
         env:
           API_URL: ${{ secrets.API_URL }}
-          SHA: ${{ github.sha }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
           PROJECT: DANIHMORAIS-GITHUB-PAGES
         run: |
           set -euo pipefail
