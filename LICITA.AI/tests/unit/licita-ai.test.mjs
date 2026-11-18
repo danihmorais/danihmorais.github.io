@@ -185,6 +185,7 @@ test("gerarFasePreparatoria usa multipart e envia apenas dados estruturados", as
   await modulo.gerarFasePreparatoria(
     {
       email: "teste@example.com",
+      emailVerificationToken: "token-verificado",
       instrucoes: "Preservar as características do objeto.",
       dados_usuario: {
         modalidade: "PREGAO_ELETRONICO",
@@ -197,6 +198,7 @@ test("gerarFasePreparatoria usa multipart e envia apenas dados estruturados", as
   assert.equal(chamada.url, "https://api.example.test/licita/api/gerar-fase-preparatoria");
   assert.equal(chamada.options.method, "POST");
   assert.equal("Content-Type" in (chamada.options.headers || {}), false);
+  assert.equal(chamada.options.headers["X-Email-Verification"], "token-verificado");
   assert.equal(chamada.options.body.get("dfd").name, "DFD anterior.docx");
   const payload = JSON.parse(chamada.options.body.get("payload"));
   assert.equal(payload.email, "teste@example.com");
@@ -224,6 +226,7 @@ test("gerarFasePreparatoria envia pagamento por etapas como dados, sem montar pr
 
   await modulo.gerarFasePreparatoria({
     email: "teste@example.com",
+    emailVerificationToken: "token-verificado",
     instrucoes: "",
     dados_usuario: {
       pagamentoTipo: "POR_ETAPAS",
@@ -234,6 +237,7 @@ test("gerarFasePreparatoria envia pagamento por etapas como dados, sem montar pr
   });
 
   const body = JSON.parse(chamada.options.body);
+  assert.equal(chamada.options.headers["X-Email-Verification"], "token-verificado");
   assert.equal(body.dados_usuario.pagamentoTipo, "POR_ETAPAS");
   assert.match(body.dados_usuario.pagamentoEtapas, /40% após a conclusão/);
   assert.equal("dados_ia" in body, false);
