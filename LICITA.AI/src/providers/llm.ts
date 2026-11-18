@@ -5,7 +5,7 @@ const MAX_TENTATIVAS = 3;
 const TIMEOUT_REQUISICAO_MS = 240_000;
 
 const API_URL = getApiBaseUrl();
-const IA_CHAT_URL = `${API_URL}/licita/api/ia/chat`;
+const IA_ITEM_URL = `${API_URL}/licita/api/ia/item`;
 
 const CHAVE_LOGS_ERRO = "licita_ai:logs_erro";
 const MAX_LOGS_GUARDADOS = 20;
@@ -145,7 +145,7 @@ export function extrairEConverterJSON(rawText: string): any {
 async function chamarBackend(payload: Record<string, any>): Promise<any> {
   if (!API_URL) throw new Error("API do Licita.AI não configurada.");
   const signal = typeof AbortSignal !== "undefined" && "timeout" in AbortSignal ? AbortSignal.timeout(TIMEOUT_REQUISICAO_MS) : undefined;
-  const response = await fetch(IA_CHAT_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), signal });
+  const response = await fetch(IA_ITEM_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), signal });
   const raw = await response.text().catch(() => "");
   if (!response.ok) {
     let detalhe = `HTTP ${response.status}`;
@@ -156,28 +156,28 @@ async function chamarBackend(payload: Record<string, any>): Promise<any> {
   let data: any;
   try { data = raw ? JSON.parse(raw) : null; } catch { throw new Error("A API do backend retornou uma resposta inválida."); }
   if (!data?.content) throw new Error("A API do backend retornou uma resposta vazia.");
-  return { json: extrairEConverterJSON(String(data.content)), model: typeof data.model === "string" ? data.model : payload.model, provider: "unsloth" };
+  return { json: extrairEConverterJSON(String(data.content)), model: typeof data.model === "string" ? data.model : "unsloth-auto" };
 }
 
-export async function gerarTextoIA(prompt: string, _legacyApiKey: string, model: string, onModelResolved?: (modelUsed: string) => void): Promise<any> {
+export type TarefaIAItem = "auditoria_marcas" | "melhorar_descricao";
+
+export async function gerarTextoIA(tarefa: TarefaIAItem, dados: Record<string, any>): Promise<any> {
   let tentativaAtual = 0;
   let ultimoErro = "";
   while (tentativaAtual < MAX_TENTATIVAS) {
     try {
-      const modeloDaRequisicao = !model ? "unsloth-auto" : model;
-      const resultado = await chamarBackend({ model: modeloDaRequisicao, prompt, temperature: 0.7, response_format: { type: "json_object" } });
-      onModelResolved?.(resultado.model);
+      const resultado = await chamarBackend({ tarefa, ...dados });
       return resultado.json;
     } catch (erro: any) {
       ultimoErro = erro.message || String(erro);
       tentativaAtual++;
       if (ultimoErro.startsWith("FATAL:")) {
         await salvarLogErro("llm-erro-fatal", erro);
-        throw new Error(ultimoErro.replace(/^FATAL:/, "").replace(/^\d+:/, "").trim());
+        throw new Error(ultimoErro.replace(/^FATAL:/, "").replace(/^\\d+:/, "").trim());
       }
       if (tentativaAtual >= MAX_TENTATIVAS) {
         await salvarLogErro("llm-falha-limite", erro);
-        throw new Error(`O sistema tentou ${MAX_TENTATIVAS} vezes, mas a inteligência artificial não conseguiu concluir o texto corretamente.\nÚltimo erro: ${ultimoErro}`);
+        throw new Error(`O sistema tentou ${MAX_TENTATIVAS} vezes, mas a inteligência artificial não conseguiu concluir a tarefa.\\nÚltimo erro: ${ultimoErro}`);
       }
       await new Promise((resolve) => setTimeout(resolve, tentativaAtual * 2000));
     }
