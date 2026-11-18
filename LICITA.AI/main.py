@@ -23,14 +23,16 @@ from documentos_contexto import MAX_CONTEXT_CHARS, extrair_contexto_documentos
 from fila import EMAIL_RE, MAX_ATTEMPTS, QUEUE_DIR, _artifact_path, _job_path, cancel_job, enqueue_job, get_job
 from fila_pipeline import limite_prompt_chars
 from fila_pipeline_unificado import iniciar_worker
+from pipeline_prompts import montar_pipeline
 
 app = FastAPI(title="Licita.AI API")
 
 
 class FasePreparatoriaRequest(BaseModel):
-    email: str
-    instrucoes: str = ""
-    dados_ia: dict = Field(default_factory=dict)
+    model_config = {"extra": "forbid"}
+
+    email: str = Field(min_length=3, max_length=254)
+    instrucoes: str = Field(default="", max_length=12000)
     dados_usuario: dict = Field(default_factory=dict)
 
 
@@ -393,15 +395,46 @@ def _queue_position(job_id: str) -> tuple[int | None, int | None]:
     return None, None
 
 
-async def _ler_payload_fase_preparatoria(request: Request) -> tuple[FasePreparatoriaRequest, dict | None]:
+def _montar_pipeline_requisicao(req: FasePreparatoriaRequest, documentos: list[dict] | None = None) -> tuple[dict, dict]:
+    dados_usuario = dict(req.dados_usuario)
+    dados_usuario["INSTRUCOES_USUARIO"] = req.instrucoes.strip()
+    try:
+        dados_ia = montar_pipeline(dados_usuario, req.instrucoes)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    if documentos:
+        pipeline = dados_ia["__LICITA_PIPELINE__"]
+        etapas = pipeline.get("etapas") or []
+        maior_prompt = max((len(str(etapa.get("prompt", ""))) for etapa in etapas if isinstance(etapa, dict)), default=0)
+        caracteres_documentos = sum(len(str(item.get("texto", ""))) + 200 for item in documentos)
+        limite = limite_prompt_chars()
+        excesso = maior_prompt + caracteres_documentos - limite
+        if excesso > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Os documentos de referência, somados às instruções da geração, ultrapassam o limite de "
+                    f"contexto da IA. Reduza os documentos em pelo menos {excesso:,} caracteres "
+                    "(por exemplo, anexando apenas as páginas necessárias).".replace(",", ".")
+                ),
+            )
+        pipeline["documentos_anteriores"] = documentos
+
+    return dados_usuario, dados_ia
+
+
+async def _ler_payload_fase_preparatoria(request: Request) -> tuple[FasePreparatoriaRequest, dict | None, dict]:
     content_type = request.headers.get("content-type", "").lower()
 
     if "multipart/form-data" not in content_type:
         try:
             payload = await request.json()
-            return FasePreparatoriaRequest.model_validate(payload), None
+            req = FasePreparatoriaRequest.model_validate(payload)
         except (ValueError, TypeError) as exc:
-            raise HTTPException(status_code=400, detail="Payload JSON inválido.") from exc
+            raise HTTPException(status_code=400, detail="Payload JSON inválido ou contém campos não permitidos.") from exc
+        _, dados_ia = _montar_pipeline_requisicao(req)
+        return req, None, dados_ia
 
     try:
         form = await request.form()
@@ -413,9 +446,9 @@ async def _ler_payload_fase_preparatoria(request: Request) -> tuple[FasePreparat
         raise HTTPException(status_code=400, detail="O campo payload é obrigatório no envio multipart.")
 
     try:
-        req = FasePreparatoriaRequest.model_validate(__import__("json").loads(payload_bruto))
+        req = FasePreparatoriaRequest.model_validate(json.loads(payload_bruto))
     except (ValueError, TypeError) as exc:
-        raise HTTPException(status_code=400, detail="Payload JSON inválido no envio multipart.") from exc
+        raise HTTPException(status_code=400, detail="Payload JSON inválido no envio multipart ou contém campos não permitidos.") from exc
 
     arquivos: dict[str, tuple[str, bytes] | None] = {campo: None for campo in UPLOAD_FIELDS}
     houve_upload = False
@@ -437,57 +470,33 @@ async def _ler_payload_fase_preparatoria(request: Request) -> tuple[FasePreparat
         arquivos[campo] = (nome, conteudo)
         houve_upload = True
 
-    if not houve_upload:
-        return req, None
+    contexto = None
+    if houve_upload:
+        try:
+            contexto = extrair_contexto_documentos(arquivos)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail=f"Não foi possível processar os documentos de referência: {exc}") from exc
 
-    try:
-        contexto = extrair_contexto_documentos(arquivos)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"Não foi possível processar os documentos de referência: {exc}") from exc
-
-    pipeline = req.dados_ia.get("__LICITA_PIPELINE__") if isinstance(req.dados_ia, dict) else None
-    if not isinstance(pipeline, dict):
-        raise HTTPException(status_code=400, detail="Não foi possível associar os documentos de referência ao pipeline de IA.")
-
-    # Falha rápido, no envio, em vez de aceitar o pedido e só descobrir na fila (por e-mail de
-    # alerta) que o prompt somado aos documentos de referência ultrapassa o limite da IA.
-    etapas = pipeline.get("etapas") if isinstance(pipeline.get("etapas"), list) else []
-    maior_prompt = max((len(str(e.get("prompt", ""))) for e in etapas if isinstance(e, dict)), default=0)
-    caracteres_documentos = sum(len(str(item.get("texto", ""))) + 200 for item in contexto["documentos"])
-    limite = limite_prompt_chars()
-    excesso = maior_prompt + caracteres_documentos - limite
-    if excesso > 0:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Os documentos de referência, somados às instruções da geração, ultrapassam o limite de "
-                f"contexto da IA. Reduza os documentos em pelo menos {excesso:,} caracteres "
-                "(por exemplo, anexando apenas as páginas necessárias).".replace(",", ".")
-            ),
-        )
-
-    dados_ia = dict(req.dados_ia)
-    pipeline_atualizado = dict(pipeline)
-    pipeline_atualizado["documentos_anteriores"] = contexto["documentos"]
-    dados_ia["__LICITA_PIPELINE__"] = pipeline_atualizado
-
-    req = req.model_copy(update={"dados_ia": dados_ia})
-    resumo = {
-        "quantidade": contexto["quantidade"],
-        "total_caracteres": min(contexto["total_caracteres"], MAX_CONTEXT_CHARS),
-        "documentos": [
-            {"tipo": item["tipo"], "nome": item["nome"], "origem": item["origem"]}
-            for item in contexto["documentos"]
-        ],
-    }
-    return req, resumo
+    documentos = contexto["documentos"] if contexto else None
+    _, dados_ia = _montar_pipeline_requisicao(req, documentos)
+    resumo = None
+    if contexto:
+        resumo = {
+            "quantidade": contexto["quantidade"],
+            "total_caracteres": min(contexto["total_caracteres"], MAX_CONTEXT_CHARS),
+            "documentos": [
+                {"tipo": item["tipo"], "nome": item["nome"], "origem": item["origem"]}
+                for item in contexto["documentos"]
+            ],
+        }
+    return req, resumo, dados_ia
 
 
 @app.post("/api/gerar-fase-preparatoria")
 async def agendar_fase_preparatoria(request: Request):
-    req, contexto_resumo = await _ler_payload_fase_preparatoria(request)
+    req, contexto_resumo, dados_ia = await _ler_payload_fase_preparatoria(request)
     email = req.email.strip()
     if not EMAIL_RE.fullmatch(email):
         raise HTTPException(status_code=400, detail="Informe um e-mail válido para receber os documentos.")
@@ -497,10 +506,11 @@ async def agendar_fase_preparatoria(request: Request):
     _check_queue_rate_limit(request, email)
 
     try:
+        dados_usuario, _ = _montar_pipeline_requisicao(req, (dados_ia.get("__LICITA_PIPELINE__") or {}).get("documentos_anteriores"))
         job = enqueue_job(
             email=email,
-            dados_usuario=req.dados_usuario,
-            dados_ia=req.dados_ia,
+            dados_usuario=dados_usuario,
+            dados_ia=dados_ia,
             instrucoes=req.instrucoes,
         )
         position, ahead = _queue_position(job["job_id"])
