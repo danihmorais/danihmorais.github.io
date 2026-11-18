@@ -81,47 +81,6 @@ function validarAuditoria(itensOriginais: Array<{ numero: number | string; nome:
   });
 }
 
-export function construirPromptAuditoriaMarcas(itens: any[], instrucoesUsuario: string): string {
-  const itensOriginais = (Array.isArray(itens) ? itens : [])
-    .map((item, index) => ({
-      numero: item?.numero ?? index + 1,
-      nome: normalizarNome(item?.descricao ?? ""),
-    }))
-    .filter((item) => item.nome);
-
-  return `Você é um auditor de contratações públicas. Sua tarefa é EXCLUSIVAMENTE revisar nomes de itens para identificar uso de marca comercial, fabricante, linha ou produto inequivocamente proprietário SEM justificativa de marca fornecida pelo usuário.
-
-REGRAS ABSOLUTAS:
-1. Analise SOMENTE os nomes dos itens recebidos e a justificativa/instruções do usuário abaixo.
-2. NÃO melhore redação, gramática, precisão técnica, completude, unidade, quantidade, medidas ou especificações.
-3. NÃO corrija um descritivo apenas porque está mal escrito ou incompleto.
-4. Se houver marca comercial sem justificativa, remova SOMENTE o(s) token(s) que identificam a marca/linha proprietária, preservando todo o restante do nome na mesma ordem.
-5. Se houver justificativa explícita e identificável para manter determinada marca, NÃO altere o item.
-6. Não substitua marca por outra marca. Não invente texto. Não acrescente características.
-7. Números de modelo, padrões, normas e códigos só devem ser removidos se forem inequivocamente parte da identificação comercial da marca/linha.
-8. Se não houver marca comercial explícita, devolva o nome exatamente como recebido.
-9. Palavras genéricas usadas como substantivos comuns não são marca sem evidência inequívoca; na dúvida, preserve o texto.
-10. Exemplos: "papel sulfite A4 Chamex" → retirar somente "Chamex" se não houver justificativa; "toner original HP compatível com impressora HP indicada" → manter a marca se houver justificativa de compatibilidade nos dados; "cabo tipo banana" → manter, pois a expressão pode ser descrição genérica.
-11. Retorne EXCLUSIVAMENTE JSON válido, sem markdown.
-
-INSTRUÇÕES/JUSTIFICATIVAS DO USUÁRIO:
-${instrucoesUsuario?.trim() || "Nenhuma justificativa específica de marca foi apresentada."}
-
-ITENS:
-${JSON.stringify(itensOriginais, null, 2)}
-
-FORMATO OBRIGATÓRIO:
-{
-  "itens": [
-    {
-      "numero": 1,
-      "nome_revisado": "...",
-      "motivo": "..."
-    }
-  ]
-}`;
-}
-
 export async function revisarMarcasItens(
   itens: any[],
   instrucoesUsuario: string,
@@ -139,9 +98,10 @@ export async function revisarMarcasItens(
     return { itens, auditoria: [] };
   }
 
-  const prompt = construirPromptAuditoriaMarcas(itens, instrucoesUsuario);
-
-  const resposta = await gerarTextoIA(prompt, apiKey, modelo);
+  const resposta = await gerarTextoIA("auditoria_marcas", {
+    itens: itensOriginais.map((item) => ({ numero: String(item.numero), descricao: item.nome })),
+    instrucoes: instrucoesUsuario,
+  });
   const auditoria = validarAuditoria(itensOriginais, resposta);
   const auditoriaPorNumero = new Map(auditoria.map((item) => [String(item.numero), item]));
 
@@ -168,36 +128,12 @@ export async function melhorarDescricaoItem(
 
   const unidadeOriginal = normalizarNome(unidade);
 
-  const prompt = `Você é um redator técnico especializado em especificações para contratações públicas.
-
-Melhore a DESCRIÇÃO do item e verifique a coerência da UNIDADE DE MEDIDA. Retorne uma descrição mais clara, objetiva, técnica e apta à contratação, preservando exatamente o objeto pretendido.
-
-REGRAS ABSOLUTAS:
-1. Trabalhe SOMENTE neste item; não analise nem mencione outros itens.
-2. A quantidade e o valor unitário não podem ser alterados.
-3. A unidade de medida pode ser corrigida SOMENTE quando a descrição contiver uma indicação clara e inequívoca de que a unidade atual está incompatível com o que está sendo adquirido.
-4. Não faça conversões de quantidade ou de embalagem. Ex.: não transforme "caixa com 12" em 12 unidades nem altere a quantidade informada.
-5. Quando a unidade atual for compatível ou quando houver dúvida, preserve exatamente a unidade atual.
-6. Não invente marca, fabricante, modelo, código proprietário, certificação, norma ou característica que não esteja implícita de forma segura na descrição original.
-7. Não transforme a descrição em justificativa, obrigação contratual, condição de habilitação ou exigência de fornecedor.
-8. Não crie requisito restritivo sem necessidade técnica evidente.
-9. Preserve medidas, capacidades, materiais e características existentes quando forem inequívocos.
-10. Corrija problemas de redação, ambiguidades linguísticas e organização das características.
-11. Retorne EXCLUSIVAMENTE JSON válido no formato {"descricao":"...","unidade":"..."}.
-
-OBJETO DA CONTRATAÇÃO:
-${normalizarNome(objeto) || "Não informado."}
-
-NECESSIDADE ADMINISTRATIVA:
-${normalizarNome(necessidade) || "Não informada."}
-
-DESCRIÇÃO ORIGINAL DO ITEM:
-${original}
-
-UNIDADE ATUAL DO ITEM:
-${unidadeOriginal || "Não informada."}`;
-
-  const resposta = await gerarTextoIA(prompt, apiKey, modelo);
+  const resposta = await gerarTextoIA("melhorar_descricao", {
+    descricao: original,
+    unidade: unidadeOriginal,
+    objeto: normalizarNome(objeto),
+    necessidade: normalizarNome(necessidade),
+  });
   const novaDescricao = normalizarNome(resposta?.descricao);
   const novaUnidade = normalizarNome(resposta?.unidade) || unidadeOriginal;
   if (!novaDescricao) throw new Error("A IA não retornou uma descrição válida para o item.");
