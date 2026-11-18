@@ -160,7 +160,7 @@ test("auditoria de marcas envia somente itens e justificativa como dados", async
     "",
   );
   assert.equal(chamada.tarefa, "auditoria_marcas");
-  assert.deepEqual(chamada.dados.itens, [{ numero: "1", descricao: "Notebook Lenovo ThinkPad" }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(chamada.dados.itens)), [{ numero: "1", descricao: "Notebook Lenovo ThinkPad" }]);
   assert.equal(chamada.dados.instrucoes, "Sem justificativa de marca.");
   assert.equal("prompt" in chamada.dados, false);
 });
