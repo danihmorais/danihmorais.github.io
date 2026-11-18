@@ -289,7 +289,8 @@ class TestHeartbeatEFimDeWorker(unittest.TestCase):
 
     def test_worker_aceita_sinal_de_encerramento(self):
         pipeline._worker_stop_event.clear()
-        self.assertTrue(pipeline.parar_worker(timeout=0))
+        with patch.object(pipeline, "_worker_thread", None):
+            self.assertTrue(pipeline.parar_worker(timeout=0))
         self.assertTrue(pipeline._worker_stop_event.is_set())
         pipeline._worker_stop_event.clear()
 
