@@ -9,7 +9,7 @@ const LICITA_DIR = path.resolve(TESTS_DIR, "../..");
 let configMunicipalCache = null;
 
 function testRequire(request) {
-  if (request === "./utils/configMunicipal") {
+  if (request === "./utils/configMunicipal" || request === "./configMunicipal") {
     if (!configMunicipalCache) configMunicipalCache = loadTsModule("src/utils/configMunicipal.ts");
     return configMunicipalCache;
   }
