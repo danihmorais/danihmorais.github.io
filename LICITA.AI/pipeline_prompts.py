@@ -1,8 +1,10 @@
 import json
 import re
 
+import config
 
-MUNICIPIO = "São Francisco/SP"
+
+MUNICIPIO = config.MUNICIPIO_DISPLAY
 
 
 def _texto(dados: dict, chave: str, padrao: str = "") -> str:
