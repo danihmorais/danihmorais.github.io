@@ -35,6 +35,7 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDis
   const [salvandoPreview, setSalvandoPreview] = useState(false);
   const [aprovando, setAprovando] = useState(false);
   const [edicoes, setEdicoes] = useState<Record<string, Record<string, string>>>({});
+  const [pollingNonce, setPollingNonce] = useState(0);
   const [previewAberto, setPreviewAberto] = useState(false);
 
 
@@ -79,7 +80,12 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDis
       if (timer) clearTimeout(timer);
       document.removeEventListener("visibilitychange", visibilidadeAlterada);
     };
-  }, [jobId, statusToken]);
+  }, [jobId, statusToken, pollingNonce]);
+
+  const atualizar = async () => {
+    const status = await consultarFilaFasePreparatoria(jobId, statusToken);
+    setJob(status as JobStatus);
+  };
 
   const abrirPreview = async () => {
     setAbrindoPreview(true);
@@ -132,6 +138,8 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDis
     setNotice("");
     try {
       await aprovarPreviewFila(jobId, statusToken);
+      setJob({ status: "queued", current_stage: "MONTAGEM_DOCX" });
+      setPollingNonce(valor => valor + 1);
       setPreviewAberto(false);
       setPreview(null);
       setNotice("Conteúdo aprovado. A montagem dos documentos foi retomada.");
