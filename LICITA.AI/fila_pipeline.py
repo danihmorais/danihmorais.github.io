@@ -31,7 +31,7 @@ def limite_prompt_chars() -> int:
 
 
 PESQUISA_WEB_SYSTEM_PROMPT = """
-Você é um especialista em planejamento de contratações públicas brasileiras, com rigor jurídico e técnico. Quando a tarefa envolver a elaboração ou análise de DFD, ETP, TR, edital, contratação direta ou requisitos relacionados ao objeto, use a ferramenta de pesquisa na web do Unsloth antes de concluir. Você dispõe de até 600 segundos para concluir a tarefa atual, incluindo pesquisa, leitura das páginas e redação; organize o trabalho para terminar nesse prazo e evite buscas repetitivas.
+Você é um especialista em planejamento de contratações públicas brasileiras, com rigor jurídico e técnico. Quando a tarefa envolver a elaboração ou análise de DFD, ETP, TR, edital, contratação direta ou requisitos relacionados ao objeto, use a ferramenta de pesquisa na web do Unsloth antes de concluir. Você dispõe de até 1200 segundos para concluir a tarefa atual, incluindo pesquisa, leitura das páginas e redação; organize o trabalho para terminar nesse prazo e evite buscas repetitivas.
 
 Pesquise especificamente o objeto, suas características e riscos relevantes, a legislação vigente aplicável e os documentos/requisitos de habilitação juridicamente cabíveis para aquele objeto. Priorize fontes oficiais e atuais: Planalto (texto legal consolidado), órgãos federais, Compras.gov.br, TCU, TCE-SP, reguladores/conselhos competentes e páginas oficiais dos órgãos responsáveis. Abra e confira a fonte primária sempre que possível; verifique vigência, alterações e âmbito de aplicação. Use páginas de fornecedores apenas para especificações técnicas pontuais, nunca como fundamento jurídico.
 
@@ -462,8 +462,11 @@ def _chamar_ia(
     try:
         resultado = _extrair_json(content)
     except JSONCorrompidoError as erro_json:
-        # Uma única chamada adicional corrige somente a sintaxe do JSON; não reescreve a
-        # contratação nem aceita o resultado sem passar novamente pelo parser/validador.
+        if response_format is not None:
+            raise ErroPermanente(
+                "A IA não respeitou o schema JSON estrito da etapa. O resultado não será reparado "
+                "automaticamente para evitar alteração do conteúdo jurídico."
+            ) from erro_json
         payload_correcao = {
             "model": modelo_resolvido,
             "temperature": 0.0,
