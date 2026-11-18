@@ -36,6 +36,9 @@ from main import app
 
 
 class LicitaBackendTests(unittest.TestCase):
+    def _headers_verificacao(self, email: str) -> dict:
+        return {"X-Email-Verification": main._emitir_token_email_verificado(email)}
+
     @classmethod
     def tearDownClass(cls):
         shutil.rmtree(QUEUE_DIR, ignore_errors=True)
@@ -48,6 +51,8 @@ class LicitaBackendTests(unittest.TestCase):
         main._queue_ip_rate_buckets.clear()
         main._queue_email_rate_buckets.clear()
         main._admin_login_rate_buckets.clear()
+        main._email_verification_rate_buckets.clear()
+        main._email_verification_challenges.clear()
 
     def test_endpoint_rejeita_email_invalido(self):
         with TestClient(app) as client:
@@ -68,7 +73,7 @@ class LicitaBackendTests(unittest.TestCase):
         }
 
         with TestClient(app) as client:
-            response = client.post("/api/gerar-fase-preparatoria", json=payload)
+            response = client.post("/api/gerar-fase-preparatoria", json=payload, headers=self._headers_verificacao(payload["email"]))
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("supera R$ 80.000,00", response.json()["detail"])
@@ -91,6 +96,7 @@ class LicitaBackendTests(unittest.TestCase):
             response = client.post(
                 "/api/gerar-fase-preparatoria",
                 data={"payload": json.dumps(payload)},
+                headers=self._headers_verificacao(payload["email"]),
                 files={
                     "dfd": (
                         "DFD-anterior.docx",
@@ -268,7 +274,7 @@ class LicitaBackendTests(unittest.TestCase):
         }
 
         with TestClient(app) as client:
-            created = client.post("/api/gerar-fase-preparatoria", json=payload)
+            created = client.post("/api/gerar-fase-preparatoria", json=payload, headers=self._headers_verificacao(payload["email"]))
             self.assertEqual(created.status_code, 200)
             first = created.json()
             job_id = first["job_id"]
@@ -279,7 +285,7 @@ class LicitaBackendTests(unittest.TestCase):
             self.assertIn("Posição aproximada: 1º", first["message"])
             self.assertTrue(status_token)
 
-            second = client.post("/api/gerar-fase-preparatoria", json=payload)
+            second = client.post("/api/gerar-fase-preparatoria", json=payload, headers=self._headers_verificacao(payload["email"]))
             self.assertEqual(second.status_code, 200)
             self.assertEqual(second.json()["fila_posicao"], 2)
             self.assertEqual(second.json()["solicitacoes_a_frente"], 1)
@@ -301,7 +307,7 @@ class LicitaBackendTests(unittest.TestCase):
             "dados_usuario": {"{{OBJETO}}": "Objeto de teste de cancelamento"},
         }
         with TestClient(app) as client:
-            criado = client.post("/api/gerar-fase-preparatoria", json=payload)
+            criado = client.post("/api/gerar-fase-preparatoria", json=payload, headers=self._headers_verificacao(payload["email"]))
             self.assertEqual(criado.status_code, 200)
             registro = criado.json()
             job_id = registro["job_id"]
@@ -356,9 +362,11 @@ class LicitaBackendTests(unittest.TestCase):
                 payload = {**payload_base, "email": f"teste-ip-{indice}@example.com"}
                 response = client.post("/api/gerar-fase-preparatoria", json=payload)
                 self.assertEqual(response.status_code, 200)
+            email_bloqueado = "teste-ip-bloqueado@example.com"
             bloqueado = client.post(
                 "/api/gerar-fase-preparatoria",
-                json={**payload_base, "email": "teste-ip-bloqueado@example.com"},
+                json={**payload_base, "email": email_bloqueado},
+                headers=self._headers_verificacao(email_bloqueado),
             )
 
         self.assertEqual(bloqueado.status_code, 429)
@@ -378,6 +386,7 @@ class LicitaBackendTests(unittest.TestCase):
             bloqueado = client.post(
                 "/api/gerar-fase-preparatoria",
                 json={**payload_base, "email": "teste-email@example.com"},
+                headers=self._headers_verificacao("teste-email@example.com"),
             )
 
         self.assertEqual(bloqueado.status_code, 429)
