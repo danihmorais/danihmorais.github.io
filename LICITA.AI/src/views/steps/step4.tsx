@@ -5,6 +5,20 @@ import { lerDadosUsuario, salvarDadosUsuario } from "../../utils/storageLocal";
 export default function Step4({
 
  dados, atualizarDados }: any) {
+
+
+  const { showToast } = useToast();
+  const [gestorNome, setGestorNome] = useState("");
+  const [gestorCargo, setGestorCargo] = useState("");
+  const [fiscalNome, setFiscalNome] = useState("");
+  const [fiscalCargo, setFiscalCargo] = useState("");
+
+  const [gestoresSalvos, setGestoresSalvos] = useState<any[]>([]);
+  const [fiscaisSalvos, setFiscaisSalvos] = useState<any[]>([]);
+
+  const [modalGestorAberto, setModalGestorAberto] = useState(false);
+  const [modalFiscalAberto, setModalFiscalAberto] = useState(false);
+
   useEffect(() => {
     if (!modalGestorAberto) return;
     const elementoAnterior = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -64,18 +78,6 @@ export default function Step4({
       elementoAnterior?.focus();
     };
   }, [modalFiscalAberto]);
-
-  const { showToast } = useToast();
-  const [gestorNome, setGestorNome] = useState("");
-  const [gestorCargo, setGestorCargo] = useState("");
-  const [fiscalNome, setFiscalNome] = useState("");
-  const [fiscalCargo, setFiscalCargo] = useState("");
-
-  const [gestoresSalvos, setGestoresSalvos] = useState<any[]>([]);
-  const [fiscaisSalvos, setFiscaisSalvos] = useState<any[]>([]);
-
-  const [modalGestorAberto, setModalGestorAberto] = useState(false);
-  const [modalFiscalAberto, setModalFiscalAberto] = useState(false);
 
   useEffect(() => {
     const dadosSalvos = lerDadosUsuario();
