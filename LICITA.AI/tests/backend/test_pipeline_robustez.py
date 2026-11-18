@@ -273,5 +273,26 @@ class TestAnaliseDoTrPersistida(unittest.TestCase):
             self.assertEqual(job["dados_ia"]["VALOR_ESTIMADO_APROXIMADO"], "R$ 1.050,00")
 
 
+class TestHeartbeatEFimDeWorker(unittest.TestCase):
+    def test_heartbeat_atualiza_mtime_do_job_em_processamento(self):
+        with tempfile.TemporaryDirectory() as diretorio:
+            caminho = Path(diretorio) / "job.processing.json"
+            caminho.write_text("{}", encoding="utf-8")
+            antigo = time.time() - 180
+            os.utime(caminho, (antigo, antigo))
+            self.assertTrue(pipeline._heartbeat_processing_file(caminho))
+            self.assertGreater(caminho.stat().st_mtime, antigo)
+
+    def test_recuperacao_de_orfaos_tem_limite_de_cinco_minutos(self):
+        self.assertGreaterEqual(pipeline.STALE_PROCESSING_SECONDS, 300)
+        self.assertLessEqual(pipeline.STALE_PROCESSING_SECONDS, 600)
+
+    def test_worker_aceita_sinal_de_encerramento(self):
+        pipeline._worker_stop_event.clear()
+        self.assertTrue(pipeline.parar_worker(timeout=0))
+        self.assertTrue(pipeline._worker_stop_event.is_set())
+        pipeline._worker_stop_event.clear()
+
+
 if __name__ == "__main__":
     unittest.main()
