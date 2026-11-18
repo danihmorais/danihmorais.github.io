@@ -12,6 +12,7 @@ import threading
 import time
 from collections import deque
 from datetime import datetime, timezone
+from email.message import EmailMessage
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
@@ -20,7 +21,7 @@ from typing import Literal
 from starlette.datastructures import UploadFile
 
 from documentos_contexto import MAX_CONTEXT_CHARS, extrair_contexto_documentos
-from fila import EMAIL_RE, MAX_ATTEMPTS, QUEUE_DIR, _artifact_path, _job_path, cancel_job, enqueue_job, get_job
+from fila import EMAIL_RE, MAX_ATTEMPTS, QUEUE_DIR, SMTP_FROM, SMTP_PASSWORD, SMTP_USERNAME, _artifact_path, _job_path, _smtp_client, cancel_job, enqueue_job, get_job
 from fila_pipeline import _dados_para_prompt, limite_prompt_chars
 from fila_pipeline_unificado import iniciar_worker
 from pipeline_prompts import montar_pipeline
@@ -34,6 +35,19 @@ class FasePreparatoriaRequest(BaseModel):
     email: str = Field(min_length=3, max_length=254)
     instrucoes: str = Field(default="", max_length=12000)
     dados_usuario: dict = Field(default_factory=dict)
+
+
+class EmailVerificationRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    email: str = Field(min_length=3, max_length=254)
+
+
+class EmailVerificationConfirmRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    email: str = Field(min_length=3, max_length=254)
+    code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
 
 
 class IAChatRequest(BaseModel):
@@ -78,6 +92,13 @@ QUEUE_EMAIL_RATE_LIMIT = max(1, int(os.getenv("LICITA_QUEUE_EMAIL_RATE_LIMIT", "
 _queue_rate_lock = threading.Lock()
 _queue_ip_rate_buckets: dict[str, deque[float]] = {}
 _queue_email_rate_buckets: dict[str, deque[float]] = {}
+EMAIL_VERIFICATION_TTL_SECONDS = max(180, int(os.getenv("LICITA_EMAIL_VERIFICATION_TTL", "600")))
+EMAIL_VERIFICATION_TOKEN_TTL_SECONDS = max(600, int(os.getenv("LICITA_EMAIL_VERIFICATION_TOKEN_TTL", "3600")))
+EMAIL_VERIFICATION_RATE_LIMIT = max(1, int(os.getenv("LICITA_EMAIL_VERIFICATION_RATE_LIMIT", "3")))
+_email_verification_lock = threading.Lock()
+_email_verification_challenges: dict[str, dict] = {}
+_email_verification_rate_buckets: dict[str, deque[float]] = {}
+_email_verification_secret = os.getenv("LICITA_EMAIL_VERIFICATION_SECRET", "").encode("utf-8") or secrets.token_bytes(32)
 
 # O painel administrativo fica desativado até que a senha seja configurada no ambiente do servidor.
 ADMIN_PASSWORD = os.getenv("LICITA_ADMIN_PASSWORD", "")
@@ -153,6 +174,75 @@ def _email_permitido(email: str) -> bool:
         if item.strip()
     ]
     return any(dominio == item or dominio.endswith("." + item) for item in permitidos)
+
+
+def _email_verification_digest(email: str, code: str) -> str:
+    return hmac.new(_email_verification_secret, f"{email}|{code}".encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def _emitir_token_email_verificado(email: str) -> str:
+    endereco = email.strip().casefold()
+    expira = int(time.time()) + EMAIL_VERIFICATION_TOKEN_TTL_SECONDS
+    nonce = secrets.token_urlsafe(18)
+    email_b64 = base64.urlsafe_b64encode(endereco.encode("utf-8")).decode("ascii").rstrip("=")
+    payload = f"{email_b64}.{expira}.{nonce}"
+    assinatura = hmac.new(_email_verification_secret, payload.encode("ascii"), hashlib.sha256).digest()
+    assinatura_b64 = base64.urlsafe_b64encode(assinatura).decode("ascii").rstrip("=")
+    return f"{payload}.{assinatura_b64}"
+
+
+def _validar_token_email_verificado(token: str, email: str) -> bool:
+    if not token:
+        return False
+    partes = token.split(".")
+    if len(partes) != 4:
+        return False
+    email_b64, expira_texto, nonce, assinatura_recebida = partes
+    if not expira_texto.isdigit() or not nonce or not assinatura_recebida:
+        return False
+    try:
+        padding = "=" * (-len(email_b64) % 4)
+        endereco = base64.urlsafe_b64decode(email_b64 + padding).decode("utf-8")
+    except (ValueError, UnicodeDecodeError):
+        return False
+    if endereco != email.strip().casefold():
+        return False
+    expira = int(expira_texto)
+    agora = int(time.time())
+    if expira <= agora or expira > agora + EMAIL_VERIFICATION_TOKEN_TTL_SECONDS + 60:
+        return False
+    payload = f"{email_b64}.{expira_texto}.{nonce}"
+    assinatura = hmac.new(_email_verification_secret, payload.encode("ascii"), hashlib.sha256).digest()
+    assinatura_esperada = base64.urlsafe_b64encode(assinatura).decode("ascii").rstrip("=")
+    return _token_matches(assinatura_esperada, assinatura_recebida)
+
+
+def _enviar_codigo_verificacao(email: str, code: str) -> None:
+    if not SMTP_FROM and not SMTP_USERNAME:
+        raise RuntimeError("Remetente SMTP não configurado.")
+    mensagem = EmailMessage()
+    mensagem["From"] = SMTP_FROM or SMTP_USERNAME
+    mensagem["To"] = email
+    mensagem["Subject"] = "LICITA.AI — confirmação do endereço de e-mail"
+    mensagem.set_content(
+        "Olá,\n\n"
+        "Foi solicitada a confirmação deste endereço para receber documentos gerados pelo LICITA.AI.\n\n"
+        f"Seu código de confirmação é: {code}\n\n"
+        f"O código expira em {EMAIL_VERIFICATION_TTL_SECONDS // 60} minutos e pode ser utilizado uma única vez. "
+        "Caso não tenha feito esta solicitação, desconsidere esta mensagem.\n\n"
+        "LICITA.AI"
+    )
+    with _smtp_client() as cliente:
+        cliente.login(SMTP_USERNAME, SMTP_PASSWORD)
+        cliente.send_message(mensagem)
+
+
+def _limpar_verificacoes_email_expiradas() -> None:
+    agora = time.time()
+    with _email_verification_lock:
+        for endereco, registro in list(_email_verification_challenges.items()):
+            if float(registro.get("expires_at", 0)) <= agora or int(registro.get("attempts", 0)) >= 5:
+                _email_verification_challenges.pop(endereco, None)
 
 
 async def _upstream_chat(base_url: str, api_key: str, payload: dict) -> tuple[dict, int]:
@@ -501,6 +591,80 @@ async def _ler_payload_fase_preparatoria(request: Request) -> tuple[FasePreparat
     return req, resumo, dados_ia
 
 
+@app.post("/api/email/verification/request")
+async def solicitar_verificacao_email(request: Request, req: EmailVerificationRequest):
+    email = req.email.strip().casefold()
+    if not EMAIL_RE.fullmatch(email):
+        raise HTTPException(status_code=400, detail="Informe um e-mail válido.")
+    if not _email_permitido(email):
+        raise HTTPException(status_code=403, detail="Somente endereços institucionais autorizados podem receber documentos.")
+
+    _check_rate_limit(
+        _email_verification_rate_buckets,
+        _queue_rate_lock,
+        _client_identity(request),
+        max(2, EMAIL_VERIFICATION_RATE_LIMIT * 2),
+        3600,
+        "Muitas solicitações de confirmação deste endereço de rede. Aguarde antes de tentar novamente.",
+    )
+    _check_rate_limit(
+        _email_verification_rate_buckets,
+        _queue_rate_lock,
+        email,
+        EMAIL_VERIFICATION_RATE_LIMIT,
+        3600,
+        "Este endereço já recebeu o limite de códigos de confirmação. Tente novamente mais tarde.",
+    )
+    _limpar_verificacoes_email_expiradas()
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    with _email_verification_lock:
+        _email_verification_challenges[email] = {
+            "digest": _email_verification_digest(email, code),
+            "expires_at": time.time() + EMAIL_VERIFICATION_TTL_SECONDS,
+            "attempts": 0,
+        }
+    try:
+        _enviar_codigo_verificacao(email, code)
+    except Exception as exc:
+        with _email_verification_lock:
+            _email_verification_challenges.pop(email, None)
+        raise HTTPException(status_code=503, detail="Não foi possível enviar o código de confirmação. Verifique a configuração do serviço de e-mail ou tente novamente mais tarde.") from exc
+    return {
+        "sent": True,
+        "expires_in": EMAIL_VERIFICATION_TTL_SECONDS,
+        "message": "Código de confirmação enviado. Confira sua caixa de entrada e a pasta de spam.",
+    }
+
+
+@app.post("/api/email/verification/confirm")
+async def confirmar_verificacao_email(req: EmailVerificationConfirmRequest):
+    email = req.email.strip().casefold()
+    if not EMAIL_RE.fullmatch(email) or not _email_permitido(email):
+        raise HTTPException(status_code=400, detail="Solicitação de confirmação inválida.")
+    _limpar_verificacoes_email_expiradas()
+    with _email_verification_lock:
+        registro = _email_verification_challenges.get(email)
+        if not registro:
+            raise HTTPException(status_code=404, detail="Solicite um novo código de confirmação.")
+        if float(registro.get("expires_at", 0)) <= time.time():
+            _email_verification_challenges.pop(email, None)
+            raise HTTPException(status_code=410, detail="O código de confirmação expirou. Solicite outro.")
+        recebido = _email_verification_digest(email, req.code)
+        if not _token_matches(str(registro.get("digest", "")), recebido):
+            registro["attempts"] = int(registro.get("attempts", 0)) + 1
+            if registro["attempts"] >= 5:
+                _email_verification_challenges.pop(email, None)
+                raise HTTPException(status_code=429, detail="Limite de tentativas excedido. Solicite um novo código.")
+            raise HTTPException(status_code=400, detail="Código de confirmação incorreto.")
+        _email_verification_challenges.pop(email, None)
+    return {
+        "verified": True,
+        "token": _emitir_token_email_verificado(email),
+        "expires_in": EMAIL_VERIFICATION_TOKEN_TTL_SECONDS,
+        "message": "Endereço de e-mail confirmado.",
+    }
+
+
 @app.post("/api/gerar-fase-preparatoria")
 async def agendar_fase_preparatoria(request: Request):
     req, contexto_resumo, dados_ia = await _ler_payload_fase_preparatoria(request)
@@ -509,6 +673,9 @@ async def agendar_fase_preparatoria(request: Request):
         raise HTTPException(status_code=400, detail="Informe um e-mail válido para receber os documentos.")
     if not _email_permitido(email):
         raise HTTPException(status_code=403, detail="O domínio deste e-mail não está autorizado a receber documentos. Utilize um endereço institucional autorizado.")
+    token_verificacao = request.headers.get("x-email-verification", "")
+    if not _validar_token_email_verificado(token_verificacao, email):
+        raise HTTPException(status_code=403, detail="Confirme o endereço de e-mail antes de colocar a solicitação na fila.")
 
     _check_queue_rate_limit(request, email)
 
