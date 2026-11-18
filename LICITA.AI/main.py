@@ -537,11 +537,28 @@ async def correlacionar_requisicao_e_medir(request: Request, call_next):
 
 @app.get("/metrics", include_in_schema=False)
 async def metricas_prometheus():
+    from fila_pipeline import obter_metricas_ia
+    metricas_ia = obter_metricas_ia()
     linhas = [
         "# HELP licita_ai_http_requests_total Total de requisicoes HTTP processadas.",
         "# TYPE licita_ai_http_requests_total counter",
         "# HELP licita_ai_http_request_duration_seconds_total Duracao acumulada das requisicoes HTTP.",
         "# TYPE licita_ai_http_request_duration_seconds_total counter",
+        "# HELP licita_ai_completions_total Total de respostas de IA completadas com sucesso.",
+        "# TYPE licita_ai_completions_total counter",
+        "# HELP licita_ai_completion_duration_seconds_total Duracao acumulada das respostas de IA.",
+        "# TYPE licita_ai_completion_duration_seconds_total counter",
+        "# HELP licita_ai_prompt_tokens_total Total de tokens de prompt reportados pelo provedor.",
+        "# TYPE licita_ai_prompt_tokens_total counter",
+        "# HELP licita_ai_completion_tokens_total Total de tokens de resposta reportados pelo provedor.",
+        "# TYPE licita_ai_completion_tokens_total counter",
+        "# HELP licita_ai_tokens_total Total de tokens reportados pelo provedor.",
+        "# TYPE licita_ai_tokens_total counter",
+        f"licita_ai_completions_total {metricas_ia['calls']}",
+        f"licita_ai_completion_duration_seconds_total {metricas_ia['duration_seconds']:.6f}",
+        f"licita_ai_prompt_tokens_total {metricas_ia['prompt_tokens']}",
+        f"licita_ai_completion_tokens_total {metricas_ia['completion_tokens']}",
+        f"licita_ai_tokens_total {metricas_ia['total_tokens']}",
     ]
     with _METRICAS_HTTP_LOCK:
         registros = sorted(_METRICAS_HTTP.items(), key=lambda item: item[0])
