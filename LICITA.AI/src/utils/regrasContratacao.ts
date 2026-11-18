@@ -19,6 +19,8 @@ export function calcularTotalEmCentavos(itens: Array<{ valor?: unknown; valor_un
   }, 0);
 }
 
+import { obterLimiteMeepp, formatarLimiteMeeppConfigurado } from "./configMunicipal";
+
 export const LIMITE_EXCLUSIVIDADE_MEEPP = 80000;
 
 export const calcularValorEstimadoItens = (itens: any[] = []) => {
@@ -26,12 +28,9 @@ export const calcularValorEstimadoItens = (itens: any[] = []) => {
 };
 
 export const exclusividadeMeeppPermitida = (itens: any[] = []) => {
-  return calcularValorEstimadoItens(itens) <= LIMITE_EXCLUSIVIDADE_MEEPP;
+  return calcularValorEstimadoItens(itens) <= obterLimiteMeepp();
 };
 
 export const formatarLimiteMeepp = () => {
-  return LIMITE_EXCLUSIVIDADE_MEEPP.toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  });
+  return formatarLimiteMeeppConfigurado();
 };
