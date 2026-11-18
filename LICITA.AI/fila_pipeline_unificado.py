@@ -1013,10 +1013,21 @@ def _process_pipeline(job: dict) -> None:
         exigir_amostra_tr = amostra_exigida(dados_usuario)
         opcoes_chamada = _opcoes_chamada_ia_etapa(etapa_tipo, etapa_id, exigir_amostra_tr=exigir_amostra_tr)
         temperatura_etapa = _temperatura_valida(etapa.get("temperature"), temperatura)
+        inicio_stage = time.perf_counter()
         if opcoes_chamada:
             resultado, modelo_resolvido = _chamar_ia(prompt_processado, modelo, temperatura_etapa, **opcoes_chamada)
         else:
             resultado, modelo_resolvido = _chamar_ia(prompt_processado, modelo, temperatura_etapa)
+        logger.info(
+            "ai_stage_completed",
+            extra={
+                "job_id": job["job_id"],
+                "request_id": job.get("request_id"),
+                "stage": etapa_id,
+                "model": modelo_resolvido or modelo,
+                "duration_seconds": round(time.perf_counter() - inicio_stage, 3),
+            },
+        )
         _checar_cancelamento(job)
         if modelo_resolvido:
             modelo = modelo_resolvido
