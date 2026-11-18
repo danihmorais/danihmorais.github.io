@@ -174,6 +174,7 @@ export default function DotacaoEditor({ value, onChange, placeholder }: DotacaoE
     if (editor.innerHTML !== conteudo) editor.innerHTML = conteudo;
   }, [value]);
 
+
   useEffect(() => {
     if (montouRef.current) return;
     montouRef.current = true;
