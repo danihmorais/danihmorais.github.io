@@ -1794,3 +1794,33 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
     padding: 14px;
   }
 }
+
+.planilha-import-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-subtle);
+}
+.planilha-import-label {
+  font-size: 13px;
+  font-weight: 650;
+}
+.planilha-import-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.planilha-import-controls input[type="file"] {
+  max-width: 100%;
+  font: inherit;
+  font-size: 13px;
+}
+.planilha-import-success {
+  margin: 0;
+  color: var(--btn-success);
+  font-size: 13px;
+}
