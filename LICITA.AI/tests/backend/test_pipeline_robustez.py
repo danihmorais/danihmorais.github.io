@@ -315,5 +315,28 @@ class TestHeartbeatEFimDeWorker(unittest.TestCase):
         pipeline._worker_stop_event.clear()
 
 
+class TestRelatorioConformidade(unittest.TestCase):
+    def test_relatorio_identifica_campos_pendentes_fontes_e_referencias(self):
+        resultado = {
+            "DFD": {"JUSTIFICATIVA": "Conforme art. 18 da Lei nº 14.133/2021."},
+            "CONSULTA_HABILITACAO": {
+                "FONTES_OFICIAIS": [
+                    {"orgao": "TCU", "titulo": "Orientação", "url": "https://www.tcu.gov.br", "relevancia": "Referência"}
+                ]
+            },
+        }
+        relatorio = pipeline._gerar_relatorio_conformidade(resultado)
+        self.assertIn("Campos estruturais verificados", relatorio)
+        self.assertIn("Campos pendentes", relatorio)
+        self.assertIn("TCU", relatorio)
+        self.assertIn("Conferência humana obrigatória", relatorio)
+        self.assertIn("não representa parecer jurídico", relatorio.lower())
+
+    def test_relatorio_nao_afirma_validacao_legal_automatica(self):
+        relatorio = pipeline._gerar_relatorio_conformidade({})
+        self.assertIn("não significa que sua interpretação ou aplicabilidade tenha sido validada", relatorio)
+        self.assertIn("Não substitui a revisão", relatorio)
+
+
 if __name__ == "__main__":
     unittest.main()
