@@ -34,8 +34,9 @@ function ehArquivoUpload(valor: unknown): valor is File {
 }
 
 export const consultarFilaFasePreparatoria = async (jobId: string, statusToken?: string) => {
-  const query = statusToken ? `?token=${encodeURIComponent(statusToken)}` : "";
-  const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}${query}`);
+  const headers: Record<string, string> = {};
+  if (statusToken) headers["X-Status-Token"] = statusToken;
+  const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}`, { headers });
   if (!response.ok) {
     let detalhe = "Não foi possível consultar a fila.";
     try {
@@ -48,7 +49,7 @@ export const consultarFilaFasePreparatoria = async (jobId: string, statusToken?:
 };
 
 export async function cancelarFilaFasePreparatoria(jobId: string, statusToken: string): Promise<{ job_id: string; status: string; message: string }> {
-  const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}/cancelar?token=${encodeURIComponent(statusToken)}`, { method: "POST" });
+  const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}/cancelar`, { method: "POST", headers: { "X-Status-Token": statusToken } });
   let payload: any = {};
   try { payload = await response.json(); } catch {}
   if (!response.ok) throw new Error(payload?.detail || "Não foi possível cancelar a solicitação.");
