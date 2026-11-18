@@ -184,3 +184,80 @@ def formatar_relatorio_conformidade(relatorio: dict) -> str:
     linhas.extend(["", "LIMITES DA VERIFICAÇÃO"])
     linhas.extend(f"- {limite}" for limite in relatorio.get("limites", []))
     return "\n".join(linhas)
+
+
+ARTIGOS_LEI_14133 = set(range(1, 195))
+CITACAO_ARTIGO_RE = re.compile(r"(?i)\\b(?:art\\.?|artigo)\\s*(\\d{1,3})\\b")
+
+
+def formatar_relatorio_referencias(resultado: dict) -> str:
+    dados = resultado if isinstance(resultado, dict) else {}
+    linhas = [
+        "LICITA.AI — RELATÓRIO DE REFERÊNCIAS E CAMPOS ESTRUTURAIS",
+        "",
+        "Campos estruturais verificados",
+    ]
+    pendentes: list[str] = []
+    for nome, campos in CAMPOS_DOCUMENTOS.items():
+        bloco = dados.get(nome, {}) if isinstance(dados.get(nome), dict) else {}
+        preenchidos = sum(bool(_texto(bloco.get(campo))) for campo in campos)
+        linhas.append(f"- {nome}: {preenchidos}/{len(campos)} campo(s) com conteúdo")
+        pendentes.extend(f"{nome}.{campo}" for campo in campos if not _texto(bloco.get(campo)))
+    linhas.append("")
+    linhas.append("Campos pendentes")
+    if pendentes:
+        linhas.extend(f"- {campo}" for campo in pendentes)
+    else:
+        linhas.append("- Nenhum campo estrutural vazio detectado.")
+    linhas.extend(["", "Fontes consultadas"])
+    fontes: list[dict] = []
+    def coletar(valor):
+        if isinstance(valor, dict):
+            for chave, item in valor.items():
+                if str(chave).upper() in {"FONTES_OFICIAIS", "FONTES", "SOURCES"} and isinstance(item, list):
+                    fontes.extend(fonte for fonte in item if isinstance(fonte, dict))
+                else:
+                    coletar(item)
+        elif isinstance(valor, list):
+            for item in valor:
+                coletar(item)
+    coletar(dados)
+    fontes_unicas = {}
+    for fonte in fontes:
+        url = _texto(fonte.get("url"))
+        if url:
+            fontes_unicas[url] = fonte
+    if fontes_unicas:
+        for fonte in fontes_unicas.values():
+            linhas.append(f"- {_texto(fonte.get('orgao'))}: {_texto(fonte.get('titulo'))} — {_texto(fonte.get('url'))}")
+            relevancia = _texto(fonte.get("relevancia"))
+            if relevancia:
+                linhas.append(f"  Relevância registrada: {relevancia}")
+    else:
+        linhas.append("- Nenhuma fonte com URL foi encontrada no resultado estruturado.")
+    artigos: set[int] = set()
+    for bloco in dados.values():
+        textos = []
+        if isinstance(bloco, dict):
+            textos.extend(_texto(valor) for valor in bloco.values() if isinstance(valor, str))
+        elif isinstance(bloco, str):
+            textos.append(bloco)
+        for texto in textos:
+            artigos.update(int(match) for match in CITACAO_ARTIGO_RE.findall(texto))
+    linhas.extend(["", "Referências legais identificadas"])
+    if artigos:
+        for artigo in sorted(artigos):
+            if artigo in ARTIGOS_LEI_14133:
+                linhas.append(f"- artigo {artigo}: No catálogo numérico da Lei 14.133/2021; confirmar a norma citada, o conteúdo e a pertinência.")
+            else:
+                linhas.append(f"- artigo {artigo}: Referências fora do catálogo — Revisar a fonte e a numeração.")
+    else:
+        linhas.append("- Nenhuma citação de artigo detectada.")
+    linhas.extend([
+        "",
+        "Conferência humana obrigatória",
+        "A análise numérica não valida a existência, o texto, a vigência, a interpretação ou a aplicabilidade de qualquer dispositivo. A conferência humana é obrigatória e este relatório não representa parecer jurídico.",
+        "A identificação de artigo dentro do catálogo não significa que sua interpretação ou aplicabilidade tenha sido validada.",
+        "Não substitui a revisão jurídica, técnica ou administrativa nem confirma autenticidade ou pertinência das fontes.",
+    ])
+    return "\\n".join(linhas)
