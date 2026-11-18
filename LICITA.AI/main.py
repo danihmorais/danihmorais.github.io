@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unicodedata
+import asyncio
 import logging
 import io
 import csv
@@ -636,7 +637,7 @@ async def _ler_payload_fase_preparatoria(request: Request) -> tuple[FasePreparat
         upload = form.get(campo)
         if upload is None:
             continue
-        if not isinstance(upload, UploadFile):
+        if not isinstance(upload, StarletteUploadFile):
             raise HTTPException(status_code=400, detail=f"O campo de arquivo '{campo}' é inválido.")
         nome = str(upload.filename or "").strip()
         if not nome:
@@ -1629,14 +1630,8 @@ _queue_position_arquivos = _queue_position
 
 
 def _queue_position(job_id: str) -> tuple[int, int]:
-    try:
-        jobs = listar_jobs_sqlite("queued", limite=5000)
-        total = len(jobs)
-        for posicao, job in enumerate(jobs, start=1):
-            if str(job.get("job_id") or "") == str(job_id):
-                return posicao, total
-        return 0, total
-    except Exception:
-        logger.exception("Falha ao consultar posição pelo índice SQLite.", extra={"job_id": job_id})
-        return _queue_position_arquivos(job_id)
+    posicao, a_frente = _queue_position_arquivos(job_id)
+    if posicao is None or a_frente is None:
+        return 0, 0
+    return posicao, a_frente
 
