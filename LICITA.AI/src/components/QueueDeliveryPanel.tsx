@@ -4,6 +4,7 @@ import {
   baixarZipFila,
   consultarFilaFasePreparatoria,
   consultarPreviewFila,
+  regenerarDocumentoPreviewFila,
   reenviarFilaFasePreparatoria,
   salvarCampoPreviewFila,
   type PreviewDocumentosFila,
@@ -33,6 +34,7 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDis
   const [preview, setPreview] = useState<PreviewDocumentosFila | null>(null);
   const [abrindoPreview, setAbrindoPreview] = useState(false);
   const [salvandoPreview, setSalvandoPreview] = useState(false);
+  const [regenerandoDocumento, setRegenerandoDocumento] = useState<string | null>(null);
   const [aprovando, setAprovando] = useState(false);
   const [edicoes, setEdicoes] = useState<Record<string, Record<string, string>>>({});
   const [pollingNonce, setPollingNonce] = useState(0);
@@ -132,6 +134,23 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDis
     }
   };
 
+  const regenerarDocumento = async (documento: "DFD" | "ETP" | "TR") => {
+    setRegenerandoDocumento(documento);
+    setError("");
+    setNotice("");
+    try {
+      const resultado = await regenerarDocumentoPreviewFila(jobId, statusToken, documento);
+      const atualizado = await consultarPreviewFila(jobId, statusToken);
+      setPreview(atualizado);
+      setEdicoes({});
+      setNotice(resultado.message);
+    } catch (erro: any) {
+      setError(erro?.message || "Não foi possível regenerar o documento.");
+    } finally {
+      setRegenerandoDocumento(null);
+    }
+  };
+
   const aprovar = async () => {
     setAprovando(true);
     setError("");
@@ -220,7 +239,10 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDis
           </div>
           {(["DFD", "ETP", "TR"] as const).map(documento => (
             <details className="queue-review-document" key={documento} open>
-              <summary>{documento}</summary>
+              <summary>{documento}{preview.stale_documents?.includes(documento) ? " — precisa regenerar" : ""}</summary>
+              <button type="button" className="button button-secondary queue-review-regenerate" disabled={!!regenerandoDocumento || salvandoPreview || aprovando} onClick={() => regenerarDocumento(documento)}>
+                {regenerandoDocumento === documento ? "Regenerando..." : `Regenerar ${documento}`}
+              </button>
               {Object.entries(preview.documentos[documento] || {}).map(([campo, conteudo]) => {
                 const id = `review-${jobId}-${documento}-${campo}`;
                 const valor = edicoes[documento]?.[campo] ?? conteudo;
@@ -233,11 +255,12 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDis
               })}
             </details>
           ))}
+          {preview.stale_documents?.length ? <p role="alert">Documentos dependentes precisam ser regenerados: {preview.stale_documents.join(", ")}.</p> : null}
           <div className="queue-delivery-actions">
-            <button type="button" className="button button-secondary" disabled={salvandoPreview || aprovando} onClick={salvarEdicoes}>
+            <button type="button" className="button button-secondary" disabled={salvandoPreview || aprovando || !!regenerandoDocumento} onClick={salvarEdicoes}>
               {salvandoPreview ? "Salvando..." : "Salvar alterações"}
             </button>
-            <button type="button" className="button button-primary" disabled={salvandoPreview || aprovando || Object.values(edicoes).some(campos => Object.values(campos).some(valor => !valor.trim()))} onClick={aprovar}>
+            <button type="button" className="button button-primary" disabled={salvandoPreview || aprovando || !!preview.stale_documents?.length || Object.values(edicoes).some(campos => Object.values(campos).some(valor => !valor.trim()))} onClick={aprovar}>
               {aprovando ? "Aprovando..." : "Aprovar e montar DOCX"}
             </button>
           </div>
