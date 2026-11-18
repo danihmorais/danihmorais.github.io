@@ -388,32 +388,139 @@ def _json_schema_itens_tr() -> dict:
     )
 
 
-def _opcoes_chamada_ia_etapa(etapa_tipo: str, etapa_id: str = "", *, exigir_amostra_tr: bool = True) -> dict:
-    """Saída estruturada nas etapas de JSON fechado; sem ferramentas nas etapas puramente mecânicas.
+def _schema_objeto_estrito(propriedades: dict, obrigatorios: list[str], nome: str) -> dict:
+    return _response_format_estrito(
+        nome,
+        {
+            "type": "object",
+            "properties": propriedades,
+            "required": obrigatorios,
+            "additionalProperties": False,
+        },
+    )
 
-    A consulta de habilitação (que usa pesquisa web) e a contratação direta (que ainda descreve o
-    formato no prompt e roda com ferramentas) ficam de fora: combinar gramática estrita com o laço
-    de ferramentas precisa ser validado no servidor antes de ser ligado.
-    """
+
+def _json_schema_auditoria_marcas() -> dict:
+    item = _schema_objeto_estrito(
+        {
+            "numero": {"type": "string", "minLength": 1},
+            "nome_revisado": {"type": "string", "minLength": 1},
+            "motivo": {"type": "string", "minLength": 1},
+        },
+        ["numero", "nome_revisado", "motivo"],
+        "item_auditoria_marca",
+    )["json_schema"]["schema"]
+    return _schema_objeto_estrito(
+        {"itens": {"type": "array", "items": item}},
+        ["itens"],
+        "auditoria_marcas",
+    )
+
+
+def _json_schema_consulta_habilitacao() -> dict:
+    documento = {
+        "type": "object",
+        "properties": {
+            "numero_documento": {"type": "string"},
+            "categoria": {"type": "string"},
+            "documento": {"type": "string"},
+            "aplicabilidade": {"type": "string"},
+            "justificativa": {"type": "string"},
+            "fundamento_legal": {"type": "string"},
+            "fonte_oficial_url": {"type": "string"},
+        },
+        "required": [
+            "numero_documento", "categoria", "documento", "aplicabilidade",
+            "justificativa", "fundamento_legal", "fonte_oficial_url",
+        ],
+        "additionalProperties": False,
+    }
+    exigencia = {
+        "type": "object",
+        "properties": {
+            "exigencia": {"type": "string"},
+            "motivo": {"type": "string"},
+            "fonte_oficial_url": {"type": "string"},
+        },
+        "required": ["exigencia", "motivo", "fonte_oficial_url"],
+        "additionalProperties": False,
+    }
+    fonte = {
+        "type": "object",
+        "properties": {
+            "orgao": {"type": "string"},
+            "titulo": {"type": "string"},
+            "url": {"type": "string"},
+            "relevancia": {"type": "string"},
+        },
+        "required": ["orgao", "titulo", "url", "relevancia"],
+        "additionalProperties": False,
+    }
+    return _schema_objeto_estrito(
+        {
+            "ENQUADRAMENTO_DO_OBJETO": {"type": "string", "minLength": 1},
+            "LEGISLACAO_E_REGULACAO_APLICAVEL": {"type": "string", "minLength": 1},
+            "REQUISITOS_TECNICOS_E_REGULATORIOS": {"type": "string", "minLength": 1},
+            "DOCUMENTOS_ADICIONAIS_HABILITACAO": {"type": "array", "items": documento},
+            "EXIGENCIAS_NAO_RECOMENDADAS": {"type": "array", "items": exigencia},
+            "FONTES_OFICIAIS": {"type": "array", "items": fonte},
+            "CONCLUSAO": {"type": "string", "minLength": 1},
+        },
+        [
+            "ENQUADRAMENTO_DO_OBJETO", "LEGISLACAO_E_REGULACAO_APLICAVEL",
+            "REQUISITOS_TECNICOS_E_REGULATORIOS", "DOCUMENTOS_ADICIONAIS_HABILITACAO",
+            "EXIGENCIAS_NAO_RECOMENDADAS", "FONTES_OFICIAIS", "CONCLUSAO",
+        ],
+        "consulta_habilitacao",
+    )
+
+
+def _json_schema_contratacao_direta() -> dict:
+    return _schema_objeto_estrito(
+        {campo: {"type": "string", "minLength": 1} for campo in _CAMPOS_CONTRATACAO_DIRETA},
+        list(_CAMPOS_CONTRATACAO_DIRETA),
+        "contratacao_direta",
+    )
+
+
+def _opcoes_chamada_ia_etapa(etapa_tipo: str, etapa_id: str = "", *, exigir_amostra_tr: bool = True) -> dict:
     tipo = str(etapa_tipo or "").strip().casefold()
+    identificador = str(etapa_id or "").strip().upper()
     if tipo == "auditoria_marcas":
-        # O próprio prompt de sistema manda não pesquisar em tarefas mecânicas; desligar as
-        # ferramentas evita minutos de busca inútil numa remoção de marca.
-        return {"enable_tools": False}
-    if tipo == "geracao_json" and str(etapa_id or "").strip().upper() == "PAGAMENTO_ETAPAS":
+        return {
+            "response_format": _json_schema_auditoria_marcas(),
+            "enable_tools": False,
+            "system_prompt": _JSON_ESTRUTURADO_SYSTEM_PROMPT,
+            "enable_thinking": False,
+        }
+    if tipo == "geracao_json" and identificador == "PAGAMENTO_ETAPAS":
         return {
             "response_format": _json_schema_pagamento_etapas(),
             "enable_tools": False,
             "system_prompt": _JSON_ESTRUTURADO_SYSTEM_PROMPT,
+            "enable_thinking": False,
         }
-    if tipo != "geracao_unificada":
-        return {}
-    return {
-        "response_format": _json_schema_fase_preparatoria(exigir_amostra_tr),
-        "enable_tools": False,
-        "system_prompt": _FASE_PREPARATORIA_SYSTEM_PROMPT,
-    }
-
+    if tipo == "consulta_habilitacao":
+        return {
+            "response_format": _json_schema_consulta_habilitacao(),
+            "enable_tools": True,
+            "enable_thinking": False,
+        }
+    if tipo == "geracao_contratacao_direta":
+        return {
+            "response_format": _json_schema_contratacao_direta(),
+            "enable_tools": False,
+            "system_prompt": _JSON_ESTRUTURADO_SYSTEM_PROMPT,
+            "enable_thinking": True,
+        }
+    if tipo == "geracao_unificada":
+        return {
+            "response_format": _json_schema_fase_preparatoria(exigir_amostra_tr),
+            "enable_tools": False,
+            "system_prompt": _FASE_PREPARATORIA_SYSTEM_PROMPT,
+            "enable_thinking": True,
+        }
+    raise ErroPermanente("Tipo de etapa sem configuração de chamada de IA.")
 
 def _chamar_ia(
     prompt: str,
@@ -423,10 +530,10 @@ def _chamar_ia(
     response_format: dict | None = None,
     enable_tools: bool = True,
     system_prompt: str | None = None,
+    enable_thinking: bool = True,
 ) -> tuple[dict, str]:
     modelo = str(model or "unsloth-auto").strip()
-    # Preserva compatibilidade com as chamadas simples existentes.
-    if response_format is None and enable_tools is True and system_prompt is None:
+    if response_format is None and enable_tools is True and system_prompt is None and enable_thinking is True:
         return _chamar_ia_primaria(prompt, modelo, temperature)
     return _chamar_ia_primaria(
         prompt,
@@ -435,6 +542,7 @@ def _chamar_ia(
         response_format=response_format,
         enable_tools=enable_tools,
         system_prompt=system_prompt,
+        enable_thinking=enable_thinking,
     )
 
 
@@ -543,6 +651,47 @@ def _validar_etapas(etapas: list) -> None:
             raise ErroPermanente(f"Tipo de etapa de IA não permitido: {tipo[:60]!r}.")
         if not _ETAPA_ID_RE.fullmatch(str(etapa.get("id", "")).strip().upper()):
             raise ErroPermanente("Identificador de etapa de IA inválido.")
+
+
+def _validar_json_consulta_habilitacao(resultado: dict) -> dict:
+    campos_textuais = (
+        "ENQUADRAMENTO_DO_OBJETO",
+        "LEGISLACAO_E_REGULACAO_APLICAVEL",
+        "REQUISITOS_TECNICOS_E_REGULATORIOS",
+        "CONCLUSAO",
+    )
+    campos_lista = (
+        "DOCUMENTOS_ADICIONAIS_HABILITACAO",
+        "EXIGENCIAS_NAO_RECOMENDADAS",
+        "FONTES_OFICIAIS",
+    )
+    if not isinstance(resultado, dict):
+        raise RuntimeError("A consulta de habilitação não retornou um objeto JSON válido.")
+    ausentes = [campo for campo in (*campos_textuais, *campos_lista) if campo not in resultado]
+    if ausentes:
+        raise RuntimeError("A consulta de habilitação não retornou os campos: " + ", ".join(ausentes) + ".")
+    for campo in campos_textuais:
+        if not isinstance(resultado[campo], str) or not resultado[campo].strip():
+            raise RuntimeError(f"A consulta de habilitação retornou o campo textual vazio: {campo}.")
+    esquemas_listas = {
+        "DOCUMENTOS_ADICIONAIS_HABILITACAO": (
+            "numero_documento", "categoria", "documento", "aplicabilidade",
+            "justificativa", "fundamento_legal", "fonte_oficial_url",
+        ),
+        "EXIGENCIAS_NAO_RECOMENDADAS": ("exigencia", "motivo", "fonte_oficial_url"),
+        "FONTES_OFICIAIS": ("orgao", "titulo", "url", "relevancia"),
+    }
+    for campo, obrigatorios in esquemas_listas.items():
+        lista = resultado[campo]
+        if not isinstance(lista, list):
+            raise RuntimeError(f"A consulta de habilitação retornou uma lista inválida em {campo}.")
+        for indice, item in enumerate(lista, start=1):
+            if not isinstance(item, dict) or set(item) != set(obrigatorios):
+                raise RuntimeError(f"O registro {indice} de {campo} não corresponde ao esquema obrigatório.")
+            vazios = [chave for chave in obrigatorios if not isinstance(item[chave], str)]
+            if vazios:
+                raise RuntimeError(f"O registro {indice} de {campo} contém campos não textuais: " + ", ".join(vazios) + ".")
+    return {campo: resultado[campo] for campo in (*campos_textuais, *campos_lista)}
 
 
 def _validar_json_contratacao_direta(resultado: dict) -> dict:
@@ -775,6 +924,8 @@ def _process_pipeline(job: dict) -> None:
             resultados[etapa_id] = resultado_final
         elif etapa_tipo == "geracao_contratacao_direta":
             resultados[etapa_id] = _validar_json_contratacao_direta(resultado)
+        elif etapa_tipo == "consulta_habilitacao":
+            resultados[etapa_id] = _validar_json_consulta_habilitacao(resultado)
         elif etapa_id == "PAGAMENTO_ETAPAS":
             resultados[etapa_id] = _validar_json_pagamento_etapas(resultado)
         else:
