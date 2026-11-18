@@ -1,8 +1,12 @@
 import { useEffect, useState } from "react";
 import {
+  aprovarPreviewFila,
   baixarZipFila,
   consultarFilaFasePreparatoria,
+  consultarPreviewFila,
   reenviarFilaFasePreparatoria,
+  salvarCampoPreviewFila,
+  type PreviewDocumentosFila,
 } from "../api";
 
 type Props = {
@@ -26,6 +30,12 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDis
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [preview, setPreview] = useState<PreviewDocumentosFila | null>(null);
+  const [abrindoPreview, setAbrindoPreview] = useState(false);
+  const [salvandoPreview, setSalvandoPreview] = useState(false);
+  const [aprovando, setAprovando] = useState(false);
+  const [edicoes, setEdicoes] = useState<Record<string, Record<string, string>>>({});
+  const [previewAberto, setPreviewAberto] = useState(false);
 
 
 
@@ -44,7 +54,7 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDis
         const status = await consultarFilaFasePreparatoria(jobId, statusToken);
         if (!ativo) return;
         setJob(status as JobStatus);
-        const finalizado = ["sent", "failed", "cancelled"].includes(String(status.status || "").toLowerCase());
+        const finalizado = ["sent", "failed", "cancelled", "awaiting_review"].includes(String(status.status || "").toLowerCase());
         if (finalizado) return;
         intervalo = Math.min(30000, Math.round(intervalo * 1.5));
       } catch (erro: any) {
@@ -70,6 +80,68 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDis
       document.removeEventListener("visibilitychange", visibilidadeAlterada);
     };
   }, [jobId, statusToken]);
+
+  const abrirPreview = async () => {
+    setAbrindoPreview(true);
+    setError("");
+    setNotice("");
+    try {
+      const resultado = await consultarPreviewFila(jobId, statusToken);
+      setPreview(resultado);
+      setEdicoes({});
+      setPreviewAberto(true);
+    } catch (erro: any) {
+      setError(erro?.message || "Não foi possível abrir a pré-visualização.");
+    } finally {
+      setAbrindoPreview(false);
+    }
+  };
+
+  const alterarCampo = (documento: "DFD" | "ETP" | "TR", campo: string, conteudo: string) => {
+    setEdicoes(anterior => ({
+      ...anterior,
+      [documento]: { ...(anterior[documento] || {}), [campo]: conteudo },
+    }));
+  };
+
+  const salvarEdicoes = async () => {
+    if (!preview) return;
+    setSalvandoPreview(true);
+    setError("");
+    setNotice("");
+    try {
+      for (const documento of ["DFD", "ETP", "TR"] as const) {
+        for (const [campo, conteudo] of Object.entries(edicoes[documento] || {})) {
+          await salvarCampoPreviewFila(jobId, statusToken, documento, campo, conteudo);
+        }
+      }
+      const atualizado = await consultarPreviewFila(jobId, statusToken);
+      setPreview(atualizado);
+      setEdicoes({});
+      setNotice("Alterações salvas. Revise o conteúdo antes de aprovar.");
+    } catch (erro: any) {
+      setError(erro?.message || "Não foi possível salvar todas as alterações.");
+    } finally {
+      setSalvandoPreview(false);
+    }
+  };
+
+  const aprovar = async () => {
+    setAprovando(true);
+    setError("");
+    setNotice("");
+    try {
+      await aprovarPreviewFila(jobId, statusToken);
+      setPreviewAberto(false);
+      setPreview(null);
+      setNotice("Conteúdo aprovado. A montagem dos documentos foi retomada.");
+      await atualizar();
+    } catch (erro: any) {
+      setError(erro?.message || "Não foi possível aprovar os documentos.");
+    } finally {
+      setAprovando(false);
+    }
+  };
 
   const baixar = async () => {
     setBusy(true);
@@ -111,6 +183,7 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDis
   const status = String(job?.status || "").toLowerCase();
   const etapa = job?.current_stage || job?.etapa_atual || "";
   const terminal = ["sent", "failed", "cancelled"].includes(status);
+  const aguardandoRevisao = status === "awaiting_review";
 
   return (
     <section className="queue-delivery-panel" aria-live="polite">
@@ -123,6 +196,45 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDis
       <p>Solicitação: <code>{jobId}</code></p>
       {etapa && <p>Etapa atual: {etapa}</p>}
       {job?.message && <p>{job.message}</p>}
+      {aguardandoRevisao && (
+        <div className="queue-review-actions">
+          <p>O conteúdo de DFD, ETP e TR foi gerado. Revise e aprove antes da montagem dos DOCX.</p>
+          <button type="button" className="button button-primary" disabled={abrindoPreview || busy} onClick={abrirPreview}>
+            {abrindoPreview ? "Carregando pré-visualização..." : "Revisar documentos"}
+          </button>
+        </div>
+      )}
+      {previewAberto && preview && (
+        <div className="queue-review-editor">
+          <div className="queue-review-editor-heading">
+            <strong>Pré-visualização e edição dos documentos</strong>
+            <button type="button" className="button button-ghost" onClick={() => setPreviewAberto(false)}>Fechar</button>
+          </div>
+          {(["DFD", "ETP", "TR"] as const).map(documento => (
+            <details className="queue-review-document" key={documento} open>
+              <summary>{documento}</summary>
+              {Object.entries(preview.documentos[documento] || {}).map(([campo, conteudo]) => {
+                const id = `review-${jobId}-${documento}-${campo}`;
+                const valor = edicoes[documento]?.[campo] ?? conteudo;
+                return (
+                  <label className="queue-review-field" htmlFor={id} key={campo}>
+                    <span>{campo.replaceAll("_", " ")}</span>
+                    <textarea id={id} value={valor} rows={Math.min(14, Math.max(3, Math.ceil(valor.length / 100)))} onChange={evento => alterarCampo(documento, campo, evento.target.value)} />
+                  </label>
+                );
+              })}
+            </details>
+          ))}
+          <div className="queue-delivery-actions">
+            <button type="button" className="button button-secondary" disabled={salvandoPreview || aprovando} onClick={salvarEdicoes}>
+              {salvandoPreview ? "Salvando..." : "Salvar alterações"}
+            </button>
+            <button type="button" className="button button-primary" disabled={salvandoPreview || aprovando || Object.values(edicoes).some(campos => Object.values(campos).some(valor => !valor.trim()))} onClick={aprovar}>
+              {aprovando ? "Aprovando..." : "Aprovar e montar DOCX"}
+            </button>
+          </div>
+        </div>
+      )}
       <div className="queue-delivery-actions">
         {job?.download_available && (
           <button type="button" className="button button-primary" disabled={busy} onClick={baixar}>
