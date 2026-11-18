@@ -12,6 +12,22 @@ from fila_pipeline_unificado import (
 
 
 class TestFilaPipeline(unittest.TestCase):
+    def test_metricas_ia_acumulam_tokens_e_duracao(self):
+        from fila_pipeline import _registrar_metricas_ia, obter_metricas_ia
+
+        antes = obter_metricas_ia()
+        _registrar_metricas_ia(
+            {"usage": {"prompt_tokens": 101, "completion_tokens": 23, "total_tokens": 124}},
+            1.25,
+            "modelo-teste",
+        )
+        depois = obter_metricas_ia()
+        self.assertEqual(depois["calls"] - antes["calls"], 1)
+        self.assertEqual(depois["prompt_tokens"] - antes["prompt_tokens"], 101)
+        self.assertEqual(depois["completion_tokens"] - antes["completion_tokens"], 23)
+        self.assertEqual(depois["total_tokens"] - antes["total_tokens"], 124)
+        self.assertGreaterEqual(depois["duration_seconds"] - antes["duration_seconds"], 1.24)
+
     def test_documentos_de_referencia_entram_no_prompt_com_prioridade(self):
         prompt = _adicionar_documentos_de_referencia(
             "PROMPT BASE",
