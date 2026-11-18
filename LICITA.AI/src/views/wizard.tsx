@@ -1,3 +1,18 @@
+let temporizadorRascunho: ReturnType<typeof setTimeout> | null = null;
+
+function salvarRascunhoDebounced(conteudo: string): void {
+  if (temporizadorRascunho) clearTimeout(temporizadorRascunho);
+  temporizadorRascunho = setTimeout(() => {
+    try {
+      localStorage.setItem("licita-ai-rascunho-v1", conteudo);
+    } catch (erro) {
+      if (erro instanceof DOMException && erro.name === "QuotaExceededError") {
+        try { window.dispatchEvent(new CustomEvent("licita-ai-storage-quota")); } catch {}
+      }
+    }
+  }, 500);
+}
+
 import React, { useContext, useEffect, useRef, useState, useCallback } from "react";
 import { useToast } from "../components/toast";
 import Step1 from "./steps/step1";
