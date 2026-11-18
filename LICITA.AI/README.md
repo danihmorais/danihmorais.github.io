@@ -87,6 +87,17 @@ Na etapa de itens, a interface aceita arquivos CSV e XLSX de até 5 MB, com limi
 
 O parser converte as linhas para os campos `numero`, `descricao`, `un`, `qtd` e `valor`. Revise os itens importados e confira unidades, quantidades e valores antes de enviar a solicitação.
 
+## Revisão dos documentos antes da montagem DOCX
+
+A interface solicita a revisão do conteúdo estruturado antes de montar os DOCX. O job fica no estado `awaiting_review` e mantém os resultados de IA e os dados do processo no diretório persistente da fila.
+
+- O endpoint `GET /api/fila/{job_id}/preview` entrega DFD, ETP e TR mediante `X-Status-Token`.
+- O endpoint `PUT /api/fila/{job_id}/preview` salva alterações de campos já existentes e rejeita campos desconhecidos ou conteúdo vazio.
+- O endpoint `POST /api/fila/{job_id}/preview/regenerar` regenera somente DFD, ETP ou TR selecionado, usando schema JSON estrito e contexto dos documentos anteriores.
+- O endpoint `POST /api/fila/{job_id}/approve` reencaminha o mesmo job para a montagem DOCX. Os resultados das etapas são reutilizados e as chamadas anteriores de IA não são repetidas.
+
+Uma edição ou regeneração do DFD marca ETP e TR como dependentes; uma edição ou regeneração do ETP marca TR como dependente. O botão de aprovação fica bloqueado até que esses documentos sejam regenerados. A revisão humana continua obrigatória, inclusive para fundamentos legais e adequação do processo.
+
 ## Desenvolvimento e testes
 
 Na pasta `LICITA.AI`:
