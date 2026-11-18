@@ -87,7 +87,7 @@ export default function Step4({
     }
   }, []);
 
-  const salvarGestoresNoBackend = (novosGestores: any[]) => {
+  const salvarGestoresLocal = (novosGestores: any[]) => {
     try {
       const dados_usuario = lerDadosUsuario() || {};
       dados_usuario.gestores_salvos = novosGestores;
@@ -97,7 +97,7 @@ export default function Step4({
     }
   };
 
-  const salvarFiscaisNoBackend = (novosFiscais: any[]) => {
+  const salvarFiscaisLocal = (novosFiscais: any[]) => {
     try {
       const dados_usuario = lerDadosUsuario() || {};
       dados_usuario.fiscais_salvos = novosFiscais;
@@ -139,7 +139,7 @@ export default function Step4({
     }
     const novosSalvos = [...gestoresSalvos, gestor];
     setGestoresSalvos(novosSalvos);
-    salvarGestoresNoBackend(novosSalvos);
+    salvarGestoresLocal(novosSalvos);
     showToast("Gestor salvo com sucesso!", "success");
   };
 
@@ -151,7 +151,7 @@ export default function Step4({
     }
     const novosSalvos = [...fiscaisSalvos, fiscal];
     setFiscaisSalvos(novosSalvos);
-    salvarFiscaisNoBackend(novosSalvos);
+    salvarFiscaisLocal(novosSalvos);
     showToast("Fiscal salvo com sucesso!", "success");
   };
 
@@ -168,13 +168,13 @@ export default function Step4({
   const handleApagarGestorSalvo = (index: number) => {
     const novosSalvos = gestoresSalvos.filter((_, i) => i !== index);
     setGestoresSalvos(novosSalvos);
-    salvarGestoresNoBackend(novosSalvos);
+    salvarGestoresLocal(novosSalvos);
   };
 
   const handleApagarFiscalSalvo = (index: number) => {
     const novosSalvos = fiscaisSalvos.filter((_, i) => i !== index);
     setFiscaisSalvos(novosSalvos);
-    salvarFiscaisNoBackend(novosSalvos);
+    salvarFiscaisLocal(novosSalvos);
   };
 
   return (
