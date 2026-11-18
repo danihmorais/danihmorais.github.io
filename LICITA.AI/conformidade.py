@@ -187,7 +187,7 @@ def formatar_relatorio_conformidade(relatorio: dict) -> str:
 
 
 ARTIGOS_LEI_14133 = set(range(1, 195))
-CITACAO_ARTIGO_RE = re.compile(r"(?i)\\b(?:art\\.?|artigo)\\s*(\\d{1,3})\\b")
+CITACAO_ARTIGO_RE = re.compile(r"(?i)\b(?:art\.?|artigo)\s*(\d{1,3})\b")
 
 
 def formatar_relatorio_referencias(resultado: dict) -> str:
@@ -260,4 +260,4 @@ def formatar_relatorio_referencias(resultado: dict) -> str:
         "A identificação de artigo dentro do catálogo não significa que sua interpretação ou aplicabilidade tenha sido validada.",
         "Não substitui a revisão jurídica, técnica ou administrativa nem confirma autenticidade ou pertinência das fontes.",
     ])
-    return "\\n".join(linhas)
+    return "\n".join(linhas)
