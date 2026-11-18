@@ -212,7 +212,7 @@ export default function Wizard() {
     setInstrucoesEnvio(valor);
   };
 
-  const atualizarDados = useCallback((novosDados: Partial<any> | ((atual: any) => {
+  const atualizarDados = useCallback((novosDados: Partial<any> | ((atual: any) => Partial<any>)) => {
     setSalvamentoConcluido(false);
     setDados((prev: any) => ({ ...prev, ...(typeof novosDados === "function" ? novosDados(prev) : novosDados) }));
   }, []);

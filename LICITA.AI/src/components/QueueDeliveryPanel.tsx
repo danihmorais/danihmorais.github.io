@@ -237,6 +237,20 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDis
             <strong>Pré-visualização e edição dos documentos</strong>
             <button type="button" className="button button-ghost" onClick={() => setPreviewAberto(false)}>Fechar</button>
           </div>
+          {preview.conformidade && (
+            <details className="queue-conformity-report" open>
+              <summary>Checklist automatizado de revisão — {preview.conformidade.summary.ok} OK · {preview.conformidade.summary.pendencias} pendência(s) · {preview.conformidade.summary.revisao} para revisão</summary>
+              <ul className="queue-conformity-checks">
+                {preview.conformidade.verificacoes.map(item => (
+                  <li className={`queue-conformity-check status-${item.status}`} key={item.id}>
+                    <strong>{item.status === "ok" ? "OK" : item.status === "alerta" ? "Pendência" : "Revisão humana"} — {item.titulo}</strong>
+                    <span>{item.detalhe}</span>
+                  </li>
+                ))}
+              </ul>
+              {preview.conformidade.limites.map((limite, index) => <p className="queue-conformity-limit" key={index}>{limite}</p>)}
+            </details>
+          )}
           {(["DFD", "ETP", "TR"] as const).map(documento => (
             <details className="queue-review-document" key={documento} open>
               <summary>{documento}{preview.stale_documents?.includes(documento) ? " — precisa regenerar" : ""}</summary>

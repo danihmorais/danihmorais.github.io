@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import unicodedata
+import asyncio
+import logging
 import io
 import csv
 
@@ -15,24 +17,36 @@ import secrets
 import threading
 import time
 import uuid
+from pathlib import Path
 from collections import deque
 from datetime import datetime, timezone
 from email.message import EmailMessage
 
 import httpx
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, Response
+from starlette.datastructures import UploadFile as StarletteUploadFile
 from pydantic import BaseModel, Field
 from typing import Literal
-from starlette.datastructures import UploadFile
 
 from documentos_contexto import MAX_CONTEXT_CHARS, extrair_contexto_documentos
-from fila import EMAIL_RE, MAX_ATTEMPTS, QUEUE_DIR, SMTP_FROM, SMTP_PASSWORD, SMTP_USERNAME, _artifact_path, _job_path, _smtp_client, cancel_job, enqueue_job, get_job
+from fila import EMAIL_RE, MAX_ATTEMPTS, QUEUE_DIR, SMTP_FROM, SMTP_PASSWORD, SMTP_USERNAME, _artifact_path, _job_path, _smtp_client, cancel_job, enqueue_job, get_job, listar_jobs_sqlite
 from fila_pipeline import _dados_para_prompt, limite_prompt_chars
 from fila_pipeline_unificado import iniciar_worker
 from pipeline_prompts import montar_pipeline
+from conformidade import avaliar_conformidade
 
 app = FastAPI(title="Licita.AI API")
+logger = logging.getLogger(__name__)
+
+
+def _write_json(path: Path, dados: dict) -> None:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporario = path.with_name(path.name + f".{uuid.uuid4().hex}.tmp")
+    with temporario.open("w", encoding="utf-8") as arquivo:
+        json.dump(dados, arquivo, ensure_ascii=False, indent=2)
+    os.replace(temporario, path)
 
 
 class FasePreparatoriaRequest(BaseModel):
@@ -623,7 +637,7 @@ async def _ler_payload_fase_preparatoria(request: Request) -> tuple[FasePreparat
         upload = form.get(campo)
         if upload is None:
             continue
-        if not isinstance(upload, UploadFile):
+        if not isinstance(upload, StarletteUploadFile):
             raise HTTPException(status_code=400, detail=f"O campo de arquivo '{campo}' é inválido.")
         nome = str(upload.filename or "").strip()
         if not nome:
@@ -741,7 +755,7 @@ async def confirmar_verificacao_email(req: EmailVerificationConfirmRequest):
 IMPORT_PLANILHA_MAX_BYTES = 5 * 1024 * 1024
 _IMPORTAR_CABECALHOS = {
     "numero": {"numero", "n", "no", "item", "seq", "sequencia"},
-    "descricao": {"descricao", "descritivo", "especificacao", "objeto", "material", "produto"},
+    "descricao": {"descricao", "descritivo", "especificacao", "objeto", "material", "produto", "descricaoitem", "descricaodoitem", "descricaoobjeto", "especificacaoitem"},
     "un": {"un", "und", "unidade", "unid"},
     "qtd": {"qtd", "qtde", "quantidade"},
     "valor": {"valor", "preco", "valorunitario", "precounitario", "valorunitarioestimado", "precoestimado"},
@@ -790,16 +804,19 @@ def _ler_itens_csv(conteudo: bytes) -> list[dict]:
         texto = conteudo.decode("utf-8-sig")
     except UnicodeDecodeError:
         texto = conteudo.decode("cp1252")
-    amostra = texto[:4096]
-    try:
-        dialecto = csv.Sniffer().sniff(amostra, delimiters=";,\t")
-        leitor = csv.reader(io.StringIO(texto), dialect=dialecto)
-    except csv.Error:
-        leitor = csv.reader(io.StringIO(texto), delimiter=";")
+    primeira_linha = texto.splitlines()[0] if texto.splitlines() else ""
+    delimitadores = (";", ",", "\\t")
+    delimitador = max(delimitadores, key=lambda candidato: primeira_linha.count(candidato))
+    if primeira_linha.count(delimitador) == 0:
+        raise ValueError("Não foi possível identificar o separador da planilha.")
+    leitor = csv.reader(io.StringIO(texto), delimiter=delimitador)
     linhas = list(leitor)
     if not linhas:
         raise ValueError("A planilha está vazia.")
     cabecalhos = linhas[0]
+    aliases_descricao = _IMPORTAR_CABECALHOS["descricao"]
+    if not any(_normalizar_cabecalho_planilha(cabecalho) in aliases_descricao for cabecalho in cabecalhos):
+        raise ValueError("A planilha deve conter uma coluna de descrição, descritivo, especificação ou objeto.")
     itens = [
         item for indice, linha in enumerate(linhas[1:], start=1)
         if (item := _normalizar_linha_planilha(cabecalhos, linha, indice)) is not None
@@ -1305,10 +1322,7 @@ async def reenviar_fila_usuario(job_id: str, request: Request):
         raise HTTPException(status_code=409, detail="Não há documentos concluídos suficientes para refazer somente o envio. Faça uma nova solicitação.")
     try:
         novo = enqueue_job(
-            email=str(job.get("email",
-            request_id=request.state.request_id,
-            require_review=request.headers.get("X-Licita-Review") == "1",
-        ) or ""),
+            email=str(job.get("email") or ""),
             dados_usuario=job.get("dados_usuario") if isinstance(job.get("dados_usuario"), dict) else {},
             dados_ia=dados_ia_final,
             instrucoes=str(job.get("instrucoes") or ""),
@@ -1350,14 +1364,18 @@ async def visualizar_documentos_fila(job_id: str, request: Request):
     documentos = job.get("dados_ia_final")
     if not isinstance(documentos, dict):
         raise HTTPException(status_code=409, detail="O conteúdo estruturado não está disponível para revisão.")
+    documentos_preview = {
+        nome: documentos.get(nome, {})
+        for nome in ("DFD", "ETP", "TR")
+        if isinstance(documentos.get(nome), dict)
+    }
+    dados_usuario = job.get("pipeline_dados_usuario") or job.get("dados_usuario_processados") or job.get("dados_usuario") or {}
+    relatorio_conformidade = avaliar_conformidade(documentos_preview, dados_usuario)
     return {
         "job_id": job_id,
         "status": "awaiting_review",
-        "documentos": {
-            nome: documentos.get(nome, {})
-            for nome in ("DFD", "ETP", "TR")
-            if isinstance(documentos.get(nome), dict)
-        },
+        "documentos": documentos_preview,
+        "conformidade": relatorio_conformidade,
         "updated_at": job.get("updated_at"),
         "stale_documents": job.get("review_stale_documents", []),
         "message": "Revise o conteúdo gerado. As alterações serão usadas antes da montagem dos documentos DOCX.",
@@ -1375,7 +1393,7 @@ async def regenerar_documento_fila(job_id: str, request: Request, req: PreviewRe
     if str(job.get("status", "")).lower() != "awaiting_review":
         raise HTTPException(status_code=409, detail="O documento não está aguardando revisão.")
     documentos = job.get("dados_ia_final")
-    dados_usuario = job.get("dados_usuario_processados") or job.get("dados_usuario")
+    dados_usuario = job.get("dados_usuario_processados") or job.get("pipeline_dados_usuario") or job.get("dados_usuario") or {}
     if not isinstance(documentos, dict) or not isinstance(dados_usuario, dict):
         raise HTTPException(status_code=409, detail="Os dados necessários para regenerar o documento não estão disponíveis.")
     try:
@@ -1403,7 +1421,9 @@ async def regenerar_documento_fila(job_id: str, request: Request, req: PreviewRe
             "enable_thinking": True,
         }
         assinatura = inspect.signature(provedor_ia._chamar_ia)
-        opcoes = {chave: valor for chave, valor in opcoes.items() if chave in assinatura.parameters}
+        aceita_kwargs = any(parametro.kind == inspect.Parameter.VAR_KEYWORD for parametro in assinatura.parameters.values())
+        if not aceita_kwargs:
+            opcoes = {chave: valor for chave, valor in opcoes.items() if chave in assinatura.parameters}
         resultado = await asyncio.to_thread(provedor_ia._chamar_ia, prompt, modelo, **opcoes)
         if isinstance(resultado, tuple):
             resultado = resultado[0]
@@ -1612,14 +1632,8 @@ _queue_position_arquivos = _queue_position
 
 
 def _queue_position(job_id: str) -> tuple[int, int]:
-    try:
-        jobs = listar_jobs_sqlite("queued", limite=5000)
-        total = len(jobs)
-        for posicao, job in enumerate(jobs, start=1):
-            if str(job.get("job_id") or "") == str(job_id):
-                return posicao, total
-        return 0, total
-    except Exception:
-        logger.exception("Falha ao consultar posição pelo índice SQLite.", extra={"job_id": job_id})
-        return _queue_position_arquivos(job_id)
+    posicao, a_frente = _queue_position_arquivos(job_id)
+    if posicao is None or a_frente is None:
+        return 0, 0
+    return posicao, a_frente
 

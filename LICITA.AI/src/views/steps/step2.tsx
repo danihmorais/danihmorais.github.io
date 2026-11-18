@@ -39,7 +39,8 @@ export default function Step2({ dados, atualizarDados }: any) {
         <textarea 
           required
           value={dados.execucao}
-          onChange={(e) = aria-label="Campo de descrição da etapa 2"> atualizarDados({ execucao: e.target.value })}
+          aria-label="Campo de descrição da etapa 2"
+          onChange={(e) => atualizarDados({ execucao: e.target.value })}
           placeholder="Descreva aqui as regras de entrega, prazos, locais, garantias e demais condições..."
           style={{ padding: "16px", borderRadius: "var(--radius-lg)", borderColor: dados.execucao.trim() === "" ? "var(--btn-danger)" : "var(--input-border)", minHeight: "220px", resize: "vertical" }}
         />
