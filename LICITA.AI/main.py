@@ -6,6 +6,8 @@ import logging
 import io
 import csv
 
+import config
+
 import base64
 import hashlib
 import hmac
@@ -357,6 +359,21 @@ async def _gerar_ia(req: IAChatRequest) -> dict:
     if not content:
         raise HTTPException(status_code=502, detail="O Unsloth local retornou uma resposta vazia.")
     return {"content": content, "model": model, "provider": "unsloth"}
+
+
+@app.get("/api/configuracao")
+def configuracao_publica():
+    return {
+        "municipio": {
+            "id": config.MUNICIPIO_ID,
+            "nome": config.MUNICIPIO_NOME,
+            "uf": config.MUNICIPIO_UF,
+            "display": config.MUNICIPIO_DISPLAY,
+            "decreto": config.DECRETO_MUNICIPAL,
+            "campos": config.CAMPOS_MUNICIPAIS,
+        },
+        "limite_exclusividade_me_epp_centavos": config.LIMITE_EXCLUSIVIDADE_ME_EPP_CENTAVOS,
+    }
 
 
 @app.get("/api/ia/status")
@@ -805,7 +822,7 @@ def _ler_itens_csv(conteudo: bytes) -> list[dict]:
     except UnicodeDecodeError:
         texto = conteudo.decode("cp1252")
     primeira_linha = texto.splitlines()[0] if texto.splitlines() else ""
-    delimitadores = (";", ",", "\\t")
+    delimitadores = (";", ",", "\t")
     delimitador = max(delimitadores, key=lambda candidato: primeira_linha.count(candidato))
     if primeira_linha.count(delimitador) == 0:
         raise ValueError("Não foi possível identificar o separador da planilha.")

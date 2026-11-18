@@ -45,9 +45,16 @@ const REGRAS_MINIMAS_TEXTO: Record<string, string> = {
     "PARCELAMENTO": "Entre 1 e 3 parágrafos. Você deve analisar a possibilidade de parcelamento da contratação, considerando aspectos como economicidade, eficiência, vantajosidade, planejamento, e jurisprudência do TCU sobre o tema. Considere a opção escolhida e detalhe a forma de parcelamento (parcelamento por item, por lote, ou outro critério), justificando tecnicamente a escolha do critério de parcelamento escolhido. Reforce os aspectos de economicidade, eficiência, vantajosidade e planejamento envolvidos, independente da opção escolhida.",
     "EXECUCAO": "Entre 4 e 6 parágrafos. Você deve aprimorar o texto base fornecido, detalhando condições de execução, prazos, cronogramas, etapas, e demais aspectos operacionais relevantes para a execução contratual. Não permita prazos de entrega inexequíveis ou condições de execução genéricas. O texto deve ser completo, detalhado e operacional, garantindo clareza e exequibilidade.",
     "PRAZO_EXEC": "Texto completo contendo prazo por extenso e em algarismos.",
-    "LOCAL": "Entre 1 e 2 parágrafos completos. Sempre será em algum endereço do Município de São Francisco/SP, mas detalhe o local de entrega ou execução, considerando aspectos logísticos e operacionais relevantes para a contratação. Horário quase sempre das 08h às 11h ou das 13h às 17h, salvo se outro tiver sido informado nas condições de execução.",
-    "AMOSTRA_TR": "Entre 4 e 5 parágrafos, detalhando a parte prática da exigência de amostra, como a forma de apresentação, as características técnicas a serem observadas, o processo de avaliação da amostra, e demais aspectos operacionais relacionados à exigência de amostra. Caso se trate de prestação de serviços, o texto pode ser mais resumido, mas ainda assim deve detalhar a parte prática da exigência de amostra, como a forma de apresentação, o processo de avaliação da amostra, e demais aspectos operacionais relacionados à exigência de amostra. Deve se basear mais ou menos nisso: Deverão ser entregues amostras de todos os itens pelos licitantes provisoriamente vencedores no prazo máximo de 07 (sete) dias úteis, contadas da data de convocação via e-mail, que serão testadas e avaliadas pela comissão de avaliação formalmente designada pela Administração. As amostras postadas por correio ou transportadora não serão aceitas fora do prazo, e, desta maneira, a empresa que necessitar do envio por esses meios, deve ter o cuidado de enviar em tempo hábil, vez que o prazo máximo de entrega é extremamente razoável. Os itens deverão ser entregues em sua embalagem ORIGINAL da marca que for cotada pelo licitante. As amostras deverão ser entregues, junto ao Setor de Licitação na Prefeitura Municipal, no endereço Av. Oscar Antônio da Costa, 1187, CEP 15710-011, São Francisco/SP, qual seja das 8h às 11h e 13h às 17h. A empresa participante que não realizar a entrega das amostras dentro do prazo concedido será desclassificada dos itens que necessitam de apresentação de amostra. Serão exigidos como critério de avaliação aquilo que consta do descritivo de cada item, e avaliados por comissão de avaliação, qual seja: {{FISCAL}}, {{FISCAL_CARGO}}; {{GESTOR}}, {{GESTOR_CARGO}}.",
+    "LOCAL": "Entre 1 e 2 parágrafos completos. Sempre será em algum endereço do Município {{MUNICIPIO_UF}}, mas detalhe o local de entrega ou execução, considerando aspectos logísticos e operacionais relevantes para a contratação. Horário quase sempre das 08h às 11h ou das 13h às 17h, salvo se outro tiver sido informado nas condições de execução.",
+    "AMOSTRA_TR": "Entre 4 e 5 parágrafos, detalhando a parte prática da exigência de amostra, como a forma de apresentação, as características técnicas a serem observadas, o processo de avaliação da amostra, e demais aspectos operacionais relacionados à exigência de amostra. Caso se trate de prestação de serviços, o texto pode ser mais resumido, mas ainda assim deve detalhar a parte prática da exigência de amostra, como a forma de apresentação, o processo de avaliação da amostra, e demais aspectos operacionais relacionados à exigência de amostra. Deve se basear mais ou menos nisso: Deverão ser entregues amostras de todos os itens pelos licitantes provisoriamente vencedores no prazo máximo de 07 (sete) dias úteis, contadas da data de convocação via e-mail, que serão testadas e avaliadas pela comissão de avaliação formalmente designada pela Administração. As amostras postadas por correio ou transportadora não serão aceitas fora do prazo, e, desta maneira, a empresa que necessitar do envio por esses meios, deve ter o cuidado de enviar em tempo hábil, vez que o prazo máximo de entrega é extremamente razoável. Os itens deverão ser entregues em sua embalagem ORIGINAL da marca que for cotada pelo licitante. As amostras deverão ser entregues, junto ao Setor de Licitação na {{PREFEITURA}}, no endereço {{ENDERECO_PREFEITURA}}, qual seja das 8h às 11h e 13h às 17h. A empresa participante que não realizar a entrega das amostras dentro do prazo concedido será desclassificada dos itens que necessitam de apresentação de amostra. Serão exigidos como critério de avaliação aquilo que consta do descritivo de cada item, e avaliados por comissão de avaliação, qual seja: {{FISCAL}}, {{FISCAL_CARGO}}; {{GESTOR}}, {{GESTOR_CARGO}}.",
 };
+
+function substituirTagsMunicipais(texto: string, dadosUsuario: Record<string, string>): string {
+    return [
+        "{{MUNICIPIO}}", "{{MUNICIPIO_UF}}", "{{PREFEITURA}}", "{{ENDERECO_PREFEITURA}}",
+        "{{TELEFONE}}", "{{EMAIL_LICITACAO}}", "{{DECRETO}}", "{{LIMITE_ME_EPP}}",
+    ].reduce((resultado, marcador) => resultado.replaceAll(marcador, dadosUsuario[marcador] || ""), texto);
+}
 
 function montarRegrasMinimas(chavesEtapa: string[], dadosUsuario: Record<string, string>, camposExcluidos: string[] = []): string {
     const valorOriginal = dadosUsuario["{{VALOR_ESTIMADO}}"];
@@ -58,6 +65,7 @@ function montarRegrasMinimas(chavesEtapa: string[], dadosUsuario: Record<string,
         .map(chave => {
             let regra = REGRAS_MINIMAS_TEXTO[chave];
             regra = regra.replace("{{VALOR_ESTIMADO}}", valorEstimado);
+            regra = substituirTagsMunicipais(regra, dadosUsuario);
             return `- ${chave}: ${regra}`;
         })
         .join("\n");
@@ -84,7 +92,7 @@ export function construirPrompt(dadosUsuario: Record<string, string>, meeppExclu
     const camposExcluidos: string[] = [];
     if (amostraFormatada === "Não") camposExcluidos.push("AMOSTRA_ETP", "AMOSTRA_TR");
     if (vistoriaFormatada === "Não") camposExcluidos.push("VISTORIA_ETP");
-    const regrasGerais = `Você é um especialista sênior em licitações e contratos administrativos para a Prefeitura de São Francisco - SP.
+    const regrasGerais = substituirTagsMunicipais(`Você é um especialista sênior em licitações e contratos administrativos para {{PREFEITURA}} ({{MUNICIPIO_UF}}).
 Atue conforme a Lei Federal nº 14.133/2021, jurisprudência consolidada do TCU, jurisprudência do TCE-SP, doutrina majoritária e boas práticas de governança pública.
 Os textos devem possuir linguagem técnica, formal, impessoal, jurídica e administrativa.
 Não gere textos genéricos, superficiais ou resumidos.
@@ -94,7 +102,7 @@ Observe especialmente: Lei 14.133/2021; Manual de Licitações e Contratos do TC
 Evite exigências restritivas ou cláusulas potencialmente limitadoras da competitividade.
 Os textos devem ser completos, extensos e aprofundados.
 Nunca invente número de acórdão, súmula, processo, artigo de lei ou parecer. Cite jurisprudência numerada apenas quando o número e o ano constarem nos dados/documentos de referência ou forem conhecidos com segurança; nos demais casos, descreva o entendimento sem numeração.
-Cada parágrafo de fundamentação deve relacionar fato concreto da contratação, fundamento legal aplicável e consequência prática ou risco. Não copie marcadores como XXXXX ou [inserir] para o documento final.`;
+Cada parágrafo de fundamentação deve relacionar fato concreto da contratação, fundamento legal aplicável e consequência prática ou risco. Não copie marcadores como XXXXX ou [inserir] para o documento final.`, dadosUsuario);
     let basePrompt = `OBJETO BASE DA CONTRATAÇÃO: ${objeto}
 NECESSIDADE ADMINISTRATIVA: ${necessidade}
 CONDIÇÕES DE EXECUÇÃO INFORMADAS: ${execucaoRaw}
@@ -121,7 +129,7 @@ O OBJETO deve:
 1 - Se o instrumento for ARP, iniciar obrigatoriamente com 'Registro de preços para futura e eventual aquisição'.
 2 - Para aquisições comuns sem ARP, iniciar com 'Aquisição'.
 3 - Para serviços, iniciar com 'Contratação de empresa especializada'.
-4 - Informar obrigatoriamente o Município de São Francisco/SP.
+4 - Informar obrigatoriamente o Município {{MUNICIPIO_UF}}.
 5 - Informar vigência e secretaria/setor destinatário (ou 'diversos setores da Administração Municipal').
 6 - Caso haja convênio, recurso vinculado ou programa governamental, mencionar expressamente.
 A JUSTIFICATIVA deve conter motivação administrativa detalhada, demonstração do interesse público, necessidade institucional, impactos da não contratação, alinhamento ao planejamento e continuidade administrativa.`;
@@ -213,5 +221,6 @@ ${instrucoesCondicionaisTr}`;
     const lembreteFinal = usarMarcadorDados
         ? `\n\nLEMBRETE OBRIGATÓRIO: aplique integralmente as INSTRUÇÕES DO USUÁRIO acima, preserve os dados concretos e não invente fatos.`
         : "";
+    diretrizEtapa = substituirTagsMunicipais(diretrizEtapa, dadosUsuario);
     return `${regrasGerais}\n\n${basePrompt}${dadosMarcados}${instrucoesObrigatorias}\n\n${diretrizEtapa}\n\nREGRAS MÍNIMAS OBRIGATÓRIAS DE TAMANHO E PROFUNDIDADE:\n${regrasMinimas}${lembreteFinal}\n\nESTRUTURA JSON OBRIGATÓRIA:\n${chaves}\n\n${restricoesJSON}`;
 }

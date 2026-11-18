@@ -6,8 +6,13 @@ import * as ts from "typescript";
 
 const TESTS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const LICITA_DIR = path.resolve(TESTS_DIR, "../..");
+let configMunicipalCache = null;
 
 function testRequire(request) {
+  if (request === "./utils/configMunicipal" || request === "./configMunicipal") {
+    if (!configMunicipalCache) configMunicipalCache = loadTsModule("src/utils/configMunicipal.ts");
+    return configMunicipalCache;
+  }
   if (request === "./providers/llm") {
     return {};
   }
@@ -53,6 +58,7 @@ export function loadTsModule(relativePath, { globals = {}, replacements = [] } =
   const module = { exports: {} };
   const sandbox = { module, exports: module.exports, console, require: testRequire, ...globals };
   vm.runInNewContext(transpiled, sandbox, { filename });
+  if (relativePath === "src/utils/configMunicipal.ts") configMunicipalCache = module.exports;
   return module.exports;
 }
 

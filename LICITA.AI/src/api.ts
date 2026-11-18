@@ -1,7 +1,20 @@
 import { mapearDadosWizard } from "./utils/mapearDados";
 import { getApiBaseUrl } from "./utils/apiBase";
+import { definirConfigMunicipal, type ConfigMunicipalPublica } from "./utils/configMunicipal";
 
 const BASE_URL = getApiBaseUrl();
+
+export async function carregarConfiguracaoMunicipal(): Promise<ConfigMunicipalPublica | null> {
+  try {
+    const response = await fetch(`${BASE_URL}/licita/api/configuracao`);
+    if (!response.ok) return null;
+    const configuracao = await response.json() as ConfigMunicipalPublica;
+    definirConfigMunicipal(configuracao);
+    return configuracao;
+  } catch {
+    return null;
+  }
+}
 
 export interface FasePreparatoriaJob {
   job_id: string;
