@@ -240,9 +240,12 @@ class TestAutomaticModelResolution(unittest.TestCase):
         self.assertNotIsInstance(contexto.exception, pipeline.ErroPermanente)
 
     def test_schema_estrito_nao_dispara_reparo_json_automatico(self):
-        from unittest.mock import patch
+        from unittest.mock import MagicMock, patch
         import fila_pipeline as pipeline
-        resposta = {
+
+        resposta = MagicMock()
+        resposta.status_code = 200
+        resposta.json.return_value = {
             "choices": [{"message": {"content": "{json incompleto"}}],
             "model": "modelo-teste",
         }
