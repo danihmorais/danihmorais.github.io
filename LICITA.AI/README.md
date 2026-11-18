@@ -13,7 +13,7 @@ Aplicação web para preparação de documentos de contratação pública, com i
 - `processador_docx.py`: preenchimento dos modelos DOCX.
 - `tests/backend` e `tests/unit`: testes de backend e front-end.
 
-A fila atual utiliza arquivos JSON e um worker por processo. O heartbeat atualiza o arquivo `.processing`; jobs abandonados são recuperados após o limite configurado. A fila ainda não usa SQLite e não deve ser compartilhada entre vários servidores sem armazenamento e coordenação comuns.
+A fila mantém os arquivos JSON como espelho de recuperação e usa um índice SQLite em modo WAL para consultas por `job_id`, status e posição. O banco `queue.sqlite3` é criado automaticamente no diretório configurado em `LICITA_QUEUE_DIR`; os índices são reconstruídos a partir dos arquivos existentes quando necessário. O heartbeat atualiza o arquivo `.processing`; jobs abandonados são recuperados após o limite configurado. O worker continua usando os arquivos para claim e recuperação durante esta etapa de migração. Não compartilhe o diretório da fila entre servidores sem armazenamento e coordenação comuns.
 
 ## Configuração
 
@@ -65,7 +65,7 @@ Não confie em `X-Forwarded-For` de clientes que não pertençam a `LICITA_TRUST
 | `LICITA_QUEUE_STALE_PROCESSING_SECONDS` | Tempo sem heartbeat para considerar um job órfão. Padrão: 300 segundos. |
 | `LICITA_QUEUE_SHUTDOWN_TIMEOUT_SECONDS` | Tempo máximo de espera para encerramento gracioso do worker. Padrão: 1250 segundos. |
 
-Os arquivos da fila e os ZIPs precisam estar em volume persistente, com permissões de leitura e escrita para o usuário do serviço. O procedimento de backup deve incluir o diretório inteiro da fila.
+Os arquivos da fila e os ZIPs precisam estar em volume persistente, com permissões de leitura e escrita para o usuário do serviço. O procedimento de backup deve incluir o diretório inteiro da fila, inclusive `queue.sqlite3`, `queue.sqlite3-wal`, `queue.sqlite3-shm` e os arquivos JSON. Antes de copiar o banco, prefira o mecanismo de backup do SQLite ou interrompa o serviço para garantir consistência.
 
 ## Fluxo de geração
 
