@@ -506,6 +506,9 @@ class LicitaBackendTests(unittest.TestCase):
                 "Pronto_DFD - BASE.docx",
                 "Pronto_ETP - BASE.docx",
                 "Pronto_TR - BASE.docx",
+                "RELATORIO_CONFORMIDADE.json",
+                "RELATORIO_CONFORMIDADE.txt",
+                "RELATORIO_REFERENCIAS_LEGAIS.txt",
             }
             self.assertEqual(names, expected)
         finally:
