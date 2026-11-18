@@ -22,10 +22,7 @@ export function calcularTotalEmCentavos(itens: Array<{ valor?: unknown; valor_un
 export const LIMITE_EXCLUSIVIDADE_MEEPP = 80000;
 
 export const calcularValorEstimadoItens = (itens: any[] = []) => {
-  return itens.reduce(
-    (total: number, item: any) => total + (Number(item?.qtd) || 0) * (Number(item?.valor) || 0),
-    0
-  );
+  return calcularTotalEmCentavos(itens) / 100;
 };
 
 export const exclusividadeMeeppPermitida = (itens: any[] = []) => {
