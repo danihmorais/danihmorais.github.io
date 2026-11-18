@@ -141,7 +141,7 @@ export const gerarFasePreparatoria = async (dados: any, arquivos?: DocumentosRef
 
   let requestInit: RequestInit = {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Email-Verification": emailVerificationToken },
+    headers: { "Content-Type": "application/json", "X-Email-Verification": emailVerificationToken, "X-Licita-Review": "1" },
     body: JSON.stringify(payload),
   };
 
@@ -153,7 +153,7 @@ export const gerarFasePreparatoria = async (dados: any, arquivos?: DocumentosRef
     }
     requestInit = {
       method: "POST",
-      headers: { "X-Email-Verification": emailVerificationToken },
+      headers: { "X-Email-Verification": emailVerificationToken, "X-Licita-Review": "1" },
       body: formData,
     };
   }
@@ -187,6 +187,69 @@ export async function importarItensPlanilha(arquivo: File): Promise<{ items: Ite
   try { payload = await response.json(); } catch {}
   if (!response.ok) throw new Error(payload?.detail || "Não foi possível importar a planilha.");
   return payload;
+}
+
+export type PreviewDocumentosFila = {
+  job_id: string;
+  status: "awaiting_review";
+  documentos: Record<"DFD" | "ETP" | "TR", Record<string, string>>;
+  updated_at?: string;
+  stale_documents?: string[];
+  message: string;
+};
+
+export async function consultarPreviewFila(jobId: string, statusToken: string): Promise<PreviewDocumentosFila> {
+  const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}/preview`, {
+    headers: { "X-Status-Token": statusToken },
+  });
+  let payload: any = {};
+  try { payload = await response.json(); } catch {}
+  if (!response.ok) throw new Error(payload?.detail || "Não foi possível carregar a pré-visualização.");
+  return payload;
+}
+
+export async function salvarCampoPreviewFila(
+  jobId: string,
+  statusToken: string,
+  documento: "DFD" | "ETP" | "TR",
+  campo: string,
+  conteudo: string,
+): Promise<void> {
+  const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}/preview`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", "X-Status-Token": statusToken },
+    body: JSON.stringify({ documento, campo, conteudo }),
+  });
+  let payload: any = {};
+  try { payload = await response.json(); } catch {}
+  if (!response.ok) throw new Error(payload?.detail || "Não foi possível salvar a alteração.");
+}
+
+export async function regenerarDocumentoPreviewFila(
+  jobId: string,
+  statusToken: string,
+  documento: "DFD" | "ETP" | "TR",
+  instrucoes = "",
+): Promise<{ saved: boolean; documento: string; stale_documents: string[]; message: string }> {
+  const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}/preview/regenerar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Status-Token": statusToken },
+    body: JSON.stringify({ documento, instrucoes }),
+  });
+  let payload: any = {};
+  try { payload = await response.json(); } catch {}
+  if (!response.ok) throw new Error(payload?.detail || "Não foi possível regenerar o documento.");
+  return payload;
+}
+
+export async function aprovarPreviewFila(jobId: string, statusToken: string): Promise<void> {
+  const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}/approve`, {
+    method: "POST",
+    headers: { "X-Status-Token": statusToken },
+  });
+  let payload: any = {};
+  try { payload = await response.json(); } catch {}
+  if (!response.ok) throw new Error(payload?.detail || "Não foi possível aprovar os documentos.");
 }
 
 export type AcompanhamentoJobSalvo = { job_id: string; status_token: string; saved_at: number };
