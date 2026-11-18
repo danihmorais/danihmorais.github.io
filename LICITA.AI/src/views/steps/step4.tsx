@@ -3,6 +3,8 @@ import { useToast } from "../../components/toast";
 import { lerDadosUsuario, salvarDadosUsuario } from "../../utils/storageLocal";
 
 export default function Step4({
+
+ dados, atualizarDados }: any) {
   useEffect(() => {
     if (!modalGestorAberto) return;
     const elementoAnterior = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -62,7 +64,7 @@ export default function Step4({
       elementoAnterior?.focus();
     };
   }, [modalFiscalAberto]);
- dados, atualizarDados }: any) {
+
   const { showToast } = useToast();
   const [gestorNome, setGestorNome] = useState("");
   const [gestorCargo, setGestorCargo] = useState("");
