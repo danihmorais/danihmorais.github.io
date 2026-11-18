@@ -1304,7 +1304,9 @@ async def reenviar_fila_usuario(job_id: str, request: Request):
         raise HTTPException(status_code=409, detail="Não há documentos concluídos suficientes para refazer somente o envio. Faça uma nova solicitação.")
     try:
         novo = enqueue_job(
-            email=str(job.get("email") or ""),
+            email=str(job.get("email",
+            request_id=request.state.request_id,
+        ) or ""),
             dados_usuario=job.get("dados_usuario") if isinstance(job.get("dados_usuario"), dict) else {},
             dados_ia=dados_ia_final,
             instrucoes=str(job.get("instrucoes") or ""),
