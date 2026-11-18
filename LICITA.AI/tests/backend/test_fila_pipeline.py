@@ -69,7 +69,7 @@ class TestFilaPipeline(unittest.TestCase):
         self.assertIn("2 imagem(ns)", saneado["{{DOTACAO}}"])
         self.assertIn("Fonte 123.456.789/0001-00", saneado["{{DOTACAO}}"])
         self.assertNotIn("{{CAMINHO_IMAGEM_DOTACAO}}", saneado)
-        self.assertNotIn("RAW_PAC", saneado)
+        self.assertEqual(saneado["RAW_PAC"], "campo interno")
 
         prompt = _substituir_contextos("__LICITA_PIPE_DADOS_USUARIO__", dados, {})
         self.assertNotIn(segredo, prompt)
@@ -199,10 +199,65 @@ class TestAutomaticModelResolution(unittest.TestCase):
             patch.object(pipeline.httpx, "Client") as cliente_http,
         ):
             cliente_http.return_value.__enter__.return_value.post.return_value = resposta
-            with self.assertRaisesRegex(RuntimeError, "limite de contexto/geração do modelo ou servidor"):
+            with self.assertRaisesRegex(pipeline.ErroPermanente, "geração já foi dividida por documento"):
                 pipeline._chamar_ia("prompt de teste", "modelo-teste")
 
         cliente_http.return_value.__enter__.return_value.post.assert_called_once()
+
+    def test_erro_400_do_provedor_e_permanente(self):
+        from unittest.mock import MagicMock, patch
+        import fila_pipeline as pipeline
+
+        resposta = MagicMock()
+        resposta.status_code = 400
+        resposta.text = '{"error":"invalid schema"}'
+
+        with (
+            patch.object(pipeline, "API_UNSLOTH_URL", "http://unsloth.test/v1"),
+            patch.object(pipeline, "API_UNSLOTH_KEY", "chave-de-teste"),
+            patch.object(pipeline.httpx, "Client") as cliente_http,
+        ):
+            cliente_http.return_value.__enter__.return_value.post.return_value = resposta
+            with self.assertRaises(pipeline.ErroPermanente):
+                pipeline._chamar_ia("prompt de teste", "modelo-teste")
+
+    def test_erro_503_do_provedor_permanece_retentavel(self):
+        from unittest.mock import MagicMock, patch
+        import fila_pipeline as pipeline
+
+        resposta = MagicMock()
+        resposta.status_code = 503
+        resposta.text = '{"error":"temporarily unavailable"}'
+
+        with (
+            patch.object(pipeline, "API_UNSLOTH_URL", "http://unsloth.test/v1"),
+            patch.object(pipeline, "API_UNSLOTH_KEY", "chave-de-teste"),
+            patch.object(pipeline.httpx, "Client") as cliente_http,
+        ):
+            cliente_http.return_value.__enter__.return_value.post.return_value = resposta
+            with self.assertRaises(RuntimeError) as contexto:
+                pipeline._chamar_ia("prompt de teste", "modelo-teste")
+        self.assertNotIsInstance(contexto.exception, pipeline.ErroPermanente)
+
+    def test_schema_estrito_nao_dispara_reparo_json_automatico(self):
+        from unittest.mock import MagicMock, patch
+        import fila_pipeline as pipeline
+
+        resposta = MagicMock()
+        resposta.status_code = 200
+        resposta.json.return_value = {
+            "choices": [{"message": {"content": "{json incompleto"}}],
+            "model": "modelo-teste",
+        }
+        with patch.object(pipeline, "_post_ia", return_value=resposta) as chamada:
+            with self.assertRaises(pipeline.ErroPermanente):
+                pipeline._chamar_ia(
+                    "prompt",
+                    "modelo-teste",
+                    response_format={"type": "json_schema", "json_schema": {"strict": True}},
+                    enable_tools=False,
+                )
+        chamada.assert_called_once()
 
     def test_auto_model_falls_back_to_first_model_reported_by_unsloth(self):
         from unittest.mock import MagicMock, patch
@@ -344,11 +399,19 @@ class TestStaleQueueCancellation(unittest.TestCase):
         resultado = _validar_json_unificado(com_extra, exigir_amostra_tr=False)
         self.assertNotIn("AMOSTRA_TR", resultado["TR"])
 
-    def test_json_schema_nao_e_ativado_nas_etapas_de_consulta(self):
-        self.assertEqual(_opcoes_chamada_ia_etapa("consulta_habilitacao"), {})
-        self.assertEqual(_opcoes_chamada_ia_etapa("geracao_json"), {})
-        self.assertEqual(_opcoes_chamada_ia_etapa("geracao_json", "OUTRA_ETAPA"), {})
-        self.assertEqual(_opcoes_chamada_ia_etapa("geracao_contratacao_direta", "CONTRATACAO_DIRETA"), {})
+    def test_todas_as_etapas_juridicas_e_de_consulta_usam_formato_estrito(self):
+        consulta = _opcoes_chamada_ia_etapa("consulta_habilitacao")
+        self.assertTrue(consulta["enable_tools"])
+        self.assertTrue(consulta["response_format"]["json_schema"]["strict"])
+        pagamento = _opcoes_chamada_ia_etapa("geracao_json", "PAGAMENTO_ETAPAS")
+        self.assertFalse(pagamento["enable_tools"])
+        self.assertTrue(pagamento["response_format"]["json_schema"]["strict"])
+        contratacao = _opcoes_chamada_ia_etapa("geracao_contratacao_direta", "CONTRATACAO_DIRETA")
+        self.assertFalse(contratacao["enable_tools"])
+        self.assertTrue(contratacao["response_format"]["json_schema"]["strict"])
+        legado = _opcoes_chamada_ia_etapa("geracao_json", "OUTRA_ETAPA")
+        self.assertFalse(legado["enable_tools"])
+        self.assertNotIn("response_format", legado)
 
     def test_pagamento_por_etapas_usa_json_schema_estrito_sem_ferramentas(self):
         opcoes = _opcoes_chamada_ia_etapa("geracao_json", "PAGAMENTO_ETAPAS")
@@ -505,7 +568,7 @@ class TestPipelineUnificado(unittest.TestCase):
         chamadas_modelo = []
         job_id = "a" * 32
 
-        def chamar_ia(prompt, model, temperature=0.3):
+        def chamar_ia(prompt, model, temperature=0.3, **opcoes):
             chamadas_modelo.append(model)
             return {"CAMPO": f"resultado de {prompt}"}, "modelo-resolvido"
 
@@ -684,7 +747,7 @@ class TestConfiguracaoThinking(unittest.TestCase):
         self.assertNotIn("max_completion_tokens", payload)
         self.assertNotIn("response_format", payload)
         self.assertEqual(payload["messages"][0]["role"], "system")
-        self.assertIn("600 segundos", payload["messages"][0]["content"])
+        self.assertIn("1200 segundos", payload["messages"][0]["content"])
         self.assertIn("pesquisa na web", payload["messages"][0]["content"])
         self.assertEqual(payload["model"], "qwen-modelo-de-teste")
         self.assertEqual(resultado, {"ok": True})

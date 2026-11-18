@@ -1,10 +1,10 @@
-import React, { useEffect, useRef } from "react";
-import type { DocumentosReferenciaUpload } from "../api";
+import React, { useEffect, useRef, useState } from "react";
+import { confirmarCodigoVerificacaoEmail, solicitarCodigoVerificacaoEmail, type DocumentosReferenciaUpload } from "../api";
 
 interface PromptModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (dados: { instrucoes: string; email: string; arquivos: DocumentosReferenciaUpload }) => void;
+  onConfirm: (dados: { instrucoes: string; email: string; emailVerificationToken: string; arquivos: DocumentosReferenciaUpload }) => void;
   texto: string;
   onTextoChange: (valor: string) => void;
   email: string;
@@ -19,7 +19,16 @@ export default function PromptModal({
   const dialogRef = useRef<HTMLDivElement>(null);
   const inputArquivoRefs = useRef<Partial<Record<keyof DocumentosReferenciaUpload, HTMLInputElement | null>>>({});
   const onCloseRef = useRef(onClose);
+  const [codigo, setCodigo] = useState("");
+  const [codigoEnviado, setCodigoEnviado] = useState(false);
+  const [verificacaoToken, setVerificacaoToken] = useState("");
+  const [emailVerificado, setEmailVerificado] = useState("");
+  const [enviandoCodigo, setEnviandoCodigo] = useState(false);
+  const [confirmandoCodigo, setConfirmandoCodigo] = useState(false);
+  const [erroVerificacao, setErroVerificacao] = useState("");
+  const [mensagemVerificacao, setMensagemVerificacao] = useState("");
   onCloseRef.current = onClose;
+  const emailVerificadoAtual = Boolean(verificacaoToken) && emailVerificado === email.trim().toLowerCase();
   const emailValido = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(email.trim());
 
   useEffect(() => {
@@ -64,9 +73,55 @@ export default function PromptModal({
     definirArquivo(campo, null);
   };
 
+  const handleEnviarCodigo = async () => {
+    if (!emailValido || enviandoCodigo) return;
+    setEnviandoCodigo(true);
+    setErroVerificacao("");
+    setMensagemVerificacao("");
+    try {
+      const resultado = await solicitarCodigoVerificacaoEmail(email.trim());
+      setCodigoEnviado(true);
+      setCodigo("");
+      setVerificacaoToken("");
+      setEmailVerificado("");
+      setMensagemVerificacao(resultado.message);
+    } catch (erro: any) {
+      setErroVerificacao(erro?.message || "Não foi possível enviar o código.");
+    } finally {
+      setEnviandoCodigo(false);
+    }
+  };
+
+  const handleConfirmarCodigo = async () => {
+    if (!emailValido || !/^\d{6}$/.test(codigo) || confirmandoCodigo) return;
+    setConfirmandoCodigo(true);
+    setErroVerificacao("");
+    setMensagemVerificacao("");
+    try {
+      const resultado = await confirmarCodigoVerificacaoEmail(email.trim(), codigo);
+      setVerificacaoToken(resultado.token);
+      setEmailVerificado(email.trim().toLowerCase());
+      setMensagemVerificacao(resultado.message);
+    } catch (erro: any) {
+      setErroVerificacao(erro?.message || "Não foi possível confirmar o endereço.");
+    } finally {
+      setConfirmandoCodigo(false);
+    }
+  };
+
+  const handleEmailChange = (valor: string) => {
+    setCodigoEnviado(false);
+    setCodigo("");
+    setVerificacaoToken("");
+    setEmailVerificado("");
+    setErroVerificacao("");
+    setMensagemVerificacao("");
+    onEmailChange(valor);
+  };
+
   const handleConfirmar = () => {
-    if (!emailValido) return;
-    onConfirm({ instrucoes: texto.trim(), email: email.trim(), arquivos });
+    if (!emailValido || !emailVerificadoAtual) return;
+    onConfirm({ instrucoes: texto.trim(), email: email.trim(), emailVerificationToken: verificacaoToken, arquivos });
   };
 
   const campos: Array<{ chave: keyof DocumentosReferenciaUpload; titulo: string; descricao: string }> = [
@@ -134,7 +189,7 @@ export default function PromptModal({
           <input
             type="email"
             value={email}
-            onChange={(e) => onEmailChange(e.target.value)}
+            onChange={(e) => handleEmailChange(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && emailValido) handleConfirmar();
             }}
@@ -143,8 +198,41 @@ export default function PromptModal({
             autoComplete="email"
             required
           />
-          <span className="field-hint">O arquivo ZIP final será enviado para este endereço.</span>
+          <span className="field-hint">O arquivo ZIP final será enviado para este endereço. A confirmação comprova que você tem acesso à caixa de entrada.</span>
         </label>
+
+        <div className="email-verification-panel">
+          {!emailVerificadoAtual ? (
+            <>
+              <button type="button" className="button button-secondary" onClick={handleEnviarCodigo} disabled={!emailValido || enviandoCodigo}>
+                {enviandoCodigo ? "Enviando código..." : codigoEnviado ? "Enviar novo código" : "Enviar código de confirmação"}
+              </button>
+              {codigoEnviado && (
+                <div className="email-verification-code">
+                  <label className="prompt-field">
+                    Código de 6 dígitos
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      value={codigo}
+                      onChange={(e) => setCodigo(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      placeholder="000000"
+                    />
+                  </label>
+                  <button type="button" className="button button-secondary" onClick={handleConfirmarCodigo} disabled={codigo.length !== 6 || confirmandoCodigo}>
+                    {confirmandoCodigo ? "Confirmando..." : "Confirmar e-mail"}
+                  </button>
+                </div>
+              )}
+            </>
+          ) : (
+            <span className="email-verification-success" role="status">✓ Endereço confirmado para esta solicitação.</span>
+          )}
+          {mensagemVerificacao && <span className="field-hint" role="status">{mensagemVerificacao}</span>}
+          {erroVerificacao && <span className="field-error" role="alert">{erroVerificacao}</span>}
+        </div>
 
         <label className="prompt-field">
           Instruções adicionais para a IA <span className="optional-label">OPCIONAL</span>
@@ -158,7 +246,7 @@ export default function PromptModal({
 
         <div className="prompt-actions">
           <button type="button" className="button button-secondary" onClick={onClose}>Cancelar</button>
-          <button type="button" className="button button-primary" onClick={handleConfirmar} disabled={!emailValido}>
+          <button type="button" className="button button-primary" onClick={handleConfirmar} disabled={!emailValido || !emailVerificadoAtual}>
             Colocar na fila <span aria-hidden="true">→</span>
           </button>
         </div>

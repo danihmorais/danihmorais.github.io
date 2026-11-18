@@ -86,7 +86,7 @@ test("helpers de lotes validam atribuição integral e compatibilidade com dados
   assertJsonEqual(obterLotes({ itens: [{ lote: "Lote legado" }] }), [{ id: "legado:lote legado", nome: "Lote legado" }]);
 });
 
-test("llm usa somente o proxy do backend e não envia Authorization do frontend", async () => {
+test("llm usa endpoint tipado do backend sem enviar prompts ou configuração do modelo", async () => {
   let chamada = null;
   const storage = new MemoryStorage();
   const { gerarTextoIA } = loadTsModule("src/providers/llm.ts", {
@@ -99,12 +99,38 @@ test("llm usa somente o proxy do backend e não envia Authorization do frontend"
     },
   });
 
-  const resultado = await gerarTextoIA("prompt", "backend", "unsloth-auto");
+  const resultado = await gerarTextoIA("auditoria_marcas", {
+    itens: [{ numero: "1", descricao: "Caderno Tilibra" }],
+    instrucoes: "Preservar características.",
+  });
   assertJsonEqual(resultado, { resultado: "ok" });
-  assert.match(chamada.url, /\/licita\/api\/ia\/chat$/);
+  assert.ok(chamada.url.includes("/licita/api/ia/item"));
   assert.equal("Authorization" in chamada.options.headers, false);
   const body = JSON.parse(chamada.options.body);
-  assert.equal(body.model, "unsloth-auto");
+  assert.equal(body.tarefa, "auditoria_marcas");
+  assert.deepEqual(body.itens, [{ numero: "1", descricao: "Caderno Tilibra" }]);
+  assert.equal("prompt" in body, false);
+  assert.equal("model" in body, false);
+  assert.equal("temperature" in body, false);
+  assert.equal("response_format" in body, false);
+});
+
+test("llm não tenta corrigir nem repetir JSON inválido do schema estrito", async () => {
+  let chamadas = 0;
+  const modulo = loadTsModule("src/providers/llm.ts", {
+    globals: {
+      localStorage: new MemoryStorage(),
+      fetch: async () => {
+        chamadas += 1;
+        return response({ json: { model: "modelo-backend", content: "{json incompleto" } });
+      },
+    },
+  });
+  await assert.rejects(
+    modulo.gerarTextoIA("melhorar_descricao", { descricao: "Cadeira", unidade: "UN" }),
+    /schema estrito/,
+  );
+  assert.equal(chamadas, 1);
 });
 
 test("llm repete falha temporária e encerra em erro fatal", async () => {
@@ -120,7 +146,7 @@ test("llm repete falha temporária e encerra em erro fatal", async () => {
       fetch: async () => { chamadas += 1; return respostas.shift(); },
     },
   });
-  assertJsonEqual(await modulo.gerarTextoIA("prompt", "backend", "modelo"), { ok: true });
+  assertJsonEqual(await modulo.gerarTextoIA("melhorar_descricao", { descricao: "Cadeira", unidade: "UN" }), { ok: true });
   assert.equal(chamadas, 2);
 });
 
@@ -145,17 +171,10 @@ test("mapearDadosWizard usa o texto fixo de pagamento mensal", () => {
   assert.equal(dados["{{PRAZO REFAZIMENTO}}"], "12 dias úteis");
 });
 
-test("gerarFasePreparatoria usa multipart quando há documentos de referência", async () => {
+test("gerarFasePreparatoria usa multipart e envia apenas dados estruturados", async () => {
   let chamada = null;
   const modulo = loadTsModule("src/api.ts", {
-    replacements: [
-      [
-        'import { construirPrompt } from "./providers/services/geradorIA";',
-        'const { construirPrompt } = __injected_gerador;',
-      ],
-    ],
     globals: {
-      __injected_gerador: { construirPrompt: (_dados, _meepp, etapa) => "PROMPT_TESTE_" + etapa + "\\n__LICITA_PIPE_DADOS_USUARIO__\\nESTRUTURA JSON OBRIGATÓRIA:" },
       FormData: class {
         values = new Map();
         append(key, value, filename) {
@@ -184,7 +203,8 @@ test("gerarFasePreparatoria usa multipart quando há documentos de referência",
   await modulo.gerarFasePreparatoria(
     {
       email: "teste@example.com",
-      instrucoes: "",
+      emailVerificationToken: "token-verificado",
+      instrucoes: "Preservar as características do objeto.",
       dados_usuario: {
         modalidade: "PREGAO_ELETRONICO",
         itens: [],
@@ -196,45 +216,20 @@ test("gerarFasePreparatoria usa multipart quando há documentos de referência",
   assert.equal(chamada.url, "https://api.example.test/licita/api/gerar-fase-preparatoria");
   assert.equal(chamada.options.method, "POST");
   assert.equal("Content-Type" in (chamada.options.headers || {}), false);
-  assert.ok(chamada.options.body);
+  assert.equal(chamada.options.headers["X-Email-Verification"], "token-verificado");
   assert.equal(chamada.options.body.get("dfd").name, "DFD anterior.docx");
   const payload = JSON.parse(chamada.options.body.get("payload"));
   assert.equal(payload.email, "teste@example.com");
-  const etapas = payload.dados_ia.__LICITA_PIPELINE__.etapas;
-  assert.deepEqual(etapas.map((etapa) => etapa.id), ["CONSULTA_HABILITACAO", "FASE_PREPARATORIA"]);
-  const consulta = etapas[0];
-  assert.equal(consulta.tipo, "consulta_habilitacao");
-  assert.equal(consulta.temperature, 0.1);
-  assert.match(consulta.prompt, /DOCUMENTOS DE HABILITAÇÃO QUE JÁ SÃO SOLICITADOS/i);
-  assert.match(etapas[0].prompt, /__LICITA_PIPE_DADOS_USUARIO__/);
-  const geracao = etapas[1];
-  assert.equal(geracao.tipo, "geracao_unificada");
-  assert.equal(geracao.temperature, 0.3);
-  assert.match(geracao.prompt, /__LICITA_PIPE_CONSULTA_HABILITACAO__/);
-  assert.match(consulta.prompt, /começando em Documento 12/);
-  assert.match(geracao.prompt, /começando em Documento 12/);
-  assert.doesNotMatch(consulta.prompt, /Documento 13/);
-  assert.doesNotMatch(geracao.prompt, /Documento 13/);
-  // O formato é imposto por response_format/json_schema no backend; o prompt não repete o esqueleto.
-  assert.doesNotMatch(geracao.prompt, /"DFD":\s*\{/);
-  assert.doesNotMatch(geracao.prompt, /"ETP":\s*\{/);
-  assert.doesNotMatch(geracao.prompt, /"TR":\s*\{/);
-  assert.doesNotMatch(geracao.prompt, /ESTRUTURA JSON OBRIGATÓRIA/);
-  assert.doesNotMatch(geracao.prompt, /barra invertida/);
-  assert.doesNotMatch(geracao.prompt, /__LICITA_PIPE_ETP__/);
+  assert.equal(payload.instrucoes, "Preservar as características do objeto.");
+  assert.deepEqual(payload.dados_usuario, { modalidade: "PREGAO_ELETRONICO", itens: [] });
+  assert.equal("dados_ia" in payload, false);
+  assert.equal("__LICITA_PIPELINE__" in payload, false);
 });
 
-test("gerarFasePreparatoria cria etapa de IA somente para pagamento por etapas", async () => {
+test("gerarFasePreparatoria envia pagamento por etapas como dados, sem montar prompts no navegador", async () => {
   let chamada = null;
   const modulo = loadTsModule("src/api.ts", {
-    replacements: [
-      [
-        'import { construirPrompt } from "./providers/services/geradorIA";',
-        'const { construirPrompt } = __injected_gerador;',
-      ],
-    ],
     globals: {
-      __injected_gerador: { construirPrompt: (_dados, _meepp, etapa) => "PROMPT_TESTE_" + etapa + "\\n__LICITA_PIPE_DADOS_USUARIO__\\nESTRUTURA JSON OBRIGATÓRIA:" },
       fetch: async (url, options) => {
         chamada = { url, options };
         return {
@@ -249,6 +244,7 @@ test("gerarFasePreparatoria cria etapa de IA somente para pagamento por etapas",
 
   await modulo.gerarFasePreparatoria({
     email: "teste@example.com",
+    emailVerificationToken: "token-verificado",
     instrucoes: "",
     dados_usuario: {
       pagamentoTipo: "POR_ETAPAS",
@@ -259,26 +255,15 @@ test("gerarFasePreparatoria cria etapa de IA somente para pagamento por etapas",
   });
 
   const body = JSON.parse(chamada.options.body);
-  const etapas = body.dados_ia.__LICITA_PIPELINE__.etapas;
-  const pagamento = etapas.find((etapa) => etapa.id === "PAGAMENTO_ETAPAS");
-  assert.equal(pagamento.tipo, "geracao_json");
-  assert.equal(pagamento.temperature, 0);
-  assert.deepEqual(etapas.filter((etapa) => etapa.id === "FASE_PREPARATORIA").map((etapa) => etapa.tipo), ["geracao_unificada"]);
-  assert.match(pagamento.prompt, /40% após a conclusão/);
-  assert.match(pagamento.prompt, /EXCLUSIVAMENTE JSON válido/);
+  assert.equal(chamada.options.headers["X-Email-Verification"], "token-verificado");
+  assert.equal(body.dados_usuario.pagamentoTipo, "POR_ETAPAS");
+  assert.match(body.dados_usuario.pagamentoEtapas, /40% após a conclusão/);
+  assert.equal("dados_ia" in body, false);
 });
 
 test("gerarFasePreparatoria rejeita pagamento por etapas sem descrição", async () => {
   const modulo = loadTsModule("src/api.ts", {
-    replacements: [
-      [
-        'import { construirPrompt } from "./providers/services/geradorIA";',
-        'const { construirPrompt } = __injected_gerador;',
-      ],
-    ],
-    globals: {
-      __injected_gerador: { construirPrompt: (_dados, _meepp, etapa) => "PROMPT_TESTE_" + etapa + "\\n__LICITA_PIPE_DADOS_USUARIO__\\nESTRUTURA JSON OBRIGATÓRIA:" },
-    },
+    globals: {},
   });
 
   await assert.rejects(

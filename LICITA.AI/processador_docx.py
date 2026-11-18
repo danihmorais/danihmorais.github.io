@@ -217,10 +217,8 @@ def _inserir_tabela(paragraph, json_str, *, centralizar=False, justificar_conteu
                         cell_paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
 
         paragraph._p.addnext(table._tbl)
-    except Exception as e:
-        new_run = paragraph.add_run(f"[ERRO AO GERAR TABELA: {e}]")
-        new_run.font.color.rgb = RGBColor(255, 0, 0)
-        new_run.bold = True
+    except Exception as exc:
+        raise RuntimeError("Não foi possível inserir uma tabela no documento DOCX.") from exc
 
 
 def _adicionar_run_preservando_formatacao(paragraph, text, original_run_data):
@@ -257,10 +255,8 @@ def _apply_segments_to_paragraph(paragraph, segments, extracted_runs_data):
                     new_run.add_picture(img_ref, width=Inches(6.0))
                 else:
                     raise FileNotFoundError(img_ref)
-            except Exception:
-                new_run = paragraph.add_run("[IMAGEM DE DOTAÇÃO NÃO PÔDE SER INSERIDA]")
-                new_run.font.color.rgb = RGBColor(255, 0, 0)
-                new_run.bold = True
+            except Exception as exc:
+                raise RuntimeError("Não foi possível inserir uma imagem de dotação no documento DOCX.") from exc
         elif part.startswith("__TABLE_CENTER_JUSTIFY__"):
             json_str = part.replace("__TABLE_CENTER_JUSTIFY__", "", 1)
             _inserir_tabela(paragraph, json_str, centralizar=True, justificar_conteudo=True)

@@ -1,5 +1,3 @@
-import { construirPrompt } from "./providers/services/geradorIA";
-import { construirPromptAuditoriaMarcas } from "./providers/services/descricaoItensIA";
 import { mapearDadosWizard } from "./utils/mapearDados";
 import { getApiBaseUrl } from "./utils/apiBase";
 
@@ -34,8 +32,9 @@ function ehArquivoUpload(valor: unknown): valor is File {
 }
 
 export const consultarFilaFasePreparatoria = async (jobId: string, statusToken?: string) => {
-  const query = statusToken ? `?token=${encodeURIComponent(statusToken)}` : "";
-  const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}${query}`);
+  const headers: Record<string, string> = {};
+  if (statusToken) headers["X-Status-Token"] = statusToken;
+  const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}`, { headers });
   if (!response.ok) {
     let detalhe = "Não foi possível consultar a fila.";
     try {
@@ -48,7 +47,7 @@ export const consultarFilaFasePreparatoria = async (jobId: string, statusToken?:
 };
 
 export async function cancelarFilaFasePreparatoria(jobId: string, statusToken: string): Promise<{ job_id: string; status: string; message: string }> {
-  const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}/cancelar?token=${encodeURIComponent(statusToken)}`, { method: "POST" });
+  const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}/cancelar`, { method: "POST", headers: { "X-Status-Token": statusToken } });
   let payload: any = {};
   try { payload = await response.json(); } catch {}
   if (!response.ok) throw new Error(payload?.detail || "Não foi possível cancelar a solicitação.");
@@ -63,119 +62,28 @@ export async function cancelarAdminPedido(token: string, jobId: string): Promise
   return respostaAdmin(response);
 }
 
-function construirPromptPagamentoEtapas(textoUsuario: string): string {
-  return `Você é especialista em redação de cláusulas de pagamento de contratos administrativos regidos pela Lei Federal nº 14.133/2021.
-
-Sua tarefa é REVISAR EXCLUSIVAMENTE a descrição fornecida pelo usuário para pagamento por etapas, transformando-a em texto formal, claro, objetivo, juridicamente adequado e operacional.
-
-REGRAS ABSOLUTAS:
-1. Preserve integralmente as etapas, eventos, critérios e condições informadas pelo usuário.
-2. NÃO invente percentuais, valores, prazos, datas, marcos, documentos ou condições que não estejam no texto do usuário.
-3. NÃO transforme pagamento por etapas em pagamento mensal, por entrega ou qualquer outra modalidade.
-4. Não altere o número ou a natureza das etapas informadas.
-5. Corrija apenas redação, clareza, gramática, coerência e formalidade jurídica.
-6. Retorne EXCLUSIVAMENTE JSON válido, sem markdown.
-
-DESCRIÇÃO INFORMADA PELO USUÁRIO:
-${textoUsuario}
-
-O campo PAGAMENTO do esquema JSON da resposta deve conter somente o texto final revisado sobre o pagamento por etapas.`;
-}
-function construirPromptContratacaoDireta(instrucoesUsuario: string, modalidade: string): string {
-  const modalidadeNome = modalidade === "DISPENSA_BLL" ? "Dispensa de Licitação com lances em plataforma eletrônica (BLL)" : "Dispensa de Licitação com recebimento de propostas por e-mail";
-  return `Você é especialista sênior em contratação direta pela Lei Federal nº 14.133/2021, com experiência prática em instrução de processos municipais. Elabore o conteúdo de um Documento de Contratação Direta para o Município de São Francisco/SP.\n\nFINALIDADE:\nO documento será o documento específico da contratação direta. Não produza DFD, ETP ou TR neste fluxo. Produza texto formal, impessoal, juridicamente fundamentado, objetivo e operacional.\n\nREGRAS JURÍDICAS E DE FIDELIDADE:\n1. Use a Lei nº 14.133/2021 como referência central e considere sua redação vigente, sem inventar artigo, inciso, alínea ou limitação financeira.\n2. O FUNDAMENTO_CONTRATACAO_DIRETA deve reproduzir ou estruturar o fundamento informado pelo usuário. Se o fundamento legal não tiver sido informado, escreva exatamente: "Fundamento legal não informado no briefing; conferir e preencher antes da assinatura."\n3. NÃO invente número de processo, fornecedor, CNPJ, data, prazo de recebimento de propostas, valor contratado, cotação, pesquisa de preços, parecer, autorização ou publicação.\n4. Diferencie claramente valor estimado da contratação e eventual valor contratado.\n5. Não declare que documentos do art. 72 foram efetivamente juntados se isso não estiver nos dados. Apresente apenas uma orientação de instrução processual, identificando o que deve ser conferido.\n6. Na RAZAO/CRITERIOS de escolha do fornecedor, produza critérios e fundamentação para seleção objetiva. Não atribua a um fornecedor específico características que não foram fornecidas.\n7. Para a forma de processamento, respeite a modalidade informada: ${modalidadeNome}. Não invente regras específicas da plataforma ou prazos não fornecidos.\n8. Preserve integralmente os fatos fornecidos nas instruções do usuário.\n9. O texto deve ser específico para contratação direta; não trate o procedimento como pregão ou licitação ordinária.\n10. Retorne EXCLUSIVAMENTE um único objeto JSON válido, sem markdown ou comentários. Nenhum valor deve ser vazio.\n\nDADOS DO USUÁRIO:\n__LICITA_PIPE_DADOS_USUARIO__\n\nINSTRUÇÕES DO USUÁRIO (OBRIGATÓRIAS — prevalecem sobre diretrizes de estilo e tamanho, mas não sobre legalidade ou fidelidade aos fatos):\n${instrucoesUsuario?.trim() || "Nenhuma instrução adicional."}\n\nLembrete obrigatório: aplique as instruções do usuário no documento inteiro e não invente fatos.\n\nREGRAS DE FUNDAMENTAÇÃO JURÍDICA: fundamente cada conclusão na situação concreta e na Lei nº 14.133/2021, explicando a consequência prática e o risco que a regra busca evitar. Não invente fatos, datas, artigos, acórdãos, súmulas ou números de processo. Só cite jurisprudência numerada quando o número, o ano e o entendimento estiverem confirmados nos dados ou referências; caso contrário, descreva o entendimento sem atribuir número. Não preencha lacunas com nomes, cargos, unidades, percentuais ou justificativas que não tenham suporte nos dados. Preserve a instrução do usuário quando ela for específica e juridicamente admissível.\n\nESTRUTURA JSON OBRIGATÓRIA:\n{\n  "FUNDAMENTO_CONTRATACAO_DIRETA": "",\n  "JUSTIFICATIVA_CONTRATACAO_DIRETA": "",\n  "INSTRUCAO_ART72": "",\n  "CRITERIOS_ESCOLHA_FORNECEDOR": "",\n  "CONDICOES_CONTRATACAO": "",\n  "PUBLICIDADE_TRANSPARENCIA": "",\n  "CONCLUSAO_CONTRATACAO_DIRETA": ""\n}`;
+export async function solicitarCodigoVerificacaoEmail(email: string): Promise<{ sent: boolean; expires_in: number; message: string }> {
+  const response = await fetch(`${BASE_URL}/licita/api/email/verification/request`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: email.trim() }),
+  });
+  let payload: any = {};
+  try { payload = await response.json(); } catch {}
+  if (!response.ok) throw new Error(payload?.detail || "Não foi possível enviar o código de confirmação.");
+  return payload;
 }
 
-function construirPromptConsultaHabilitacao(instrucoesUsuario: string): string {
-  const schema = [
-    "{",
-    '  "ENQUADRAMENTO_DO_OBJETO": "",',
-    '  "LEGISLACAO_E_REGULACAO_APLICAVEL": "",',
-    '  "REQUISITOS_TECNICOS_E_REGULATORIOS": "",',
-    '  "DOCUMENTOS_ADICIONAIS_HABILITACAO": [',
-    '    { "numero_documento": "", "categoria": "", "documento": "", "aplicabilidade": "", "justificativa": "", "fundamento_legal": "", "fonte_oficial_url": "" }',
-    "  ],",
-    '  "EXIGENCIAS_NAO_RECOMENDADAS": [',
-    '    { "exigencia": "", "motivo": "", "fonte_oficial_url": "" }',
-    "  ],",
-    '  "FONTES_OFICIAIS": [',
-    '    { "orgao": "", "titulo": "", "url": "", "relevancia": "" }',
-    "  ],",
-    '  "CONCLUSAO": ""',
-    "}"
-  ].join("\n");
-
-  return [
-    "Você é um analista jurídico-técnico especializado em contratações públicas brasileiras, com acesso à pesquisa web. Faça uma consulta específica antes da geração do DFD, ETP e TR.",
-    "PESQUISA OBRIGATÓRIA: pesquise o objeto, suas características e riscos relevantes, a legislação setorial, os registros profissionais, as licenças, autorizações ou qualificações técnicas que possam ser legalmente exigidos. Priorize fontes oficiais primárias e atuais: Planalto, órgãos reguladores, ministérios, conselhos profissionais, Compras.gov.br, TCU e TCE-SP. Confira vigência e âmbito de aplicação e informe URLs oficiais realmente consultadas.",
-    "Diferencie obrigação legal de recomendação. Não invente documentos, registros profissionais, licenças, atestados, índices, certificações, normas, artigos ou URLs. Só indique exigência adicional quando for pertinente, necessária e proporcional ao objeto, com fundamento verificável, observando a competitividade e os arts. 62 a 70 da Lei nº 14.133/2021. Se não conseguir confirmar, indique a incerteza.",
-    "DOCUMENTOS DE HABILITAÇÃO QUE JÁ SÃO SOLICITADOS PELO MODELO DO EDITAL — NÃO REPETIR COMO ADICIONAIS:",
-    "Documento 1 — ato constitutivo, estatuto ou contrato social vigente e registrado; eleição dos administradores em sociedades por ações; inscrição e averbação de filial, sucursal ou agência; registro ou autorização para atividade sujeita a legislação específica; documentos de empresa estrangeira quando exigíveis; inscrição de empresário individual; alterações ou consolidação para conferir objeto social, sócios e administração.",
-    "Documento 2 — cópia do RG e CPF de todos os sócios e, se houver procurador, seus documentos acompanhados da procuração.",
-    "Documento 3 — comprovante de inscrição no CNPJ.",
-    "Documento 4 — inscrição no cadastro de contribuintes estadual e/ou municipal, conforme o caso e a pertinência.",
-    "Documento 5 — certidão de regularidade relativa a créditos tributários federais e à Dívida Ativa da União.",
-    "Documento 6 — certidão de regularidade fiscal estadual da sede.",
-    "Documento 7 — certidão de regularidade fiscal municipal da sede.",
-    "Documento 8 — Certificado de Regularidade do FGTS (CRF).",
-    "Documento 9 — comprovação de enquadramento como ME/EPP ou equiparada, somente quando a empresa se declarar nessa condição.",
-    "Documento 10 — Certidão Negativa de Débitos Trabalhistas (CNDT).",
-    "Documento 11 — certidão relativa a falência, recuperação judicial/extrajudicial e concordata, conforme o modelo atual.",
-    "Considere os documentos 1 a 11 como requisitos-base existentes; não os repita em DOCUMENTOS_ADICIONAIS_HABILITACAO e não os renumere. Os documentos adicionais, se realmente necessários, devem respeitar a numeração adotada pelo modelo, começando em Documento 12. Não crie exigências artificiais para preencher a lista: se os requisitos gerais forem suficientes, use uma lista vazia e justifique em CONCLUSAO.",
-    "Não altere silenciosamente os requisitos-base. Se fonte oficial atual revelar possível incompatibilidade jurídica de algum deles, registre alerta objetivo em CONCLUSAO para revisão humana, sem inventar conclusão.",
-    "DADOS DA CONTRATAÇÃO:",
-    "__LICITA_PIPE_DADOS_USUARIO__",
-    "INSTRUÇÕES COMPLEMENTARES DO USUÁRIO:\n" + (instrucoesUsuario.trim() || "Nenhuma instrução adicional."),
-    "Retorne exclusivamente um único objeto JSON válido, sem markdown, comentários ou texto fora do JSON. Use os campos do esquema abaixo, listas vazias quando cabível e strings não vazias nos campos textuais.",
-    "ESTRUTURA JSON OBRIGATÓRIA:",
-    schema
-  ].join("\n\n");
-}
-
-function construirPromptUnificado(
-  dadosUsuario: Record<string, string>,
-  meeppExclusivo: boolean,
-  instrucoesUsuario: string,
-): string {
-  const etapas = (["DFD", "ETP", "TR"] as const).map((etapa) =>
-    construirPrompt(dadosUsuario, meeppExclusivo, etapa, instrucoesUsuario, true)
-  );
-  const marcadorEtapaDfd = "\n\nETAPA: DOCUMENTO DE FORMALIZAÇÃO DE DEMANDA.";
-  const inicioEtapas = etapas[0].indexOf(marcadorEtapaDfd);
-  const fimSchemaComum = etapas[0].lastIndexOf("ESTRUTURA JSON OBRIGATÓRIA:");
-  const prefixo = etapas[0].slice(
-    0,
-    inicioEtapas >= 0 ? inicioEtapas : (fimSchemaComum >= 0 ? fimSchemaComum : etapas[0].length),
-  ).trim();
-
-  const diretriz = (prompt: string, marcador: string) => {
-    const inicio = prompt.indexOf(marcador);
-    const fimSchema = prompt.lastIndexOf("ESTRUTURA JSON OBRIGATÓRIA:");
-    const inicioReal = inicio >= 0 ? inicio : 0;
-    return prompt.slice(inicioReal, fimSchema >= inicioReal ? fimSchema : prompt.length).trim();
-  };
-  const dfd = diretriz(etapas[0], "ETAPA: DOCUMENTO DE FORMALIZAÇÃO DE DEMANDA.");
-  const etp = diretriz(etapas[1], "ETAPA: ESTUDO TÉCNICO PRELIMINAR.");
-  const tr = diretriz(etapas[2], "ETAPA: TERMO DE REFERÊNCIA.")
-    .replace(/__LICITA_PIPE_ETP__/g, "bloco ETP que será produzido nesta mesma resposta JSON");
-
-  // O formato de saída (blocos DFD/ETP/TR e seus campos) NÃO é descrito aqui: o backend o impõe
-  // por response_format = json_schema estrito (fila_pipeline_unificado._json_schema_fase_preparatoria).
-  // Repetir o esqueleto no prompt só duplicaria a fonte de verdade e gastaria contexto.
-  return [
-    prefixo,
-    "CONSULTA PRÉVIA SOBRE O OBJETO E A HABILITAÇÃO — CONTEXTO JURÍDICO-TÉCNICO OBRIGATÓRIO:",
-    "__LICITA_PIPE_CONSULTA_HABILITACAO__",
-    "Considere a consulta prévia baseada em pesquisa de fontes oficiais. Ela deve qualificar a análise, sem criar requisitos que as fontes não sustentem.",
-    "DOCUMENTOS DE HABILITAÇÃO: os documentos 1 a 11 descritos na consulta já são solicitados pelo modelo atual. Não os repita como adicionais. Em REQUISITOS_ETP, considere requisitos gerais já previstos e inclua somente documentos adicionais concretos, necessários, pertinentes e proporcionais, justificando cada um com fundamento legal. Em REQUISITOS_TR, reproduza somente os adicionais efetivamente exigidos em REQUISITOS_ETP, sem acrescentar, retirar ou alterar exigências e começando em Documento 12. Se não houver documentos adicionais, escreva a frase Não há documentos adicionais. Não invente fontes. Se a consulta indicar possível incompatibilidade jurídica de requisito-base, preserve-o no texto do modelo e sinalize o alerta para revisão humana.",
-    "Abaixo estão as instruções específicas dos três documentos. Produza os três na mesma resposta, mantendo coerência cruzada entre eles.",
-    dfd,
-    etp,
-    tr,
-    "REGRAS PARA A RESPOSTA:",
-    "1. Preencha todos os campos dos blocos DFD, ETP e TR com texto não vazio, conforme o esquema JSON da resposta. As quebras de linha dentro dos textos são tratadas pelo próprio formato JSON.",
-    "2. Preserve os fatos e as instruções do usuário. Não invente valores, normas, datas, locais, fornecedores, registros ou exigências de habilitação."
-  ].filter((parte) => Boolean(String(parte || "").trim())).join("\n\n");
+export async function confirmarCodigoVerificacaoEmail(email: string, code: string): Promise<{ verified: boolean; token: string; expires_in: number; message: string }> {
+  const response = await fetch(`${BASE_URL}/licita/api/email/verification/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: email.trim(), code: code.trim() }),
+  });
+  let payload: any = {};
+  try { payload = await response.json(); } catch {}
+  if (!response.ok) throw new Error(payload?.detail || "Não foi possível confirmar o endereço de e-mail.");
+  return payload;
 }
 
 export const gerarFasePreparatoria = async (dados: any, arquivos?: DocumentosReferenciaUpload): Promise<FasePreparatoriaJob> => {
@@ -184,69 +92,19 @@ export const gerarFasePreparatoria = async (dados: any, arquivos?: DocumentosRef
   const dadosOriginais = { ...(dados?.dados_usuario || {}) } as Record<string, any>;
   const dadosUsuario = mapearDadosWizard(dadosOriginais) as Record<string, string>;
   const instrucoes = String(dados?.instrucoes || "").trim();
-  const meeppExclusivo = dadosUsuario["{{ME_EPP}}"] === "SIM";
-  const modelo = "unsloth-auto";
-
-  const modalidade = String(dadosUsuario["{{MODALIDADE}}"] || "").trim().toUpperCase();
   const pagamentoTipo = String(dadosOriginais?.pagamentoTipo || "CONFORME_ENTREGAS").trim().toUpperCase();
   const pagamentoEtapasRaw = String(dadosOriginais?.pagamentoEtapas || "").trim();
-  const ehContratacaoDireta = ["DISPENSA_EMAIL", "DISPENSA_BLL"].includes(modalidade);
-  const etapas: Array<{ id: string; tipo: string; prompt: string; temperature?: number }> = [];
-
-  const itensJson = dadosUsuario["{{ITENS}}"];
-  let itens: any[] = [];
-  if (typeof itensJson === "string") {
-    try { itens = JSON.parse(itensJson.replace(/^__TABLE__/, "")); } catch { itens = []; }
-  } else if (Array.isArray(itensJson)) {
-    itens = itensJson;
+  if (pagamentoTipo === "POR_ETAPAS" && !pagamentoEtapasRaw) {
+    throw new Error("Informe como será o pagamento por etapas antes de confeccionar os documentos.");
   }
 
-  if (itens.length > 0) {
-    etapas.push({
-      id: "AUDITORIA_MARCAS",
-      tipo: "auditoria_marcas",
-      temperature: 0,
-      prompt: construirPromptAuditoriaMarcas(itens, instrucoes),
-    });
-  }
-
-  if (pagamentoTipo === "POR_ETAPAS") {
-    if (!pagamentoEtapasRaw) throw new Error("Informe como será o pagamento por etapas antes de confeccionar os documentos.");
-    etapas.push({
-      id: "PAGAMENTO_ETAPAS",
-      tipo: "geracao_json",
-      temperature: 0,
-      prompt: construirPromptPagamentoEtapas(pagamentoEtapasRaw),
-    });
-  }
-
-  if (ehContratacaoDireta) {
-    etapas.push({
-      id: "CONTRATACAO_DIRETA",
-      tipo: "geracao_contratacao_direta",
-      temperature: 0.3,
-      prompt: construirPromptContratacaoDireta(instrucoes, modalidade),
-    });
-  } else {
-    etapas.push({
-      id: "CONSULTA_HABILITACAO",
-      tipo: "consulta_habilitacao",
-      temperature: 0.1,
-      prompt: construirPromptConsultaHabilitacao(instrucoes),
-    });
-    etapas.push({
-      id: "FASE_PREPARATORIA",
-      tipo: "geracao_unificada",
-      temperature: 0.3,
-      prompt: construirPromptUnificado(dadosUsuario, meeppExclusivo, instrucoes),
-    });
-  }
+  const emailVerificationToken = String(dados?.emailVerificationToken || "").trim();
+  if (!emailVerificationToken) throw new Error("Confirme o endereço de e-mail antes de colocar a solicitação na fila.");
 
   const payload = {
     email: dados.email,
     instrucoes,
     dados_usuario: dadosUsuario,
-    dados_ia: { __LICITA_PIPELINE__: { version: 6, model: modelo, temperature: 0.3, eh_contratacao_direta: ehContratacaoDireta, etapas } },
   };
 
   const anexos = arquivos || {};
@@ -260,7 +118,7 @@ export const gerarFasePreparatoria = async (dados: any, arquivos?: DocumentosRef
 
   let requestInit: RequestInit = {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Email-Verification": emailVerificationToken },
     body: JSON.stringify(payload),
   };
 
@@ -272,6 +130,7 @@ export const gerarFasePreparatoria = async (dados: any, arquivos?: DocumentosRef
     }
     requestInit = {
       method: "POST",
+      headers: { "X-Email-Verification": emailVerificationToken },
       body: formData,
     };
   }

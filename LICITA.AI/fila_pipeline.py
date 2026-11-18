@@ -31,7 +31,7 @@ def limite_prompt_chars() -> int:
 
 
 PESQUISA_WEB_SYSTEM_PROMPT = """
-Você é um especialista em planejamento de contratações públicas brasileiras, com rigor jurídico e técnico. Quando a tarefa envolver a elaboração ou análise de DFD, ETP, TR, edital, contratação direta ou requisitos relacionados ao objeto, use a ferramenta de pesquisa na web do Unsloth antes de concluir. Você dispõe de até 600 segundos para concluir a tarefa atual, incluindo pesquisa, leitura das páginas e redação; organize o trabalho para terminar nesse prazo e evite buscas repetitivas.
+Você é um especialista em planejamento de contratações públicas brasileiras, com rigor jurídico e técnico. Quando a tarefa envolver a elaboração ou análise de DFD, ETP, TR, edital, contratação direta ou requisitos relacionados ao objeto, use a ferramenta de pesquisa na web do Unsloth antes de concluir. Você dispõe de até 1200 segundos para concluir a tarefa atual, incluindo pesquisa, leitura das páginas e redação; organize o trabalho para terminar nesse prazo e evite buscas repetitivas.
 
 Pesquise especificamente o objeto, suas características e riscos relevantes, a legislação vigente aplicável e os documentos/requisitos de habilitação juridicamente cabíveis para aquele objeto. Priorize fontes oficiais e atuais: Planalto (texto legal consolidado), órgãos federais, Compras.gov.br, TCU, TCE-SP, reguladores/conselhos competentes e páginas oficiais dos órgãos responsáveis. Abra e confira a fonte primária sempre que possível; verifique vigência, alterações e âmbito de aplicação. Use páginas de fornecedores apenas para especificações técnicas pontuais, nunca como fundamento jurídico.
 
@@ -66,8 +66,7 @@ def _dados_para_prompt(dados_usuario: dict) -> dict:
     for chave in (
         "{{CAMINHO_IMAGEM_DOTACAO}}", "{{CONTATOS_SECRETARIAS}}", "ITENS_NOMES",
         "GESTORES_DADOS", "FISCAIS_DADOS",
-        "PAGAMENTO_ETAPAS_RAW", "INSTRUCOES_EXTRAS", "REQUISITOS_ETP_ANTERIOR",
-        "RAW_EXECUCAO", "RAW_MOTIVO_CRITERIO", "RAW_MOTIVO_MODALIDADE", "RAW_PAC",
+        "INSTRUCOES_EXTRAS", "REQUISITOS_ETP_ANTERIOR",
     ):
         dados.pop(chave, None)
 
@@ -350,6 +349,13 @@ def _timeout_ia() -> httpx.Timeout:
     return httpx.Timeout(AI_TIMEOUT_SECONDS, connect=AI_CONNECT_TIMEOUT_SECONDS)
 
 
+def _erro_http_provedor(status: int, detalhe: str) -> RuntimeError:
+    mensagem = f"IA HTTP {status}: {str(detalhe or '')[:500]}"
+    if status in {408, 425, 429} or status >= 500:
+        return RuntimeError(mensagem)
+    return ErroPermanente(mensagem)
+
+
 def _post_ia(client, url: str, **kwargs):
     """POST ao provedor de IA convertendo falhas de rede em erros com mensagem legível."""
     try:
@@ -372,6 +378,7 @@ def _chamar_ia(
     response_format: dict | None = None,
     enable_tools: bool = True,
     system_prompt: str | None = None,
+    enable_thinking: bool = True,
 ) -> tuple[dict, str]:
     base_url, api_key, modelo = _provider_config(model)
     if not base_url or not api_key:
@@ -398,7 +405,7 @@ def _chamar_ia(
         payload["response_format"] = response_format
     # O Unsloth aplica o modo de raciocínio quando suportado pelo modelo/template ativo.
     # Enviar em todas as chamadas evita acoplar esse comportamento ao nome de uma família específica.
-    payload["enable_thinking"] = True
+    payload["enable_thinking"] = bool(enable_thinking)
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
     with httpx.Client(timeout=_timeout_ia()) as client:
         response = _post_ia(client, f"{base_url}/chat/completions", headers=headers, json=payload)
@@ -406,7 +413,7 @@ def _chamar_ia(
             try:
                 lista_modelos = client.get(f"{base_url}/models", headers=headers)
                 if lista_modelos.status_code >= 400:
-                    raise RuntimeError(f"HTTP {lista_modelos.status_code}")
+                    raise _erro_http_provedor(lista_modelos.status_code, lista_modelos.text)
                 dados_modelos = lista_modelos.json()
                 itens_modelos = dados_modelos.get("data", []) if isinstance(dados_modelos, dict) else []
                 disponiveis = [
@@ -427,7 +434,7 @@ def _chamar_ia(
             payload["model"] = modelo
             response = _post_ia(client, f"{base_url}/chat/completions", headers=headers, json=payload)
     if response.status_code >= 400:
-        raise RuntimeError(f"IA HTTP {response.status_code}: {response.text[:500]}")
+        raise _erro_http_provedor(response.status_code, response.text)
     try:
         data = response.json()
     except ValueError as exc:
@@ -447,17 +454,19 @@ def _chamar_ia(
     # de contexto ou geração. A aplicação não impõe um teto fixo de tokens de saída.
     # Não tente "reparar" uma resposta truncada: isso poderia inventar ou omitir conteúdo.
     if choice.get("finish_reason") == "length":
-        raise RuntimeError(
-            "A resposta da IA foi truncada ao atingir o limite de contexto/geração do modelo ou servidor. "
-            "A aplicação não impõe um teto fixo de tokens de saída; confira o contexto disponível no Unsloth "
-            "e, se necessário, divida a geração em etapas."
+        raise ErroPermanente(
+            "A resposta desta etapa documental foi truncada pelo limite de contexto/geração do modelo ou servidor. "
+            "A geração já foi dividida por documento; reduza os anexos ou o conteúdo do documento e tente novamente."
         )
 
     try:
         resultado = _extrair_json(content)
     except JSONCorrompidoError as erro_json:
-        # Uma única chamada adicional corrige somente a sintaxe do JSON; não reescreve a
-        # contratação nem aceita o resultado sem passar novamente pelo parser/validador.
+        if response_format is not None:
+            raise ErroPermanente(
+                "A IA não respeitou o schema JSON estrito da etapa. O resultado não será reparado "
+                "automaticamente para evitar alteração do conteúdo jurídico."
+            ) from erro_json
         payload_correcao = {
             "model": modelo_resolvido,
             "temperature": 0.0,
@@ -494,9 +503,9 @@ def _chamar_ia(
                 json=payload_correcao,
             )
         if resposta_correcao.status_code >= 400:
-            raise RuntimeError(
-                f"{erro_json}. A tentativa automática de correção falhou com HTTP "
-                f"{resposta_correcao.status_code}."
+            raise _erro_http_provedor(
+                resposta_correcao.status_code,
+                f"{erro_json}. A tentativa automática de correção falhou: {resposta_correcao.text}",
             ) from erro_json
         try:
             dados_correcao = resposta_correcao.json()

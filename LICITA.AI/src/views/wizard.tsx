@@ -466,7 +466,7 @@ export default function Wizard() {
     sair();
   };
 
-  const confeccionarDocumentos = async ({ instrucoes, email, arquivos }: { instrucoes: string; email: string; arquivos: DocumentosReferenciaUpload }) => {
+  const confeccionarDocumentos = async ({ instrucoes, email, emailVerificationToken, arquivos }: { instrucoes: string; email: string; emailVerificationToken: string; arquivos: DocumentosReferenciaUpload }) => {
     setMostrarPromptModal(false);
     setCarregando(true);
     setErroMsg(null);
@@ -480,6 +480,7 @@ export default function Wizard() {
     try {
       const resultado = await gerarFasePreparatoria({
         email,
+        emailVerificationToken,
         instrucoes: instrucoes.trim(),
         dados_usuario: dados,
       }, arquivos);
