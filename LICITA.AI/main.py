@@ -24,11 +24,12 @@ from email.message import EmailMessage
 import httpx
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, Response
+from starlette.datastructures import UploadFile as StarletteUploadFile
 from pydantic import BaseModel, Field
 from typing import Literal
 
 from documentos_contexto import MAX_CONTEXT_CHARS, extrair_contexto_documentos
-from fila import EMAIL_RE, MAX_ATTEMPTS, QUEUE_DIR, SMTP_FROM, SMTP_PASSWORD, SMTP_USERNAME, _artifact_path, _job_path, _smtp_client, cancel_job, enqueue_job, get_job
+from fila import EMAIL_RE, MAX_ATTEMPTS, QUEUE_DIR, SMTP_FROM, SMTP_PASSWORD, SMTP_USERNAME, _artifact_path, _job_path, _smtp_client, cancel_job, enqueue_job, get_job, listar_jobs_sqlite
 from fila_pipeline import _dados_para_prompt, limite_prompt_chars
 from fila_pipeline_unificado import iniciar_worker
 from pipeline_prompts import montar_pipeline
@@ -753,7 +754,7 @@ async def confirmar_verificacao_email(req: EmailVerificationConfirmRequest):
 IMPORT_PLANILHA_MAX_BYTES = 5 * 1024 * 1024
 _IMPORTAR_CABECALHOS = {
     "numero": {"numero", "n", "no", "item", "seq", "sequencia"},
-    "descricao": {"descricao", "descritivo", "especificacao", "objeto", "material", "produto"},
+    "descricao": {"descricao", "descritivo", "especificacao", "objeto", "material", "produto", "descricaoitem", "descricaodoitem", "descricaoobjeto", "especificacaoitem"},
     "un": {"un", "und", "unidade", "unid"},
     "qtd": {"qtd", "qtde", "quantidade"},
     "valor": {"valor", "preco", "valorunitario", "precounitario", "valorunitarioestimado", "precoestimado"},
@@ -812,6 +813,9 @@ def _ler_itens_csv(conteudo: bytes) -> list[dict]:
     if not linhas:
         raise ValueError("A planilha está vazia.")
     cabecalhos = linhas[0]
+    aliases_descricao = _IMPORTAR_CABECALHOS["descricao"]
+    if not any(_normalizar_cabecalho_planilha(cabecalho) in aliases_descricao for cabecalho in cabecalhos):
+        raise ValueError("A planilha deve conter uma coluna de descrição, descritivo, especificação ou objeto.")
     itens = [
         item for indice, linha in enumerate(linhas[1:], start=1)
         if (item := _normalizar_linha_planilha(cabecalhos, linha, indice)) is not None
@@ -1317,10 +1321,7 @@ async def reenviar_fila_usuario(job_id: str, request: Request):
         raise HTTPException(status_code=409, detail="Não há documentos concluídos suficientes para refazer somente o envio. Faça uma nova solicitação.")
     try:
         novo = enqueue_job(
-            email=str(job.get("email",
-            request_id=request.state.request_id,
-            require_review=request.headers.get("X-Licita-Review") == "1",
-        ) or ""),
+            email=str(job.get("email") or ""),
             dados_usuario=job.get("dados_usuario") if isinstance(job.get("dados_usuario"), dict) else {},
             dados_ia=dados_ia_final,
             instrucoes=str(job.get("instrucoes") or ""),
