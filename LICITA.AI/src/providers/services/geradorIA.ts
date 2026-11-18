@@ -221,5 +221,6 @@ ${instrucoesCondicionaisTr}`;
     const lembreteFinal = usarMarcadorDados
         ? `\n\nLEMBRETE OBRIGATÓRIO: aplique integralmente as INSTRUÇÕES DO USUÁRIO acima, preserve os dados concretos e não invente fatos.`
         : "";
+    diretrizEtapa = substituirTagsMunicipais(diretrizEtapa, dadosUsuario);
     return `${regrasGerais}\n\n${basePrompt}${dadosMarcados}${instrucoesObrigatorias}\n\n${diretrizEtapa}\n\nREGRAS MÍNIMAS OBRIGATÓRIAS DE TAMANHO E PROFUNDIDADE:\n${regrasMinimas}${lembreteFinal}\n\nESTRUTURA JSON OBRIGATÓRIA:\n${chaves}\n\n${restricoesJSON}`;
 }
