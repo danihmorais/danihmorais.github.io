@@ -160,7 +160,7 @@ export default function PromptModal({
                   <input
                     ref={(elemento) => { inputArquivoRefs.current[campo.chave] = elemento; }}
                     type="file"
-                    accept=".pdf,.docx"
+                    accept=".pdf,.docx,.txt"
                     aria-label={"Anexar " + campo.titulo}
                     onChange={(e) => definirArquivo(campo.chave, e.target.files?.[0] || null)}
                   />
@@ -180,7 +180,7 @@ export default function PromptModal({
             })}
           </div>
           <p className="reference-footnote">
-            Formatos aceitos: PDF e DOCX. Documentos digitalizados podem passar por OCR quando não houver texto extraível. Ao anexar um Edital/Aviso, apenas os anexos DFD, ETP e TR encontrados serão encaminhados como contexto.
+            Formatos aceitos: PDF, DOCX e TXT. Documentos digitalizados podem passar por OCR quando não houver texto extraível. Ao anexar um Edital/Aviso, apenas os anexos DFD, ETP e TR encontrados serão encaminhados como contexto.
           </p>
         </div>
 
