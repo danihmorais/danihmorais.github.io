@@ -37,6 +37,15 @@ from main import app
 
 
 class LicitaBackendTests(unittest.TestCase):
+    def test_metrics_prometheus_inclui_metricas_ia(self):
+        with TestClient(app) as client:
+            resposta = client.get("/metrics")
+        self.assertEqual(resposta.status_code, 200)
+        self.assertIn("licita_ai_completions_total", resposta.text)
+        self.assertIn("licita_ai_prompt_tokens_total", resposta.text)
+        self.assertIn("licita_ai_completion_tokens_total", resposta.text)
+        self.assertIn("licita_ai_completion_duration_seconds_total", resposta.text)
+
     def test_configuracao_municipal_publica(self):
         with TestClient(app) as client:
             resposta = client.get("/api/configuracao")

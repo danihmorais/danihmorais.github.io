@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import logging
+import threading
+import time
 import os
 import re
 
@@ -370,6 +373,51 @@ def _post_ia(client, url: str, **kwargs):
         ) from exc
 
 
+_AI_METRICS_LOCK = threading.Lock()
+_AI_METRICS = {
+    "calls": 0,
+    "duration_seconds": 0.0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "total_tokens": 0,
+}
+
+
+def obter_metricas_ia() -> dict:
+    with _AI_METRICS_LOCK:
+        return dict(_AI_METRICS)
+
+
+def _registrar_metricas_ia(dados: dict, duracao: float, modelo: str) -> None:
+    usage = dados.get("usage") if isinstance(dados, dict) else {}
+    usage = usage if isinstance(usage, dict) else {}
+    def normalizar_tokens(valor) -> int:
+        try:
+            return max(0, int(valor or 0))
+        except (TypeError, ValueError, OverflowError):
+            return 0
+
+    prompt_tokens = normalizar_tokens(usage.get("prompt_tokens") or usage.get("input_tokens"))
+    completion_tokens = normalizar_tokens(usage.get("completion_tokens") or usage.get("output_tokens"))
+    total_tokens = normalizar_tokens(usage.get("total_tokens")) or prompt_tokens + completion_tokens
+    with _AI_METRICS_LOCK:
+        _AI_METRICS["calls"] += 1
+        _AI_METRICS["duration_seconds"] += max(0.0, float(duracao))
+        _AI_METRICS["prompt_tokens"] += prompt_tokens
+        _AI_METRICS["completion_tokens"] += completion_tokens
+        _AI_METRICS["total_tokens"] += total_tokens
+    logging.getLogger(__name__).info(
+        "ai_completion_completed",
+        extra={
+            "model": modelo,
+            "duration_seconds": round(max(0.0, float(duracao)), 3),
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": total_tokens,
+        },
+    )
+
+
 def _chamar_ia(
     prompt: str,
     model: str,
@@ -380,6 +428,7 @@ def _chamar_ia(
     system_prompt: str | None = None,
     enable_thinking: bool = True,
 ) -> tuple[dict, str]:
+    inicio_chamada = time.perf_counter()
     base_url, api_key, modelo = _provider_config(model)
     if not base_url or not api_key:
         raise ErroPermanente("O provedor de IA da fila não está configurado no backend.")
@@ -538,4 +587,5 @@ def _chamar_ia(
             ) from erro_correcao
         modelo_resolvido = str(dados_correcao.get("model") or modelo_resolvido)
 
+    _registrar_metricas_ia(dados_correcao if "dados_correcao" in locals() else data, time.perf_counter() - inicio_chamada, modelo_resolvido)
     return resultado, modelo_resolvido
