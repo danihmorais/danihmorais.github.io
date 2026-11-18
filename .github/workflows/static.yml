@@ -113,7 +113,7 @@ jobs:
           if any("__API_URL_JSON__" in (Path("site")/name).read_text(encoding="utf-8") for name in ("documentos-modelo.html","estudos.html")) or "__PAGES_VERSION__" in text: raise SystemExit("Placeholder não substituído.")
           PY
       - name: Setup Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
