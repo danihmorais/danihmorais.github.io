@@ -1,4 +1,19 @@
-import React, { useContext, useEffect, useRef, useState } from "react";
+let temporizadorRascunho: ReturnType<typeof setTimeout> | null = null;
+
+function salvarRascunhoDebounced(conteudo: string): void {
+  if (temporizadorRascunho) clearTimeout(temporizadorRascunho);
+  temporizadorRascunho = setTimeout(() => {
+    try {
+      localStorage.setItem("licita-ai-rascunho-v1", conteudo);
+    } catch (erro) {
+      if (erro instanceof DOMException && erro.name === "QuotaExceededError") {
+        try { window.dispatchEvent(new CustomEvent("licita-ai-storage-quota")); } catch {}
+      }
+    }
+  }, 500);
+}
+
+import React, { useContext, useEffect, useRef, useState, useCallback } from "react";
 import { useToast } from "../components/toast";
 import Step1 from "./steps/step1";
 import Step2 from "./steps/step2";
@@ -197,10 +212,10 @@ export default function Wizard() {
     setInstrucoesEnvio(valor);
   };
 
-  const atualizarDados = (novosDados: Partial<any> | ((atual: any) => Partial<any>)) => {
+  const atualizarDados = useCallback((novosDados: Partial<any> | ((atual: any) => {
     setSalvamentoConcluido(false);
     setDados((prev: any) => ({ ...prev, ...(typeof novosDados === "function" ? novosDados(prev) : novosDados) }));
-  };
+  }, []);
 
   const carregarTeste = (tipo: TipoTesteContratacao) => {
     setDados(criarDadosTeste(tipo) as any);
@@ -547,6 +562,7 @@ export default function Wizard() {
     setRascunhoDisponivel(false);
     setSalvamentoConcluido(false);
     setDados({
+    lotes: [],
       objeto: "", necessidade: "", itens: [], amostra: false, vistoria: false, execucao: "",
       secretarias: [], contatosSecretarias: {}, gestores: [], fiscais: [], instrumento: "CONTRATO",
       prorrogar: true, meepp: "SIM", criterio: "ITEM", motivoCriterio: "", modalidade: "PREGAO_ELETRONICO",
