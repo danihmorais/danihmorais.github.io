@@ -109,6 +109,26 @@ class TestFerramentasEmEtapasMecanicas(unittest.TestCase):
         self.assertTrue(opcoes["enable_thinking"])
         self.assertTrue(opcoes["response_format"]["json_schema"]["strict"])
 
+    def test_schemas_por_documento_sao_estritos_e_exigem_campos_nao_vazios(self):
+        for tipo, nome in (("geracao_dfd", "DFD"), ("geracao_etp", "ETP"), ("geracao_tr", "TR")):
+            with self.subTest(documento=nome):
+                opcoes = pipeline._opcoes_chamada_ia_etapa(tipo)
+                self.assertFalse(opcoes["enable_tools"])
+                self.assertTrue(opcoes["enable_thinking"])
+                formato = opcoes["response_format"]
+                self.assertTrue(formato["json_schema"]["strict"])
+                bloco = formato["json_schema"]["schema"]["properties"][nome]
+                self.assertTrue(bloco["required"])
+                self.assertTrue(all(item["minLength"] == 1 for item in bloco["properties"].values()))
+
+    def test_validador_rejeita_campo_vazio_em_documento_individual(self):
+        campos = pipeline._FASE_PREPARATORIA_CAMPOS["DFD"]
+        resultado = {"DFD": {campo: "Conteúdo suficiente." for campo in campos}}
+        self.assertEqual(pipeline._validar_json_documento(resultado, "DFD"), resultado)
+        resultado["DFD"]["JUSTIFICATIVA"] = "  "
+        with self.assertRaisesRegex(RuntimeError, "vazios"):
+            pipeline._validar_json_documento(resultado, "DFD")
+
     def test_consulta_de_habilitacao_valida_campos_e_listas(self):
         resposta = {
             "ENQUADRAMENTO_DO_OBJETO": "Bem comum.",
