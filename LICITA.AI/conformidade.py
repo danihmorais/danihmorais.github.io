@@ -221,11 +221,17 @@ MATRIZ_TR = [
 
 def _valor_matriz(campo: str, documentos: dict, dados_usuario: dict) -> str:
     if campo.startswith("dados:"):
-        return _texto(dados_usuario.get(campo.removeprefix("dados:")))
-    if "." in campo:
+        valor = _texto(dados_usuario.get(campo.removeprefix("dados:")))
+    elif "." in campo:
         documento, chave = campo.split(".", 1)
-        return _texto(documentos.get(documento, {}).get(chave))
-    return ""
+        valor = _texto(documentos.get(documento, {}).get(chave))
+    else:
+        valor = ""
+    if valor.casefold() in {"não informado", "nao informado", "[não informado]", "[nao informado]", "não informada", "nao informada"}:
+        return ""
+    if PLACEHOLDER_RE.search(valor):
+        return ""
+    return valor
 
 
 def _avaliar_matriz_legal(documentos: dict, dados_usuario: dict) -> dict:
