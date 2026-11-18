@@ -31,6 +31,7 @@ from fila import EMAIL_RE, MAX_ATTEMPTS, QUEUE_DIR, SMTP_FROM, SMTP_PASSWORD, SM
 from fila_pipeline import _dados_para_prompt, limite_prompt_chars
 from fila_pipeline_unificado import iniciar_worker
 from pipeline_prompts import montar_pipeline
+from conformidade import avaliar_conformidade
 
 app = FastAPI(title="Licita.AI API")
 
@@ -1350,14 +1351,18 @@ async def visualizar_documentos_fila(job_id: str, request: Request):
     documentos = job.get("dados_ia_final")
     if not isinstance(documentos, dict):
         raise HTTPException(status_code=409, detail="O conteúdo estruturado não está disponível para revisão.")
+    documentos_preview = {
+        nome: documentos.get(nome, {})
+        for nome in ("DFD", "ETP", "TR")
+        if isinstance(documentos.get(nome), dict)
+    }
+    dados_usuario = job.get("pipeline_dados_usuario") or job.get("dados_usuario_processados") or job.get("dados_usuario") or {}
+    relatorio_conformidade = avaliar_conformidade(documentos_preview, dados_usuario)
     return {
         "job_id": job_id,
         "status": "awaiting_review",
-        "documentos": {
-            nome: documentos.get(nome, {})
-            for nome in ("DFD", "ETP", "TR")
-            if isinstance(documentos.get(nome), dict)
-        },
+        "documentos": documentos_preview,
+        "conformidade": relatorio_conformidade,
         "updated_at": job.get("updated_at"),
         "stale_documents": job.get("review_stale_documents", []),
         "message": "Revise o conteúdo gerado. As alterações serão usadas antes da montagem dos documentos DOCX.",
