@@ -145,6 +145,7 @@ def avaliar_conformidade(documentos: dict, dados_usuario: dict | None = None) ->
         if divergentes:
             alertas.append({"tipo": "pagamento_etapas_tokens", "tokens_nao_encontrados": divergentes})
 
+    matriz = _avaliar_matriz_legal(docs, dados)
     total = len(verificacoes)
     ok = sum(item["status"] == "ok" for item in verificacoes)
     revisao = sum(item["status"] == "revisao" for item in verificacoes)
@@ -152,9 +153,10 @@ def avaliar_conformidade(documentos: dict, dados_usuario: dict | None = None) ->
     return {
         "version": 1,
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "status": "pendencias" if pendencias else "revisao_humana",
-        "summary": {"total": total, "ok": ok, "pendencias": pendencias, "revisao": revisao},
+        "status": "pendencias" if pendencias or matriz["summary"]["alertas"] else "revisao_humana",
+        "summary": {"total": total, "ok": ok, "pendencias": pendencias, "revisao": revisao, "matriz_alertas": matriz["summary"]["alertas"], "matriz_revisao": matriz["summary"]["revisao"]},
         "verificacoes": verificacoes,
+        "matriz_conformidade": matriz,
         "alertas": alertas,
         "limites": [
             "A análise é automatizada e baseada em verificações estruturais e de coerência; não substitui análise jurídica, técnica ou administrativa.",
