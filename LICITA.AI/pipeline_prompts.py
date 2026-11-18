@@ -97,14 +97,6 @@ def _prompt_unificado(dados: dict, exige_amostra: bool, exige_vistoria: bool) ->
     instrumento_arp = _texto(dados, "{{INSTRUMENTO}}").upper() == "ARP"
     criterio = _texto(dados, "{{CRITERIOS}}", "ITEM").upper()
     modalidade = _texto(dados, "{{MODALIDADE}}", "PREGAO_ELETRONICO").upper()
-    if modalidade not in {"PREGAO_ELETRONICO", "PREGAO_PRESENCIAL", "DISPENSA_EMAIL", "DISPENSA_BLL"}:
-        raise ValueError("Modalidade de contratação inválida.")
-    criterio = _texto(dados, "{{CRITERIOS}}", "ITEM").upper()
-    if criterio not in {"ITEM", "GLOBAL", "LOTE"}:
-        raise ValueError("Critério de julgamento inválido.")
-    if len(str(instrucoes or "")) > 12000:
-        raise ValueError("As instruções complementares ultrapassam o limite permitido.")
-
     if instrumento_arp:
         diretriz_objeto = "O OBJETO deve iniciar obrigatoriamente com 'Registro de preços para futura e eventual aquisição'."
     else:
@@ -218,6 +210,13 @@ def montar_pipeline(dados_usuario: dict, instrucoes: str = "") -> dict:
     dados = dict(dados_usuario)
     dados["INSTRUCOES_USUARIO"] = str(instrucoes or "").strip()
     modalidade = _texto(dados, "{{MODALIDADE}}", "PREGAO_ELETRONICO").upper()
+    if modalidade not in {"PREGAO_ELETRONICO", "PREGAO_PRESENCIAL", "DISPENSA_EMAIL", "DISPENSA_BLL"}:
+        raise ValueError("Modalidade de contratação inválida.")
+    criterio = _texto(dados, "{{CRITERIOS}}", "ITEM").upper()
+    if criterio not in {"ITEM", "GLOBAL", "LOTE"}:
+        raise ValueError("Critério de julgamento inválido.")
+    if len(str(instrucoes or "")) > 12000:
+        raise ValueError("As instruções complementares ultrapassam o limite permitido.")
     pagamento_tipo = _texto(dados, "PAGAMENTO_TIPO", "CONFORME_ENTREGAS").upper()
     if pagamento_tipo not in {"CONFORME_ENTREGAS", "MENSALMENTE", "POR_ETAPAS"}:
         raise ValueError("Tipo de pagamento inválido.")
