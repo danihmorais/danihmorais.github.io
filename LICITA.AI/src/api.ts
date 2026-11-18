@@ -141,7 +141,7 @@ export const gerarFasePreparatoria = async (dados: any, arquivos?: DocumentosRef
 
   let requestInit: RequestInit = {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Email-Verification": emailVerificationToken },
+    headers: { "Content-Type": "application/json", "X-Email-Verification": emailVerificationToken, "X-Licita-Review": "1" },
     body: JSON.stringify(payload),
   };
 
@@ -153,7 +153,7 @@ export const gerarFasePreparatoria = async (dados: any, arquivos?: DocumentosRef
     }
     requestInit = {
       method: "POST",
-      headers: { "X-Email-Verification": emailVerificationToken },
+      headers: { "X-Email-Verification": emailVerificationToken, "X-Licita-Review": "1" },
       body: formData,
     };
   }
