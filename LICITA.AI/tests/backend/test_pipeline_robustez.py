@@ -329,8 +329,18 @@ class TestRelatorioConformidade(unittest.TestCase):
         self.assertIn("Campos estruturais verificados", relatorio)
         self.assertIn("Campos pendentes", relatorio)
         self.assertIn("TCU", relatorio)
+        self.assertIn("https://www.tcu.gov.br", relatorio)
+        self.assertIn("artigo 18", relatorio.lower())
+        self.assertIn("No catálogo", relatorio)
         self.assertIn("Conferência humana obrigatória", relatorio)
         self.assertIn("não representa parecer jurídico", relatorio.lower())
+
+    def test_relatorio_sinaliza_citacao_fora_do_catalogo(self):
+        resultado = {"DFD": {"JUSTIFICATIVA": "Nos termos do art. 500 da Lei nº 14.133/2021."}}
+        relatorio = pipeline._gerar_relatorio_conformidade(resultado)
+        self.assertIn("Referências fora do catálogo", relatorio)
+        self.assertIn("artigo 500", relatorio.lower())
+        self.assertIn("Revisar", relatorio)
 
     def test_relatorio_nao_afirma_validacao_legal_automatica(self):
         relatorio = pipeline._gerar_relatorio_conformidade({})
