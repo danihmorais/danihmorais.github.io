@@ -37,6 +37,16 @@ from main import app
 
 
 class LicitaBackendTests(unittest.TestCase):
+    def test_configuracao_municipal_publica(self):
+        with TestClient(app) as client:
+            resposta = client.get("/api/configuracao")
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        payload = resposta.json()
+        self.assertEqual(payload["municipio"]["id"], "sao-francisco-sp")
+        self.assertEqual(payload["municipio"]["display"], "São Francisco/SP")
+        self.assertEqual(payload["limite_exclusividade_me_epp_centavos"], 8000000)
+        self.assertIn("endereco_prefeitura", payload["municipio"]["campos"])
+
     def _headers_verificacao(self, email: str) -> dict:
         return {"X-Email-Verification": main._emitir_token_email_verificado(email)}
 
@@ -390,7 +400,7 @@ class LicitaBackendTests(unittest.TestCase):
                 email="admin-cancelar@example.com",
                 dados_usuario={
                     "{{OBJETO}}": "Objeto com dotação em imagem",
-                    "{{DOTACAO}}": "__IMG__" + segredo + "\\nFonte 123.456.789/0001-00",
+                    "{{DOTACAO}}": "__IMG__" + segredo + "\nFonte 123.456.789/0001-00",
                     "{{CAMINHO_IMAGEM_DOTACAO}}": "data:image/png;base64," + segredo,
                 },
                 dados_ia={"__LICITA_PIPELINE__": {"model": "unsloth-auto", "etapas": []}},
@@ -496,6 +506,9 @@ class LicitaBackendTests(unittest.TestCase):
                 "Pronto_DFD - BASE.docx",
                 "Pronto_ETP - BASE.docx",
                 "Pronto_TR - BASE.docx",
+                "RELATORIO_CONFORMIDADE.json",
+                "RELATORIO_CONFORMIDADE.txt",
+                "RELATORIO_REFERENCIAS_LEGAIS.txt",
             }
             self.assertEqual(names, expected)
         finally:
@@ -745,9 +758,9 @@ class TestEntregaZipAutenticada(unittest.TestCase):
 class TestImportacaoItensPlanilha(unittest.TestCase):
     def test_csv_separado_por_ponto_e_virgula_normaliza_cabecalhos(self):
         conteudo = (
-            "Nº;Descrição;Unidade;Quantidade;Valor Unitário\\n"
-            "1;Papel A4;RESMA;10;32,50\\n"
-            "2;Caneta azul;CAIXA;5;18,90\\n"
+            "Nº;Descrição;Unidade;Quantidade;Valor Unitário\n"
+            "1;Papel A4;RESMA;10;32,50\n"
+            "2;Caneta azul;CAIXA;5;18,90\n"
         ).encode("utf-8")
         itens = main._ler_itens_csv(conteudo)
         self.assertEqual(len(itens), 2)
@@ -758,7 +771,7 @@ class TestImportacaoItensPlanilha(unittest.TestCase):
 
     def test_csv_rejeita_planilha_sem_coluna_de_descricao(self):
         with self.assertRaisesRegex(ValueError, "coluna de descrição"):
-            main._ler_itens_csv(b"Codigo;Quantidade\\n01;10\\n")
+            main._ler_itens_csv(b"Codigo;Quantidade\n01;10\n")
 
     def test_xlsx_le_cabecalhos_em_portugues(self):
         from openpyxl import Workbook
@@ -778,7 +791,7 @@ class TestImportacaoItensPlanilha(unittest.TestCase):
         )
 
     def test_endpoint_recebe_csv_e_aplica_limites_de_upload(self):
-        csv_data = b"Item;Descricao;Unidade;Quantidade;Valor\\n1;Papel A4;RESMA;10;32.50\\n"
+        csv_data = b"Item;Descricao;Unidade;Quantidade;Valor\n1;Papel A4;RESMA;10;32.50\n"
         with TestClient(app) as client:
             resposta = client.post(
                 "/api/importar-itens-planilha",
@@ -829,6 +842,20 @@ class TestRevisaoPreviaDocumentos(unittest.TestCase):
         ):
             resposta = client.get(f"/api/fila/{job['job_id']}/preview", headers={"X-Status-Token": "errado"})
         self.assertEqual(resposta.status_code, 403)
+
+    def test_previsualizacao_retorna_checklist_de_conformidade(self):
+        job = self.job_revisao()
+        with (
+            patch.object(main, "get_job", return_value=job),
+            patch.object(main, "_token_matches", return_value=True),
+            TestClient(app) as client,
+        ):
+            resposta = client.get(f"/api/fila/{job['job_id']}/preview", headers={"X-Status-Token": "token-revisao"})
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        relatorio = resposta.json()["conformidade"]
+        self.assertEqual(relatorio["version"], 1)
+        self.assertIn("summary", relatorio)
+        self.assertTrue(relatorio["verificacoes"])
 
     def test_edicao_de_dfd_marca_etp_e_tr_para_regeneracao(self):
         from tempfile import TemporaryDirectory

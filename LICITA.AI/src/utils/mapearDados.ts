@@ -1,3 +1,5 @@
+import { obterTagsMunicipais } from "./configMunicipal";
+
 export const mapearDadosWizard = (dados: any) => {
   const itens = dados.itens || [];
   const lotesExplicitos = Array.isArray(dados.lotes) ? dados.lotes : [];
@@ -99,6 +101,7 @@ export const mapearDadosWizard = (dados: any) => {
     "RAW_MOTIVO_CRITERIO": dados.motivoCriterio || "",
     "RAW_MOTIVO_MODALIDADE": dados.motivoModalidade || "",
     "RAW_PAC": dados.pac === "SIM" ? "Previsto no PAC" : `Não previsto: ${dados.motivoPac || 'sem justificativa'}`,
-    "REQUISITOS_ETP_ANTERIOR": dados.requisitosEtpAnterior || "Não informados."
+    "REQUISITOS_ETP_ANTERIOR": dados.requisitosEtpAnterior || "Não informados.",
+    ...obterTagsMunicipais()
   };
 };

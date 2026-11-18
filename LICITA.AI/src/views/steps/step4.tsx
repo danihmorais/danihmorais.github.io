@@ -228,7 +228,7 @@ export default function Step4({
               <div style={{ padding: "20px", textAlign: "center", color: "var(--text-light)", fontSize: "13px" }}>Nenhum gestor adicionado.</div>
             )}
             {dados.gestores.map((gestor: any, index: number) => (
-              <div key={item.id ?? item.nome ?? item.descricao ?? item.value ?? JSON.stringify(item)} className="person-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--bg-subtle)", padding: "8px 16px", borderRadius: "var(--radius)", border: "1px solid var(--border)" }}>
+              <div key={gestor.id ?? `${gestor.nome}-${gestor.cargo}-${index}`} className="person-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--bg-subtle)", padding: "8px 16px", borderRadius: "var(--radius)", border: "1px solid var(--border)" }}>
                 <span style={{ fontSize: "13px", color: "var(--text-main)", fontWeight: "500" }}>{gestor.nome} — {gestor.cargo}</span>
                 <div style={{ display: "flex", gap: "6px" }}>
                   <div style={{ display: "flex", gap: "6px" }}>
@@ -308,7 +308,7 @@ export default function Step4({
               <div style={{ padding: "20px", textAlign: "center", color: "var(--text-light)", fontSize: "13px" }}>Nenhum fiscal adicionado.</div>
             )}
             {dados.fiscais.map((fiscal: any, index: number) => (
-              <div key={item.id ?? item.nome ?? item.descricao ?? item.value ?? JSON.stringify(item)} className="person-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--bg-subtle)", padding: "8px 16px", borderRadius: "var(--radius)", border: "1px solid var(--border)" }}>
+              <div key={fiscal.id ?? `${fiscal.nome}-${fiscal.cargo}-${index}`} className="person-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--bg-subtle)", padding: "8px 16px", borderRadius: "var(--radius)", border: "1px solid var(--border)" }}>
                 <span style={{ fontSize: "13px", color: "var(--text-main)", fontWeight: "500" }}>{fiscal.nome} — {fiscal.cargo}</span>
                 <div style={{ display: "flex", gap: "6px" }}>
                   <div style={{ display: "flex", gap: "6px" }}>

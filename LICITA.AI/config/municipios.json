@@ -10,7 +10,33 @@
       "nome": "São Francisco",
       "uf": "SP",
       "decreto": "Decreto Municipal nº 2.056/2024",
-      "campos": {}
+      "parametros": {
+        "limite_exclusividade_me_epp_centavos": 8000000
+      },
+      "campos": {
+        "nome_completo": "Prefeitura Municipal de São Francisco",
+        "nome_uf": "São Francisco/SP",
+        "endereco_prefeitura": "Av. Oscar Antônio da Costa, 1187, CEP 15710-011, São Francisco/SP",
+        "telefone": "(17) 3693-1101",
+        "email_licitacao": "licitacao@saofrancisco.sp.gov.br"
+      },
+      "modelos": {
+        "pasta": "modelos",
+        "fase_preparatoria": [
+          "DFD - BASE.docx",
+          "ETP - BASE.docx",
+          "TR - BASE.docx"
+        ],
+        "contratacao_direta": [
+          "Contratação Direta - BASE.docx"
+        ]
+      },
+      "textos": {
+        "clausula_padrao": "A prorrogação, quando aplicável, deverá respeitar os limites legais e será formalizada por meio de termo aditivo, mediante prévia manifestação técnica e jurídica, assegurando a continuidade do atendimento às necessidades de {{MUNICIPIO}}. Para viabilizar a prorrogação, o pedido deverá ser encaminhado ao Setor de Licitações com antecedência mínima de 60 (sessenta) dias do término da vigência contratual, conforme dispõe {{DECRETO}}.",
+        "meepp_exclusivo": "A contratação SERÁ exclusiva para ME/EPP nos itens em que o valor estimado esteja dentro do limite legal de {{LIMITE_ME_EPP}}, nos termos dos arts. 47 e 48 da Lei Complementar nº 123/2006, observadas as hipóteses legais de afastamento e a vantajosidade para a Administração.",
+        "meepp_nao_exclusivo": "Nos termos da Lei Complementar nº 123/2006, o tratamento diferenciado e simplificado para microempresas e empresas de pequeno porte poderá ser afastado nas hipóteses legais, especialmente quando não for vantajoso para a Administração ou representar prejuízo ao conjunto ou complexo do objeto. Nesta licitação, não haverá exclusividade para ME/EPP, sem prejuízo dos demais benefícios legalmente aplicáveis.",
+        "vistoria_tr": "Em vista das especificidades do objeto, o licitante poderá realizar visita ao local de execução, às suas expensas, durante o prazo de envio das propostas. A visita, quando solicitada, poderá ser acompanhada pelo Fiscal {{FISCAL}}, cujo acompanhamento individualizado deverá ser solicitado pelo telefone {{TELEFONE}}. O local de visita será {{ENDERECO_PREFEITURA}}, em dias úteis e horários previamente informados pela Administração. Independentemente da visita, o licitante declarará na habilitação que conhece as condições e peculiaridades do objeto, observados os requisitos legais aplicáveis."
+      }
     }
   }
 }

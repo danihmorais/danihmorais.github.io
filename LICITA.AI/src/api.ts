@@ -1,7 +1,20 @@
 import { mapearDadosWizard } from "./utils/mapearDados";
 import { getApiBaseUrl } from "./utils/apiBase";
+import { definirConfigMunicipal, type ConfigMunicipalPublica } from "./utils/configMunicipal";
 
 const BASE_URL = getApiBaseUrl();
+
+export async function carregarConfiguracaoMunicipal(): Promise<ConfigMunicipalPublica | null> {
+  try {
+    const response = await fetch(`${BASE_URL}/licita/api/configuracao`);
+    if (!response.ok) return null;
+    const configuracao = await response.json() as ConfigMunicipalPublica;
+    definirConfigMunicipal(configuracao);
+    return configuracao;
+  } catch {
+    return null;
+  }
+}
 
 export interface FasePreparatoriaJob {
   job_id: string;
@@ -189,10 +202,27 @@ export async function importarItensPlanilha(arquivo: File): Promise<{ items: Ite
   return payload;
 }
 
+export type RelatorioConformidadePreview = {
+  version: number;
+  generated_at: string;
+  status: string;
+  summary: { total: number; ok: number; pendencias: number; revisao: number };
+  verificacoes: Array<{ id: string; titulo: string; status: "ok" | "alerta" | "revisao"; detalhe: string }>;
+  alertas: Array<Record<string, unknown>>;
+  limites: string[];
+  matriz_conformidade: {
+    fonte: string;
+    summary: { total: number; alertas: number; revisao: number };
+    itens: Array<{ id: string; base: string; titulo: string; status: "alerta" | "revisao"; campos: string[]; detalhe: string; nota?: string }>;
+    limite: string;
+  };
+};
+
 export type PreviewDocumentosFila = {
   job_id: string;
   status: "awaiting_review";
   documentos: Record<"DFD" | "ETP" | "TR", Record<string, string>>;
+  conformidade?: RelatorioConformidadePreview;
   updated_at?: string;
   stale_documents?: string[];
   message: string;
