@@ -106,3 +106,4 @@ TEXTOS = {
     if isinstance(valor, str)
 }
 SETTINGS = {"textos": TEXTOS.copy()}
+LIMITE_ME_EPP_TEXTO = _substituir_campos_municipais("{{LIMITE_ME_EPP}}")
