@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useRef, useState } from "react";
+import React, { useContext, useEffect, useRef, useState, useCallback } from "react";
 import { useToast } from "../components/toast";
 import Step1 from "./steps/step1";
 import Step2 from "./steps/step2";
@@ -197,10 +197,10 @@ export default function Wizard() {
     setInstrucoesEnvio(valor);
   };
 
-  const atualizarDados = (novosDados: Partial<any> | ((atual: any) => Partial<any>)) => {
+  const atualizarDados = useCallback((novosDados: Partial<any> | ((atual: any) => {
     setSalvamentoConcluido(false);
     setDados((prev: any) => ({ ...prev, ...(typeof novosDados === "function" ? novosDados(prev) : novosDados) }));
-  };
+  }, []);
 
   const carregarTeste = (tipo: TipoTesteContratacao) => {
     setDados(criarDadosTeste(tipo) as any);
