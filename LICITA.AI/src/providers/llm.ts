@@ -36,7 +36,7 @@ export function extrairEConverterJSON(rawText: string): any {
     return JSON.parse(String(rawText ?? "").trim());
   } catch (erro) {
     const detalhe = erro instanceof Error ? erro.message : String(erro);
-    throw new Error(`O backend não retornou JSON válido conforme o schema estrito. ${detalhe}`);
+    throw new Error(`FATAL:O backend não retornou JSON válido conforme o schema estrito. ${detalhe}`);
   }
 }
 
