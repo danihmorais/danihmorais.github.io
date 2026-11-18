@@ -168,6 +168,36 @@ export const gerarFasePreparatoria = async (dados: any, arquivos?: DocumentosRef
   return response.json();
 };
 
+export type AcompanhamentoJobSalvo = { job_id: string; status_token: string; saved_at: number };
+
+const CHAVE_ACOMPANHAMENTO_JOB = "licita-ai-acompanhamento-job-v1";
+
+export function salvarAcompanhamentoJob(jobId: string, statusToken: string): void {
+  if (!jobId || !statusToken || typeof window === "undefined") return;
+  try {
+    const registro: AcompanhamentoJobSalvo = { job_id: jobId, status_token: statusToken, saved_at: Date.now() };
+    window.sessionStorage.setItem(CHAVE_ACOMPANHAMENTO_JOB, JSON.stringify(registro));
+  } catch {}
+}
+
+export function recuperarAcompanhamentoJob(): AcompanhamentoJobSalvo | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const bruto = window.sessionStorage.getItem(CHAVE_ACOMPANHAMENTO_JOB);
+    if (!bruto) return null;
+    const registro = JSON.parse(bruto) as Partial<AcompanhamentoJobSalvo>;
+    if (typeof registro.job_id !== "string" || !registro.job_id || typeof registro.status_token !== "string" || !registro.status_token) return null;
+    return { job_id: registro.job_id, status_token: registro.status_token, saved_at: Number(registro.saved_at) || 0 };
+  } catch {
+    return null;
+  }
+}
+
+export function limparAcompanhamentoJob(): void {
+  if (typeof window === "undefined") return;
+  try { window.sessionStorage.removeItem(CHAVE_ACOMPANHAMENTO_JOB); } catch {}
+}
+
 export interface AdminJob {
   job_id: string;
   status: "queued" | "processing" | "sent" | "failed" | "cancelled" | "cancelling" | string;
