@@ -240,6 +240,7 @@ class TestAutomaticModelResolution(unittest.TestCase):
         self.assertNotIsInstance(contexto.exception, pipeline.ErroPermanente)
 
     def test_schema_estrito_nao_dispara_reparo_json_automatico(self):
+        from unittest.mock import patch
         import fila_pipeline as pipeline
         resposta = {
             "choices": [{"message": {"content": "{json incompleto"}}],
@@ -743,7 +744,7 @@ class TestConfiguracaoThinking(unittest.TestCase):
         self.assertNotIn("max_completion_tokens", payload)
         self.assertNotIn("response_format", payload)
         self.assertEqual(payload["messages"][0]["role"], "system")
-        self.assertIn("600 segundos", payload["messages"][0]["content"])
+        self.assertIn("1200 segundos", payload["messages"][0]["content"])
         self.assertIn("pesquisa na web", payload["messages"][0]["content"])
         self.assertEqual(payload["model"], "qwen-modelo-de-teste")
         self.assertEqual(resultado, {"ok": True})
