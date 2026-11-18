@@ -106,6 +106,7 @@ class LicitaBackendTests(unittest.TestCase):
         self.assertEqual(body["documentos_referencia"]["documentos"][0]["tipo"], "DFD")
 
         job = fila.get_job(body["job_id"])
+        self.assertEqual(job["dados_usuario"]["INSTRUCOES_USUARIO"], "Considerar o documento anterior como referência principal.")
         pipeline = job["dados_ia"]["__LICITA_PIPELINE__"]
         documentos = pipeline["documentos_anteriores"]
         self.assertEqual(len(documentos), 1)
