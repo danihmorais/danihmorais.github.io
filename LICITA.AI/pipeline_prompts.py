@@ -200,6 +200,48 @@ def _prompt_unificado(dados: dict, exige_amostra: bool, exige_vistoria: bool) ->
 
 
 
+def _prompt_documento(dados: dict, documento: str, exige_amostra: bool, exige_vistoria: bool) -> str:
+    prompt = _prompt_unificado(dados, exige_amostra, exige_vistoria)
+    secoes = {
+        "DFD": "ETAPA: DOCUMENTO DE FORMALIZAÇÃO DE DEMANDA.",
+        "ETP": "ETAPA: ESTUDO TÉCNICO PRELIMINAR.",
+        "TR": "ETAPA: TERMO DE REFERÊNCIA.",
+    }
+    if documento not in secoes:
+        raise ValueError("Documento do pipeline inválido.")
+    posicoes = {nome: prompt.find(marcador) for nome, marcador in secoes.items()}
+    if any(posicao < 0 for posicao in posicoes.values()):
+        raise ValueError("Não foi possível separar as instruções dos documentos.")
+    pos_regras_finais = prompt.find("REGRAS RÍGIDAS:")
+    if pos_regras_finais < 0:
+        raise ValueError("As regras finais do pipeline não foram encontradas.")
+    ordem = ("DFD", "ETP", "TR")
+    indice = ordem.index(documento)
+    inicio = posicoes[documento]
+    fim = posicoes[ordem[indice + 1]] if indice + 1 < len(ordem) else pos_regras_finais
+    cabecalho = prompt[:posicoes["DFD"]]
+    regras_documento = prompt[inicio:fim]
+    regras_finais = prompt[pos_regras_finais:]
+    contexto_previo = ""
+    if documento == "ETP":
+        contexto_previo = (
+            "DOCUMENTO DE FORMALIZAÇÃO DE DEMANDA PRODUZIDO NESTA SOLICITAÇÃO. "
+            "Use-o como fonte para preservar a necessidade, o objeto, os resultados esperados e as quantidades, "
+            "sem copiar inconsistências ou inventar fatos:\n__LICITA_PIPE_DFD__"
+        )
+    elif documento == "TR":
+        contexto_previo = (
+            "DOCUMENTO DE FORMALIZAÇÃO DE DEMANDA PRODUZIDO NESTA SOLICITAÇÃO:\n__LICITA_PIPE_DFD__\n\n"
+            "ESTUDO TÉCNICO PRELIMINAR PRODUZIDO NESTA SOLICITAÇÃO. Reproduza no TR os requisitos, documentos "
+            "adicionais, garantias, decisões de parcelamento e demais conclusões aplicáveis, sem criar "
+            "exigências incompatíveis:\n__LICITA_PIPE_ETP__"
+        )
+    return "\n\n".join(
+        parte for parte in (cabecalho, contexto_previo, regras_documento, regras_finais) if parte
+    )
+
+
+
 def montar_pipeline(dados_usuario: dict, instrucoes: str = "") -> dict:
     if not isinstance(dados_usuario, dict):
         raise ValueError("Os dados da contratação devem ser enviados como objeto.")
@@ -264,16 +306,21 @@ def montar_pipeline(dados_usuario: dict, instrucoes: str = "") -> dict:
         })
         amostra = _texto(dados, "{{AMOST}}", "nao").lower() in {"sim", "s", "x"}
         vistoria = _texto(dados, "{{VIST}}", "nao").lower() in {"sim", "s", "x"}
-        etapas.append({
-            "id": "FASE_PREPARATORIA",
-            "tipo": "geracao_unificada",
-            "temperature": 0.3,
-            "prompt": _prompt_unificado(dados, amostra, vistoria),
-        })
+        for documento, etapa_id, etapa_tipo in (
+            ("DFD", "GERACAO_DFD", "geracao_dfd"),
+            ("ETP", "GERACAO_ETP", "geracao_etp"),
+            ("TR", "GERACAO_TR", "geracao_tr"),
+        ):
+            etapas.append({
+                "id": etapa_id,
+                "tipo": etapa_tipo,
+                "temperature": 0.3,
+                "prompt": _prompt_documento(dados, documento, amostra, vistoria),
+            })
         direta = False
     return {
         "__LICITA_PIPELINE__": {
-            "version": 7,
+            "version": 8,
             "model": "unsloth-auto",
             "temperature": 0.3,
             "eh_contratacao_direta": direta,
