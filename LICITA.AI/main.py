@@ -16,6 +16,7 @@ from email.message import EmailMessage
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from typing import Literal
 from starlette.datastructures import UploadFile
@@ -755,6 +756,8 @@ async def consultar_fila(job_id: str, request: Request):
         "cancelled_by": job.get("cancelled_by"),
         "fila_posicao": _queue_position(job_id)[0],
         "result": job.get("result"),
+        "download_available": _artifact_path(job_id).is_file() and str(job.get("status", "")).lower() in {"sent", "failed"},
+        "can_resend": str(job.get("status", "")).lower() == "failed" and str(job.get("current_stage", "")).upper() == "ENVIO_EMAIL" and isinstance(job.get("dados_usuario_processados"), dict) and isinstance(job.get("dados_ia_final") or job.get("dados_ia"), dict),
     }
 
 
@@ -1092,6 +1095,62 @@ async def cancelar_pedido_admin(job_id: str, request: Request):
     }
 
 
+@app.post("/api/fila/{job_id}/reenviar")
+async def reenviar_fila_usuario(job_id: str, request: Request):
+    token = request.headers.get("x-status-token", "")
+    job = get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Solicitação não encontrada.")
+    if not _token_matches(str(job.get("status_token") or ""), token):
+        raise HTTPException(status_code=403, detail="Token de consulta inválido.")
+    if str(job.get("status", "")).lower() != "failed" or str(job.get("current_stage", "")).upper() != "ENVIO_EMAIL":
+        raise HTTPException(status_code=409, detail="O reenvio só está disponível quando a geração foi concluída, mas o envio por e-mail falhou.")
+    dados_processados = job.get("dados_usuario_processados")
+    dados_ia_final = job.get("dados_ia_final") or job.get("dados_ia")
+    if not isinstance(dados_processados, dict) or not isinstance(dados_ia_final, dict) or not dados_ia_final:
+        raise HTTPException(status_code=409, detail="Não há documentos concluídos suficientes para refazer somente o envio. Faça uma nova solicitação.")
+    try:
+        novo = enqueue_job(
+            email=str(job.get("email") or ""),
+            dados_usuario=job.get("dados_usuario") if isinstance(job.get("dados_usuario"), dict) else {},
+            dados_ia=dados_ia_final,
+            instrucoes=str(job.get("instrucoes") or ""),
+            retry_of=job_id,
+            retry_mode="email_only",
+            dados_usuario_processados=dados_processados,
+        )
+        novo["retry_of"] = job_id
+        return novo
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/fila/{job_id}/download")
+async def baixar_zip_fila(job_id: str, request: Request):
+    token = request.headers.get("x-status-token", "")
+    job = get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Solicitação não encontrada.")
+    if not _token_matches(str(job.get("status_token") or ""), token):
+        raise HTTPException(status_code=403, detail="Token de consulta inválido.")
+    if str(job.get("status", "")).lower() not in {"sent", "failed"}:
+        raise HTTPException(status_code=409, detail="O arquivo ainda não está disponível para download.")
+    artifact = _artifact_path(job_id)
+    if not artifact.is_file():
+        raise HTTPException(status_code=404, detail="O arquivo não está mais disponível. A retenção pode ter expirado.")
+    filename = str((job.get("result") or {}).get("filename") or f"LICITA.AI-{job_id}.zip")
+    filename = re.sub(r"[^A-Za-z0-9._ -]", "_", filename).strip(" .") or f"LICITA.AI-{job_id}.zip"
+    return FileResponse(
+        path=artifact,
+        media_type="application/zip",
+        filename=filename,
+        headers={"Cache-Control": "private, no-store"},
+    )
+
+
+
+
+
 @app.post("/api/admin/jobs/{job_id}/retry")
 async def refazer_pedido_admin(job_id: str, request: Request):
     _exigir_admin(request)
@@ -1140,6 +1199,7 @@ async def refazer_pedido_admin(job_id: str, request: Request):
         return novo
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
 
 
 

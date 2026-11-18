@@ -655,5 +655,92 @@ class LicitaBackendTests(unittest.TestCase):
         self._com_admin(executar)
 
 
+class TestEntregaZipAutenticada(unittest.TestCase):
+    def test_download_zip_exige_token_e_entrega_arquivo(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from unittest.mock import patch
+
+        job_id = "a" * 32
+        token = "token-de-status"
+        job = {
+            "job_id": job_id,
+            "status_token": token,
+            "status": "sent",
+            "result": {"filename": "documentos.zip"},
+        }
+        with TemporaryDirectory() as diretorio:
+            arquivo = Path(diretorio) / f"{job_id}.artifact.zip"
+            arquivo.write_bytes(b"PK\\x03\\x04")
+            with (
+                patch.object(main, "get_job", return_value=job),
+                patch.object(main, "_artifact_path", return_value=arquivo),
+                TestClient(app) as client,
+            ):
+                negado = client.get(f"/api/fila/{job_id}/download")
+                resposta = client.get(
+                    f"/api/fila/{job_id}/download",
+                    headers={"X-Status-Token": token},
+                )
+        self.assertEqual(negado.status_code, 403)
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual(resposta.content, b"PK\\x03\\x04")
+        self.assertIn("application/zip", resposta.headers.get("content-type", ""))
+
+    def test_reenvio_usuario_cria_job_email_only_sem_repetir_geracao(self):
+        from unittest.mock import patch
+
+        job_id = "b" * 32
+        token = "token-original"
+        job = {
+            "job_id": job_id,
+            "status_token": token,
+            "status": "failed",
+            "current_stage": "ENVIO_EMAIL",
+            "email": "teste@example.gov.br",
+            "dados_usuario": {"{{OBJETO}}": "Aquisição de materiais"},
+            "dados_usuario_processados": {"{{OBJETO}}": "Aquisição de materiais"},
+            "dados_ia": {"__LICITA_PIPELINE__": {"etapas": []}},
+            "dados_ia_final": {"DFD": {"OBJETO": "Aquisição de materiais"}},
+            "instrucoes": "Preservar os dados.",
+        }
+        novo = {"job_id": "c" * 32, "status": "queued", "status_token": "novo-token"}
+        with (
+            patch.object(main, "get_job", return_value=job),
+            patch.object(main, "enqueue_job", return_value=novo) as enqueue,
+            TestClient(app) as client,
+        ):
+            resposta = client.post(
+                f"/api/fila/{job_id}/reenviar",
+                headers={"X-Status-Token": token},
+            )
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual(resposta.json()["job_id"], novo["job_id"])
+        self.assertEqual(enqueue.call_args.kwargs["retry_mode"], "email_only")
+        self.assertEqual(enqueue.call_args.kwargs["dados_ia"], job["dados_ia_final"])
+
+    def test_reenvio_nao_reexecuta_geracao_quando_erro_nao_e_smtp(self):
+        from unittest.mock import patch
+
+        job_id = "d" * 32
+        job = {
+            "job_id": job_id,
+            "status_token": "token",
+            "status": "failed",
+            "current_stage": "GERACAO_ETP",
+        }
+        with (
+            patch.object(main, "get_job", return_value=job),
+            patch.object(main, "enqueue_job") as enqueue,
+            TestClient(app) as client,
+        ):
+            resposta = client.post(
+                f"/api/fila/{job_id}/reenviar",
+                headers={"X-Status-Token": "token"},
+            )
+        self.assertEqual(resposta.status_code, 409)
+        enqueue.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

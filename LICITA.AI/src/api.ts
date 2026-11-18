@@ -46,6 +46,29 @@ export const consultarFilaFasePreparatoria = async (jobId: string, statusToken?:
   return response.json();
 };
 
+export async function baixarZipFila(jobId: string, statusToken: string): Promise<Blob> {
+  const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}/download`, {
+    headers: { "X-Status-Token": statusToken },
+  });
+  if (!response.ok) {
+    let detalhe = "Não foi possível baixar o arquivo.";
+    try { const payload = await response.json(); if (payload?.detail) detalhe = String(payload.detail); } catch {}
+    throw new Error(detalhe);
+  }
+  return await response.blob();
+}
+
+export async function reenviarFilaFasePreparatoria(jobId: string, statusToken: string): Promise<FasePreparatoriaJob> {
+  const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}/reenviar`, {
+    method: "POST",
+    headers: { "X-Status-Token": statusToken },
+  });
+  let payload: any = {};
+  try { payload = await response.json(); } catch {}
+  if (!response.ok) throw new Error(payload?.detail || "Não foi possível reenviar os documentos.");
+  return payload;
+}
+
 export async function cancelarFilaFasePreparatoria(jobId: string, statusToken: string): Promise<{ job_id: string; status: string; message: string }> {
   const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}/cancelar`, { method: "POST", headers: { "X-Status-Token": statusToken } });
   let payload: any = {};
@@ -144,6 +167,36 @@ export const gerarFasePreparatoria = async (dados: any, arquivos?: DocumentosRef
 
   return response.json();
 };
+
+export type AcompanhamentoJobSalvo = { job_id: string; status_token: string; saved_at: number };
+
+const CHAVE_ACOMPANHAMENTO_JOB = "licita-ai-acompanhamento-job-v1";
+
+export function salvarAcompanhamentoJob(jobId: string, statusToken: string): void {
+  if (!jobId || !statusToken || typeof window === "undefined") return;
+  try {
+    const registro: AcompanhamentoJobSalvo = { job_id: jobId, status_token: statusToken, saved_at: Date.now() };
+    window.sessionStorage.setItem(CHAVE_ACOMPANHAMENTO_JOB, JSON.stringify(registro));
+  } catch {}
+}
+
+export function recuperarAcompanhamentoJob(): AcompanhamentoJobSalvo | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const bruto = window.sessionStorage.getItem(CHAVE_ACOMPANHAMENTO_JOB);
+    if (!bruto) return null;
+    const registro = JSON.parse(bruto) as Partial<AcompanhamentoJobSalvo>;
+    if (typeof registro.job_id !== "string" || !registro.job_id || typeof registro.status_token !== "string" || !registro.status_token) return null;
+    return { job_id: registro.job_id, status_token: registro.status_token, saved_at: Number(registro.saved_at) || 0 };
+  } catch {
+    return null;
+  }
+}
+
+export function limparAcompanhamentoJob(): void {
+  if (typeof window === "undefined") return;
+  try { window.sessionStorage.removeItem(CHAVE_ACOMPANHAMENTO_JOB); } catch {}
+}
 
 export interface AdminJob {
   job_id: string;
