@@ -45,7 +45,7 @@ class LicitaBackendTests(unittest.TestCase):
         self.assertEqual(payload["municipio"]["id"], "sao-francisco-sp")
         self.assertEqual(payload["municipio"]["display"], "São Francisco/SP")
         self.assertEqual(payload["limite_exclusividade_me_epp_centavos"], 8000000)
-        self.assertIn("endereco_prefeitura", payload["municipio"]["campos")
+        self.assertIn("endereco_prefeitura", payload["municipio"]["campos"])
 
     def _headers_verificacao(self, email: str) -> dict:
         return {"X-Email-Verification": main._emitir_token_email_verificado(email)}
