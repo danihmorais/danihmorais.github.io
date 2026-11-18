@@ -372,6 +372,7 @@ def _chamar_ia(
     response_format: dict | None = None,
     enable_tools: bool = True,
     system_prompt: str | None = None,
+    enable_thinking: bool = True,
 ) -> tuple[dict, str]:
     base_url, api_key, modelo = _provider_config(model)
     if not base_url or not api_key:
@@ -398,7 +399,7 @@ def _chamar_ia(
         payload["response_format"] = response_format
     # O Unsloth aplica o modo de raciocínio quando suportado pelo modelo/template ativo.
     # Enviar em todas as chamadas evita acoplar esse comportamento ao nome de uma família específica.
-    payload["enable_thinking"] = True
+    payload["enable_thinking"] = bool(enable_thinking)
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
     with httpx.Client(timeout=_timeout_ia()) as client:
         response = _post_ia(client, f"{base_url}/chat/completions", headers=headers, json=payload)
