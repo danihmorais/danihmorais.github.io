@@ -81,6 +81,12 @@ O worker monta os documentos DOCX e o ZIP. Falhas ao inserir tabelas ou imagens 
 
 Tokens de status e confirmação são enviados em cabeçalhos, não na URL. O token de status deve ser tratado como credencial: não o grave em logs nem o compartilhe.
 
+## Importação de itens por planilha
+
+Na etapa de itens, a interface aceita arquivos CSV e XLSX de até 5 MB, com limite de 1.000 itens. A primeira linha deve conter os cabeçalhos; a coluna de descrição é obrigatória. São reconhecidos sinônimos em português para número/item, descrição/especificação, unidade, quantidade e valor/preço unitário. O exemplo fica em `modelos/importacao-itens.csv`.
+
+O parser converte as linhas para os campos `numero`, `descricao`, `un`, `qtd` e `valor`. Revise os itens importados e confira unidades, quantidades e valores antes de enviar a solicitação.
+
 ## Desenvolvimento e testes
 
 Na pasta `LICITA.AI`:
