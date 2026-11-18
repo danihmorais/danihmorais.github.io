@@ -527,7 +527,7 @@ async def cancelar_fila_usuario(job_id: str, request: Request):
     if job is None:
         raise HTTPException(status_code=404, detail="Solicitação não encontrada.")
     token_armazenado = str(job.get("status_token") or "")
-    if not token_armazenado or not token or not hmac.compare_digest(token_armazenado, token):
+    if not _token_matches(token_armazenado, token):
         raise HTTPException(status_code=403, detail="Token de consulta inválido.")
     try:
         status = cancel_job(job_id, "usuario")
@@ -553,7 +553,7 @@ async def consultar_fila(job_id: str, request: Request):
     if not stored_token or not token:
         raise HTTPException(status_code=401, detail="Token de consulta não informado.")
 
-    if not hmac.compare_digest(stored_token, token):
+    if not _token_matches(stored_token, token):
         raise HTTPException(status_code=403, detail="Token de consulta inválido.")
 
     return {
@@ -608,7 +608,7 @@ def _validar_token_admin(token: str) -> bool:
     payload = f"{expira_texto}.{nonce}"
     assinatura = hmac.new(secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).digest()
     esperada = base64.urlsafe_b64encode(assinatura).decode("ascii").rstrip("=")
-    return hmac.compare_digest(esperada, assinatura_recebida)
+    return _token_matches(esperada, assinatura_recebida)
 
 
 def _exigir_admin(request: Request) -> None:
