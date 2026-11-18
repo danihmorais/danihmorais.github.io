@@ -239,6 +239,22 @@ class TestAutomaticModelResolution(unittest.TestCase):
                 pipeline._chamar_ia("prompt de teste", "modelo-teste")
         self.assertNotIsInstance(contexto.exception, pipeline.ErroPermanente)
 
+    def test_schema_estrito_nao_dispara_reparo_json_automatico(self):
+        import fila_pipeline as pipeline
+        resposta = {
+            "choices": [{"message": {"content": "{json incompleto"}}],
+            "model": "modelo-teste",
+        }
+        with patch.object(pipeline, "_post_ia", return_value=resposta) as chamada:
+            with self.assertRaises(pipeline.ErroPermanente):
+                pipeline._chamar_ia(
+                    "prompt",
+                    "modelo-teste",
+                    response_format={"type": "json_schema", "json_schema": {"strict": True}},
+                    enable_tools=False,
+                )
+        chamada.assert_called_once()
+
     def test_auto_model_falls_back_to_first_model_reported_by_unsloth(self):
         from unittest.mock import MagicMock, patch
         import fila_pipeline as pipeline
