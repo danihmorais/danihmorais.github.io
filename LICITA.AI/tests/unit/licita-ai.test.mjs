@@ -23,6 +23,39 @@ function assertJsonEqual(actual, expected) {
   assert.deepEqual(JSON.parse(JSON.stringify(actual)), expected);
 }
 
+test("mapearDadosWizard injeta contexto municipal configurado", () => {
+  const config = loadTsModule("src/utils/configMunicipal.ts");
+  config.definirConfigMunicipal({
+    municipio: {
+      id: "teste",
+      nome: "Cidade Teste",
+      uf: "SP",
+      display: "Cidade Teste/SP",
+      decreto: "Decreto Municipal nº 10/2026",
+      campos: {
+        nome_completo: "Prefeitura de Cidade Teste",
+        endereco_prefeitura: "Rua Teste, 1",
+        telefone: "(11) 1234-5678",
+        email_licitacao: "licitacao@cidade-teste.sp.gov.br",
+      },
+    },
+    limite_exclusividade_me_epp_centavos: 5000000,
+  });
+  const { mapearDadosWizard } = loadTsModule("src/utils/mapearDados.ts");
+  const dados = mapearDadosWizard({});
+  assert.equal(dados["{{MUNICIPIO_UF}}"], "Cidade Teste/SP");
+  assert.equal(dados["{{PREFEITURA}}"], "Prefeitura de Cidade Teste");
+  assert.equal(dados["{{ENDERECO_PREFEITURA}}"], "Rua Teste, 1");
+  assert.equal(dados["{{LIMITE_ME_EPP}}"], "R$ 50.000,00");
+  config.definirConfigMunicipal({
+    municipio: {
+      id: "sao-francisco-sp", nome: "São Francisco", uf: "SP", display: "São Francisco/SP", decreto: "",
+      campos: { nome_completo: "Prefeitura Municipal de São Francisco", endereco_prefeitura: "Av. Oscar Antônio da Costa", telefone: "(17) 3693-1101", email_licitacao: "licitacao@saofrancisco.sp.gov.br" },
+    },
+    limite_exclusividade_me_epp_centavos: 8000000,
+  });
+});
+
 test("mapearDadosWizard calcula o valor estimado e preserva defaults", () => {
   const { mapearDadosWizard } = loadTsModule("src/utils/mapearDados.ts");
   const dados = mapearDadosWizard({
