@@ -94,5 +94,35 @@ class ConformidadeTests(unittest.TestCase):
         self.assertTrue(any(a["tipo"] == "amostra_incoerente" for a in relatorio["alertas"]))
 
 
+    def test_matriz_legal_etp_tr_e_itens_de_risco(self):
+        dados = {
+            "{{VIGENCIA}}": "12 meses",
+            "{{GESTOR}}": "Gestor cadastrado",
+            "{{FISCAL}}": "Fiscal cadastrado",
+            "{{PAGAMENTO}}": "Pagamento após aceite",
+            "{{MODALIDADE}}": "Pregão eletrônico",
+            "{{CRITERIOS}}": "Menor preço por item",
+            "{{VALOR_ESTIMADO}}": "R$ 1.000,00",
+            "{{ITENS}}": "Item 1",
+            "{{DOTACAO}}": "Dotação informada",
+        }
+        relatorio = avaliar_conformidade(documentos_base(), dados)
+        matriz = relatorio["matriz_conformidade"]
+        self.assertEqual(matriz["fonte"], "https://normas.leg.br/?urn=urn:lex:br:federal:lei:2021-04-01;14133")
+        self.assertEqual(sum(item["id"].startswith("etp_") for item in matriz["itens"]), 13)
+        self.assertEqual(sum(item["id"].startswith("tr_") for item in matriz["itens"]), 10)
+        self.assertEqual(matriz["summary"]["alertas"], 0)
+        self.assertTrue(any(item["id"] == "risco_art18_x" and item["status"] == "revisao" for item in matriz["itens"]))
+
+    def test_matriz_sinaliza_elemento_minimo_etp_ausente(self):
+        documentos = documentos_base()
+        documentos["ETP"]["PARCELAMENTO"] = ""
+        relatorio = avaliar_conformidade(documentos, {})
+        item = next(item for item in relatorio["matriz_conformidade"]["itens"] if item["id"] == "etp_viii")
+        self.assertEqual(item["status"], "alerta")
+        self.assertIn("PARCELAMENTO", item["detalhe"])
+
+
+
 if __name__ == "__main__":
     unittest.main()

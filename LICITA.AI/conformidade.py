@@ -145,6 +145,7 @@ def avaliar_conformidade(documentos: dict, dados_usuario: dict | None = None) ->
         if divergentes:
             alertas.append({"tipo": "pagamento_etapas_tokens", "tokens_nao_encontrados": divergentes})
 
+    matriz = _avaliar_matriz_legal(docs, dados)
     total = len(verificacoes)
     ok = sum(item["status"] == "ok" for item in verificacoes)
     revisao = sum(item["status"] == "revisao" for item in verificacoes)
@@ -152,9 +153,10 @@ def avaliar_conformidade(documentos: dict, dados_usuario: dict | None = None) ->
     return {
         "version": 1,
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "status": "pendencias" if pendencias else "revisao_humana",
-        "summary": {"total": total, "ok": ok, "pendencias": pendencias, "revisao": revisao},
+        "status": "pendencias" if pendencias or matriz["summary"]["alertas"] else "revisao_humana",
+        "summary": {"total": total, "ok": ok, "pendencias": pendencias, "revisao": revisao, "matriz_alertas": matriz["summary"]["alertas"], "matriz_revisao": matriz["summary"]["revisao"]},
         "verificacoes": verificacoes,
+        "matriz_conformidade": matriz,
         "alertas": alertas,
         "limites": [
             "A análise é automatizada e baseada em verificações estruturais e de coerência; não substitui análise jurídica, técnica ou administrativa.",
@@ -184,6 +186,112 @@ def formatar_relatorio_conformidade(relatorio: dict) -> str:
     linhas.extend(["", "LIMITES DA VERIFICAÇÃO"])
     linhas.extend(f"- {limite}" for limite in relatorio.get("limites", []))
     return "\n".join(linhas)
+
+
+
+FONTE_LEI_14133 = "https://normas.leg.br/?urn=urn:lex:br:federal:lei:2021-04-01;14133"
+MATRIZ_ETP = [
+    ("etp_i", "Art. 18, § 1º, I", "Descrição da necessidade", ["DFD.JUSTIFICATIVA"], True, "Obrigatório no mínimo legal"),
+    ("etp_ii", "Art. 18, § 1º, II", "Alinhamento ao PAC, quando elaborado", ["ETP.JUSTIFICATIVA_PAC"], False, "Quando houver PAC; ausência deve ser justificada"),
+    ("etp_iii", "Art. 18, § 1º, III", "Requisitos da contratação", ["ETP.REQUISITOS_ETP"], False, "Omissão dos elementos do § 1º deve ser justificada"),
+    ("etp_iv", "Art. 18, § 1º, IV", "Estimativa das quantidades e memória de cálculo", ["DFD.ESTIMATIVA_QUANTIDADES", "ETP.JUSTIFICATIVA_ESTIMATIVA"], True, "Obrigatório no mínimo legal"),
+    ("etp_v", "Art. 18, § 1º, V", "Levantamento de mercado e escolha da solução", ["ETP.MERCADO"], False, "Omissão dos elementos do § 1º deve ser justificada"),
+    ("etp_vi", "Art. 18, § 1º, VI", "Estimativa do valor e suporte da pesquisa", ["dados:{{VALOR_ESTIMADO}}", "ETP.JUSTIFICATIVA_ESTIMATIVA"], True, "Obrigatório no mínimo legal"),
+    ("etp_vii", "Art. 18, § 1º, VII", "Descrição da solução como um todo", ["ETP.SOLUCAO"], False, "Omissão dos elementos do § 1º deve ser justificada"),
+    ("etp_viii", "Art. 18, § 1º, VIII", "Justificativa do parcelamento ou não", ["ETP.PARCELAMENTO"], True, "Obrigatório no mínimo legal"),
+    ("etp_ix", "Art. 18, § 1º, IX", "Resultados pretendidos", ["DFD.RESULTADOS_ESPERADOS"], False, "Omissão dos elementos do § 1º deve ser justificada"),
+    ("etp_x", "Art. 18, § 1º, X", "Providências prévias da Administração", ["ETP.PROVIDENCIAS_CONT"], False, "Omissão dos elementos do § 1º deve ser justificada"),
+    ("etp_xi", "Art. 18, § 1º, XI", "Contratações correlatas ou interdependentes", ["ETP.CORRELATAS_INTER"], False, "Omissão dos elementos do § 1º deve ser justificada"),
+    ("etp_xii", "Art. 18, § 1º, XII", "Impactos ambientais e mitigação, quando aplicável", ["ETP.CRITERIOS_SUSTENTABILIDADE"], False, "Aplicabilidade deve ser analisada e eventual omissão justificada"),
+    ("etp_xiii", "Art. 18, § 1º, XIII", "Conclusão sobre adequação da contratação", ["ETP.CONCLUSAO"], True, "Obrigatório no mínimo legal"),
+]
+MATRIZ_TR = [
+    ("tr_a", "Art. 6º, XXIII, a", "Objeto, natureza, quantitativos e prazo", ["DFD.OBJETO", "DFD.TIPO_OBJ", "DFD.ESTIMATIVA_QUANTIDADES", "dados:{{VIGENCIA}}"], True),
+    ("tr_b", "Art. 6º, XXIII, b", "Fundamentação e referência ao ETP", ["DFD.JUSTIFICATIVA", "ETP.CONCLUSAO"], True),
+    ("tr_c", "Art. 6º, XXIII, c", "Descrição da solução como um todo", ["ETP.SOLUCAO"], True),
+    ("tr_d", "Art. 6º, XXIII, d", "Requisitos da contratação", ["TR.REQUISITOS_TR"], True),
+    ("tr_e", "Art. 6º, XXIII, e", "Modelo de execução", ["TR.EXECUCAO"], True),
+    ("tr_f", "Art. 6º, XXIII, f", "Modelo de gestão e fiscalização", ["TR.OBRIGACOES_CONTRATADA", "TR.OBRIGACOES_CONTRANTE", "dados:{{GESTOR}}", "dados:{{FISCAL}}"], True),
+    ("tr_g", "Art. 6º, XXIII, g", "Critérios de medição e pagamento", ["dados:{{PAGAMENTO}}"], True),
+    ("tr_h", "Art. 6º, XXIII, h", "Forma e critérios de seleção do fornecedor", ["TR.QUALIFICACAO_TECNICA", "dados:{{MODALIDADE}}", "dados:{{CRITERIOS}}"], True),
+    ("tr_i", "Art. 6º, XXIII, i", "Estimativa do valor e suporte", ["dados:{{VALOR_ESTIMADO}}", "dados:{{ITENS}}"], True),
+    ("tr_j", "Art. 6º, XXIII, j", "Adequação orçamentária", ["dados:{{DOTACAO}}"], True),
+]
+
+
+def _valor_matriz(campo: str, documentos: dict, dados_usuario: dict) -> str:
+    if campo.startswith("dados:"):
+        valor = _texto(dados_usuario.get(campo.removeprefix("dados:")))
+    elif "." in campo:
+        documento, chave = campo.split(".", 1)
+        valor = _texto(documentos.get(documento, {}).get(chave))
+    else:
+        valor = ""
+    if valor.casefold() in {"não informado", "nao informado", "[não informado]", "[nao informado]", "não informada", "nao informada"}:
+        return ""
+    if PLACEHOLDER_RE.search(valor):
+        return ""
+    return valor
+
+
+def _avaliar_matriz_legal(documentos: dict, dados_usuario: dict) -> dict:
+    itens = []
+    for especificacao in MATRIZ_ETP:
+        identificador, base, titulo, campos, minimo, nota = especificacao
+        ausentes = [campo for campo in campos if not _valor_matriz(campo, documentos, dados_usuario)]
+        status = "alerta" if ausentes and minimo else "revisao"
+        if not ausentes:
+            detalhe = "Texto/campo localizado; a qualidade e adequação do conteúdo exigem revisão humana."
+        elif minimo:
+            detalhe = "Elemento mínimo do ETP não localizado: " + ", ".join(ausentes)
+        else:
+            detalhe = "Confira se o elemento está presente ou se sua omissão foi justificada: " + ", ".join(ausentes)
+        itens.append({"id": identificador, "base": base, "titulo": titulo, "status": status, "campos": campos, "detalhe": detalhe, "nota": nota})
+    for identificador, base, titulo, campos, obrigatorio in MATRIZ_TR:
+        ausentes = [campo for campo in campos if not _valor_matriz(campo, documentos, dados_usuario)]
+        status = "alerta" if ausentes and obrigatorio else "revisao"
+        detalhe = "Campos localizados; revise o conteúdo e sua adequação." if not ausentes else "Confira os elementos do TR: " + ", ".join(ausentes)
+        itens.append({"id": identificador, "base": base, "titulo": titulo, "status": status, "campos": campos, "detalhe": detalhe})
+    itens.extend([
+        {
+            "id": "risco_art18_x",
+            "base": "Art. 18, X",
+            "titulo": "Análise de riscos do processo",
+            "status": "revisao",
+            "campos": [],
+            "detalhe": "A ferramenta não gera uma análise de riscos autônoma. Verifique se foi elaborada e juntada ao processo.",
+        },
+        {
+            "id": "matriz_risco_art22",
+            "base": "Art. 22, § 3º",
+            "titulo": "Matriz de alocação de riscos, quando legalmente aplicável",
+            "status": "revisao",
+            "campos": [],
+            "detalhe": "Verifique a aplicabilidade às hipóteses legais, como obras/serviços de grande vulto e regimes integrado ou semi-integrado; não é exigida automaticamente para toda contratação.",
+        },
+        {
+            "id": "modo_disputa_art18_viii",
+            "base": "Art. 18, VIII",
+            "titulo": "Modo de disputa",
+            "status": "revisao",
+            "campos": [],
+            "detalhe": "O formulário não captura o modo de disputa. Confira a definição e a motivação no edital.",
+        },
+        {
+            "id": "pesquisa_precos_art23",
+            "base": "Art. 23",
+            "titulo": "Compatibilidade da estimativa com mercado e fontes de preços",
+            "status": "revisao",
+            "campos": ["dados:{{ITENS}}", "dados:{{VALOR_ESTIMADO}}"],
+            "detalhe": "O relatório não valida pesquisa de preços nem a autenticidade das fontes. Confira as fontes, metodologia, datas, memória de cálculo e parâmetros de estimativa no processo.",
+        },
+    ])
+    resumo = {
+        "total": len(itens),
+        "alertas": sum(item["status"] == "alerta" for item in itens),
+        "revisao": sum(item["status"] == "revisao" for item in itens),
+    }
+    return {"fonte": FONTE_LEI_14133, "summary": resumo, "itens": itens, "limite": "A matriz confere presença de campos e registra itens para revisão; não valida conteúdo jurídico, técnico, mercado, vigência ou aplicabilidade."}
 
 
 ARTIGOS_LEI_14133 = set(range(1, 195))
