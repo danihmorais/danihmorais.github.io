@@ -62,6 +62,30 @@ export async function cancelarAdminPedido(token: string, jobId: string): Promise
   return respostaAdmin(response);
 }
 
+export async function solicitarCodigoVerificacaoEmail(email: string): Promise<{ sent: boolean; expires_in: number; message: string }> {
+  const response = await fetch(`${BASE_URL}/licita/api/email/verification/request`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: email.trim() }),
+  });
+  let payload: any = {};
+  try { payload = await response.json(); } catch {}
+  if (!response.ok) throw new Error(payload?.detail || "Não foi possível enviar o código de confirmação.");
+  return payload;
+}
+
+export async function confirmarCodigoVerificacaoEmail(email: string, code: string): Promise<{ verified: boolean; token: string; expires_in: number; message: string }> {
+  const response = await fetch(`${BASE_URL}/licita/api/email/verification/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: email.trim(), code: code.trim() }),
+  });
+  let payload: any = {};
+  try { payload = await response.json(); } catch {}
+  if (!response.ok) throw new Error(payload?.detail || "Não foi possível confirmar o endereço de e-mail.");
+  return payload;
+}
+
 export const gerarFasePreparatoria = async (dados: any, arquivos?: DocumentosReferenciaUpload): Promise<FasePreparatoriaJob> => {
   if (!BASE_URL) throw new Error("API do Licita.AI não configurada.");
 
@@ -73,6 +97,9 @@ export const gerarFasePreparatoria = async (dados: any, arquivos?: DocumentosRef
   if (pagamentoTipo === "POR_ETAPAS" && !pagamentoEtapasRaw) {
     throw new Error("Informe como será o pagamento por etapas antes de confeccionar os documentos.");
   }
+
+  const emailVerificationToken = String(dados?.emailVerificationToken || "").trim();
+  if (!emailVerificationToken) throw new Error("Confirme o endereço de e-mail antes de colocar a solicitação na fila.");
 
   const payload = {
     email: dados.email,
@@ -91,7 +118,7 @@ export const gerarFasePreparatoria = async (dados: any, arquivos?: DocumentosRef
 
   let requestInit: RequestInit = {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Email-Verification": emailVerificationToken },
     body: JSON.stringify(payload),
   };
 
@@ -103,6 +130,7 @@ export const gerarFasePreparatoria = async (dados: any, arquivos?: DocumentosRef
     }
     requestInit = {
       method: "POST",
+      headers: { "X-Email-Verification": emailVerificationToken },
       body: formData,
     };
   }
