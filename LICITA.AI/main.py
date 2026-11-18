@@ -1306,6 +1306,7 @@ async def reenviar_fila_usuario(job_id: str, request: Request):
         novo = enqueue_job(
             email=str(job.get("email",
             request_id=request.state.request_id,
+            require_review=request.headers.get("X-Licita-Review") == "1",
         ) or ""),
             dados_usuario=job.get("dados_usuario") if isinstance(job.get("dados_usuario"), dict) else {},
             dados_ia=dados_ia_final,
@@ -1318,6 +1319,88 @@ async def reenviar_fila_usuario(job_id: str, request: Request):
         return novo
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+class PreviewEdicaoRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    documento: Literal["DFD", "ETP", "TR"]
+    campo: str = Field(min_length=1, max_length=120)
+    conteudo: str = Field(min_length=1, max_length=30000)
+
+
+@app.get("/api/fila/{job_id}/preview")
+async def visualizar_documentos_fila(job_id: str, request: Request):
+    token = request.headers.get("x-status-token", "")
+    job = get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Solicitação não encontrada.")
+    if not _token_matches(str(job.get("status_token") or ""), token):
+        raise HTTPException(status_code=403, detail="Token de consulta inválido.")
+    if str(job.get("status", "")).lower() != "awaiting_review":
+        raise HTTPException(status_code=409, detail="A pré-visualização ficará disponível quando a geração do conteúdo estiver pronta para revisão.")
+    documentos = job.get("dados_ia_final")
+    if not isinstance(documentos, dict):
+        raise HTTPException(status_code=409, detail="O conteúdo estruturado não está disponível para revisão.")
+    return {
+        "job_id": job_id,
+        "status": "awaiting_review",
+        "documentos": {
+            nome: documentos.get(nome, {})
+            for nome in ("DFD", "ETP", "TR")
+            if isinstance(documentos.get(nome), dict)
+        },
+        "updated_at": job.get("updated_at"),
+        "message": "Revise o conteúdo gerado. As alterações serão usadas antes da montagem dos documentos DOCX.",
+    }
+
+
+@app.put("/api/fila/{job_id}/preview")
+async def editar_documento_fila(job_id: str, request: Request, req: PreviewEdicaoRequest):
+    token = request.headers.get("x-status-token", "")
+    job = get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Solicitação não encontrada.")
+    if not _token_matches(str(job.get("status_token") or ""), token):
+        raise HTTPException(status_code=403, detail="Token de consulta inválido.")
+    if str(job.get("status", "")).lower() != "awaiting_review":
+        raise HTTPException(status_code=409, detail="O documento não está aguardando revisão.")
+    documentos = job.get("dados_ia_final")
+    if not isinstance(documentos, dict) or not isinstance(documentos.get(req.documento), dict):
+        raise HTTPException(status_code=404, detail="Documento não encontrado para revisão.")
+    bloco = documentos[req.documento]
+    if req.campo not in bloco:
+        raise HTTPException(status_code=400, detail="Campo não permitido para edição.")
+    bloco[req.campo] = req.conteudo.strip()
+    if not bloco[req.campo]:
+        raise HTTPException(status_code=400, detail="O conteúdo não pode ficar vazio.")
+    job["dados_ia_final"] = documentos
+    job["review_edits"] = int(job.get("review_edits", 0)) + 1
+    job["updated_at"] = datetime.now(timezone.utc).isoformat()
+    _write_json(_job_path(job_id, ".review"), job)
+    return {"saved": True, "documento": req.documento, "campo": req.campo, "review_edits": job["review_edits"]}
+
+
+@app.post("/api/fila/{job_id}/approve")
+async def aprovar_documentos_fila(job_id: str, request: Request):
+    token = request.headers.get("x-status-token", "")
+    job = get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Solicitação não encontrada.")
+    if not _token_matches(str(job.get("status_token") or ""), token):
+        raise HTTPException(status_code=403, detail="Token de consulta inválido.")
+    if str(job.get("status", "")).lower() != "awaiting_review":
+        raise HTTPException(status_code=409, detail="A solicitação não está aguardando revisão.")
+    documentos = job.get("dados_ia_final")
+    if not isinstance(documentos, dict) or not all(isinstance(documentos.get(nome), dict) for nome in ("DFD", "ETP", "TR")):
+        raise HTTPException(status_code=409, detail="Os três documentos devem estar disponíveis antes da aprovação.")
+    job["review_approved"] = True
+    job["status"] = "queued"
+    job["current_stage"] = "MONTAGEM_DOCX"
+    job["updated_at"] = datetime.now(timezone.utc).isoformat()
+    _write_json(_job_path(job_id, ".queued"), job)
+    _job_path(job_id, ".review").unlink(missing_ok=True)
+    return {"job_id": job_id, "status": "queued", "message": "Conteúdo aprovado. A montagem dos DOCX foi colocada na fila."}
 
 
 @app.get("/api/fila/{job_id}/download")
