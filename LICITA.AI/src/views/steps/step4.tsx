@@ -16,6 +16,20 @@ export default function Step4({
         evento.preventDefault();
         setModalGestorAberto(false);
       }
+      if (evento.key === "Tab") {
+        const dialogo = document.querySelector('[role="dialog"][aria-modal="true"]') as HTMLElement | null;
+        const campos = dialogo ? [...dialogo.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')] : [];
+        if (campos.length === 0) {
+          evento.preventDefault();
+          dialogo?.focus();
+        } else if (evento.shiftKey && document.activeElement === campos[0]) {
+          evento.preventDefault();
+          campos[campos.length - 1].focus();
+        } else if (!evento.shiftKey && document.activeElement === campos[campos.length - 1]) {
+          evento.preventDefault();
+          campos[0].focus();
+        }
+      }
     };
     window.addEventListener("keydown", tratarTecla);
     const foco = window.setTimeout(selecionarPrimeiroCampo, 0);
