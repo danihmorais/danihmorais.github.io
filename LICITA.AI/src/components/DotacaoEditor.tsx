@@ -3,12 +3,6 @@ const MAX_DOTACAO_IMAGE_BYTES = 2 * 1024 * 1024;
 const MAX_DOTACAO_IMAGES = 8;
 
 function inserirImagemNoCursor(src: string, alt = "Imagem da dotação"): boolean {
-  useEffect(() => {
-    const editor = editorRef.current as HTMLElement | null;
-    if (!editor) return;
-    const conteudo = String(value ?? "");
-    if (editor.innerHTML !== conteudo) editor.innerHTML = conteudo;
-  }, [value]);
 
   if (!src || !/^data:image\/(?:png|jpeg|jpg|webp|gif);base64,/i.test(src)) return false;
   const base64 = src.slice(src.indexOf(",") + 1);
@@ -172,6 +166,13 @@ export default function DotacaoEditor({ value, onChange, placeholder }: DotacaoE
   const fileInputRef = useRef<HTMLInputElement>(null);
   const savedRangeRef = useRef<Range | null>(null);
   const montouRef = useRef(false);
+
+  useEffect(() => {
+    const editor = editorRef.current as HTMLElement | null;
+    if (!editor) return;
+    const conteudo = String(value ?? "");
+    if (editor.innerHTML !== conteudo) editor.innerHTML = conteudo;
+  }, [value]);
 
   useEffect(() => {
     if (montouRef.current) return;
