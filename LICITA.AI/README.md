@@ -137,3 +137,4 @@ Na pré-visualização de DFD, ETP e TR, o LICITA.AI apresenta um checklist estr
 - `RELATORIO_REFERENCIAS_LEGAIS.txt`: campos estruturais, fontes com URL e referências a artigos identificadas; a checagem numérica é limitada e exige conferência humana.
 
 O checklist identifica campos obrigatórios vazios, marcadores de preenchimento, diferenças entre documentos adicionais de habilitação no ETP e TR, referências legais que precisam de verificação humana, consistência da amostra e preservação de números/percentuais em pagamento por etapas. A ferramenta não valida automaticamente vigência, texto, interpretação, pertinência ou legalidade. A revisão humana continua necessária.
+A seleção de município e modelos DOCX será configurada separadamente por município; o checklist é assistivo e não substitui revisão jurídica.
