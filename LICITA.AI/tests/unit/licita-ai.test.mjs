@@ -86,7 +86,7 @@ test("helpers de lotes validam atribuição integral e compatibilidade com dados
   assertJsonEqual(obterLotes({ itens: [{ lote: "Lote legado" }] }), [{ id: "legado:lote legado", nome: "Lote legado" }]);
 });
 
-test("llm usa somente o proxy do backend e não envia Authorization do frontend", async () => {
+test("llm usa endpoint tipado do backend sem enviar prompts ou configuração do modelo", async () => {
   let chamada = null;
   const storage = new MemoryStorage();
   const { gerarTextoIA } = loadTsModule("src/providers/llm.ts", {
@@ -94,23 +94,31 @@ test("llm usa somente o proxy do backend e não envia Authorization do frontend"
       localStorage: storage,
       fetch: async (url, options) => {
         chamada = { url, options };
-        return response({ json: { model: "modelo-backend", provider: "unsloth", content: "{\"resultado\":\"ok\"}" } });
+        return response({ json: { model: "modelo-backend", provider: "unsloth", content: "{\\"resultado\\":\\"ok\\"}" } });
       },
     },
   });
 
-  const resultado = await gerarTextoIA("prompt", "backend", "unsloth-auto");
+  const resultado = await gerarTextoIA("auditoria_marcas", {
+    itens: [{ numero: "1", descricao: "Caderno Tilibra" }],
+    instrucoes: "Preservar características.",
+  });
   assertJsonEqual(resultado, { resultado: "ok" });
-  assert.match(chamada.url, /\/licita\/api\/ia\/chat$/);
+  assert.match(chamada.url, /\\/licita\\/api\\/ia\\/item$/);
   assert.equal("Authorization" in chamada.options.headers, false);
   const body = JSON.parse(chamada.options.body);
-  assert.equal(body.model, "unsloth-auto");
+  assert.equal(body.tarefa, "auditoria_marcas");
+  assert.deepEqual(body.itens, [{ numero: "1", descricao: "Caderno Tilibra" }]);
+  assert.equal("prompt" in body, false);
+  assert.equal("model" in body, false);
+  assert.equal("temperature" in body, false);
+  assert.equal("response_format" in body, false);
 });
 
 test("llm repete falha temporária e encerra em erro fatal", async () => {
   const respostas = [
     response({ ok: false, status: 503, text: "indisponível" }),
-    response({ json: { model: "modelo-recuperado", content: "{\"ok\":true}" } }),
+    response({ json: { model: "modelo-recuperado", content: "{\\"ok\\":true}" } }),
   ];
   let chamadas = 0;
   const modulo = loadTsModule("src/providers/llm.ts", {
@@ -120,7 +128,7 @@ test("llm repete falha temporária e encerra em erro fatal", async () => {
       fetch: async () => { chamadas += 1; return respostas.shift(); },
     },
   });
-  assertJsonEqual(await modulo.gerarTextoIA("prompt", "backend", "modelo"), { ok: true });
+  assertJsonEqual(await modulo.gerarTextoIA("melhorar_descricao", { descricao: "Cadeira", unidade: "UN" }), { ok: true });
   assert.equal(chamadas, 2);
 });
 
