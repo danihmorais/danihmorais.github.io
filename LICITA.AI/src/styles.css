@@ -1794,3 +1794,105 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
     padding: 14px;
   }
 }
+
+.planilha-import-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-subtle);
+}
+.planilha-import-label {
+  font-size: 13px;
+  font-weight: 650;
+}
+.planilha-import-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.planilha-import-controls input[type="file"] {
+  max-width: 100%;
+  font: inherit;
+  font-size: 13px;
+}
+.planilha-import-success {
+  margin: 0;
+  color: var(--btn-success);
+  font-size: 13px;
+}
+
+.queue-review-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-subtle);
+}
+.queue-review-actions p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.queue-review-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 58vh;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card-bg, var(--bg));
+}
+.queue-review-editor-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.queue-review-document {
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.queue-review-document summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.queue-review-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 12px;
+  font-size: 12px;
+  font-weight: 650;
+  text-transform: none;
+}
+.queue-review-field textarea {
+  width: 100%;
+  min-height: 80px;
+  resize: vertical;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text);
+  background: var(--input-bg, var(--bg));
+}
+.queue-review-field textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.queue-review-regenerate {
+  margin: 10px 0 4px;
+  align-self: flex-start;
+}

@@ -1,3 +1,66 @@
+
+const MAX_DOTACAO_IMAGE_BYTES = 2 * 1024 * 1024;
+const MAX_DOTACAO_IMAGES = 8;
+
+function inserirImagemNoCursor(src: string, alt = "Imagem da dotação"): boolean {
+
+  if (!src || !/^data:image\/(?:png|jpeg|jpg|webp|gif);base64,/i.test(src)) return false;
+  const base64 = src.slice(src.indexOf(",") + 1);
+  const bytes = Math.floor(base64.length * 3 / 4);
+  if (bytes > MAX_DOTACAO_IMAGE_BYTES) return false;
+  const editor = document.activeElement instanceof HTMLElement
+    ? document.activeElement
+    : null;
+  const alvo = editor?.isContentEditable
+    ? editor
+    : document.querySelector<HTMLElement>('[contenteditable="true"]');
+  if (!alvo || alvo.querySelectorAll("img").length >= MAX_DOTACAO_IMAGES) return false;
+  const imagem = document.createElement("img");
+  imagem.src = src;
+  imagem.alt = alt;
+  imagem.loading = "lazy";
+  imagem.style.maxWidth = "100%";
+  imagem.style.height = "auto";
+  const selecao = window.getSelection();
+  if (selecao && selecao.rangeCount > 0 && alvo.contains(selecao.getRangeAt(0).commonAncestorContainer)) {
+    const range = selecao.getRangeAt(0);
+    range.deleteContents();
+    range.insertNode(imagem);
+    range.setStartAfter(imagem);
+    range.collapse(true);
+    selecao.removeAllRanges();
+    selecao.addRange(range);
+  } else {
+    alvo.appendChild(imagem);
+  }
+  return true;
+}
+
+function sanitizarHtmlColado(html: string): string {
+  const documento = new DOMParser().parseFromString(html, "text/html");
+  documento.querySelectorAll("script, style, iframe, object, embed, link, meta, form").forEach(no => no.remove());
+  documento.body.querySelectorAll("*").forEach(elemento => {
+    [...elemento.attributes].forEach(atributo => {
+      const nome = atributo.name.toLowerCase();
+      const valor = atributo.value.trim().toLowerCase();
+      if (nome.startsWith("on") || nome === "style" || (nome === "src" && !valor.startsWith("data:image/"))) {
+        elemento.removeAttribute(atributo.name);
+      }
+    });
+  });
+  documento.body.querySelectorAll("img").forEach(imagem => {
+    const src = imagem.getAttribute("src") || "";
+    if (!/^data:image\/(?:png|jpeg|jpg|webp|gif);base64,/i.test(src) || Math.floor(src.length * 3 / 4) > MAX_DOTACAO_IMAGE_BYTES) {
+      imagem.remove();
+    } else {
+      imagem.setAttribute("alt", imagem.getAttribute("alt") || "Imagem da dotação");
+      imagem.removeAttribute("onerror");
+      imagem.removeAttribute("onload");
+    }
+  });
+  return documento.body.innerHTML;
+}
+
 import React, { useCallback, useEffect, useRef } from "react";
 
 export interface DotacaoBloco {
@@ -105,6 +168,14 @@ export default function DotacaoEditor({ value, onChange, placeholder }: DotacaoE
   const montouRef = useRef(false);
 
   useEffect(() => {
+    const editor = editorRef.current as HTMLElement | null;
+    if (!editor) return;
+    const conteudo = String(value ?? "");
+    if (editor.innerHTML !== conteudo) editor.innerHTML = conteudo;
+  }, [value]);
+
+
+  useEffect(() => {
     if (montouRef.current) return;
     montouRef.current = true;
     if (editorRef.current) {
@@ -158,7 +229,7 @@ export default function DotacaoEditor({ value, onChange, placeholder }: DotacaoE
 
       const sel = window.getSelection();
       if (sel && sel.rangeCount > 0 && editorRef.current?.contains(sel.anchorNode)) {
-        document.execCommand("insertImage", false, dataUrl);
+        inserirImagemNoCursor(String(dataUrl));
       } else {
         const img = document.createElement("img");
         img.src = dataUrl;
@@ -181,7 +252,27 @@ export default function DotacaoEditor({ value, onChange, placeholder }: DotacaoE
           data-placeholder={placeholder}
           onInput={sincronizar}
           onBlur={sincronizar}
-        />
+        / onPaste={(evento) => {
+    const html = evento.clipboardData.getData("text/html");
+    if (!html) return;
+    evento.preventDefault();
+    const editor = evento.currentTarget as HTMLElement;
+    const imagensAtuais = editor.querySelectorAll("img").length;
+    const container = document.createElement("div");
+    container.innerHTML = sanitizarHtmlColado(html);
+    const imagens = [...container.querySelectorAll("img")];
+    imagens.slice(Math.max(0, MAX_DOTACAO_IMAGES - imagensAtuais)).forEach(imagem => imagem.remove());
+    const fragmento = document.createDocumentFragment();
+    while (container.firstChild) fragmento.appendChild(container.firstChild);
+    const selecao = window.getSelection();
+    if (selecao && selecao.rangeCount > 0 && editor.contains(selecao.getRangeAt(0).commonAncestorContainer)) {
+      const range = selecao.getRangeAt(0);
+      range.deleteContents();
+      range.insertNode(fragmento);
+    } else {
+      editor.appendChild(fragmento);
+    }
+  }}>
         <div style={{ position: "absolute", bottom: "8px", left: "8px", display: "flex", gap: "6px" }}>
           <button
             type="button"

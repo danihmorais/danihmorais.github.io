@@ -1,6 +1,35 @@
 import os
 import sys
 
+import json as _json_config_municipal
+import os as _os_config_municipal
+from pathlib import Path as _Path_config_municipal
+
+
+def carregar_configuracao_municipal(municipio_id: str | None = None) -> dict:
+    caminho = _Path_config_municipal(__file__).resolve().parent / "config" / "municipios.json"
+    try:
+        dados = _json_config_municipal.loads(caminho.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        dados = {}
+    identificador = municipio_id or _os_config_municipal.getenv("LICITA_MUNICIPIO_ID") or dados.get("municipio_padrao")
+    municipios = dados.get("municipios") if isinstance(dados.get("municipios"), dict) else {}
+    municipio = municipios.get(identificador) if isinstance(identificador, str) else None
+    if not isinstance(municipio, dict):
+        raise RuntimeError(f"Configuração municipal não encontrada: {identificador!r}.")
+    return municipio
+
+
+_MUNICIPIO_ATIVO = carregar_configuracao_municipal()
+_PARAMETROS_LICITACAO = {}
+try:
+    _CAMINHO_PARAMETROS = _Path_config_municipal(__file__).resolve().parent / "config" / "municipios.json"
+    _PARAMETROS_LICITACAO = _json_config_municipal.loads(_CAMINHO_PARAMETROS.read_text(encoding="utf-8")).get("parametros", {})
+except (OSError, ValueError):
+    _PARAMETROS_LICITACAO = {}
+LIMITE_EXCLUSIVIDADE_ME_EPP_CENTAVOS = int(_PARAMETROS_LICITACAO.get("limite_exclusividade_me_epp_centavos", 8000000))
+
+
 if getattr(sys, 'frozen', False):
     BASE_DIR = sys._MEIPASS
 else:
