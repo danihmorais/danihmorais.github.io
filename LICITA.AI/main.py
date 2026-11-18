@@ -1321,6 +1321,13 @@ async def reenviar_fila_usuario(job_id: str, request: Request):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+class PreviewRegenerarRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    documento: Literal["DFD", "ETP", "TR"]
+    instrucoes: str = Field(default="", max_length=4000)
+
+
 class PreviewEdicaoRequest(BaseModel):
     model_config = {"extra": "forbid"}
 
@@ -1351,7 +1358,81 @@ async def visualizar_documentos_fila(job_id: str, request: Request):
             if isinstance(documentos.get(nome), dict)
         },
         "updated_at": job.get("updated_at"),
+        "stale_documents": job.get("review_stale_documents", []),
         "message": "Revise o conteúdo gerado. As alterações serão usadas antes da montagem dos documentos DOCX.",
+    }
+
+
+@app.post("/api/fila/{job_id}/preview/regenerar")
+async def regenerar_documento_fila(job_id: str, request: Request, req: PreviewRegenerarRequest):
+    token = request.headers.get("x-status-token", "")
+    job = get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Solicitação não encontrada.")
+    if not _token_matches(str(job.get("status_token") or ""), token):
+        raise HTTPException(status_code=403, detail="Token de consulta inválido.")
+    if str(job.get("status", "")).lower() != "awaiting_review":
+        raise HTTPException(status_code=409, detail="O documento não está aguardando revisão.")
+    documentos = job.get("dados_ia_final")
+    dados_usuario = job.get("dados_usuario_processados") or job.get("dados_usuario")
+    if not isinstance(documentos, dict) or not isinstance(dados_usuario, dict):
+        raise HTTPException(status_code=409, detail="Os dados necessários para regenerar o documento não estão disponíveis.")
+    try:
+        import inspect
+        import fila_pipeline as provedor_ia
+        from fila_pipeline_unificado import _json_schema_documento, _validar_json_documento
+        from pipeline_prompts import _prompt_documento
+
+        exige_amostra = isinstance(documentos.get("TR"), dict) and "AMOSTRA_TR" in documentos["TR"]
+        exige_vistoria = bool(job.get("exige_vistoria", False))
+        prompt = _prompt_documento(dados_usuario, req.documento, exige_amostra, exige_vistoria)
+        prompt = prompt.replace("__LICITA_PIPE_DADOS_USUARIO__", json.dumps(dados_usuario, ensure_ascii=False, default=str))
+        if req.documento == "ETP":
+            prompt = prompt.replace("__LICITA_PIPE_DFD__", json.dumps(documentos.get("DFD", {}), ensure_ascii=False, default=str))
+        if req.documento == "TR":
+            prompt = prompt.replace("__LICITA_PIPE_DFD__", json.dumps(documentos.get("DFD", {}), ensure_ascii=False, default=str))
+            prompt = prompt.replace("__LICITA_PIPE_ETP__", json.dumps(documentos.get("ETP", {}), ensure_ascii=False, default=str))
+        if req.instrucoes.strip():
+            prompt += "\n\nORIENTAÇÃO ADICIONAL PARA ESTA REGENERAÇÃO:\n" + req.instrucoes.strip()
+        modelo = str(job.get("modelo") or os.getenv("AI_MODEL") or os.getenv("UNSLOTH_MODEL") or "auto")
+        opcoes = {
+            "temperature": 0.3,
+            "response_format": _json_schema_documento(req.documento, exige_amostra),
+            "enable_tools": False,
+            "enable_thinking": True,
+        }
+        assinatura = inspect.signature(provedor_ia._chamar_ia)
+        opcoes = {chave: valor for chave, valor in opcoes.items() if chave in assinatura.parameters}
+        resultado = await asyncio.to_thread(provedor_ia._chamar_ia, prompt, modelo, **opcoes)
+        if isinstance(resultado, tuple):
+            resultado = resultado[0]
+        validado = _validar_json_documento(resultado, req.documento, exige_amostra)
+    except Exception as exc:
+        logger.exception("Falha ao regenerar documento da revisão.", extra={"job_id": job_id, "documento": req.documento, "request_id": getattr(request.state, "request_id", None)})
+        raise HTTPException(status_code=502, detail="Não foi possível regenerar o documento. Revise a instrução e tente novamente.") from exc
+    documentos[req.documento] = validado[req.documento]
+    resultados = job.get("review_results")
+    if isinstance(resultados, dict):
+        resultados[req.documento] = validado[req.documento]
+        etapa_id = {"DFD": "GERACAO_DFD", "ETP": "GERACAO_ETP", "TR": "GERACAO_TR"}[req.documento]
+        resultados[etapa_id] = validado
+        job["review_results"] = resultados
+    obsoletos = set(job.get("review_stale_documents") or [])
+    if req.documento == "DFD":
+        obsoletos.update(("ETP", "TR"))
+    elif req.documento == "ETP":
+        obsoletos.add("TR")
+    obsoletos.discard(req.documento)
+    job["review_stale_documents"] = sorted(obsoletos)
+    job["review_regenerations"] = int(job.get("review_regenerations", 0)) + 1
+    job["dados_ia_final"] = documentos
+    job["updated_at"] = datetime.now(timezone.utc).isoformat()
+    _write_json(_job_path(job_id, ".review"), job)
+    return {
+        "saved": True,
+        "documento": req.documento,
+        "stale_documents": job["review_stale_documents"],
+        "message": "Documento regenerado. Confira os documentos dependentes antes de aprovar.",
     }
 
 
@@ -1383,6 +1464,13 @@ async def editar_documento_fila(job_id: str, request: Request, req: PreviewEdica
         if isinstance(etapa_resultado, dict) and isinstance(etapa_resultado.get(req.documento), dict):
             etapa_resultado[req.documento][req.campo] = bloco[req.campo]
     job["review_results"] = resultados if isinstance(resultados, dict) else job.get("review_results")
+    obsoletos = set(job.get("review_stale_documents") or [])
+    if req.documento == "DFD":
+        obsoletos.update(("ETP", "TR"))
+    elif req.documento == "ETP":
+        obsoletos.add("TR")
+    obsoletos.discard(req.documento)
+    job["review_stale_documents"] = sorted(obsoletos)
     job["dados_ia_final"] = documentos
     job["review_edits"] = int(job.get("review_edits", 0)) + 1
     job["updated_at"] = datetime.now(timezone.utc).isoformat()
@@ -1403,6 +1491,9 @@ async def aprovar_documentos_fila(job_id: str, request: Request):
     documentos = job.get("dados_ia_final")
     if not isinstance(documentos, dict) or not all(isinstance(documentos.get(nome), dict) for nome in ("DFD", "ETP", "TR")):
         raise HTTPException(status_code=409, detail="Os três documentos devem estar disponíveis antes da aprovação.")
+    obsoletos = job.get("review_stale_documents") or []
+    if obsoletos:
+        raise HTTPException(status_code=409, detail="Regere os documentos dependentes antes de aprovar: " + ", ".join(obsoletos) + ".")
     job["review_approved"] = True
     job["status"] = "queued"
     job["current_stage"] = "MONTAGEM_DOCX"
