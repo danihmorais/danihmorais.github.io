@@ -20,11 +20,10 @@ from datetime import datetime, timezone
 from email.message import EmailMessage
 
 import httpx
-from fastapi import FastAPI, File, HTTPException, Request
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 from typing import Literal
-from starlette.datastructures import UploadFile
 
 from documentos_contexto import MAX_CONTEXT_CHARS, extrair_contexto_documentos
 from fila import EMAIL_RE, MAX_ATTEMPTS, QUEUE_DIR, SMTP_FROM, SMTP_PASSWORD, SMTP_USERNAME, _artifact_path, _job_path, _smtp_client, cancel_job, enqueue_job, get_job
