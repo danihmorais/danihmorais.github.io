@@ -137,3 +137,15 @@ Na pré-visualização de DFD, ETP e TR, o LICITA.AI apresenta um checklist estr
 - `RELATORIO_REFERENCIAS_LEGAIS.txt`: campos estruturais, fontes com URL e referências a artigos identificadas; a checagem numérica é limitada e exige conferência humana.
 
 O checklist identifica campos obrigatórios vazios, marcadores de preenchimento, diferenças entre documentos adicionais de habilitação no ETP e TR, referências legais que precisam de verificação humana, consistência da amostra e preservação de números/percentuais em pagamento por etapas. A pré-visualização também apresenta uma matriz assistiva dos 13 elementos do ETP (art. 18, § 1º, incluindo os elementos mínimos do § 2º) e dos 10 elementos do TR (art. 6º, XXIII), além de itens para revisão sobre análise de riscos, matriz de riscos, modo de disputa e pesquisa de preços. A matriz verifica a presença dos campos mapeados, não o mérito do conteúdo. A ferramenta não valida automaticamente vigência, texto, interpretação, pertinência ou legalidade. A revisão humana continua necessária.
+
+
+## Configuração por município
+
+O município ativo é selecionado pelo backend com `LICITA_MUNICIPIO_ID`; se a variável não estiver definida, usa `municipio_padrao` de `config/municipios.json`. A configuração inclui:
+
+- Nome, UF, decreto, endereço, telefone e e-mail público do setor.
+- Textos municipais para cláusulas e modelos de instruções.
+- Limite ME/EPP em centavos, centralizado e retornado pela API pública `/api/configuracao`.
+- Diretório e nomes dos modelos DOCX de DFD, ETP, TR e contratação direta.
+
+Para cadastrar outro município, adicione um identificador em `config/municipios.json`, seus campos/textos e um diretório de modelos relativo à pasta LICITA.AI. Configure `LICITA_MUNICIPIO_ID` no serviço e reinicie o backend. O frontend carrega os dados públicos da API e usa o limite configurado para cálculos, mensagens e prompts. A configuração padrão permanece São Francisco/SP.
