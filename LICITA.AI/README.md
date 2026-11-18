@@ -149,3 +149,8 @@ O município ativo é selecionado pelo backend com `LICITA_MUNICIPIO_ID`; se a v
 - Diretório e nomes dos modelos DOCX de DFD, ETP, TR e contratação direta.
 
 Para cadastrar outro município, adicione um identificador em `config/municipios.json`, seus campos/textos e um diretório de modelos relativo à pasta LICITA.AI. Configure `LICITA_MUNICIPIO_ID` no serviço e reinicie o backend. O frontend carrega os dados públicos da API e usa o limite configurado para cálculos, mensagens e prompts. A configuração padrão permanece São Francisco/SP.
+
+
+## Observabilidade e retry
+
+O endpoint Prometheus `/metrics` expõe contadores de requisições HTTP e de completions de IA, duração acumulada e tokens de prompt/resposta/total quando o provedor informa `usage`. Os logs de etapa incluem job, request, etapa, modelo e duração, sem registrar prompts ou respostas integrais. Falhas de validação e geração de documentos são permanentes; timeout, conexão, HTTP 5xx e rate limit são retentáveis.

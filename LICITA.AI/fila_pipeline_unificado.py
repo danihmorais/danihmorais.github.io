@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import shutil
+import smtplib
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -23,6 +24,43 @@ from conformidade import formatar_relatorio_referencias
 
 class JobCancelado(Exception):
     """Cancelamento solicitado; o worker deve interromper entre etapas."""
+
+
+def _classificar_erro_permanente(exc: Exception) -> bool:
+    if isinstance(exc, ErroPermanente):
+        return True
+    if isinstance(exc, smtplib.SMTPServerDisconnected):
+        return False
+    codigo_smtp = getattr(exc, "smtp_code", None)
+    if codigo_smtp is not None:
+        try:
+            codigo_smtp = int(codigo_smtp)
+        except (TypeError, ValueError):
+            codigo_smtp = None
+        if codigo_smtp is not None:
+            if 400 <= codigo_smtp < 500:
+                return False
+            if 500 <= codigo_smtp < 600:
+                return True
+    status = getattr(exc, "status_code", None)
+    if status is not None:
+        try:
+            status = int(status)
+        except (TypeError, ValueError):
+            status = None
+        if status is not None:
+            return 400 <= status < 500 and status not in {408, 425, 429}
+    nome = type(exc).__name__.casefold()
+    if isinstance(exc, (TimeoutError, ConnectionError)) or any(token in nome for token in ("timeout", "connecterror", "networkerror", "requesterror")):
+        return False
+    if isinstance(exc, (ValueError, TypeError, KeyError, IndexError, AssertionError, OSError)):
+        return True
+    if isinstance(exc, RuntimeError):
+        mensagem = str(exc).casefold()
+        if any(token in mensagem for token in ("http 5", "http 429", "http 408", "http 425", "timeout", "timed out", "falha de comunicacao", "falha de comunicação", "conexao", "conexão", "fora do ar")):
+            return False
+        return True
+    return True
 
 
 def _utc_now() -> str:
@@ -989,10 +1027,22 @@ def _process_pipeline(job: dict) -> None:
         exigir_amostra_tr = amostra_exigida(dados_usuario)
         opcoes_chamada = _opcoes_chamada_ia_etapa(etapa_tipo, etapa_id, exigir_amostra_tr=exigir_amostra_tr)
         temperatura_etapa = _temperatura_valida(etapa.get("temperature"), temperatura)
+        inicio_stage = time.perf_counter()
+        inicio_stage = time.perf_counter()
         if opcoes_chamada:
             resultado, modelo_resolvido = _chamar_ia(prompt_processado, modelo, temperatura_etapa, **opcoes_chamada)
         else:
             resultado, modelo_resolvido = _chamar_ia(prompt_processado, modelo, temperatura_etapa)
+        logger.info(
+            "ai_stage_completed",
+            extra={
+                "job_id": job["job_id"],
+                "request_id": job.get("request_id"),
+                "stage": etapa_id,
+                "model": modelo_resolvido or modelo,
+                "duration_seconds": round(time.perf_counter() - inicio_stage, 3),
+            },
+        )
         _checar_cancelamento(job)
         if modelo_resolvido:
             modelo = modelo_resolvido
@@ -1198,7 +1248,7 @@ def _process_one_job() -> None:
         attempts = int(job.get("attempts", 1))
         # str() de algumas exceções (ex.: timeouts) é vazio; registre ao menos o tipo.
         erro_texto = str(exc) or type(exc).__name__
-        permanente = isinstance(exc, ErroPermanente)
+        permanente = _classificar_erro_permanente(exc)
         logger.warning(
             "Solicitação %s falhou na tentativa %s (%s): %s",
             job.get("job_id"), attempts, "permanente" if permanente else "transitória", erro_texto,
