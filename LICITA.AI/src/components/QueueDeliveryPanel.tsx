@@ -248,6 +248,20 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDis
                   </li>
                 ))}
               </ul>
+              <details className="queue-conformity-report">
+                <summary>Matriz da Lei 14.133/2021 — {preview.conformidade.matriz_conformidade.summary.alertas} pendência(s) · {preview.conformidade.matriz_conformidade.summary.revisao} para revisão</summary>
+                <p className="queue-conformity-limit">Referência: <a href={preview.conformidade.matriz_conformidade.fonte} target="_blank" rel="noreferrer">Lei 14.133/2021 — texto oficial</a></p>
+                <ul className="queue-conformity-checks">
+                  {preview.conformidade.matriz_conformidade.itens.map(item => (
+                    <li className={`queue-conformity-check status-${item.status}`} key={item.id}>
+                      <strong>{item.status === "alerta" ? "Pendência" : "Revisão humana"} — {item.base}: {item.titulo}</strong>
+                      <span>{item.detalhe}</span>
+                      {item.nota && <span>{item.nota}</span>}
+                    </li>
+                  ))}
+                </ul>
+                <p className="queue-conformity-limit">{preview.conformidade.matriz_conformidade.limite}</p>
+              </details>
               {preview.conformidade.limites.map((limite, index) => <p className="queue-conformity-limit" key={index}>{limite}</p>)}
             </details>
           )}
