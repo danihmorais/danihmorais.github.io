@@ -1151,6 +1151,58 @@ async def baixar_zip_fila(job_id: str, request: Request):
 
 
 
+@app.post("/api/admin/jobs/{job_id}/retry")
+async def refazer_pedido_admin(job_id: str, request: Request):
+    _exigir_admin(request)
+    job = get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Solicitação não encontrada ou já removida pela retenção.")
+    if str(job.get("status", "")).lower() not in {"failed", "cancelled"}:
+        raise HTTPException(status_code=409, detail="Só é possível refazer solicitações marcadas como falha ou canceladas.")
+
+    email = str(job.get("email") or "").strip()
+    dados_usuario = job.get("dados_usuario")
+    dados_ia = job.get("dados_ia")
+    if not isinstance(dados_usuario, dict):
+        dados_usuario = {}
+    if not isinstance(dados_ia, dict):
+        dados_ia = {}
+
+    pipeline = dados_ia.get("__LICITA_PIPELINE__")
+    retry_mode = None
+    dados_processados = job.get("dados_usuario_processados")
+    if not (isinstance(pipeline, dict) and isinstance(pipeline.get("etapas"), list) and pipeline.get("etapas")):
+        # Compatibilidade com falhas antigas no envio SMTP: os documentos já haviam sido gerados.
+        if (
+            str(job.get("current_stage", "")).upper() == "ENVIO_EMAIL"
+            and isinstance(dados_processados, dict)
+            and dados_ia
+        ):
+            retry_mode = "email_only"
+        else:
+            raise HTTPException(
+                status_code=409,
+                detail="Este registro antigo não contém os dados necessários para refazer a geração. Envie uma nova solicitação pelo formulário.",
+            )
+
+    try:
+        novo = enqueue_job(
+            email=email,
+            dados_usuario=dados_usuario,
+            dados_ia=dados_ia,
+            instrucoes=str(job.get("instrucoes") or ""),
+            retry_of=job_id,
+            retry_mode=retry_mode,
+            dados_usuario_processados=dados_processados if retry_mode == "email_only" else None,
+        )
+        novo["retry_of"] = job_id
+        return novo
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+
+
 RETENTION_DAYS = max(1, int(os.getenv("LICITA_QUEUE_RETENTION_DAYS", "7")))
 
 
