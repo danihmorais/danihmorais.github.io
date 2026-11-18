@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unicodedata
+import logging
 import io
 import csv
 
@@ -15,6 +16,7 @@ import secrets
 import threading
 import time
 import uuid
+from pathlib import Path
 from collections import deque
 from datetime import datetime, timezone
 from email.message import EmailMessage
@@ -33,6 +35,16 @@ from pipeline_prompts import montar_pipeline
 from conformidade import avaliar_conformidade
 
 app = FastAPI(title="Licita.AI API")
+logger = logging.getLogger(__name__)
+
+
+def _write_json(path: Path, dados: dict) -> None:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporario = path.with_name(path.name + f".{uuid.uuid4().hex}.tmp")
+    with temporario.open("w", encoding="utf-8") as arquivo:
+        json.dump(dados, arquivo, ensure_ascii=False, indent=2)
+    os.replace(temporario, path)
 
 
 class FasePreparatoriaRequest(BaseModel):
@@ -790,12 +802,12 @@ def _ler_itens_csv(conteudo: bytes) -> list[dict]:
         texto = conteudo.decode("utf-8-sig")
     except UnicodeDecodeError:
         texto = conteudo.decode("cp1252")
-    amostra = texto[:4096]
-    try:
-        dialecto = csv.Sniffer().sniff(amostra, delimiters=";,\t")
-        leitor = csv.reader(io.StringIO(texto), dialect=dialecto)
-    except csv.Error:
-        leitor = csv.reader(io.StringIO(texto), delimiter=";")
+    primeira_linha = texto.splitlines()[0] if texto.splitlines() else ""
+    delimitadores = (";", ",", "\\t")
+    delimitador = max(delimitadores, key=lambda candidato: primeira_linha.count(candidato))
+    if primeira_linha.count(delimitador) == 0:
+        raise ValueError("Não foi possível identificar o separador da planilha.")
+    leitor = csv.reader(io.StringIO(texto), delimiter=delimitador)
     linhas = list(leitor)
     if not linhas:
         raise ValueError("A planilha está vazia.")
