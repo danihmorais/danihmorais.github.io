@@ -1,3 +1,4 @@
+import sqlite3
 from __future__ import annotations
 
 import json
@@ -614,3 +615,205 @@ def _claim_next_job() -> tuple[Path, dict] | None:
         except (OSError, json.JSONDecodeError, ValueError):
             continue
     return None
+
+_WRITE_JSON_ARQUIVO = _write_json
+_GET_JOB_ARQUIVO = get_job
+_SQLITE_FILA_LOCK = threading.RLock()
+_SQLITE_FILA_INICIALIZADO = False
+_SQLITE_FILA_EXTENSOES = (".queued", ".processing", ".review", ".done", ".failed", ".cancelled")
+
+
+def _sqlite_fila_caminho() -> Path:
+    diretorio = Path(_job_path("0" * 32, ".queued")).parent
+    diretorio.mkdir(parents=True, exist_ok=True)
+    return diretorio / "queue.sqlite3"
+
+
+def _sqlite_fila_conectar():
+    conexao = sqlite3.connect(_sqlite_fila_caminho(), timeout=30)
+    conexao.row_factory = sqlite3.Row
+    conexao.execute("PRAGMA journal_mode=WAL")
+    conexao.execute("PRAGMA synchronous=NORMAL")
+    conexao.execute("PRAGMA busy_timeout=30000")
+    conexao.execute(
+        """
+        CREATE TABLE IF NOT EXISTS queue_jobs (
+            job_id TEXT PRIMARY KEY,
+            status TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT '',
+            updated_at TEXT NOT NULL DEFAULT '',
+            file_path TEXT NOT NULL DEFAULT '',
+            payload TEXT NOT NULL
+        )
+        """
+    )
+    conexao.execute("CREATE INDEX IF NOT EXISTS idx_queue_jobs_status_created ON queue_jobs(status, created_at, job_id)")
+    conexao.execute("CREATE INDEX IF NOT EXISTS idx_queue_jobs_updated ON queue_jobs(updated_at DESC)")
+    return conexao
+
+
+def _sqlite_fila_gravar(job: dict, caminho: str | Path) -> None:
+    if not isinstance(job, dict):
+        return
+    job_id = str(job.get("job_id") or "").strip()
+    if not job_id:
+        return
+    status = str(job.get("status") or "").strip().lower() or "unknown"
+    caminho_str = str(caminho)
+    created_at = str(job.get("created_at") or job.get("criado_em") or "")
+    updated_at = str(job.get("updated_at") or job.get("atualizado_em") or created_at)
+    payload = json.dumps(job, ensure_ascii=False, default=str)
+    conexao = _sqlite_fila_conectar()
+    try:
+        with conexao:
+            conexao.execute(
+                """
+                INSERT INTO queue_jobs(job_id, status, created_at, updated_at, file_path, payload)
+                VALUES(?, ?, ?, ?, ?, ?)
+                ON CONFLICT(job_id) DO UPDATE SET
+                    status=excluded.status,
+                    created_at=CASE WHEN excluded.created_at='' THEN queue_jobs.created_at ELSE excluded.created_at END,
+                    updated_at=excluded.updated_at,
+                    file_path=excluded.file_path,
+                    payload=excluded.payload
+                """,
+                (job_id, status, created_at, updated_at, caminho_str, payload),
+            )
+    finally:
+        conexao.close()
+
+
+def _sqlite_fila_reindexar() -> None:
+    global _SQLITE_FILA_INICIALIZADO
+    with _SQLITE_FILA_LOCK:
+        if _SQLITE_FILA_INICIALIZADO:
+            return
+        conexao = _sqlite_fila_conectar()
+        try:
+            diretorio = _sqlite_fila_caminho().parent
+            arquivos = []
+            for arquivo in diretorio.iterdir():
+                if not arquivo.is_file() or arquivo.name == "queue.sqlite3":
+                    continue
+                if not any(extensao in arquivo.name for extensao in _SQLITE_FILA_EXTENSOES):
+                    continue
+                try:
+                    job = json.loads(arquivo.read_text(encoding="utf-8"))
+                except (OSError, ValueError, UnicodeDecodeError):
+                    continue
+                if isinstance(job, dict) and job.get("job_id"):
+                    arquivos.append((job, arquivo))
+            with conexao:
+                for job, arquivo in arquivos:
+                    status = str(job.get("status") or "").lower() or "unknown"
+                    created_at = str(job.get("created_at") or job.get("criado_em") or "")
+                    updated_at = str(job.get("updated_at") or job.get("atualizado_em") or created_at)
+                    conexao.execute(
+                        """
+                        INSERT INTO queue_jobs(job_id, status, created_at, updated_at, file_path, payload)
+                        VALUES(?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(job_id) DO UPDATE SET
+                            status=excluded.status,
+                            created_at=CASE WHEN excluded.created_at='' THEN queue_jobs.created_at ELSE excluded.created_at END,
+                            updated_at=excluded.updated_at,
+                            file_path=excluded.file_path,
+                            payload=excluded.payload
+                        """,
+                        (
+                            str(job["job_id"]),
+                            status,
+                            created_at,
+                            updated_at,
+                            str(arquivo),
+                            json.dumps(job, ensure_ascii=False, default=str),
+                        ),
+                    )
+            _SQLITE_FILA_INICIALIZADO = True
+        finally:
+            conexao.close()
+
+
+def _sqlite_fila_consultar(job_id: str) -> dict | None:
+    _sqlite_fila_reindexar()
+    conexao = _sqlite_fila_conectar()
+    try:
+        registro = conexao.execute(
+            "SELECT payload, file_path FROM queue_jobs WHERE job_id = ?",
+            (str(job_id),),
+        ).fetchone()
+        if registro is None:
+            return None
+        caminho = Path(registro["file_path"]) if registro["file_path"] else None
+        if caminho is not None and caminho.is_file():
+            try:
+                payload = json.loads(registro["payload"])
+                if isinstance(payload, dict):
+                    return payload
+            except (TypeError, ValueError):
+                pass
+        return None
+    finally:
+        conexao.close()
+
+
+def _write_json(caminho: str | Path, dados: dict) -> None:
+    _WRITE_JSON_ARQUIVO(caminho, dados)
+    try:
+        _sqlite_fila_reindexar()
+        _sqlite_fila_gravar(dados, caminho)
+    except Exception:
+        logger.exception("Não foi possível atualizar o índice SQLite da fila.")
+
+
+def get_job(job_id: str) -> dict | None:
+    try:
+        resultado = _sqlite_fila_consultar(job_id)
+        if resultado is not None:
+            return resultado
+    except Exception:
+        logger.exception("Falha ao consultar o índice SQLite da fila.")
+    resultado = _GET_JOB_ARQUIVO(job_id)
+    if resultado is not None:
+        try:
+            caminho = None
+            for extensao in _SQLITE_FILA_EXTENSOES:
+                candidato = _job_path(job_id, extensao)
+                if Path(candidato).is_file():
+                    caminho = candidato
+                    break
+            if caminho is not None:
+                _sqlite_fila_gravar(resultado, caminho)
+        except Exception:
+            logger.exception("Não foi possível reconstruir o índice do job.")
+    return resultado
+
+
+def listar_jobs_sqlite(status: str | None = None, limite: int = 500) -> list[dict]:
+    _sqlite_fila_reindexar()
+    limite = max(1, min(int(limite), 5000))
+    conexao = _sqlite_fila_conectar()
+    try:
+        if status:
+            registros = conexao.execute(
+                "SELECT payload FROM queue_jobs WHERE status = ? ORDER BY created_at DESC, job_id LIMIT ?",
+                (status.lower(), limite),
+            ).fetchall()
+        else:
+            registros = conexao.execute(
+                "SELECT payload FROM queue_jobs ORDER BY created_at DESC, job_id LIMIT ?",
+                (limite,),
+            ).fetchall()
+        resultado = []
+        for registro in registros:
+            try:
+                job = json.loads(registro["payload"])
+            except (TypeError, ValueError):
+                continue
+            if isinstance(job, dict):
+                resultado.append(job)
+        return resultado
+    finally:
+        conexao.close()
+
+
+
