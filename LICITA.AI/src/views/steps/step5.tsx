@@ -197,7 +197,7 @@ export default function Step5({ dados, atualizarDados, tentouAvancar = false }: 
             onChange={(e: any) => atualizarDados({ meepp: e.target.value })} 
           />
           <RadioOption 
-            name="meepp" label="Não Exclusiva (Maior que R$ {LIMITE_EXCLUSIVIDADE_ME_EPP.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ou ampla participação)" 
+            name="meepp" label={`Não Exclusiva (Maior que ${formatarLimiteMeepp()} ou ampla participação)`} 
             value="NAO" 
             checked={dados.meepp === "NAO"} 
             onChange={(e: any) => atualizarDados({ meepp: e.target.value })} 
