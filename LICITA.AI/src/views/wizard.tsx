@@ -562,6 +562,7 @@ export default function Wizard() {
     setRascunhoDisponivel(false);
     setSalvamentoConcluido(false);
     setDados({
+    lotes: [],
       objeto: "", necessidade: "", itens: [], amostra: false, vistoria: false, execucao: "",
       secretarias: [], contatosSecretarias: {}, gestores: [], fiscais: [], instrumento: "CONTRATO",
       prorrogar: true, meepp: "SIM", criterio: "ITEM", motivoCriterio: "", modalidade: "PREGAO_ELETRONICO",
