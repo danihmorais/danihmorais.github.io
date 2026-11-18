@@ -475,7 +475,7 @@ def enqueue_job(
     instrucoes: str = "",
     retry_of: str | None = None,
     retry_mode: str | None = None,
-    dados_usuario_processados: dict | None = None,, request_id: str | None = None) -> dict:
+    dados_usuario_processados: dict | None = None,, request_id: str | None = None, require_review: bool = False) -> dict:
     email = email.strip()
     if not EMAIL_RE.fullmatch(email):
         raise ValueError("Informe um e-mail válido para receber os documentos.")
@@ -484,7 +484,8 @@ def enqueue_job(
     job_id = uuid.uuid4().hex
     status_token = secrets.token_urlsafe(32)
     job = {
-        "request_id": request_id,"version": 3, "job_id": job_id, "status": "queued", "created_at": _utc_now(), "attempts": 0, "email": email, "status_token": status_token, "instrucoes": instrucoes.strip(), "dados_usuario": dados_usuario, "dados_ia": dados_ia}
+        "request_id": request_id,
+        "require_review": bool(require_review),"version": 3, "job_id": job_id, "status": "queued", "created_at": _utc_now(), "attempts": 0, "email": email, "status_token": status_token, "instrucoes": instrucoes.strip(), "dados_usuario": dados_usuario, "dados_ia": dados_ia}
     if retry_of:
         job["retry_of"] = retry_of
     if retry_mode:
