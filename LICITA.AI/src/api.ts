@@ -189,10 +189,21 @@ export async function importarItensPlanilha(arquivo: File): Promise<{ items: Ite
   return payload;
 }
 
+export type RelatorioConformidadePreview = {
+  version: number;
+  generated_at: string;
+  status: string;
+  summary: { total: number; ok: number; pendencias: number; revisao: number };
+  verificacoes: Array<{ id: string; titulo: string; status: "ok" | "alerta" | "revisao"; detalhe: string }>;
+  alertas: Array<Record<string, unknown>>;
+  limites: string[];
+};
+
 export type PreviewDocumentosFila = {
   job_id: string;
   status: "awaiting_review";
   documentos: Record<"DFD" | "ETP" | "TR", Record<string, string>>;
+  conformidade?: RelatorioConformidadePreview;
   updated_at?: string;
   stale_documents?: string[];
   message: string;
