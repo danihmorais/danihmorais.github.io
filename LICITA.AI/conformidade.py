@@ -22,7 +22,7 @@ CAMPOS_DOCUMENTOS = {
 PLACEHOLDER_RE = re.compile(r"(?i)\{\{[^{}]+\}\}|\bX{3,}\b|\[(?:inserir|preencher|definir|informar)[^\]]*\]")
 CITACAO_RE = re.compile(r"(?i)\b(?:art\.?|artigo|lei\s*(?:n[ºo.]?\s*)?|decreto\s*(?:n[ºo.]?\s*)?|s[uú]mula|ac[oó]rd[aã]o|processo)\s*\d")
 DOCUMENTO_NUMERO_RE = re.compile(r"(?i)\bdocumento\s*(?:n[ºo.]?\s*)?(\d{1,3})\b")
-NUMERO_RE = re.compile(r"\d+(?:[.,]\d+)?%?|\b\d{1,2}/\d{1,2}/\d{2,4}\b")
+NUMERO_RE = re.compile(r"\b\d{1,2}/\d{1,2}/\d{2,4}\b|\d+(?:[.,]\d+)?%?")
 
 
 def _texto(valor) -> str:
@@ -116,7 +116,10 @@ def avaliar_conformidade(documentos: dict, dados_usuario: dict | None = None) ->
     amostra_informada = _texto(dados.get("{{AMOST}}")).casefold()
     texto_amostra = _texto(docs["TR"].get("AMOSTRA_TR"))
     exige_amostra = amostra_informada in {"sim", "true", "1"}
-    amostra_contem = bool(re.search(r"(?i)amostra|prot[oó]tipo", texto_amostra))
+    menciona_amostra = bool(re.search(r"(?i)amostra|prot[oó]tipo", texto_amostra))
+    dispensa_amostra = bool(re.search(r"(?i)dispensad|n[aã]o\s+(?:ser[aá]\s+)?exigid|n[aã]o\s+necess[aá]ri|inexig", texto_amostra))
+    exige_no_texto = bool(re.search(r"(?i)obrigat|exigid|dever[aá]\s+apresent|apresentar\s+(?:a\s+)?amostra", texto_amostra)) and not dispensa_amostra
+    amostra_contem = menciona_amostra if exige_amostra else exige_no_texto
     amostra_status = "ok" if (exige_amostra == amostra_contem) else "alerta"
     verificacoes.append({
         "id": "amostra",
