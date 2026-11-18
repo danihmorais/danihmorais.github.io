@@ -302,7 +302,7 @@ def montar_variaveis_fixas(dados_usuario: dict) -> dict:
     resultado["{{TELEFONE}}"] = str(config.CAMPOS_MUNICIPAIS.get("telefone") or "")
     resultado["{{EMAIL_LICITACAO}}"] = str(config.CAMPOS_MUNICIPAIS.get("email_licitacao") or "")
     resultado["{{DECRETO}}"] = config.DECRETO_MUNICIPAL
-    resultado["{{LIMITE_ME_EPP}}"] = config.TEXTOS.get("limite_me_epp", "")
+    resultado["{{LIMITE_ME_EPP}}"] = config.LIMITE_ME_EPP_TEXTO
 
     return resultado
 
