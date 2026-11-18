@@ -93,7 +93,7 @@ export default function PromptModal({
   };
 
   const handleConfirmarCodigo = async () => {
-    if (!emailValido || !/^\\d{6}$/.test(codigo) || confirmandoCodigo) return;
+    if (!emailValido || !/^\d{6}$/.test(codigo) || confirmandoCodigo) return;
     setConfirmandoCodigo(true);
     setErroVerificacao("");
     setMensagemVerificacao("");
@@ -217,7 +217,7 @@ export default function PromptModal({
                       autoComplete="one-time-code"
                       maxLength={6}
                       value={codigo}
-                      onChange={(e) => setCodigo(e.target.value.replace(/\\D/g, "").slice(0, 6))}
+                      onChange={(e) => setCodigo(e.target.value.replace(/\D/g, "").slice(0, 6))}
                       placeholder="000000"
                     />
                   </label>
