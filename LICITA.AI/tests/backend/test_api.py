@@ -262,7 +262,7 @@ class LicitaBackendTests(unittest.TestCase):
             self.assertEqual(enviado.status_code, 200, enviado.text)
             self.assertEqual(len(mensagens), 1)
             self.assertEqual(mensagens[0]["To"], email)
-            codigo_match = re.search(r"(?<!\\d)\\d{6}(?!\\d)", mensagens[0].get_content())
+            codigo_match = re.search(r"(?<![0-9])[0-9]{6}(?![0-9])", mensagens[0].get_content())
             self.assertIsNotNone(codigo_match)
             confirmado = client.post(
                 "/api/email/verification/confirm",
