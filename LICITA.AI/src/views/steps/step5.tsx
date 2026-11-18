@@ -1,4 +1,3 @@
-import { LIMITE_EXCLUSIVIDADE_ME_EPP } from "../../config/parametrosLicitacao";
 import React from "react";
 import DotacaoEditor, { type DotacaoBloco } from "../../components/DotacaoEditor";
 import { obterLotes } from "../../utils/lotes";
