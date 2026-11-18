@@ -742,5 +742,60 @@ class TestEntregaZipAutenticada(unittest.TestCase):
         enqueue.assert_not_called()
 
 
+class TestImportacaoItensPlanilha(unittest.TestCase):
+    def test_csv_separado_por_ponto_e_virgula_normaliza_cabecalhos(self):
+        conteudo = (
+            "Nº;Descrição;Unidade;Quantidade;Valor Unitário\\n"
+            "1;Papel A4;RESMA;10;32,50\\n"
+            "2;Caneta azul;CAIXA;5;18,90\\n"
+        ).encode("utf-8")
+        itens = main._ler_itens_csv(conteudo)
+        self.assertEqual(len(itens), 2)
+        self.assertEqual(
+            itens[0],
+            {"numero": "1", "descricao": "Papel A4", "un": "RESMA", "qtd": "10", "valor": "32,50"},
+        )
+
+    def test_csv_rejeita_planilha_sem_coluna_de_descricao(self):
+        with self.assertRaisesRegex(ValueError, "coluna de descrição"):
+            main._ler_itens_csv(b"Codigo;Quantidade\\n01;10\\n")
+
+    def test_xlsx_le_cabecalhos_em_portugues(self):
+        from openpyxl import Workbook
+        from io import BytesIO
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append(["Item", "Especificação", "Und.", "Qtde", "Preço unitário"])
+        sheet.append([1, "Teclado USB", "UN", 2, 45.9])
+        buffer = BytesIO()
+        workbook.save(buffer)
+        workbook.close()
+        itens = main._ler_itens_xlsx(buffer.getvalue())
+        self.assertEqual(
+            itens,
+            [{"numero": "1", "descricao": "Teclado USB", "un": "UN", "qtd": "2", "valor": "45.9"}],
+        )
+
+    def test_endpoint_recebe_csv_e_aplica_limites_de_upload(self):
+        csv_data = b"Item;Descricao;Unidade;Quantidade;Valor\\n1;Papel A4;RESMA;10;32.50\\n"
+        with TestClient(app) as client:
+            resposta = client.post(
+                "/api/importar-itens-planilha",
+                files={"arquivo": ("itens.csv", csv_data, "text/csv")},
+            )
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual(resposta.json()["count"], 1)
+        self.assertEqual(resposta.json()["items"][0]["descricao"], "Papel A4")
+
+    def test_endpoint_rejeita_extensao_nao_suportada(self):
+        with TestClient(app) as client:
+            resposta = client.post(
+                "/api/importar-itens-planilha",
+                files={"arquivo": ("itens.xls", b"conteudo", "application/octet-stream")},
+            )
+        self.assertEqual(resposta.status_code, 400)
+
+
 if __name__ == "__main__":
     unittest.main()
