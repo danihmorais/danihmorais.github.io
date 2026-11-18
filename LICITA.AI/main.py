@@ -756,6 +756,8 @@ async def consultar_fila(job_id: str, request: Request):
         "cancelled_by": job.get("cancelled_by"),
         "fila_posicao": _queue_position(job_id)[0],
         "result": job.get("result"),
+        "download_available": _artifact_path(job_id).is_file() and str(job.get("status", "")).lower() in {"sent", "failed"},
+        "can_resend": str(job.get("status", "")).lower() == "failed" and str(job.get("current_stage", "")).upper() == "ENVIO_EMAIL" and isinstance(job.get("dados_usuario_processados"), dict) and isinstance(job.get("dados_ia_final") or job.get("dados_ia"), dict),
     }
 
 
