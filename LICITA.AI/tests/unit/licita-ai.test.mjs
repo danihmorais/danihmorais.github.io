@@ -94,7 +94,7 @@ test("llm usa endpoint tipado do backend sem enviar prompts ou configuração do
       localStorage: storage,
       fetch: async (url, options) => {
         chamada = { url, options };
-        return response({ json: { model: "modelo-backend", provider: "unsloth", content: "{\\"resultado\\":\\"ok\\"}" } });
+        return response({ json: { model: "modelo-backend", provider: "unsloth", content: "{\"resultado\":\"ok\"}" } });
       },
     },
   });
@@ -104,7 +104,7 @@ test("llm usa endpoint tipado do backend sem enviar prompts ou configuração do
     instrucoes: "Preservar características.",
   });
   assertJsonEqual(resultado, { resultado: "ok" });
-  assert.match(chamada.url, /\\/licita\\/api\\/ia\\/item$/);
+  assert.ok(chamada.url.includes("/licita/api/ia/item"));
   assert.equal("Authorization" in chamada.options.headers, false);
   const body = JSON.parse(chamada.options.body);
   assert.equal(body.tarefa, "auditoria_marcas");
@@ -118,7 +118,7 @@ test("llm usa endpoint tipado do backend sem enviar prompts ou configuração do
 test("llm repete falha temporária e encerra em erro fatal", async () => {
   const respostas = [
     response({ ok: false, status: 503, text: "indisponível" }),
-    response({ json: { model: "modelo-recuperado", content: "{\\"ok\\":true}" } }),
+    response({ json: { model: "modelo-recuperado", content: "{\"ok\":true}" } }),
   ];
   let chamadas = 0;
   const modulo = loadTsModule("src/providers/llm.ts", {
