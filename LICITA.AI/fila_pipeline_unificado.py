@@ -506,6 +506,12 @@ def _opcoes_chamada_ia_etapa(etapa_tipo: str, etapa_id: str = "", *, exigir_amos
             "enable_tools": True,
             "enable_thinking": False,
         }
+    if tipo == "geracao_json":
+        return {
+            "enable_tools": False,
+            "system_prompt": _JSON_ESTRUTURADO_SYSTEM_PROMPT,
+            "enable_thinking": False,
+        }
     if tipo == "geracao_contratacao_direta":
         return {
             "response_format": _json_schema_contratacao_direta(),
@@ -520,7 +526,7 @@ def _opcoes_chamada_ia_etapa(etapa_tipo: str, etapa_id: str = "", *, exigir_amos
             "system_prompt": _FASE_PREPARATORIA_SYSTEM_PROMPT,
             "enable_thinking": True,
         }
-    raise ErroPermanente("Tipo de etapa sem configuração de chamada de IA.")
+    return {}
 
 def _chamar_ia(
     prompt: str,
