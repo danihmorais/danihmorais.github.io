@@ -126,3 +126,15 @@ O workflow `LICITA.AI checks` executa os testes front-end, build, smoke test e t
 5. Em falha, interrompa novas publicações, restaure o último SHA conhecido como funcional e faça rollback do código pelo fluxo de deploy da infraestrutura. Preserve o diretório persistente da fila e os ZIPs; não remova jobs em processamento durante o rollback.
 
 O repositório não contém segredos de deploy. O webhook de deploy e a URL pública da API permanecem configurados como secrets do GitHub Actions.
+
+
+## Checklist automatizado de revisão documental
+
+Na pré-visualização de DFD, ETP e TR, o LICITA.AI apresenta um checklist estrutural e de coerência com os dados do formulário. O ZIP da fase preparatória inclui:
+
+- `RELATORIO_CONFORMIDADE.txt`: checklist legível, verificações e limites.
+- `RELATORIO_CONFORMIDADE.json`: resultado estruturado para auditoria ou integração.
+
+O checklist identifica campos obrigatórios vazios, marcadores de preenchimento, diferenças entre documentos adicionais de habilitação no ETP e TR, referências legais que precisam de verificação humana, consistência da amostra e preservação de números/percentuais em pagamento por etapas.
+
+O checklist é **assistivo**: não valida automaticamente vigência de leis, jurisprudência, autenticidade de fontes, pesquisa de mercado, adequação técnica ou conformidade jurídica. A revisão humana continua necessária. O relatório é incluído nos ZIPs da fase preparatória padrão; os fluxos de contratação direta não utilizam atualmente esse checklist de DFD/ETP/TR.
