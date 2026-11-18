@@ -10,14 +10,14 @@ const IA_ITEM_URL = `${API_URL}/licita/api/ia/item`;
 const CHAVE_LOGS_ERRO = "licita_ai:logs_erro";
 const MAX_LOGS_GUARDADOS = 20;
 
-async function salvarLogErro(prefixo: string, erro: any, dadosCrus: any = null) {
+async function salvarLogErro(prefixo: string, erro: any) {
   try {
     const entrada = {
       prefixo,
       data: new Date().toISOString(),
       mensagem: erro instanceof Error ? erro.message : String(erro),
-      stack: erro instanceof Error ? erro.stack : undefined,
-      dadosCrus: dadosCrus ? (typeof dadosCrus === "string" ? dadosCrus : JSON.stringify(dadosCrus, null, 2)) : undefined,
+      
+      
     };
     console.error(`[${prefixo}]`, entrada);
     const brutos = localStorage.getItem(CHAVE_LOGS_ERRO);
