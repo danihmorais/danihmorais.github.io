@@ -26,6 +26,7 @@ import AdminPedidosModal from "../components/AdminPedidosModal";
 import { ThemeContext } from "../context/ThemeContext";
 import { carregarConfiguracaoMunicipal, cancelarFilaFasePreparatoria, consultarFilaFasePreparatoria, gerarFasePreparatoria, type DocumentosReferenciaUpload, type FasePreparatoriaJob } from "../api";
 import { criarDadosTeste, TipoTesteContratacao } from "../utils/dadosTeste";
+import type { ConfigMunicipalPublica } from "../utils/configMunicipal";
 import { obterLotes, distribuicaoLotesValida } from "../utils/lotes";
 
 function rotuloEtapa(chave?: string): string {
@@ -130,6 +131,7 @@ function etapaValida(indice: number, dados: any): boolean {
 }
 
 export default function Wizard() {
+  const [configMunicipalAtiva, setConfigMunicipalAtiva] = useState<ConfigMunicipalPublica | null>(null);
   const [etapaAtual, setEtapaAtual] = useState(0);
   const [maiorEtapaAlcancada, setMaiorEtapaAlcancada] = useState(0);
   const [tentouAvancar, setTentouAvancar] = useState(false);
@@ -256,7 +258,13 @@ export default function Wizard() {
     });
   };
    useEffect(() => {
-     void carregarConfiguracaoMunicipal();
+     let cancelado = false;
+     void carregarConfiguracaoMunicipal().then(configuracao => {
+       if (!cancelado && configuracao) setConfigMunicipalAtiva(configuracao);
+     });
+     return () => {
+       cancelado = true;
+     };
    }, []);
 
    useEffect(() => {
@@ -678,6 +686,7 @@ export default function Wizard() {
     <div className="wizard-app">
       <header className="wizard-header">
         <a className="wizard-brand" href="/" aria-label="LICITA.AI — página inicial">LICITA<span>.</span>AI</a>
+        {configMunicipalAtiva?.municipio.display && <span className="wizard-municipio">{configMunicipalAtiva.municipio.display}</span>}
         <div className="wizard-header-actions">
           <button
             type="button"
