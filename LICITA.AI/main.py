@@ -345,6 +345,21 @@ async def _gerar_ia(req: IAChatRequest) -> dict:
     return {"content": content, "model": model, "provider": "unsloth"}
 
 
+@app.get("/api/configuracao")
+def configuracao_publica():
+    return {
+        "municipio": {
+            "id": config.MUNICIPIO_ID,
+            "nome": config.MUNICIPIO_NOME,
+            "uf": config.MUNICIPIO_UF,
+            "display": config.MUNICIPIO_DISPLAY,
+            "decreto": config.DECRETO_MUNICIPAL,
+            "campos": config.CAMPOS_MUNICIPAIS,
+        },
+        "limite_exclusividade_me_epp_centavos": config.LIMITE_EXCLUSIVIDADE_ME_EPP_CENTAVOS,
+    }
+
+
 @app.get("/api/ia/status")
 async def status_ia():
     return {"ok": bool(API_UNSLOTH_URL and API_UNSLOTH_KEY), "unsloth": bool(API_UNSLOTH_URL and API_UNSLOTH_KEY)}
