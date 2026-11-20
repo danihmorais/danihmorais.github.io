@@ -140,7 +140,7 @@ def _artifact_path(job_id: str) -> Path:
 
 
 def _find_job_path(job_id: str) -> Path | None:
-    for suffix in ("", ".processing", ".done", ".failed", ".cancelled"):
+    for suffix in ("", ".processing", ".review", ".done", ".failed", ".cancelled"):
         path = _job_path(job_id, suffix)
         if path.is_file():
             return path
@@ -597,7 +597,7 @@ def _claim_next_job() -> tuple[Path, dict] | None:
     _ensure_queue_dir()
     pending = sorted(QUEUE_DIR.glob("[0-9a-f]*.json"), key=lambda path: path.stat().st_mtime)
     for path in pending:
-        if path.name.endswith((".processing.json", ".done.json", ".failed.json", ".cancelled.json")):
+        if path.name.endswith((".processing.json", ".review.json", ".done.json", ".failed.json", ".cancelled.json")):
             continue
         try:
             job = json.loads(path.read_text(encoding="utf-8"))
