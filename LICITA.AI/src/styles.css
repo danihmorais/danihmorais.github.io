@@ -1946,3 +1946,53 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   color: var(--text-muted);
   margin: 5px 0;
 }
+
+
+.dotacao-editor-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dotacao-editor-shell {
+  position: relative;
+}
+
+.dotacao-editor img,
+.dotacao-editor-image {
+  max-width: 100%;
+  height: auto;
+}
+
+.dotacao-editor-toolbar {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  display: flex;
+  gap: 6px;
+}
+
+.dotacao-editor-button {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin: 0;
+  background: var(--bg-panel);
+  color: var(--text-main);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.dotacao-editor-bold {
+  font-weight: 700;
+}
+
+.dotacao-editor-image-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dotacao-editor-file-input {
+  display: none;
+}
