@@ -40,6 +40,29 @@ from main import app
 
 
 class LicitaBackendTests(unittest.TestCase):
+    def test_limpeza_preserva_pedidos_em_revisao_por_pelo_menos_30_dias(self):
+        with tempfile.TemporaryDirectory(prefix="licita_retencao_") as diretorio:
+            queue_dir = Path(diretorio)
+            agora = main.time.time()
+            pedidos = [
+                ("a" * 32, "awaiting_review", 10),
+                ("b" * 32, "sent", 10),
+                ("c" * 32, "awaiting_review", 31),
+            ]
+            for job_id, status, idade_dias in pedidos:
+                caminho = queue_dir / f"{job_id}.json"
+                caminho.write_text(json.dumps({"job_id": job_id, "status": status}), encoding="utf-8")
+                instante = agora - idade_dias * 86400
+                os.utime(caminho, (instante, instante))
+
+            with patch.object(main, "QUEUE_DIR", queue_dir):
+                main._limpar_fila_antiga_uma_vez(agora)
+
+            self.assertTrue((queue_dir / f'{"a" * 32}.json').exists())
+            self.assertFalse((queue_dir / f'{"b" * 32}.json').exists())
+            self.assertFalse((queue_dir / f'{"c" * 32}.json').exists())
+            self.assertGreaterEqual(main.REVIEW_RETENTION_DAYS, 30)
+
     def test_metrics_prometheus_exige_token_e_inclui_metricas_ia(self):
         with patch.dict(os.environ, {"LICITA_METRICS_TOKEN": ""}):
             with TestClient(app) as client:

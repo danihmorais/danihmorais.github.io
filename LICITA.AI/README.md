@@ -51,6 +51,8 @@ Não é exigida confirmação do endereço por código. O sistema valida o forma
 | `LICITA_QUEUE_RATE_LIMIT` | Limite de criação de pedidos por IP, persistido no SQLite. |
 | `LICITA_QUEUE_EMAIL_RATE_LIMIT` | Limite de criação de pedidos por e-mail, persistido no SQLite. |
 | `LICITA_QUEUE_DIR` | Diretório de persistência dos jobs e arquivos ZIP, conforme `fila.py`. |
+| `LICITA_QUEUE_RETENTION_DAYS` | Retenção padrão de arquivos de pedidos concluídos. Padrão: 7 dias. |
+| `LICITA_QUEUE_REVIEW_RETENTION_DAYS` | Retenção dos pedidos em `awaiting_review`. Padrão: 30 dias e mínimo efetivo de 30 dias. |
 
 O endpoint `/metrics` exige `Authorization: Bearer <LICITA_METRICS_TOKEN>`. As métricas incluem contagem de jobs por status, duração e quantidade de execuções por etapa, falhas categorizadas, requisições HTTP e uso de tokens de IA. Não são expostos e-mails nem identificadores individuais de pedidos.
 

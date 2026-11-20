@@ -20,7 +20,7 @@ CAMPOS_DOCUMENTOS = {
 }
 
 PLACEHOLDER_RE = re.compile(r"(?i)\{\{[^{}]+\}\}|\bX{3,}\b|\[(?:inserir|preencher|definir|informar)[^\]]*\]")
-CITACAO_RE = re.compile(r"(?i)\b(?:art\.?|artigo|lei\s*(?:n[ºo.]?\s*)?|decreto\s*(?:n[ºo.]?\s*)?|s[uú]mula|ac[oó]rd[aã]o|processo)\s*\d")
+CITACAO_RE = re.compile(r"(?i)\b(?:art\.?|artigo|lei\s*(?:n[ºo.]?\s*)?|decreto(?:-lei)?\s*(?:n[ºo.]?\s*)?|s[uú]mula|portaria\s*(?:n[ºo.]?\s*)?|instru[cç][aã]o\s+normativa\s*(?:n[ºo.]?\s*)?|resolu[cç][aã]o\s*(?:n[ºo.]?\s*)?|ac[oó]rd[aã]o|processo)\s*\d")
 DOCUMENTO_NUMERO_RE = re.compile(r"(?i)\bdocumento\s*(?:n[ºo.]?\s*)?(\d{1,3})\b")
 NUMERO_RE = re.compile(r"\b\d{1,2}/\d{1,2}/\d{2,4}\b|\d+(?:[.,]\d+)?%?")
 
@@ -119,19 +119,39 @@ def avaliar_conformidade(documentos: dict, dados_usuario: dict | None = None) ->
             "detalhe": "Não foram detectadas referências normativas identificáveis. Confirme se a fundamentação jurídica exigida está adequada ao objeto.",
         })
 
-    artigos_fora_catalogo = _artigos_lei_14133_fora_do_catalogo(docs)
+    artigos_citados = _artigos_lei_14133(docs)
+    artigos_fora_catalogo = [item for item in artigos_citados if item["artigo"] not in ARTIGOS_LEI_14133]
+    artigos_incoerentes = [item for item in artigos_citados if item["coerencia"] == "incompativel"]
     verificacoes.append({
         "id": "catalogo_artigos_lei_14133",
-        "titulo": "Numeração dos artigos da Lei 14.133/2021",
-        "status": "alerta" if artigos_fora_catalogo else "revisao",
+        "titulo": "Tema e coerência das citações da Lei 14.133/2021",
+        "status": "alerta" if artigos_fora_catalogo or artigos_incoerentes else "revisao",
         "detalhe": (
-            "Foram encontradas citações fora do intervalo numérico conhecido da Lei 14.133/2021 (arts. 1º a 194). Confira a norma e corrija a referência."
+            f"Foram encontradas {len(artigos_fora_catalogo)} citação(ões) fora do catálogo numérico (arts. 1º a 194)."
             if artigos_fora_catalogo
-            else "Não foram detectados artigos fora do intervalo numérico conhecido. A numeração válida não confirma a interpretação ou a pertinência do dispositivo."
+            else f"Foram encontrados {len(artigos_incoerentes)} possível(is) conflito(s) entre o tema do artigo e o contexto citado."
+            if artigos_incoerentes
+            else "As citações numéricas foram associadas ao tema catalogado. A comparação temática só sinaliza incompatibilidades claras e não valida a interpretação ou a aplicabilidade do dispositivo."
         ),
     })
     if artigos_fora_catalogo:
         alertas.append({"tipo": "artigo_fora_catalogo_lei_14133", "ocorrencias": artigos_fora_catalogo})
+    if artigos_incoerentes:
+        alertas.append({"tipo": "citacao_incoerente_lei_14133", "ocorrencias": artigos_incoerentes})
+
+    referencias_normativas = _referencias_normativas_complementares(docs)
+    verificacoes.append({
+        "id": "referencias_normativas_complementares",
+        "titulo": "Decretos e súmulas identificados",
+        "status": "revisao" if referencias_normativas else "ok",
+        "detalhe": (
+            f"Foram identificadas {len(referencias_normativas)} referência(s) a decreto(s) ou súmula(s). Confira órgão, número, texto, vigência e pertinência."
+            if referencias_normativas
+            else "Nenhuma citação de decreto ou súmula foi detectada nos campos analisados."
+        ),
+    })
+    if referencias_normativas:
+        alertas.append({"tipo": "referencias_normativas_complementares", "ocorrencias": referencias_normativas})
 
     requisitos_etp = _texto(docs["ETP"].get("REQUISITOS_ETP"))
     requisitos_tr = _texto(docs["TR"].get("REQUISITOS_TR"))
@@ -330,8 +350,205 @@ def _avaliar_matriz_legal(documentos: dict, dados_usuario: dict) -> dict:
     return {"fonte": FONTE_LEI_14133, "summary": resumo, "itens": itens, "limite": "A matriz confere presença de campos e registra itens para revisão; não valida conteúdo jurídico, técnico, mercado, vigência ou aplicabilidade."}
 
 
-ARTIGOS_LEI_14133 = set(range(1, 195))
+def _montar_catalogo_artigos_lei_14133() -> dict[int, dict[str, str | None]]:
+    faixas = [
+        (1, 4, "Âmbito de aplicação, objetos abrangidos, exclusões e tratamento das ME/EPP", None),
+        (5, 5, "Princípios aplicáveis às licitações e aos contratos", None),
+        (6, 6, "Definições legais", None),
+        (7, 10, "Agentes públicos, agente de contratação, impedimentos e defesa dos agentes", None),
+        (11, 17, "Objetivos, diretrizes e organização do processo licitatório", "processo"),
+        (18, 27, "Fase preparatória, planejamento, estudos, orçamento e regras do edital", "planejamento"),
+        (28, 32, "Modalidades de licitação", "modalidades"),
+        (33, 39, "Critérios de julgamento", "julgamento"),
+        (40, 52, "Disposições setoriais sobre compras, obras, serviços, locação e licitações internacionais", None),
+        (53, 54, "Controle de legalidade e publicidade do edital", "publicidade_edital"),
+        (55, 58, "Apresentação de propostas, lances e garantia de proposta", "propostas"),
+        (59, 61, "Julgamento das propostas, desempate e negociação", "julgamento"),
+        (62, 70, "Habilitação jurídica, técnica, fiscal, social, trabalhista e econômico-financeira", "habilitacao"),
+        (71, 71, "Encerramento da licitação", "processo"),
+        (72, 75, "Processo de contratação direta, inexigibilidade e dispensa", "contratacao_direta"),
+        (76, 77, "Alienação de bens públicos", "alienacoes"),
+        (78, 88, "Procedimentos e instrumentos auxiliares das contratações", "instrumentos_auxiliares"),
+        (89, 102, "Formalização dos contratos e garantias contratuais", "contratos"),
+        (103, 103, "Alocação de riscos contratuais", "contratos"),
+        (104, 104, "Prerrogativas da Administração nos contratos", "contratos"),
+        (105, 114, "Duração e prorrogação dos contratos", "contratos"),
+        (115, 123, "Execução, fiscalização, gestão e responsabilidades contratuais", "execucao_contratual"),
+        (124, 136, "Alterações contratuais, reajuste e recomposição de preços", "alteracao_contratual"),
+        (137, 139, "Hipóteses e consequências da extinção contratual", "extincao_contratual"),
+        (140, 140, "Recebimento do objeto do contrato", "execucao_contratual"),
+        (141, 146, "Ordem cronológica e procedimentos de pagamento", "pagamentos"),
+        (147, 150, "Nulidade dos contratos e seus efeitos", "contratos"),
+        (151, 154, "Meios alternativos de resolução de controvérsias", "contratos"),
+        (155, 163, "Infrações e sanções administrativas", "sancoes"),
+        (164, 168, "Impugnações, pedidos de esclarecimento e recursos", "recursos"),
+        (169, 173, "Gestão de riscos e controle das contratações", "controle"),
+        (174, 176, "Portal Nacional de Contratações Públicas (PNCP)", "pncp"),
+        (177, 180, "Alterações legislativas relacionadas à Lei", None),
+        (181, 194, "Disposições transitórias e finais", None),
+    ]
+    catalogo = {
+        artigo: {"tema": tema, "dominio": dominio}
+        for inicio, fim, tema, dominio in faixas
+        for artigo in range(inicio, fim + 1)
+    }
+    catalogo.update({
+        18: {"tema": "Fase preparatória e elementos do planejamento da contratação, incluindo ETP e análise de riscos", "dominio": "planejamento"},
+        20: {"tema": "Enquadramento de bens de consumo nas categorias comum e de luxo", "dominio": "planejamento"},
+        22: {"tema": "Matriz de alocação de riscos na fase preparatória", "dominio": "planejamento"},
+        23: {"tema": "Estimativa do valor da contratação", "dominio": "planejamento"},
+        24: {"tema": "Caráter sigiloso do orçamento estimado", "dominio": "planejamento"},
+        25: {"tema": "Regras e cláusulas do edital", "dominio": "publicidade_edital"},
+        28: {"tema": "Modalidades de licitação", "dominio": "modalidades"},
+        29: {"tema": "Pregão e concorrência", "dominio": "modalidades"},
+        30: {"tema": "Concurso", "dominio": "modalidades"},
+        31: {"tema": "Leilão", "dominio": "modalidades"},
+        32: {"tema": "Diálogo competitivo", "dominio": "modalidades"},
+        33: {"tema": "Critérios de julgamento", "dominio": "julgamento"},
+        40: {"tema": "Planejamento das compras", "dominio": "planejamento"},
+        41: {"tema": "Indicação de marcas e modelos e exigências relacionadas à aquisição", "dominio": None},
+        42: {"tema": "Comprovação da qualidade de produto", "dominio": None},
+        44: {"tema": "Consideração do ciclo de vida do objeto", "dominio": None},
+        53: {"tema": "Controle prévio de legalidade da contratação", "dominio": "publicidade_edital"},
+        54: {"tema": "Divulgação e publicação do edital", "dominio": "publicidade_edital"},
+        55: {"tema": "Prazos mínimos para apresentação de propostas e lances", "dominio": "propostas"},
+        56: {"tema": "Modos de disputa", "dominio": "propostas"},
+        57: {"tema": "Intervalos mínimos entre lances", "dominio": "propostas"},
+        58: {"tema": "Garantia de proposta", "dominio": "propostas"},
+        59: {"tema": "Desclassificação de propostas", "dominio": "julgamento"},
+        60: {"tema": "Critérios de desempate", "dominio": "julgamento"},
+        61: {"tema": "Negociação de condições mais vantajosas", "dominio": "julgamento"},
+        62: {"tema": "Categorias da habilitação", "dominio": "habilitacao"},
+        66: {"tema": "Qualificação técnico-profissional e técnico-operacional", "dominio": "habilitacao"},
+        68: {"tema": "Habilitação fiscal, social e trabalhista", "dominio": "habilitacao"},
+        69: {"tema": "Habilitação econômico-financeira", "dominio": "habilitacao"},
+        72: {"tema": "Instrução do processo de contratação direta", "dominio": "contratacao_direta"},
+        74: {"tema": "Inexigibilidade de licitação", "dominio": "contratacao_direta"},
+        75: {"tema": "Hipóteses de dispensa de licitação", "dominio": "contratacao_direta"},
+        76: {"tema": "Alienação de bens da Administração Pública", "dominio": "alienacoes"},
+        79: {"tema": "Procedimento auxiliar de credenciamento", "dominio": "instrumentos_auxiliares"},
+        80: {"tema": "Pré-qualificação", "dominio": "instrumentos_auxiliares"},
+        81: {"tema": "Procedimento de manifestação de interesse", "dominio": "instrumentos_auxiliares"},
+        82: {"tema": "Sistema de registro de preços e conteúdo do edital", "dominio": "instrumentos_auxiliares"},
+        86: {"tema": "Intenção de registro de preços", "dominio": "instrumentos_auxiliares"},
+        87: {"tema": "Registro cadastral", "dominio": "instrumentos_auxiliares"},
+        89: {"tema": "Regime jurídico e formalização dos contratos", "dominio": "contratos"},
+        92: {"tema": "Cláusulas necessárias dos contratos", "dominio": "contratos"},
+        94: {"tema": "Divulgação do contrato no PNCP como condição de eficácia", "dominio": "pncp"},
+        96: {"tema": "Exigência e modalidades de garantia contratual", "dominio": "contratos"},
+        103: {"tema": "Matriz de alocação de riscos", "dominio": "contratos"},
+        104: {"tema": "Prerrogativas da Administração", "dominio": "contratos"},
+        105: {"tema": "Duração dos contratos", "dominio": "contratos"},
+        115: {"tema": "Execução fiel do contrato", "dominio": "execucao_contratual"},
+        117: {"tema": "Acompanhamento e fiscalização da execução contratual", "dominio": "execucao_contratual"},
+        118: {"tema": "Subcontratação", "dominio": "execucao_contratual"},
+        121: {"tema": "Encargos trabalhistas, previdenciários, fiscais e comerciais", "dominio": "execucao_contratual"},
+        124: {"tema": "Alterações unilaterais e consensuais dos contratos", "dominio": "alteracao_contratual"},
+        125: {"tema": "Limites e condições para alterações contratuais", "dominio": "alteracao_contratual"},
+        126: {"tema": "Reequilíbrio econômico-financeiro em alterações contratuais", "dominio": "alteracao_contratual"},
+        137: {"tema": "Motivos para extinção dos contratos", "dominio": "extincao_contratual"},
+        138: {"tema": "Extinção unilateral e consensual", "dominio": "extincao_contratual"},
+        140: {"tema": "Recebimento provisório e definitivo do objeto", "dominio": "execucao_contratual"},
+        141: {"tema": "Ordem cronológica de pagamentos", "dominio": "pagamentos"},
+        147: {"tema": "Avaliação de consequências da nulidade contratual", "dominio": "contratos"},
+        151: {"tema": "Meios alternativos de prevenção e resolução de controvérsias", "dominio": "contratos"},
+        155: {"tema": "Infrações administrativas de licitantes e contratados", "dominio": "sancoes"},
+        156: {"tema": "Sanções administrativas", "dominio": "sancoes"},
+        157: {"tema": "Dosimetria e aplicação das sanções", "dominio": "sancoes"},
+        164: {"tema": "Impugnação do edital e pedido de esclarecimento", "dominio": "recursos"},
+        165: {"tema": "Recursos administrativos", "dominio": "recursos"},
+        169: {"tema": "Linhas de defesa e gestão de riscos nas contratações", "dominio": "controle"},
+        174: {"tema": "Portal Nacional de Contratações Públicas", "dominio": "pncp"},
+    })
+    return catalogo
+
+
+ARTIGOS_LEI_14133_TEMAS = _montar_catalogo_artigos_lei_14133()
+ARTIGOS_LEI_14133 = set(ARTIGOS_LEI_14133_TEMAS)
 CITACAO_ARTIGO_RE = re.compile(r"(?i)\b(?:art\.?|artigo)\s*(\d{1,3})\b")
+CITACAO_DECRETO_RE = re.compile(r"(?i)\b(?P<tipo>decreto(?:-lei)?)\s*(?:(?:federal|estadual|municipal)\s*)?(?:n[ºo.]?\s*)?(?P<numero>\d{1,3}(?:\.\d{3})*(?:[./-]\d{2,4})?)\b")
+CITACAO_SUMULA_RE = re.compile(r"(?i)\bS[uú]mula\s+(?:(?P<tribunal>TCU|STF|STJ|TST|TSE|TCE(?:[-/ ]?[A-Z]{2})?)\s*(?:n[ºo.]?\s*)?(?P<num_a>\d{1,4})|(?:n[ºo.]?\s*)?(?P<num_b>\d{1,4})(?:\s+(?:do|da)\s+(?P<tribunal_pos>TCU|STF|STJ|TST|TSE|TCE(?:[-/ ]?[A-Z]{2})?))?)\b")
+
+
+DOMINIOS_CONTEXTO_LEGAL = {
+    "planejamento": re.compile(r"(?i)\b(planejamento|fase\s+preparat[oó]ria|estudo\s+t[eé]cnico\s+preliminar|ETP|termo\s+de\s+refer[eê]ncia|or[cç]amento\s+estimado|estimativa\s+de\s+pre[cç]os)\b"),
+    "contratacao_direta": re.compile(r"(?i)\b(contrata[cç][aã]o\s+direta|dispensa|inexigibilidade|emerg[eê]ncia|emergencial|exclusividade)\b"),
+    "modalidades": re.compile(r"(?i)\b(preg[aã]o|concorr[eê]ncia|leil[aã]o|concurso|di[aá]logo\s+competitivo|modalidade)\b"),
+    "julgamento": re.compile(r"(?i)\b(julgamento|desclassifica[cç][aã]o|desempate|crit[eé]rio\s+de\s+julgamento|negocia[cç][aã]o)\b"),
+    "publicidade_edital": re.compile(r"(?i)\b(edital|publica[cç][aã]o|publicidade|PNCP|aviso\s+de\s+licita[cç][aã]o)\b"),
+    "propostas": re.compile(r"(?i)\b(propostas?|lances|modo\s+de\s+disputa|garantia\s+de\s+proposta)\b"),
+    "habilitacao": re.compile(r"(?i)\b(habilita[cç][aã]o|qualifica[cç][aã]o|atestado|capacidade\s+t[eé]cnica|regularidade\s+fiscal|documenta[cç][aã]o\s+do\s+licitante)\b"),
+    "instrumentos_auxiliares": re.compile(r"(?i)\b(credenciamento|pr[eé]-qualifica[cç][aã]o|sistema\s+de\s+registro\s+de\s+pre[cç]os|registro\s+cadastral)\b"),
+    "execucao_contratual": re.compile(r"(?i)\b(execuc[aã]o\s+contratual|fiscaliza[cç][aã]o|fiscal\s+do\s+contrato|gestor\s+do\s+contrato|recebimento|medi[cç][aã]o|ordem\s+de\s+servi[cç]o|encargos\s+trabalhistas)\b"),
+    "alteracao_contratual": re.compile(r"(?i)\b(aditivo|altera[cç][aã]o\s+contratual|reequil[ií]brio|reajuste|repactua[cç][aã]o|revis[aã]o\s+de\s+pre[cç]os)\b"),
+    "extincao_contratual": re.compile(r"(?i)\b(extin[cç][aã]o|rescis[aã]o|anula[cç][aã]o\s+do\s+contrato)\b"),
+    "pagamentos": re.compile(r"(?i)\b(pagamento|ordem\s+cronol[oó]gica|liquida[cç][aã]o|antecipa[cç][aã]o)\b"),
+    "alienacoes": re.compile(r"(?i)\b(aliena[cç][aã]o|leil[aã]o\s+de\s+bens|venda\s+de\s+bens?)\b"),
+    "sancoes": re.compile(r"(?i)\b(san[cç][aã]o|multa|impedimento|inidoneidade|penalidade|infra[cç][aã]o\s+administrativa)\b"),
+    "recursos": re.compile(r"(?i)\b(recurso|impugna[cç][aã]o|pedido\s+de\s+esclarecimento|contrarraz[oõ]es)\b"),
+    "controle": re.compile(r"(?i)\b(controle\s+das\s+contrata[cç][oõ]es|gest[aã]o\s+de\s+riscos|linhas\s+de\s+defesa)\b"),
+    "pncp": re.compile(r"(?i)\b(portal\s+nacional\s+de\s+contrata[cç][oõ]es\s+p[uú]blicas|PNCP)\b"),
+}
+
+
+def _dominios_do_trecho(trecho: str) -> set[str]:
+    return {dominio for dominio, padrao in DOMINIOS_CONTEXTO_LEGAL.items() if padrao.search(trecho)}
+
+
+def _artigos_lei_14133(documentos: dict) -> list[dict]:
+    ocorrencias = []
+    for nome, campos in documentos.items():
+        if not isinstance(campos, dict):
+            continue
+        for campo, valor in campos.items():
+            texto = _texto(valor)
+            trechos = re.split(r"(?<=[!?;])\s+|(?<=[.!?])\s+(?=[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ])", texto)
+            for trecho in trechos:
+                if not re.search(r"(?i)\blei\s*(?:federal\s*)?(?:n[ºo.]?\s*)?14\s*[.,]\s*133(?:\s*/\s*2021)?\b", trecho):
+                    continue
+                for match in CITACAO_ARTIGO_RE.finditer(trecho):
+                    artigo = int(match.group(1))
+                    tema = ARTIGOS_LEI_14133_TEMAS.get(artigo)
+                    dominios = _dominios_do_trecho(trecho)
+                    dominio_artigo = tema.get("dominio") if tema else None
+                    incompativel = bool(dominio_artigo and len(dominios) == 1 and dominio_artigo not in dominios)
+                    ocorrencias.append({
+                        "documento": nome,
+                        "campo": campo,
+                        "artigo": artigo,
+                        "tema": tema["tema"] if tema else "Fora do catálogo da Lei 14.133/2021",
+                        "dominio_artigo": dominio_artigo,
+                        "dominios_contexto": sorted(dominios),
+                        "coerencia": "incompativel" if incompativel else "sem_conflito_identificado",
+                        "trecho": trecho[:500],
+                    })
+    return ocorrencias
+
+
+def _referencias_normativas_complementares(documentos: dict) -> list[dict]:
+    ocorrencias = []
+    vistos = set()
+    for nome, campos in documentos.items():
+        if not isinstance(campos, dict):
+            continue
+        for campo, valor in campos.items():
+            texto = _texto(valor)
+            for trecho in re.split(r"(?<=[!?;])\s+|(?<=[.!?])\s+(?=[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ])", texto):
+                for match in CITACAO_DECRETO_RE.finditer(trecho):
+                    referencia = f"{match.group('tipo').title()} nº {match.group('numero')}"
+                    chave = (nome, campo, referencia, trecho)
+                    if chave not in vistos:
+                        vistos.add(chave)
+                        ocorrencias.append({"tipo": "decreto", "referencia": referencia, "documento": nome, "campo": campo, "trecho": trecho[:500]})
+                for match in CITACAO_SUMULA_RE.finditer(trecho):
+                    tribunal = match.group("tribunal") or match.group("tribunal_pos")
+                    numero = match.group("num_a") or match.group("num_b")
+                    referencia = f"Súmula {tribunal} nº {numero}" if tribunal else f"Súmula nº {numero}"
+                    chave = (nome, campo, referencia, trecho)
+                    if chave not in vistos:
+                        vistos.add(chave)
+                        ocorrencias.append({"tipo": "sumula", "referencia": referencia, "documento": nome, "campo": campo, "trecho": trecho[:500]})
+    return ocorrencias
 
 
 def formatar_relatorio_referencias(resultado: dict) -> str:
@@ -391,12 +608,20 @@ def formatar_relatorio_referencias(resultado: dict) -> str:
     linhas.extend(["", "Referências legais identificadas"])
     if artigos:
         for artigo in sorted(artigos):
-            if artigo in ARTIGOS_LEI_14133:
-                linhas.append(f"- artigo {artigo}: No catálogo numérico da Lei 14.133/2021; confirmar a norma citada, o conteúdo e a pertinência.")
+            tema = ARTIGOS_LEI_14133_TEMAS.get(artigo)
+            if tema:
+                linhas.append(f"- artigo {artigo}: No catálogo temático da Lei 14.133/2021 — {tema['tema']}; confirmar a norma citada, o conteúdo e a pertinência.")
             else:
                 linhas.append(f"- artigo {artigo}: Referências fora do catálogo — Revisar a fonte e a numeração.")
     else:
         linhas.append("- Nenhuma citação de artigo detectada.")
+    referencias_complementares = _referencias_normativas_complementares(dados)
+    linhas.extend(["", "Decretos e súmulas identificados"])
+    if referencias_complementares:
+        for referencia in referencias_complementares:
+            linhas.append(f"- {referencia['referencia']} — conferir órgão emissor, texto, vigência e pertinência.")
+    else:
+        linhas.append("- Nenhuma citação de decreto ou súmula identificada.")
     linhas.extend([
         "",
         "Conferência humana obrigatória",
