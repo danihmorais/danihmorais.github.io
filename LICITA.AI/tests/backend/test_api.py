@@ -373,6 +373,31 @@ class LicitaBackendTests(unittest.TestCase):
         with patch.dict(os.environ, {"LICITA_TRUSTED_PROXY_CIDRS": "127.0.0.1/32"}):
             self.assertEqual(main._client_identity(Requisicao()), "198.51.100.5")
 
+    def test_email_permitido_aceita_dominios_publicos_e_sp_gov_br(self):
+        emails = [
+            "usuario@hotmail.com",
+            "usuario@outlook.com",
+            "usuario@gmail.com",
+            "usuario@sp.gov.br",
+            "usuario@prefeitura.sp.gov.br",
+            "usuario@secretaria.educacao.sp.gov.br",
+        ]
+        with patch.dict(os.environ, {"LICITA_EMAIL_ALLOWED_DOMAINS": "example.com"}):
+            for email in emails:
+                with self.subTest(email=email):
+                    self.assertTrue(main._email_permitido(email))
+
+    def test_email_permitido_preserva_lista_configurada_e_rejeita_sufixos_falsos(self):
+        with patch.dict(os.environ, {"LICITA_EMAIL_ALLOWED_DOMAINS": "example.com"}):
+            self.assertTrue(main._email_permitido("usuario@example.com"))
+            self.assertFalse(main._email_permitido("usuario@fake-sp.gov.br"))
+            self.assertFalse(main._email_permitido("usuario@gmail.com.example"))
+
+    def test_endpoint_de_importacao_de_planilha_foi_removido(self):
+        with TestClient(app) as client:
+            resposta = client.post("/api/importar-itens-planilha")
+        self.assertEqual(resposta.status_code, 404)
+
     def test_endpoint_bloqueia_destinatario_fora_da_lista_de_dominios(self):
         payload = {
             "email": "destino@naoautorizado.example",
@@ -805,61 +830,6 @@ class TestEntregaZipAutenticada(unittest.TestCase):
             )
         self.assertEqual(resposta.status_code, 409)
         enqueue.assert_not_called()
-
-
-class TestImportacaoItensPlanilha(unittest.TestCase):
-    def test_csv_separado_por_ponto_e_virgula_normaliza_cabecalhos(self):
-        conteudo = (
-            "Nº;Descrição;Unidade;Quantidade;Valor Unitário\n"
-            "1;Papel A4;RESMA;10;32,50\n"
-            "2;Caneta azul;CAIXA;5;18,90\n"
-        ).encode("utf-8")
-        itens = main._ler_itens_csv(conteudo)
-        self.assertEqual(len(itens), 2)
-        self.assertEqual(
-            itens[0],
-            {"numero": "1", "descricao": "Papel A4", "un": "RESMA", "qtd": "10", "valor": "32,50"},
-        )
-
-    def test_csv_rejeita_planilha_sem_coluna_de_descricao(self):
-        with self.assertRaisesRegex(ValueError, "coluna de descrição"):
-            main._ler_itens_csv(b"Codigo;Quantidade\n01;10\n")
-
-    def test_xlsx_le_cabecalhos_em_portugues(self):
-        from openpyxl import Workbook
-        from io import BytesIO
-
-        workbook = Workbook()
-        sheet = workbook.active
-        sheet.append(["Item", "Especificação", "Und.", "Qtde", "Preço unitário"])
-        sheet.append([1, "Teclado USB", "UN", 2, 45.9])
-        buffer = BytesIO()
-        workbook.save(buffer)
-        workbook.close()
-        itens = main._ler_itens_xlsx(buffer.getvalue())
-        self.assertEqual(
-            itens,
-            [{"numero": "1", "descricao": "Teclado USB", "un": "UN", "qtd": "2", "valor": "45.9"}],
-        )
-
-    def test_endpoint_recebe_csv_e_aplica_limites_de_upload(self):
-        csv_data = b"Item;Descricao;Unidade;Quantidade;Valor\n1;Papel A4;RESMA;10;32.50\n"
-        with TestClient(app) as client:
-            resposta = client.post(
-                "/api/importar-itens-planilha",
-                files={"arquivo": ("itens.csv", csv_data, "text/csv")},
-            )
-        self.assertEqual(resposta.status_code, 200, resposta.text)
-        self.assertEqual(resposta.json()["count"], 1)
-        self.assertEqual(resposta.json()["items"][0]["descricao"], "Papel A4")
-
-    def test_endpoint_rejeita_extensao_nao_suportada(self):
-        with TestClient(app) as client:
-            resposta = client.post(
-                "/api/importar-itens-planilha",
-                files={"arquivo": ("itens.xls", b"conteudo", "application/octet-stream")},
-            )
-        self.assertEqual(resposta.status_code, 400)
 
 
 class TestRevisaoPreviaDocumentos(unittest.TestCase):

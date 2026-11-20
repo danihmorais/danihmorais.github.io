@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import unicodedata
 import asyncio
 import logging
-import io
-import csv
 
 import config
 
@@ -24,7 +21,7 @@ from collections import deque
 from datetime import datetime, timezone
 
 import httpx
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from pydantic import BaseModel, Field
@@ -182,10 +179,13 @@ def _token_matches(esperado: str, recebido: str) -> bool:
 
 
 def _email_permitido(email: str) -> bool:
+    dominio = email.rsplit("@", 1)[-1].casefold().strip()
+    dominios_publicos_permitidos = {"hotmail.com", "outlook.com", "gmail.com"}
+    if dominio in dominios_publicos_permitidos or dominio == "sp.gov.br" or dominio.endswith(".sp.gov.br"):
+        return True
     configuracao = os.getenv("LICITA_EMAIL_ALLOWED_DOMAINS", "").strip()
     if not configuracao:
         return True
-    dominio = email.rsplit("@", 1)[-1].casefold().strip()
     permitidos = [
         item.strip().casefold().lstrip("@").lstrip(".")
         for item in configuracao.split(",")
@@ -639,132 +639,6 @@ async def _ler_payload_fase_preparatoria(request: Request) -> tuple[FasePreparat
             ],
         }
     return req, resumo, dados_ia
-
-
-IMPORT_PLANILHA_MAX_BYTES = 5 * 1024 * 1024
-_IMPORTAR_CABECALHOS = {
-    "numero": {"numero", "n", "no", "item", "seq", "sequencia"},
-    "descricao": {"descricao", "descritivo", "especificacao", "objeto", "material", "produto", "descricaoitem", "descricaodoitem", "descricaoobjeto", "especificacaoitem"},
-    "un": {"un", "und", "unidade", "unid"},
-    "qtd": {"qtd", "qtde", "quantidade"},
-    "valor": {"valor", "preco", "valorunitario", "precounitario", "valorunitarioestimado", "precoestimado"},
-}
-
-
-def _normalizar_cabecalho_planilha(valor: object) -> str:
-    texto = unicodedata.normalize("NFKD", str(valor or ""))
-    texto = "".join(caractere for caractere in texto if not unicodedata.combining(caractere))
-    return "".join(caractere for caractere in texto.casefold() if caractere.isalnum())
-
-
-def _normalizar_linha_planilha(cabecalhos: list[object], valores: list[object], indice: int) -> dict | None:
-    colunas = {}
-    for posicao, cabecalho in enumerate(cabecalhos):
-        normalizado = _normalizar_cabecalho_planilha(cabecalho)
-        for campo, aliases in _IMPORTAR_CABECALHOS.items():
-            if normalizado in aliases and campo not in colunas:
-                colunas[campo] = posicao
-    if "descricao" not in colunas:
-        raise ValueError("A planilha deve conter uma coluna de descrição, descritivo, especificação ou objeto.")
-    def valor(campo: str, padrao: str = "") -> str:
-        posicao = colunas.get(campo)
-        if posicao is None or posicao >= len(valores):
-            return padrao
-        bruto = valores[posicao]
-        if bruto is None:
-            return padrao
-        if isinstance(bruto, float) and bruto.is_integer():
-            return str(int(bruto))
-        return str(bruto).strip()
-    descricao = valor("descricao")
-    if not descricao:
-        return None
-    return {
-        "numero": valor("numero", str(indice)),
-        "descricao": descricao,
-        "un": valor("un", "UN"),
-        "qtd": valor("qtd", "1"),
-        "valor": valor("valor", "0"),
-    }
-
-
-def _ler_itens_csv(conteudo: bytes) -> list[dict]:
-    try:
-        texto = conteudo.decode("utf-8-sig")
-    except UnicodeDecodeError:
-        texto = conteudo.decode("cp1252")
-    primeira_linha = texto.splitlines()[0] if texto.splitlines() else ""
-    delimitadores = (";", ",", "\t")
-    delimitador = max(delimitadores, key=lambda candidato: primeira_linha.count(candidato))
-    if primeira_linha.count(delimitador) == 0:
-        raise ValueError("Não foi possível identificar o separador da planilha.")
-    leitor = csv.reader(io.StringIO(texto), delimiter=delimitador)
-    linhas = list(leitor)
-    if not linhas:
-        raise ValueError("A planilha está vazia.")
-    cabecalhos = linhas[0]
-    aliases_descricao = _IMPORTAR_CABECALHOS["descricao"]
-    if not any(_normalizar_cabecalho_planilha(cabecalho) in aliases_descricao for cabecalho in cabecalhos):
-        raise ValueError("A planilha deve conter uma coluna de descrição, descritivo, especificação ou objeto.")
-    itens = [
-        item for indice, linha in enumerate(linhas[1:], start=1)
-        if (item := _normalizar_linha_planilha(cabecalhos, linha, indice)) is not None
-    ]
-    return itens
-
-
-def _ler_itens_xlsx(conteudo: bytes) -> list[dict]:
-    try:
-        from openpyxl import load_workbook
-    except ImportError as exc:
-        raise RuntimeError("A leitura de XLSX requer a dependência openpyxl.") from exc
-    workbook = load_workbook(io.BytesIO(conteudo), read_only=True, data_only=True)
-    try:
-        worksheet = workbook.active
-        linhas = worksheet.iter_rows(values_only=True)
-        cabecalhos = list(next(linhas, ()) or ())
-        itens = []
-        for indice, linha in enumerate(linhas, start=1):
-            item = _normalizar_linha_planilha(cabecalhos, list(linha), indice)
-            if item is not None:
-                itens.append(item)
-        return itens
-    finally:
-        workbook.close()
-
-
-@app.post("/api/importar-itens-planilha")
-async def importar_itens_planilha(request: Request, arquivo: UploadFile = File(...)):
-    nome = str(arquivo.filename or "").strip()
-    extensao = Path(nome).suffix.casefold()
-    if extensao not in {".csv", ".xlsx"}:
-        raise HTTPException(status_code=400, detail="Envie uma planilha .csv ou .xlsx.")
-    conteudo = await arquivo.read(IMPORT_PLANILHA_MAX_BYTES + 1)
-    await arquivo.close()
-    if not conteudo:
-        raise HTTPException(status_code=400, detail="O arquivo enviado está vazio.")
-    if len(conteudo) > IMPORT_PLANILHA_MAX_BYTES:
-        raise HTTPException(status_code=413, detail="A planilha ultrapassa o limite de 5 MB.")
-    _check_rate_limit(
-        _ia_rate_buckets,
-        _ia_rate_lock,
-        _client_identity(request),
-        12,
-        3600,
-        "Limite de importações atingido. Tente novamente mais tarde.",
-        "import-planilha-ip",
-    )
-    try:
-        itens = _ler_itens_csv(conteudo) if extensao == ".csv" else _ler_itens_xlsx(conteudo)
-    except (ValueError, csv.Error) as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail="Não foi possível interpretar a planilha. Confira o formato e as colunas.") from exc
-    if not itens:
-        raise HTTPException(status_code=400, detail="Nenhuma linha com descrição válida foi encontrada.")
-    if len(itens) > 1000:
-        raise HTTPException(status_code=413, detail="A planilha ultrapassa o limite de 1.000 itens por importação.")
-    return {"items": itens, "count": len(itens), "filename": Path(nome).name}
 
 
 @app.post("/api/gerar-fase-preparatoria")
