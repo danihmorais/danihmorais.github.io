@@ -246,7 +246,7 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
       const pdfWorkerUrl: string = (workerModule as any).default || String(workerModule);
       pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
       const dadosPdf = new Uint8Array(await arquivo.arrayBuffer());
-      const documento = await pdfjs.getDocument({ data: dadosPdf }).promise;
+      const documento = await pdfjs.getDocument({ data: dadosPdf, isEvalSupported: false }).promise;
       const linhas: string[] = [];
 
       try {
