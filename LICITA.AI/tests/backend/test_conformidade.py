@@ -83,6 +83,13 @@ class ConformidadeTests(unittest.TestCase):
         ocorrencia = next(a for a in relatorio["alertas"] if a["tipo"] == "artigo_fora_catalogo_lei_14133")
         self.assertEqual(ocorrencia["ocorrencias"][0]["artigo"], 195)
 
+    def test_sinaliza_artigo_fora_do_catalogo_com_lei_com_virgula(self):
+        documentos = documentos_base()
+        documentos["ETP"]["CONCLUSAO"] = "Nos termos do art. 195 da Lei 14,133/2021."
+        relatorio = avaliar_conformidade(documentos)
+        verificacao = next(v for v in relatorio["verificacoes"] if v["id"] == "catalogo_artigos_lei_14133")
+        self.assertEqual(verificacao["status"], "alerta")
+
     def test_artigo_dentro_do_catalogo_nao_e_marcado_como_invalido(self):
         documentos = documentos_base()
         documentos["ETP"]["CONCLUSAO"] = "Nos termos do art. 18 da Lei 14.133/2021."
