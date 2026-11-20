@@ -707,7 +707,7 @@ def _sqlite_fila_reindexar() -> None:
             for arquivo in diretorio.iterdir():
                 if not arquivo.is_file() or arquivo.name == "queue.sqlite3":
                     continue
-                if not any(extensao in arquivo.name for extensao in _SQLITE_FILA_EXTENSOES):
+                if not arquivo.name.endswith(".json") and not any(extensao in arquivo.name for extensao in _SQLITE_FILA_EXTENSOES):
                     continue
                 try:
                     job = json.loads(arquivo.read_text(encoding="utf-8"))
