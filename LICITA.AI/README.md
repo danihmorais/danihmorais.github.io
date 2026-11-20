@@ -103,6 +103,12 @@ Uma edição ou regeneração do DFD marca ETP e TR como dependentes; uma ediç�
 
 A verificação numérica da Lei 14.133/2021 sinaliza artigos fora do intervalo numérico 1 a 194, mas não verifica o teor, a vigência, a interpretação, a aplicabilidade nem a autenticidade de citações. As demais normas e jurisprudências continuam sujeitas à conferência em fonte primária. A revisão humana continua obrigatória.
 
+## PDF.js e política de Content Security Policy
+
+A importação de PDFs usa `@bundled-es-modules/pdfjs-dist` e fornece explicitamente o worker do navegador por `GlobalWorkerOptions.workerSrc`. O aviso de `eval` emitido pelo Rolldown vem do caminho de compatibilidade do worker para Node.js na dependência; no navegador, o PDF.js usa a URL do worker e o carregamento por script, sem depender desse caminho de `eval("require")`. Não adicione `'unsafe-eval'` à CSP apenas para suprimir esse aviso. A política de produção deve continuar restritiva e ser validada com a importação real de PDFs.
+
+A abertura de documentos usa `isEvalSupported: false` para impedir que o PDF.js avalie código derivado de fontes embutidas no PDF. Essa opção é a mitigação recomendada pelo aviso de segurança do PDF.js para versões vulneráveis. A dependência empacotada continua em uma versão antiga; planeje uma atualização controlada para uma versão oficial corrigida do `pdfjs-dist`, validando worker, importação de PDFs e build antes de remover a mitigação.
+
 ## Desenvolvimento e testes
 
 Na pasta `LICITA.AI`:
