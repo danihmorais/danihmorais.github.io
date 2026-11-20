@@ -79,6 +79,7 @@ function rotuloEtapa(chave?: string): string {
     CONSULTA_HABILITACAO: "Pesquisa do objeto e da habilitação",
     PAGAMENTO_ETAPAS: "Revisão das condições de pagamento",
     DFD: "Geração do DFD",
+    REVISAO_USUARIO: "Aguardando revisão dos documentos",
     ETP: "Geração do ETP",
     TR: "Geração do TR",
     CONTRATACAO_DIRETA: "Geração da contratação direta",
@@ -654,7 +655,7 @@ export default function Wizard() {
             <>
               <p><strong>Status:</strong> {rotuloStatusPedido(statusPedido, cancelamentoSolicitado)}</p>
               <dl className="job-details">
-                <div><dt>E-mail de destino</dt><dd>{jobAgendado.email}</dd></div>
+                {jobAgendado.email && <div><dt>E-mail de destino</dt><dd>{jobAgendado.email}</dd></div>}
                 <div><dt>ID da solicitação</dt><dd><code>{jobAgendado.job_id}</code></dd></div>
                 <div><dt>Etapa atual</dt><dd>{rotuloEtapa(jobDetalhe?.current_stage)}</dd></div>
                 {(typeof (jobDetalhe?.fila_posicao ?? jobAgendado.fila_posicao) === "number" && pedidoAindaAtivo) && (
