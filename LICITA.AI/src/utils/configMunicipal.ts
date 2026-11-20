@@ -1,3 +1,5 @@
+import configuracoesMunicipais from "../../config/municipios.json";
+
 export interface ConfigMunicipalPublica {
   municipio: {
     id: string;
@@ -10,21 +12,26 @@ export interface ConfigMunicipalPublica {
   limite_exclusividade_me_epp_centavos: number;
 }
 
+const municipioPadraoId = configuracoesMunicipais.municipio_padrao;
+const municipioPadrao = configuracoesMunicipais.municipios[municipioPadraoId];
+const limitePadrao = municipioPadrao.parametros?.limite_exclusividade_me_epp_centavos
+  ?? configuracoesMunicipais.parametros.limite_exclusividade_me_epp_centavos;
+
 const CONFIG_PADRAO: ConfigMunicipalPublica = {
   municipio: {
-    id: "sao-francisco-sp",
-    nome: "São Francisco",
-    uf: "SP",
-    display: "São Francisco/SP",
-    decreto: "Decreto Municipal nº 2.056/2024",
+    id: municipioPadrao.id,
+    nome: municipioPadrao.nome,
+    uf: municipioPadrao.uf,
+    display: municipioPadrao.uf ? `${municipioPadrao.nome}/${municipioPadrao.uf}` : municipioPadrao.nome,
+    decreto: municipioPadrao.decreto,
     campos: {
-      nome_completo: "Prefeitura Municipal de São Francisco",
-      endereco_prefeitura: "Av. Oscar Antônio da Costa, 1187, CEP 15710-011, São Francisco/SP",
-      telefone: "(17) 3693-1101",
-      email_licitacao: "licitacao@saofrancisco.sp.gov.br",
+      nome_completo: municipioPadrao.campos.nome_completo || `Prefeitura Municipal de ${municipioPadrao.nome}`,
+      endereco_prefeitura: municipioPadrao.campos.endereco_prefeitura || "",
+      telefone: municipioPadrao.campos.telefone || "",
+      email_licitacao: municipioPadrao.campos.email_licitacao || "",
     },
   },
-  limite_exclusividade_me_epp_centavos: 8000000,
+  limite_exclusividade_me_epp_centavos: limitePadrao,
 };
 
 let configMunicipalAtiva = CONFIG_PADRAO;
