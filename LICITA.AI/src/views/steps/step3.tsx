@@ -18,7 +18,7 @@ NaN
               const faltaContato = contatos.length === 0;
 
               return (
-                <div key={sec} className="department-contact-card licita-step3-style-011" >
+                <div key={sec} className={ ["department-contact-card licita-step3-style-011", (faltaContato ? "licita-step3-style-011-p2-a" : "licita-step3-style-011-p2-b")].filter(Boolean).join(" ") } >
                   <div className="department-contact-form licita-step3-style-012" >
                     <strong  className={ ["licita-step3-style-013"].filter(Boolean).join(" ") }>{sec}</strong>
                     <input 
