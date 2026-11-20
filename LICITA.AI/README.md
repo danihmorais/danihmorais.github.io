@@ -50,10 +50,13 @@ Os desafios e tokens de confirmação são persistidos no SQLite da fila. Cada t
 | Variável | Finalidade |
 | --- | --- |
 | `LICITA_TRUSTED_PROXY_CIDRS` | CIDRs dos proxies reversos confiáveis, separados por vírgula. Configure somente os endereços reais do proxy que conecta diretamente à API. |
-| `LICITA_QUEUE_GLOBAL_RATE_LIMIT` | Limite global de novas solicitações da fila na janela configurada. Padrão: 40. |
-| `LICITA_IA_GLOBAL_RATE_LIMIT` | Limite global de operações pontuais de IA. Padrão: 120. |
-| `LICITA_IA_RATE_LIMIT` | Limite de chamadas pontuais por identidade de cliente. |
+| `LICITA_METRICS_TOKEN` | Token bearer obrigatório para acessar `/metrics`. Sem configuração, o endpoint permanece desativado. |
+| `LICITA_IA_RATE_LIMIT` | Limite de chamadas pontuais por identidade de cliente, persistido no SQLite. |
+| `LICITA_QUEUE_RATE_LIMIT` | Limite de criação de pedidos por IP, persistido no SQLite. |
+| `LICITA_QUEUE_EMAIL_RATE_LIMIT` | Limite de criação de pedidos por e-mail, persistido no SQLite. |
 | `LICITA_QUEUE_DIR` | Diretório de persistência dos jobs e arquivos ZIP, conforme `fila.py`. |
+
+O endpoint `/metrics` exige `Authorization: Bearer <LICITA_METRICS_TOKEN>`. As métricas incluem contagem de jobs por status, duração e quantidade de execuções por etapa, falhas categorizadas, requisições HTTP e uso de tokens de IA. Não são expostos e-mails nem identificadores individuais de pedidos.
 
 Não confie em `X-Forwarded-For` de clientes que não pertençam a `LICITA_TRUSTED_PROXY_CIDRS`. O Uvicorn também deve receber apenas os headers de proxy da infraestrutura confiável.
 
