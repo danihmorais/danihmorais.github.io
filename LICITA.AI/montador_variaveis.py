@@ -250,7 +250,8 @@ def montar_variaveis_fixas(dados_usuario: dict) -> dict:
     else:
         if _converter_para_sim(prorroga):
             clausula_prorroga = config.TEXTOS.get("clausula_padrao", "")
-            texto_prorroga = "podendo ser prorrogado por igual período, nos termos dos arts. 106 e 107 da Lei Federal nº 14.133/2021, e art. 68 do Decreto Municipal nº 2056/24"
+            referencia_decreto = f", e art. 68 do {config.DECRETO_MUNICIPAL}" if config.DECRETO_MUNICIPAL else ""
+            texto_prorroga = f"podendo ser prorrogado por igual período, nos termos dos arts. 106 e 107 da Lei Federal nº 14.133/2021{referencia_decreto}"
             texto_prorroga_sn = "Sim"
         else:
             clausula_prorroga = ""
