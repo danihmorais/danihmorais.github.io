@@ -122,3 +122,41 @@ test("pré-visualização, edição e aprovação usam o token da fila", async (
   assert.deepEqual(JSON.parse(chamadas[2].options.body), { confirmar_alertas: true });
 });
 
+
+
+test("pesquisa PNCP envia filtros e preserva a distinção entre preço homologado e estimado", async () => {
+  let chamada;
+  const retorno = {
+    fonte: "PNCP",
+    total: 2,
+    contratacoes_consultadas: 12,
+    contratacoes_com_falha_de_consulta: 0,
+    mensagem: "Consulta auxiliar.",
+    resultados: [
+      { tipo_preco: "homologado", valor_unitario: 34.9, unidade: "RESMA", unidade_compativel: true },
+      { tipo_preco: "estimado", valor_unitario: 38, unidade: "RESMA", unidade_compativel: true },
+    ],
+  };
+  const api = loadTsModule("src/api.ts", {
+    globals: {
+      fetch: async (url, options) => {
+        chamada = { url, options };
+        return { ok: true, async json() { return retorno; } };
+      },
+    },
+  });
+  const resultado = await api.pesquisarPrecosPNCP({
+    descricao: "Papel sulfite A4",
+    unidade: "RESMA",
+    data_inicial: "2025-01-01",
+    data_final: "2025-12-31",
+    uf: "SP",
+    modalidades: [4, 6, 8],
+    incluir_estimados: true,
+  });
+  assert.equal(chamada.url, "https://api.example.test/licita/api/pesquisa-precos/pncp");
+  assert.equal(chamada.options.method, "POST");
+  assert.equal(JSON.parse(chamada.options.body).modalidades.length, 3);
+  assert.equal(resultado.resultados[0].tipo_preco, "homologado");
+  assert.equal(resultado.resultados[1].tipo_preco, "estimado");
+});
