@@ -4,6 +4,7 @@ import unicodedata
 import asyncio
 import logging
 import io
+import math
 import csv
 
 import config
@@ -21,6 +22,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
+from urllib.parse import quote
 from collections import deque
 from datetime import datetime, timezone
 from email.message import EmailMessage
@@ -96,6 +98,18 @@ class IAItemRequest(BaseModel):
     unidade: str = Field(default="", max_length=100)
     objeto: str = Field(default="", max_length=2000)
     necessidade: str = Field(default="", max_length=4000)
+
+
+class PesquisaPrecosPNCPRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    descricao: str = Field(min_length=3, max_length=600)
+    unidade: str = Field(default="", max_length=100)
+    data_inicial: str = Field(min_length=10, max_length=10)
+    data_final: str = Field(min_length=10, max_length=10)
+    uf: str | None = Field(default=None, min_length=2, max_length=2)
+    modalidades: list[int] = Field(default_factory=lambda: [4, 6, 8], min_length=1, max_length=3)
+    incluir_estimados: bool = True
 
 
 class AdminLoginRequest(BaseModel):
@@ -1046,6 +1060,304 @@ def _ler_itens_xlsx(conteudo: bytes) -> list[dict]:
         return itens
     finally:
         workbook.close()
+
+
+PNCP_CONSULTA_BASE_URL = os.getenv("LICITA_PNCP_CONSULTA_URL", "https://pncp.gov.br/api/consulta").rstrip("/")
+PNCP_MODALIDADES_PERMITIDAS = {4, 6, 8}
+PNCP_MAX_CONTRATACOES_POR_MODALIDADE = 16
+PNCP_MAX_RESULTADOS = 40
+
+
+def _pncp_lista(payload, *chaves) -> list:
+    if isinstance(payload, list):
+        return payload
+    if not isinstance(payload, dict):
+        return []
+    for chave in chaves:
+        valor = payload.get(chave)
+        if isinstance(valor, list):
+            return valor
+    for chave in ("data", "resultado", "response", "content"):
+        valor = payload.get(chave)
+        if isinstance(valor, dict):
+            lista = _pncp_lista(valor, *chaves)
+            if lista:
+                return lista
+    return []
+
+
+def _pncp_texto_normalizado(valor: str) -> str:
+    normalizado = unicodedata.normalize("NFKD", str(valor or ""))
+    sem_acentos = "".join(caractere for caractere in normalizado if not unicodedata.combining(caractere))
+    return re.sub(r"[^a-z0-9]+", " ", sem_acentos.casefold()).strip()
+
+
+def _pncp_pontuacao_descricao(consulta: str, descricao: str) -> tuple[float, int]:
+    stop_words = {"a", "ao", "aos", "as", "com", "da", "das", "de", "do", "dos", "e", "em", "para", "por", "um", "uma"}
+    consulta_tokens = {token for token in _pncp_texto_normalizado(consulta).split() if len(token) > 1 and token not in stop_words}
+    descricao_tokens = {token for token in _pncp_texto_normalizado(descricao).split() if len(token) > 1 and token not in stop_words}
+    if not consulta_tokens or not descricao_tokens:
+        return 0.0, 0
+    encontrados = len(consulta_tokens & descricao_tokens)
+    return encontrados / len(consulta_tokens), encontrados
+
+
+def _pncp_decimal(valor) -> float | None:
+    if valor is None or isinstance(valor, bool):
+        return None
+    try:
+        numero = float(str(valor).strip().replace(",", "."))
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(numero) or numero <= 0:
+        return None
+    return round(numero, 6)
+
+
+def _pncp_unidade_compativel(unidade_consulta: str, unidade_resultado: str) -> bool:
+    consulta = _pncp_texto_normalizado(unidade_consulta)
+    resultado = _pncp_texto_normalizado(unidade_resultado)
+    return bool(consulta and resultado and consulta == resultado)
+
+
+def _pncp_resultado_homologado(resultado: dict) -> bool:
+    try:
+        return int(resultado.get("situacaoCompraItemResultadoId")) == 1
+    except (TypeError, ValueError):
+        return False
+
+
+def _pncp_normalizar_preco(
+    tipo: str,
+    valor,
+    descricao: str,
+    unidade: str,
+    quantidade,
+    contrato: dict,
+    item: dict,
+    resultado: dict | None = None,
+) -> dict | None:
+    valor_unitario = _pncp_decimal(valor)
+    if valor_unitario is None:
+        return None
+    orgao = contrato.get("orgaoEntidade") if isinstance(contrato.get("orgaoEntidade"), dict) else {}
+    unidade_orgao = contrato.get("unidadeOrgao") if isinstance(contrato.get("unidadeOrgao"), dict) else {}
+    numero_controle = str(contrato.get("numeroControlePNCP") or "").strip()
+    modalidade = str(contrato.get("modalidadeNome") or contrato.get("modalidade") or "").strip()
+    data_fonte = (
+        (resultado or {}).get("dataResultado")
+        or contrato.get("dataPublicacaoPncp")
+        or contrato.get("dataPublicacao")
+        or contrato.get("dataAtualizacao")
+    )
+    return {
+        "tipo_preco": tipo,
+        "valor_unitario": valor_unitario,
+        "descricao_item": str(descricao or "").strip()[:600],
+        "unidade": str(unidade or "").strip()[:100],
+        "quantidade": _pncp_decimal(quantidade),
+        "unidade_compativel": False,
+        "orgao": str(orgao.get("razaoSocial") or contrato.get("orgaoEntidadeNome") or "").strip()[:240],
+        "municipio": str(unidade_orgao.get("municipioNome") or contrato.get("municipioNome") or "").strip()[:120],
+        "uf": str(unidade_orgao.get("ufSigla") or contrato.get("ufSigla") or "").strip()[:2],
+        "modalidade": modalidade[:100],
+        "data_referencia": str(data_fonte or "")[:40],
+        "numero_controle_pncp": numero_controle[:80],
+        "numero_item": str(item.get("numeroItem") or item.get("numero") or "")[:30],
+        "url_fonte": f"https://pncp.gov.br/app/editais?pagina=1&q={quote(numero_controle)}&status=todos" if numero_controle else "",
+    }
+
+
+async def _pncp_get_json(cliente: httpx.AsyncClient, caminho: str, parametros: dict | None = None):
+    resposta = await cliente.get(f"{PNCP_CONSULTA_BASE_URL}{caminho}", params=parametros or {})
+    resposta.raise_for_status()
+    try:
+        return resposta.json()
+    except ValueError as exc:
+        raise RuntimeError("O PNCP retornou uma resposta que não é JSON válido.") from exc
+
+
+async def _consultar_precos_pncp(req: PesquisaPrecosPNCPRequest) -> dict:
+    modalidades = sorted(set(req.modalidades))
+    consulta_data = datetime.strptime(req.data_inicial, "%Y-%m-%d").strftime("%Y%m%d")
+    final_data = datetime.strptime(req.data_final, "%Y-%m-%d").strftime("%Y%m%d")
+    timeout = httpx.Timeout(25.0, connect=8.0)
+    limite = asyncio.Semaphore(8)
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True, headers={"Accept": "application/json"}) as cliente:
+        async def buscar_modalidade(modalidade: int) -> list[dict]:
+            payload = await _pncp_get_json(
+                cliente,
+                "/v1/contratacoes/publicacao",
+                {
+                    "dataInicial": consulta_data,
+                    "dataFinal": final_data,
+                    "codigoModalidadeContratacao": modalidade,
+                    "pagina": 1,
+                    "tamanhoPagina": 50,
+                    **({"uf": req.uf.upper()} if req.uf else {}),
+                },
+            )
+            return _pncp_lista(payload, "data", "items", "resultado", "contratacoes")
+
+        respostas_modalidade = await asyncio.gather(*(buscar_modalidade(modalidade) for modalidade in modalidades))
+        contratos_por_chave = {}
+        for modalidade, contratos in zip(modalidades, respostas_modalidade):
+            for contrato in contratos:
+                if not isinstance(contrato, dict):
+                    continue
+                orgao = contrato.get("orgaoEntidade") if isinstance(contrato.get("orgaoEntidade"), dict) else {}
+                cnpj = re.sub(r"[^A-Z0-9]", "", str(orgao.get("cnpj") or contrato.get("cnpj") or "").upper())
+                ano = str(contrato.get("anoCompra") or "")
+                sequencial = str(contrato.get("sequencialCompra") or "")
+                if not re.fullmatch(r"[A-Z0-9]{12}\d{2}", cnpj) or not ano.isdigit() or not sequencial.isdigit():
+                    continue
+                chave = (cnpj, ano, sequencial)
+                contrato.setdefault("codigoModalidadeConsulta", modalidade)
+                contratos_por_chave[chave] = contrato
+
+        contratos = list(contratos_por_chave.values())
+        contratos.sort(
+            key=lambda contrato: (
+                _pncp_pontuacao_descricao(req.descricao, str(contrato.get("objetoCompra") or ""))[0],
+                str(contrato.get("dataPublicacaoPncp") or ""),
+            ),
+            reverse=True,
+        )
+        contratos = contratos[:PNCP_MAX_CONTRATACOES_POR_MODALIDADE * len(modalidades)]
+
+        async def buscar_itens(contrato: dict) -> list[tuple[dict, list[dict]]]:
+            orgao = contrato.get("orgaoEntidade") if isinstance(contrato.get("orgaoEntidade"), dict) else {}
+            cnpj = re.sub(r"[^A-Z0-9]", "", str(orgao.get("cnpj") or contrato.get("cnpj") or "").upper())
+            ano = str(contrato.get("anoCompra") or "")
+            sequencial = str(contrato.get("sequencialCompra") or "")
+            async with limite:
+                payload = await _pncp_get_json(
+                    cliente,
+                    f"/v1/orgaos/{cnpj}/compras/{ano}/{sequencial}/itens",
+                    {"pagina": 1, "tamanhoPagina": 50},
+                )
+                itens = _pncp_lista(payload, "data", "items", "resultado", "itens", "listaItens")
+                itens_correspondentes = []
+                for item in itens:
+                    if not isinstance(item, dict):
+                        continue
+                    descricao_item = str(item.get("descricao") or item.get("descricaoItem") or "")
+                    pontuacao, encontrados = _pncp_pontuacao_descricao(req.descricao, descricao_item)
+                    quantidade_termos = len(_pncp_texto_normalizado(req.descricao).split())
+                    minimo = 1 if quantidade_termos <= 1 else 2
+                    if encontrados < minimo or pontuacao < 0.34:
+                        continue
+                    numero_item = item.get("numeroItem") or item.get("numero")
+                    if numero_item is None:
+                        continue
+                    resultados_payload = await _pncp_get_json(
+                        cliente,
+                        f"/v1/orgaos/{cnpj}/compras/{ano}/{sequencial}/itens/{numero_item}/resultados",
+                    )
+                    resultados = _pncp_lista(resultados_payload, "listaResultados", "data", "items", "resultado", "resultados")
+                    itens_correspondentes.append((item, resultados))
+                return itens_correspondentes
+
+        resultados_itens = await asyncio.gather(*(buscar_itens(contrato) for contrato in contratos), return_exceptions=True)
+        precos = []
+        erros_consulta = 0
+        for contrato, resultado_contrato in zip(contratos, resultados_itens):
+            if isinstance(resultado_contrato, Exception):
+                erros_consulta += 1
+                logger.warning("Falha ao consultar itens de uma contratação no PNCP: %s", type(resultado_contrato).__name__)
+                continue
+            for item, resultados in resultado_contrato:
+                descricao_item = str(item.get("descricao") or item.get("descricaoItem") or "")
+                unidade_item = str(item.get("unidadeMedida") or item.get("unidade") or "")
+                homologados = []
+                for resultado in resultados:
+                    if not isinstance(resultado, dict):
+                        continue
+                    if not _pncp_resultado_homologado(resultado):
+                        continue
+                    preco = _pncp_normalizar_preco(
+                        "homologado",
+                        resultado.get("valorUnitarioHomologado"),
+                        descricao_item,
+                        resultado.get("unidadeMedida") or unidade_item,
+                        resultado.get("quantidadeHomologada") or item.get("quantidade"),
+                        contrato,
+                        item,
+                    )
+                    if preco is not None:
+                        preco["unidade_compativel"] = _pncp_unidade_compativel(req.unidade, preco["unidade"])
+                        homologados.append(preco)
+                if homologados:
+                    precos.extend(homologados)
+                    continue
+                if req.incluir_estimados:
+                    orcamento_sigiloso = item.get("orcamentoSigiloso") is True or str(item.get("orcamentoSigiloso") or "").strip().casefold() in {"true", "sim", "1"}
+                    if not orcamento_sigiloso:
+                        estimado = _pncp_normalizar_preco(
+                            "estimado",
+                            item.get("valorUnitarioEstimado"),
+                            descricao_item,
+                            unidade_item,
+                            item.get("quantidade"),
+                            contrato,
+                            item,
+                        )
+                        if estimado is not None:
+                            estimado["unidade_compativel"] = _pncp_unidade_compativel(req.unidade, estimado["unidade"])
+                            precos.append(estimado)
+
+    precos.sort(
+        key=lambda preco: (
+            1 if preco["tipo_preco"] == "homologado" else 0,
+            1 if preco["unidade_compativel"] else 0,
+            preco.get("data_referencia") or "",
+        ),
+        reverse=True,
+    )
+    return {
+        "fonte": "PNCP",
+        "resultados": precos[:PNCP_MAX_RESULTADOS],
+        "total": len(precos),
+        "contratacoes_consultadas": len(contratos),
+        "contratacoes_com_falha_de_consulta": erros_consulta,
+        "mensagem": "Referências auxiliares do PNCP: até 16 contratações por modalidade e a primeira página de até 50 itens por contratação. A pesquisa não é exaustiva. Confirme especificação, unidade, quantidade, localidade e data antes de usar qualquer valor como referência de preço.",
+    }
+
+
+@app.post("/api/pesquisa-precos/pncp")
+async def pesquisar_precos_pncp(request: Request, req: PesquisaPrecosPNCPRequest):
+    _check_rate_limit(
+        _ia_rate_buckets,
+        _ia_rate_lock,
+        _client_identity(request),
+        10,
+        300,
+        "Limite de pesquisas de preços excedido. Tente novamente em alguns minutos.",
+        "pncp-search-ip",
+    )
+    try:
+        data_inicial = datetime.strptime(req.data_inicial, "%Y-%m-%d").date()
+        data_final = datetime.strptime(req.data_final, "%Y-%m-%d").date()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Informe as datas no formato AAAA-MM-DD.") from exc
+    if data_inicial > data_final:
+        raise HTTPException(status_code=400, detail="A data inicial deve ser anterior à data final.")
+    if (data_final - data_inicial).days > 730:
+        raise HTTPException(status_code=400, detail="O período máximo por pesquisa é de 730 dias.")
+    if data_final > datetime.now(timezone.utc).date():
+        raise HTTPException(status_code=400, detail="A data final não pode estar no futuro.")
+    if any(modalidade not in PNCP_MODALIDADES_PERMITIDAS for modalidade in req.modalidades):
+        raise HTTPException(status_code=400, detail="Modalidade de contratação não permitida nesta pesquisa.")
+    if req.uf and not re.fullmatch(r"[A-Za-z]{2}", req.uf):
+        raise HTTPException(status_code=400, detail="Informe uma sigla de UF válida.")
+    try:
+        return await _consultar_precos_pncp(req)
+    except httpx.HTTPStatusError as exc:
+        logger.warning("PNCP respondeu com HTTP %s durante pesquisa de preços.", exc.response.status_code)
+        raise HTTPException(status_code=502, detail="O serviço de consulta do PNCP não conseguiu concluir a pesquisa. Tente novamente mais tarde.") from exc
+    except (httpx.RequestError, RuntimeError, ValueError) as exc:
+        logger.warning("Falha na integração de pesquisa de preços do PNCP: %s", type(exc).__name__)
+        raise HTTPException(status_code=502, detail="Não foi possível consultar o PNCP agora. Tente novamente mais tarde.") from exc
 
 
 @app.post("/api/importar-itens-planilha")
