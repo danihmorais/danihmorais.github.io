@@ -402,7 +402,7 @@ def _montar_catalogo_artigos_lei_14133() -> dict[int, dict[str, str | None]]:
         28: {"tema": "Modalidades de licitação", "dominio": "modalidades"},
         29: {"tema": "Pregão e concorrência", "dominio": "modalidades"},
         30: {"tema": "Concurso", "dominio": "modalidades"},
-        31: {"tema": "Leilão", "dominio": "alienacoes"},
+        31: {"tema": "Leilão", "dominio": "modalidades"},
         32: {"tema": "Diálogo competitivo", "dominio": "modalidades"},
         33: {"tema": "Critérios de julgamento", "dominio": "julgamento"},
         40: {"tema": "Planejamento das compras", "dominio": "planejamento"},
