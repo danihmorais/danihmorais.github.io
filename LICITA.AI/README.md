@@ -28,7 +28,7 @@ Configure as variáveis no serviço do backend. Não grave senhas, chaves ou tok
 | `AI_TIMEOUT_SECONDS` | Timeout geral das chamadas de IA. O valor recomendado para a configuração atual é 1200 segundos. |
 | `VITE_API_URL` | URL-base da API usada na compilação do front-end. |
 
-### SMTP e confirmação do destinatário
+### SMTP e destinatário
 
 | Variável | Finalidade |
 | --- | --- |
