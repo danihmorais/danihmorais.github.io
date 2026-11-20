@@ -2,6 +2,7 @@ import React, { useRef, useState } from "react";
 import { useToast } from "../../components/toast";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import { importarItensPlanilha } from "../../api";
+import PesquisaPrecosPNCP from "../../components/PesquisaPrecosPNCP";
 
 import { calcularValorEstimadoItens } from "../../utils/regrasContratacao";
 import { melhorarDescricaoItem } from "../../providers/services/descricaoItensIA";
@@ -460,6 +461,10 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
         </div>
       </div>
     </section>
+    <PesquisaPrecosPNCP
+      itens={itens}
+      onAplicarPreco={(itemId, valor) => atualizarItem(itemId, "valor", valor)}
+    />
     {loteParaExcluir && (
       <ConfirmDialog
         title={`Excluir "${loteParaExcluir.nome}"?`}
