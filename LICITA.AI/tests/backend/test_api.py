@@ -44,7 +44,7 @@ class LicitaBackendTests(unittest.TestCase):
     def test_limpeza_preserva_pedidos_em_revisao_por_pelo_menos_30_dias(self):
         with tempfile.TemporaryDirectory(prefix="licita_retencao_") as diretorio:
             queue_dir = Path(diretorio)
-            agora = time.time()
+            agora = main.time.time()
             pedidos = [
                 ("a" * 32, "awaiting_review", 10),
                 ("b" * 32, "sent", 10),
