@@ -1865,25 +1865,42 @@ async def refazer_pedido_admin(job_id: str, request: Request):
 
 
 RETENTION_DAYS = max(1, int(os.getenv("LICITA_QUEUE_RETENTION_DAYS", "7")))
+REVIEW_RETENTION_DAYS = max(RETENTION_DAYS, 30, int(os.getenv("LICITA_QUEUE_REVIEW_RETENTION_DAYS", "30")))
+
+
+def _limpar_fila_antiga_uma_vez(agora: float | None = None) -> None:
+    instante = time.time() if agora is None else float(agora)
+    cutoff = instante - RETENTION_DAYS * 86400
+    review_cutoff = instante - REVIEW_RETENTION_DAYS * 86400
+    try:
+        if not QUEUE_DIR.exists():
+            return
+        for path in QUEUE_DIR.iterdir():
+            if path.suffix not in {".json", ".zip", ".cancel"}:
+                continue
+            if path.name.endswith(".processing.json"):
+                continue
+            try:
+                modified_at = path.stat().st_mtime
+                if modified_at >= cutoff:
+                    continue
+                if path.suffix == ".json" and modified_at >= review_cutoff:
+                    try:
+                        job = json.loads(path.read_text(encoding="utf-8"))
+                    except (OSError, ValueError):
+                        job = None
+                    if isinstance(job, dict) and str(job.get("status", "")).casefold() == "awaiting_review":
+                        continue
+                path.unlink()
+            except OSError:
+                pass
+    except OSError:
+        pass
 
 
 def _limpar_fila_antiga() -> None:
-    cutoff = time.time() - RETENTION_DAYS * 86400
     while True:
-        try:
-            if QUEUE_DIR.exists():
-                for path in QUEUE_DIR.iterdir():
-                    if path.suffix not in {".json", ".zip", ".cancel"}:
-                        continue
-                    if path.name.endswith(".processing.json"):
-                        continue
-                    try:
-                        if path.stat().st_mtime < cutoff:
-                            path.unlink()
-                    except OSError:
-                        pass
-        except OSError:
-            pass
+        _limpar_fila_antiga_uma_vez()
         time.sleep(86400)
 
 
