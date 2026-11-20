@@ -53,7 +53,7 @@ def _artigos_lei_14133_fora_do_catalogo(documentos: dict) -> list[dict]:
             continue
         for campo, valor in campos.items():
             texto = _texto(valor)
-            for trecho in re.split(r"(?<=[!?;])\s+|(?<!\d)\.(?!\d)\s+", texto):
+            for trecho in re.split(r"(?<=[!?;])\s+|(?<=[.!?])\s+(?=[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ])", texto):
                 if not re.search(r"(?i)\blei\s*(?:federal\s*)?(?:n[ºo.]?\s*)?14\s*[.,]\s*133(?:\s*/\s*2021)?\b", trecho):
                     continue
                 for match in CITACAO_ARTIGO_RE.finditer(trecho):
