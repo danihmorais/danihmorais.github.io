@@ -16,14 +16,12 @@ import json
 import os
 import re
 import secrets
-import sqlite3
 import threading
 import time
 import uuid
 from pathlib import Path
 from collections import deque
 from datetime import datetime, timezone
-from email.message import EmailMessage
 
 import httpx
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
@@ -33,7 +31,7 @@ from pydantic import BaseModel, Field
 from typing import Literal
 
 from documentos_contexto import MAX_CONTEXT_CHARS, extrair_contexto_documentos
-from fila import EMAIL_RE, MAX_ATTEMPTS, QUEUE_DIR, SMTP_FROM, SMTP_PASSWORD, SMTP_USERNAME, _artifact_path, _job_path, _smtp_client, atualizar_indice_job_sqlite, cancel_job, consumir_limite_taxa_sqlite, enqueue_job, get_job, listar_jobs_sqlite, obter_metricas_fila_sqlite, obter_posicao_fila_sqlite
+from fila import EMAIL_RE, MAX_ATTEMPTS, QUEUE_DIR, _artifact_path, _job_path, atualizar_indice_job_sqlite, cancel_job, consumir_limite_taxa_sqlite, enqueue_job, get_job, listar_jobs_sqlite, obter_metricas_fila_sqlite, obter_posicao_fila_sqlite
 from fila_pipeline import _dados_para_prompt, limite_prompt_chars
 from fila_pipeline_unificado import iniciar_worker
 from pipeline_prompts import montar_pipeline
@@ -62,19 +60,6 @@ class FasePreparatoriaRequest(BaseModel):
     email: str = Field(min_length=3, max_length=254)
     instrucoes: str = Field(default="", max_length=12000)
     dados_usuario: dict = Field(default_factory=dict)
-
-
-class EmailVerificationRequest(BaseModel):
-    model_config = {"extra": "forbid"}
-
-    email: str = Field(min_length=3, max_length=254)
-
-
-class EmailVerificationConfirmRequest(BaseModel):
-    model_config = {"extra": "forbid"}
-
-    email: str = Field(min_length=3, max_length=254)
-    code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
 
 
 class IAChatRequest(BaseModel):
@@ -118,13 +103,6 @@ QUEUE_EMAIL_RATE_LIMIT = max(1, int(os.getenv("LICITA_QUEUE_EMAIL_RATE_LIMIT", "
 _queue_rate_lock = threading.Lock()
 _queue_ip_rate_buckets: dict[str, deque[float]] = {}
 _queue_email_rate_buckets: dict[str, deque[float]] = {}
-EMAIL_VERIFICATION_TTL_SECONDS = max(180, int(os.getenv("LICITA_EMAIL_VERIFICATION_TTL", "600")))
-EMAIL_VERIFICATION_TOKEN_TTL_SECONDS = max(600, int(os.getenv("LICITA_EMAIL_VERIFICATION_TOKEN_TTL", "3600")))
-EMAIL_VERIFICATION_RATE_LIMIT = max(1, int(os.getenv("LICITA_EMAIL_VERIFICATION_RATE_LIMIT", "3")))
-_email_verification_rate_buckets: dict[str, deque[float]] = {}
-_email_verification_secret = os.getenv("LICITA_EMAIL_VERIFICATION_SECRET", "").encode("utf-8")
-if len(_email_verification_secret) < 32:
-    raise RuntimeError("LICITA_EMAIL_VERIFICATION_SECRET deve conter ao menos 32 caracteres e ser estável entre reinícios e workers.")
 
 # O painel administrativo fica desativado até que a senha seja configurada no ambiente do servidor.
 ADMIN_PASSWORD = os.getenv("LICITA_ADMIN_PASSWORD", "")
@@ -214,196 +192,6 @@ def _email_permitido(email: str) -> bool:
         if item.strip()
     ]
     return any(dominio == item or dominio.endswith("." + item) for item in permitidos)
-
-
-def _conectar_verificacao_email():
-    QUEUE_DIR.mkdir(parents=True, exist_ok=True)
-    conexao = sqlite3.connect(QUEUE_DIR / "queue.sqlite3", timeout=30)
-    conexao.row_factory = sqlite3.Row
-    conexao.execute("PRAGMA journal_mode=WAL")
-    conexao.execute("PRAGMA busy_timeout=30000")
-    conexao.execute(
-        """
-        CREATE TABLE IF NOT EXISTS email_verification_challenges (
-            email TEXT PRIMARY KEY,
-            digest TEXT NOT NULL,
-            expires_at REAL NOT NULL,
-            attempts INTEGER NOT NULL DEFAULT 0,
-            updated_at REAL NOT NULL
-        )
-        """
-    )
-    conexao.execute(
-        """
-        CREATE TABLE IF NOT EXISTS email_verification_tokens (
-            nonce TEXT PRIMARY KEY,
-            email TEXT NOT NULL,
-            expires_at INTEGER NOT NULL,
-            created_at INTEGER NOT NULL,
-            consumed_at INTEGER,
-            job_id TEXT
-        )
-        """
-    )
-    conexao.execute("CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_email ON email_verification_tokens(email, expires_at)")
-    return conexao
-
-
-def _email_verification_digest(email: str, code: str) -> str:
-    return hmac.new(_email_verification_secret, f"{email}|{code}".encode("utf-8"), hashlib.sha256).hexdigest()
-
-
-def _salvar_desafio_email(email: str, digest: str, expira: float) -> None:
-    conexao = _conectar_verificacao_email()
-    try:
-        with conexao:
-            conexao.execute(
-                """
-                INSERT INTO email_verification_challenges(email, digest, expires_at, attempts, updated_at)
-                VALUES(?, ?, ?, 0, ?)
-                ON CONFLICT(email) DO UPDATE SET
-                    digest = excluded.digest,
-                    expires_at = excluded.expires_at,
-                    attempts = 0,
-                    updated_at = excluded.updated_at
-                """,
-                (email, digest, float(expira), time.time()),
-            )
-    finally:
-        conexao.close()
-
-
-def _emitir_token_email_verificado(email: str) -> str:
-    endereco = email.strip().casefold()
-    expira = int(time.time()) + EMAIL_VERIFICATION_TOKEN_TTL_SECONDS
-    nonce = secrets.token_urlsafe(18)
-    email_b64 = base64.urlsafe_b64encode(endereco.encode("utf-8")).decode("ascii").rstrip("=")
-    payload = f"{email_b64}.{expira}.{nonce}"
-    assinatura = hmac.new(_email_verification_secret, payload.encode("ascii"), hashlib.sha256).digest()
-    assinatura_b64 = base64.urlsafe_b64encode(assinatura).decode("ascii").rstrip("=")
-    conexao = _conectar_verificacao_email()
-    try:
-        with conexao:
-            conexao.execute(
-                "INSERT INTO email_verification_tokens(nonce, email, expires_at, created_at) VALUES(?, ?, ?, ?)",
-                (nonce, endereco, expira, int(time.time())),
-            )
-    finally:
-        conexao.close()
-    return f"{payload}.{assinatura_b64}"
-
-
-def _dados_token_email_verificado(token: str, email: str) -> tuple[str, int] | None:
-    if not token:
-        return None
-    partes = token.split(".")
-    if len(partes) != 4:
-        return None
-    email_b64, expira_texto, nonce, assinatura_recebida = partes
-    if not expira_texto.isdigit() or not nonce or not assinatura_recebida:
-        return None
-    try:
-        padding = "=" * (-len(email_b64) % 4)
-        endereco = base64.urlsafe_b64decode(email_b64 + padding).decode("utf-8")
-    except (ValueError, UnicodeDecodeError):
-        return None
-    endereco_esperado = email.strip().casefold()
-    if endereco != endereco_esperado:
-        return None
-    expira = int(expira_texto)
-    agora = int(time.time())
-    if expira <= agora or expira > agora + EMAIL_VERIFICATION_TOKEN_TTL_SECONDS + 60:
-        return None
-    payload = f"{email_b64}.{expira_texto}.{nonce}"
-    assinatura = hmac.new(_email_verification_secret, payload.encode("ascii"), hashlib.sha256).digest()
-    assinatura_esperada = base64.urlsafe_b64encode(assinatura).decode("ascii").rstrip("=")
-    if not _token_matches(assinatura_esperada, assinatura_recebida):
-        return None
-    return nonce, expira
-
-
-def _validar_token_email_verificado(token: str, email: str) -> bool:
-    dados = _dados_token_email_verificado(token, email)
-    if not dados:
-        return False
-    nonce, expira = dados
-    conexao = _conectar_verificacao_email()
-    try:
-        registro = conexao.execute(
-            """
-            SELECT 1 FROM email_verification_tokens
-            WHERE nonce = ? AND email = ? AND expires_at = ?
-              AND consumed_at IS NULL AND expires_at > ?
-            """,
-            (nonce, email.strip().casefold(), expira, int(time.time())),
-        ).fetchone()
-        return registro is not None
-    finally:
-        conexao.close()
-
-
-def _consumir_token_email_verificado(token: str, email: str, job_id: str) -> bool:
-    dados = _dados_token_email_verificado(token, email)
-    if not dados or not re.fullmatch(r"[0-9a-f]{32}", str(job_id)):
-        return False
-    nonce, expira = dados
-    agora = int(time.time())
-    conexao = _conectar_verificacao_email()
-    try:
-        conexao.execute("BEGIN IMMEDIATE")
-        cursor = conexao.execute(
-            """
-            UPDATE email_verification_tokens
-            SET consumed_at = ?, job_id = ?
-            WHERE nonce = ? AND email = ? AND expires_at = ?
-              AND consumed_at IS NULL AND expires_at > ?
-            """,
-            (agora, str(job_id), nonce, email.strip().casefold(), expira, agora),
-        )
-        conexao.commit()
-        return cursor.rowcount == 1
-    except Exception:
-        conexao.rollback()
-        raise
-    finally:
-        conexao.close()
-
-
-def _enviar_codigo_verificacao(email: str, code: str) -> None:
-    if not SMTP_FROM and not SMTP_USERNAME:
-        raise RuntimeError("Remetente SMTP não configurado.")
-    mensagem = EmailMessage()
-    mensagem["From"] = SMTP_FROM or SMTP_USERNAME
-    mensagem["To"] = email
-    mensagem["Subject"] = "LICITA.AI — confirmação do endereço de e-mail"
-    mensagem.set_content(
-        "Olá,\n\n"
-        "Foi solicitada a confirmação deste endereço para receber documentos gerados pelo LICITA.AI.\n\n"
-        f"Seu código de confirmação é: {code}\n\n"
-        f"O código expira em {EMAIL_VERIFICATION_TTL_SECONDS // 60} minutos e pode ser utilizado uma única vez. "
-        "Caso não tenha feito esta solicitação, desconsidere esta mensagem.\n\n"
-        "LICITA.AI"
-    )
-    with _smtp_client() as cliente:
-        cliente.login(SMTP_USERNAME, SMTP_PASSWORD)
-        cliente.send_message(mensagem)
-
-
-def _limpar_verificacoes_email_expiradas() -> None:
-    agora = time.time()
-    conexao = _conectar_verificacao_email()
-    try:
-        with conexao:
-            conexao.execute(
-                "DELETE FROM email_verification_challenges WHERE expires_at <= ? OR attempts >= 5",
-                (agora,),
-            )
-            conexao.execute(
-                "DELETE FROM email_verification_tokens WHERE expires_at <= ?",
-                (int(agora),),
-            )
-    finally:
-        conexao.close()
 
 
 async def _upstream_chat(base_url: str, api_key: str, payload: dict) -> tuple[dict, int]:
@@ -680,7 +468,7 @@ async def metricas_prometheus(request: Request):
     if not token_configurado:
         raise HTTPException(status_code=404, detail="Not Found")
     esquema, _, token_recebido = request.headers.get("authorization", "").partition(" ")
-    if esquema.casefold() != "bearer" or not hmac.compare_digest(token_configurado, token_recebido.strip()):
+    if esquema.casefold() != "bearer" or not _token_matches(token_configurado, token_recebido.strip()):
         raise HTTPException(status_code=401, detail="Token de métricas inválido.")
     from fila_pipeline import obter_metricas_ia
     metricas_ia = obter_metricas_ia()
@@ -853,109 +641,6 @@ async def _ler_payload_fase_preparatoria(request: Request) -> tuple[FasePreparat
     return req, resumo, dados_ia
 
 
-@app.post("/api/email/verification/request")
-async def solicitar_verificacao_email(request: Request, req: EmailVerificationRequest):
-    email = req.email.strip().casefold()
-    if not EMAIL_RE.fullmatch(email):
-        raise HTTPException(status_code=400, detail="Informe um e-mail válido.")
-    if not _email_permitido(email):
-        raise HTTPException(status_code=403, detail="Somente endereços institucionais autorizados podem receber documentos.")
-
-    _check_rate_limit(
-        _email_verification_rate_buckets,
-        _queue_rate_lock,
-        _client_identity(request),
-        max(2, EMAIL_VERIFICATION_RATE_LIMIT * 2),
-        3600,
-        "Muitas solicitações de confirmação deste endereço de rede. Aguarde antes de tentar novamente.",
-        "email-verification-ip",
-    )
-    _check_rate_limit(
-        _email_verification_rate_buckets,
-        _queue_rate_lock,
-        email,
-        EMAIL_VERIFICATION_RATE_LIMIT,
-        3600,
-        "Este endereço já recebeu o limite de códigos de confirmação. Tente novamente mais tarde.",
-        "email-verification-address",
-    )
-    _limpar_verificacoes_email_expiradas()
-    code = f"{secrets.randbelow(1_000_000):06d}"
-    digest = _email_verification_digest(email, code)
-    expira = time.time() + EMAIL_VERIFICATION_TTL_SECONDS
-    try:
-        _salvar_desafio_email(email, digest, expira)
-        _enviar_codigo_verificacao(email, code)
-    except Exception as exc:
-        conexao = _conectar_verificacao_email()
-        try:
-            with conexao:
-                conexao.execute(
-                    "DELETE FROM email_verification_challenges WHERE email = ? AND digest = ?",
-                    (email, digest),
-                )
-        finally:
-            conexao.close()
-        raise HTTPException(status_code=503, detail="Não foi possível enviar o código de confirmação. Verifique a configuração do serviço de e-mail ou tente novamente mais tarde.") from exc
-    return {
-        "sent": True,
-        "expires_in": EMAIL_VERIFICATION_TTL_SECONDS,
-        "message": "Código de confirmação enviado. Confira sua caixa de entrada e a pasta de spam.",
-    }
-
-
-@app.post("/api/email/verification/confirm")
-async def confirmar_verificacao_email(req: EmailVerificationConfirmRequest):
-    email = req.email.strip().casefold()
-    if not EMAIL_RE.fullmatch(email) or not _email_permitido(email):
-        raise HTTPException(status_code=400, detail="Solicitação de confirmação inválida.")
-    _limpar_verificacoes_email_expiradas()
-    agora = time.time()
-    recebido = _email_verification_digest(email, req.code)
-    conexao = _conectar_verificacao_email()
-    erro = None
-    try:
-        conexao.execute("BEGIN IMMEDIATE")
-        registro = conexao.execute(
-            "SELECT digest, expires_at, attempts FROM email_verification_challenges WHERE email = ?",
-            (email,),
-        ).fetchone()
-        if registro is None:
-            erro = (404, "Solicite um novo código de confirmação.")
-        elif float(registro["expires_at"]) <= agora:
-            conexao.execute("DELETE FROM email_verification_challenges WHERE email = ?", (email,))
-            erro = (410, "O código de confirmação expirou. Solicite outro.")
-        elif not _token_matches(str(registro["digest"]), recebido):
-            tentativas = int(registro["attempts"]) + 1
-            if tentativas >= 5:
-                conexao.execute("DELETE FROM email_verification_challenges WHERE email = ?", (email,))
-                erro = (429, "Limite de tentativas excedido. Solicite um novo código.")
-            else:
-                conexao.execute(
-                    "UPDATE email_verification_challenges SET attempts = ?, updated_at = ? WHERE email = ?",
-                    (tentativas, agora, email),
-                )
-                erro = (400, "Código de confirmação incorreto.")
-        else:
-            conexao.execute("DELETE FROM email_verification_challenges WHERE email = ?", (email,))
-        conexao.commit()
-    except Exception:
-        conexao.rollback()
-        raise
-    finally:
-        conexao.close()
-    if erro:
-        raise HTTPException(status_code=erro[0], detail=erro[1])
-    return {
-        "verified": True,
-        "token": _emitir_token_email_verificado(email),
-        "expires_in": EMAIL_VERIFICATION_TOKEN_TTL_SECONDS,
-        "message": "Endereço de e-mail confirmado.",
-    }
-
-
-
-
 IMPORT_PLANILHA_MAX_BYTES = 5 * 1024 * 1024
 _IMPORTAR_CABECALHOS = {
     "numero": {"numero", "n", "no", "item", "seq", "sequencia"},
@@ -1090,14 +775,9 @@ async def agendar_fase_preparatoria(request: Request):
         raise HTTPException(status_code=400, detail="Informe um e-mail válido para receber os documentos.")
     if not _email_permitido(email):
         raise HTTPException(status_code=403, detail="O domínio deste e-mail não está autorizado a receber documentos. Utilize um endereço institucional autorizado.")
-    token_verificacao = request.headers.get("x-email-verification", "")
-    if not _validar_token_email_verificado(token_verificacao, email):
-        raise HTTPException(status_code=403, detail="Confirme o endereço de e-mail antes de colocar a solicitação na fila.")
 
     _check_queue_rate_limit(request, email)
     job_id = uuid.uuid4().hex
-    if not _consumir_token_email_verificado(token_verificacao, email, job_id):
-        raise HTTPException(status_code=403, detail="Este token de confirmação já foi utilizado ou expirou.")
 
     try:
         job = enqueue_job(
@@ -1399,7 +1079,7 @@ def _listar_jobs_admin() -> list[dict]:
         if not re.fullmatch(r"[0-9a-f]{32}", nome, re.IGNORECASE):
             continue
         try:
-            job = __import__("json").loads(caminho.read_text(encoding="utf-8"))
+            job = json.loads(caminho.read_text(encoding="utf-8"))
             if not isinstance(job, dict) or str(job.get("job_id", "")).lower() != nome.lower():
                 continue
             mtime = caminho.stat().st_mtime
