@@ -15,6 +15,7 @@ type Props = {
   statusToken: string;
   onResent: (job: { job_id: string; status_token: string }) => void;
   onDismiss: () => void;
+  onStatusChange?: (job: JobStatus) => void;
 };
 
 type JobStatus = {
@@ -26,7 +27,7 @@ type JobStatus = {
   can_resend?: boolean;
 };
 
-export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDismiss }: Props) {
+export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDismiss, onStatusChange }: Props) {
   const [job, setJob] = useState<JobStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -57,6 +58,7 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDis
         const status = await consultarFilaFasePreparatoria(jobId, statusToken);
         if (!ativo) return;
         setJob(status as JobStatus);
+        onStatusChange?.(status as JobStatus);
         const finalizado = ["sent", "failed", "cancelled", "awaiting_review"].includes(String(status.status || "").toLowerCase());
         if (finalizado) return;
         intervalo = Math.min(30000, Math.round(intervalo * 1.5));
@@ -82,11 +84,12 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDis
       if (timer) clearTimeout(timer);
       document.removeEventListener("visibilitychange", visibilidadeAlterada);
     };
-  }, [jobId, statusToken, pollingNonce]);
+  }, [jobId, statusToken, pollingNonce, onStatusChange]);
 
   const atualizar = async () => {
     const status = await consultarFilaFasePreparatoria(jobId, statusToken);
     setJob(status as JobStatus);
+    onStatusChange?.(status as JobStatus);
   };
 
   const abrirPreview = async () => {
@@ -157,7 +160,9 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDis
     setNotice("");
     try {
       await aprovarPreviewFila(jobId, statusToken);
-      setJob({ status: "queued", current_stage: "MONTAGEM_DOCX" });
+      const statusAtualizado = { status: "queued", current_stage: "MONTAGEM_DOCX" };
+      setJob(statusAtualizado);
+      onStatusChange?.(statusAtualizado);
       setPollingNonce(valor => valor + 1);
       setPreviewAberto(false);
       setPreview(null);
