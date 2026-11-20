@@ -9,6 +9,8 @@ type Props = {
 
 export default function AccessibleDialog({ labelledBy, onClose, className = "", children }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     const elementoAnterior = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -21,7 +23,7 @@ export default function AccessibleDialog({ labelledBy, onClose, className = "", 
     const tratarTecla = (evento: KeyboardEvent) => {
       if (evento.key === "Escape") {
         evento.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (evento.key !== "Tab") return;
@@ -44,7 +46,7 @@ export default function AccessibleDialog({ labelledBy, onClose, className = "", 
       document.removeEventListener("keydown", tratarTecla);
       elementoAnterior?.focus();
     };
-  }, [onClose]);
+  }, []);
 
   return (
     <div className="accessible-dialog-overlay">
