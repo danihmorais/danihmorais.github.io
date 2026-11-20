@@ -107,7 +107,7 @@ A verificação numérica da Lei 14.133/2021 sinaliza artigos fora do intervalo 
 
 A importação de PDFs usa `@bundled-es-modules/pdfjs-dist` e fornece explicitamente o worker do navegador por `GlobalWorkerOptions.workerSrc`. O aviso de `eval` emitido pelo Rolldown vem do caminho de compatibilidade do worker para Node.js na dependência; no navegador, o PDF.js usa a URL do worker e o carregamento por script, sem depender desse caminho de `eval("require")`. Não adicione `'unsafe-eval'` à CSP apenas para suprimir esse aviso. A política de produção deve continuar restritiva e ser validada com a importação real de PDFs.
 
-A abertura de documentos usa `isEvalSupported: false` para impedir que o PDF.js avalie código derivado de fontes embutidas no PDF. Essa opção é a mitigação recomendada pelo aviso de segurança do PDF.js para versões vulneráveis. A dependência empacotada continua em uma versão antiga; planeje uma atualização controlada para uma versão oficial corrigida do `pdfjs-dist`, validando worker, importação de PDFs e build antes de remover a mitigação.
+A versão instalada de `@bundled-es-modules/pdfjs-dist` é `3.6.172-alpha.1`, dentro da faixa afetada pelo [CVE-2024-4367](https://github.com/mozilla/pdf.js/security/advisories/GHSA-wgrm-67xf-hhpq). O aviso oficial classifica o problema como execução de JavaScript arbitrário ao abrir PDF malicioso quando `isEvalSupported` permanece habilitado e indica `isEvalSupported: false` como mitigação; a correção definitiva está disponível a partir de `pdfjs-dist` `4.2.67`. A abertura de documentos agora usa essa mitigação. Planeje uma atualização controlada para uma versão oficial corrigida, validando worker, importação de PDFs e build antes de remover a opção.
 
 ## Desenvolvimento e testes
 
