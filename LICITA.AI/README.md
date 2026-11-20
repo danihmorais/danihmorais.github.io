@@ -39,7 +39,7 @@ Configure as variáveis no serviço do backend. Não grave senhas, chaves ou tok
 | `SMTP_FROM` | Endereço remetente dos e-mails. |
 | `LICITA_EMAIL_ALLOWED_DOMAINS` | Lista opcional de domínios permitidos, separados por vírgula. Quando vazia, qualquer domínio com endereço sintaticamente válido é aceito. |
 
-Os desafios e tokens de confirmação são persistidos no SQLite da fila. Cada token é consumido atomicamente na criação de um único pedido e fica associado ao respectivo `job_id`. O segredo é obrigatório e deve ter ao menos 32 caracteres; defina-o no ambiente do serviço antes de iniciar a API. O mesmo valor precisa permanecer estável entre reinícios e workers.
+Não é exigida confirmação do endereço por código. O sistema valida o formato do e-mail e aplica a lista de domínios permitidos somente quando `LICITA_EMAIL_ALLOWED_DOMAINS` estiver configurada.
 
 ### Rate limit e proxy reverso
 
