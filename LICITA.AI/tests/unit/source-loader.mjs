@@ -9,6 +9,9 @@ const LICITA_DIR = path.resolve(TESTS_DIR, "../..");
 let configMunicipalCache = null;
 
 function testRequire(request) {
+  if (request === "../../config/municipios.json") {
+    return JSON.parse(fs.readFileSync(path.join(LICITA_DIR, "config/municipios.json"), "utf8"));
+  }
   if (request === "./utils/configMunicipal" || request === "./configMunicipal") {
     if (!configMunicipalCache) configMunicipalCache = loadTsModule("src/utils/configMunicipal.ts");
     return configMunicipalCache;
