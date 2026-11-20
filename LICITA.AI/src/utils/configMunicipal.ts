@@ -12,7 +12,7 @@ export interface ConfigMunicipalPublica {
   limite_exclusividade_me_epp_centavos: number;
 }
 
-const municipioPadraoId = configuracoesMunicipais.municipio_padrao;
+const municipioPadraoId = configuracoesMunicipais.municipio_padrao as keyof typeof configuracoesMunicipais.municipios;
 const municipioPadrao = configuracoesMunicipais.municipios[municipioPadraoId];
 const limitePadrao = municipioPadrao.parametros?.limite_exclusividade_me_epp_centavos
   ?? configuracoesMunicipais.parametros.limite_exclusividade_me_epp_centavos;
