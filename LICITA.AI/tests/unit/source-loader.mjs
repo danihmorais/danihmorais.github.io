@@ -29,9 +29,6 @@ function testRequire(request) {
   }
   if (request === "./providers/services/descricaoItensIA") {
     return {
-      construirPromptAuditoriaMarcas: (itens, instrucoesUsuario) =>
-        `AUDITORIA_MARCAS: ${JSON.stringify(itens)} ${instrucoesUsuario || ""}`,
-      revisarMarcasItens: async (itens) => ({ itens, auditoria: [] }),
       melhorarDescricaoItem: async (descricao, unidade) => ({ descricao, unidade }),
     };
   }
