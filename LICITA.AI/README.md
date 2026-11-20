@@ -37,13 +37,13 @@ Configure as variáveis no serviço do backend. Não grave senhas, chaves ou tok
 | `SMTP_USERNAME` | Usuário de autenticação SMTP. |
 | `SMTP_PASSWORD` | Senha SMTP. |
 | `SMTP_FROM` | Endereço remetente dos e-mails. |
-| `LICITA_EMAIL_ALLOWED_DOMAINS` | Domínios autorizados, separados por vírgula. O padrão é `gov.br`; ajuste-o aos domínios institucionais efetivamente utilizados. |
+| `LICITA_EMAIL_ALLOWED_DOMAINS` | Lista opcional de domínios permitidos, separados por vírgula. Quando vazia, qualquer domínio com endereço sintaticamente válido é aceito. |
 | `LICITA_EMAIL_VERIFICATION_SECRET` | **Obrigatório em produção:** segredo aleatório estável, compartilhado por todos os workers e reinícios, usado para assinar tokens de confirmação. Não use uma chave diferente por processo. |
 | `LICITA_EMAIL_VERIFICATION_TTL` | Validade do código de seis dígitos. Padrão: 600 segundos. |
 | `LICITA_EMAIL_VERIFICATION_TOKEN_TTL` | Validade do token de endereço confirmado. Padrão: 3600 segundos. |
 | `LICITA_EMAIL_VERIFICATION_RATE_LIMIT` | Solicitações de código permitidas por endereço na janela de uma hora. Padrão: 3. |
 
-Os desafios de confirmação ficam em memória no processo. Após reinício, o usuário deverá solicitar novo código. Para executar vários workers, além de compartilhar o segredo, será necessário substituir o armazenamento em memória dos desafios por armazenamento compartilhado.
+Os desafios e tokens de confirmação são persistidos no SQLite da fila. Cada token é consumido atomicamente na criação de um único pedido e fica associado ao respectivo `job_id`. O segredo é obrigatório e deve ter ao menos 32 caracteres; defina-o no ambiente do serviço antes de iniciar a API. O mesmo valor precisa permanecer estável entre reinícios e workers.
 
 ### Rate limit e proxy reverso
 

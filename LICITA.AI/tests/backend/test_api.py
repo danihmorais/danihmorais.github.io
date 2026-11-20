@@ -25,6 +25,7 @@ os.environ["LICITA_QUEUE_POLL_SECONDS"] = "3600"
 os.environ["LICITA_QUEUE_MAX_ATTEMPTS"] = "1"
 os.environ["LICITA_UNSLOTH_KEY"] = "test-unsloth"
 os.environ["LICITA_EMAIL_ALLOWED_DOMAINS"] = "example.com"
+os.environ["LICITA_EMAIL_VERIFICATION_SECRET"] = "licita-ai-test-email-verification-secret-2026-11-19"
 
 from docx import Document
 
@@ -74,7 +75,6 @@ class LicitaBackendTests(unittest.TestCase):
         main._queue_email_rate_buckets.clear()
         main._admin_login_rate_buckets.clear()
         main._email_verification_rate_buckets.clear()
-        main._email_verification_challenges.clear()
 
 
     def test_limite_persistente_sqlite_separa_identidades_e_sobrevive_ao_cache(self):
@@ -327,6 +327,40 @@ class LicitaBackendTests(unittest.TestCase):
         token = confirmado.json()["token"]
         self.assertTrue(main._validar_token_email_verificado(token, email))
         self.assertFalse(main._validar_token_email_verificado(token, "outro@example.com"))
+        job_id = "f" * 32
+        self.assertTrue(main._consumir_token_email_verificado(token, email, job_id))
+        self.assertFalse(main._validar_token_email_verificado(token, email))
+        with sqlite3.connect(QUEUE_DIR / "queue.sqlite3") as conexao:
+            token_registrado = conexao.execute(
+                "SELECT job_id, consumed_at FROM email_verification_tokens WHERE job_id = ?",
+                (job_id,),
+            ).fetchone()
+        self.assertIsNotNone(token_registrado)
+        self.assertEqual(token_registrado[0], job_id)
+        self.assertIsNotNone(token_registrado[1])
+
+
+    def test_token_de_confirmacao_so_agenda_um_pedido(self):
+        email = "token-unico@example.com"
+        token = main._emitir_token_email_verificado(email)
+        payload = {
+            "email": email,
+            "dados_usuario": {"{{OBJETO}}": "Objeto de teste"},
+        }
+        with TestClient(app) as client:
+            primeira = client.post(
+                "/api/gerar-fase-preparatoria",
+                json=payload,
+                headers={"X-Email-Verification": token},
+            )
+            segunda = client.post(
+                "/api/gerar-fase-preparatoria",
+                json=payload,
+                headers={"X-Email-Verification": token},
+            )
+        self.assertEqual(primeira.status_code, 200, primeira.text)
+        self.assertEqual(segunda.status_code, 403, segunda.text)
+        self.assertEqual(len(list(QUEUE_DIR.glob("*.json"))), 1)
 
     def test_envio_para_destinatario_sem_confirmacao_e_bloqueado(self):
         with TestClient(app) as client:

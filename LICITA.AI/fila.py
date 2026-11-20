@@ -488,13 +488,26 @@ def enqueue_job(
     dados_usuario_processados: dict | None = None,
     request_id: str | None = None,
     require_review: bool = False,
+    job_id: str | None = None,
 ) -> dict:
     email = email.strip()
     if not EMAIL_RE.fullmatch(email):
         raise ValueError("Informe um e-mail válido para receber os documentos.")
     validar_consistencia_dados(dados_usuario)
     _ensure_queue_dir()
-    job_id = uuid.uuid4().hex
+    job_id = str(job_id or uuid.uuid4().hex).lower()
+    if not re.fullmatch(r"[0-9a-f]{32}", job_id):
+        raise ValueError("Identificador interno da solicitação inválido.")
+    if any(candidato.exists() for candidato in (
+        _job_path(job_id),
+        _job_path(job_id, ".queued"),
+        _job_path(job_id, ".processing"),
+        _job_path(job_id, ".review"),
+        _job_path(job_id, ".done"),
+        _job_path(job_id, ".failed"),
+        _job_path(job_id, ".cancelled"),
+    )):
+        raise ValueError("Já existe uma solicitação com este identificador.")
     status_token = secrets.token_urlsafe(32)
     job = {
         "request_id": request_id,
