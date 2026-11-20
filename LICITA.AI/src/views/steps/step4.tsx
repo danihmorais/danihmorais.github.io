@@ -68,6 +68,21 @@ export default function Step4({
       if (evento.key === "Escape") {
         evento.preventDefault();
         setModalFiscalAberto(false);
+        return;
+      }
+      if (evento.key === "Tab") {
+        const dialogo = document.getElementById("step4-fiscais-salvos-dialog");
+        const campos = dialogo ? [...dialogo.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')] : [];
+        if (campos.length === 0) {
+          evento.preventDefault();
+          dialogo?.focus();
+        } else if (evento.shiftKey && document.activeElement === campos[0]) {
+          evento.preventDefault();
+          campos[campos.length - 1].focus();
+        } else if (!evento.shiftKey && document.activeElement === campos[campos.length - 1]) {
+          evento.preventDefault();
+          campos[0].focus();
+        }
       }
     };
     window.addEventListener("keydown", tratarTecla);
@@ -189,18 +204,20 @@ export default function Step4({
         <div className="person-section" style={{ background: "var(--bg-subtle)", border: dados.gestores.length === 0 ? "1px solid var(--btn-danger)" : "1px solid var(--border)", borderRadius: "var(--radius-xl)", padding: "20px" }}>
           <div className="person-entry-form" style={{ display: "flex", gap: "12px", marginBottom: "20px", alignItems: "flex-end" }}>
             <div style={{ flex: 1 }}>
-              <label style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-main)", display: "block", marginBottom: "6px" }}>Nome</label>
-              <input 
-                type="text" 
+              <label htmlFor="step4-gestor-nome" style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-main)", display: "block", marginBottom: "6px" }}>Nome</label>
+              <input
+                id="step4-gestor-nome"
+                type="text"
                 value={gestorNome}
                 onChange={(e) => setGestorNome(e.target.value)}
                 style={{ padding: "10px" }}
               />
             </div>
             <div style={{ flex: 1 }}>
-              <label style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-main)", display: "block", marginBottom: "6px" }}>Cargo</label>
-              <input 
-                type="text" 
+              <label htmlFor="step4-gestor-cargo" style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-main)", display: "block", marginBottom: "6px" }}>Cargo</label>
+              <input
+                id="step4-gestor-cargo"
+                type="text"
                 value={gestorCargo}
                 onChange={(e) => setGestorCargo(e.target.value)}
                 style={{ padding: "10px" }}
@@ -269,18 +286,20 @@ export default function Step4({
         <div className="person-section" style={{ background: "var(--bg-subtle)", border: dados.fiscais.length === 0 ? "1px solid var(--btn-danger)" : "1px solid var(--border)", borderRadius: "var(--radius-xl)", padding: "20px" }}>
           <div className="person-entry-form" style={{ display: "flex", gap: "12px", marginBottom: "20px", alignItems: "flex-end" }}>
             <div style={{ flex: 1 }}>
-              <label style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-main)", display: "block", marginBottom: "6px" }}>Nome</label>
-              <input 
-                type="text" 
+              <label htmlFor="step4-fiscal-nome" style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-main)", display: "block", marginBottom: "6px" }}>Nome</label>
+              <input
+                id="step4-fiscal-nome"
+                type="text"
                 value={fiscalNome}
                 onChange={(e) => setFiscalNome(e.target.value)}
                 style={{ padding: "10px" }}
               />
             </div>
             <div style={{ flex: 1 }}>
-              <label style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-main)", display: "block", marginBottom: "6px" }}>Cargo</label>
-              <input 
-                type="text" 
+              <label htmlFor="step4-fiscal-cargo" style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-main)", display: "block", marginBottom: "6px" }}>Cargo</label>
+              <input
+                id="step4-fiscal-cargo"
+                type="text"
                 value={fiscalCargo}
                 onChange={(e) => setFiscalCargo(e.target.value)}
                 style={{ padding: "10px" }}
@@ -341,10 +360,10 @@ export default function Step4({
       </div>
 
       {modalGestorAberto && (
-        <div className="step-modal-overlay" style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }} role="dialog" aria-modal="true" aria-label="Diálogo de edição">
-          <div className="step-modal" style={{ background: "var(--bg-panel)", padding: "24px", borderRadius: "var(--radius-xl)", width: "100%", maxWidth: "450px", boxShadow: "var(--shadow-lg)" }} role="dialog" aria-modal="true" aria-label="Diálogo de edição">
+        <div id="step4-gestores-salvos-dialog" className="step-modal-overlay" style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }} role="dialog" aria-modal="true" aria-labelledby="step4-gestores-salvos-title" tabIndex={-1}>
+          <div className="step-modal" style={{ background: "var(--bg-panel)", padding: "24px", borderRadius: "var(--radius-xl)", width: "100%", maxWidth: "450px", boxShadow: "var(--shadow-lg)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-              <h3 style={{ margin: 0, color: "var(--text-main)", fontSize: "18px" }}>Gestores Salvos</h3>
+              <h3 id="step4-gestores-salvos-title" style={{ margin: 0, color: "var(--text-main)", fontSize: "18px" }}>Gestores Salvos</h3>
               <button type="button" onClick={() => setModalGestorAberto(false)} style={{ background: "none", border: "none", fontSize: "20px", color: "var(--text-muted)" }}>×</button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "300px", overflowY: "auto" }}>
@@ -383,10 +402,10 @@ export default function Step4({
       )}
 
       {modalFiscalAberto && (
-        <div className="step-modal-overlay" style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }} role="dialog" aria-modal="true" aria-label="Diálogo de edição">
-          <div className="step-modal" style={{ background: "var(--bg-panel)", padding: "24px", borderRadius: "var(--radius-xl)", width: "100%", maxWidth: "450px", boxShadow: "var(--shadow-lg)" }} role="dialog" aria-modal="true" aria-label="Diálogo de edição">
+        <div id="step4-fiscais-salvos-dialog" className="step-modal-overlay" style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }} role="dialog" aria-modal="true" aria-labelledby="step4-fiscais-salvos-title" tabIndex={-1}>
+          <div className="step-modal" style={{ background: "var(--bg-panel)", padding: "24px", borderRadius: "var(--radius-xl)", width: "100%", maxWidth: "450px", boxShadow: "var(--shadow-lg)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-              <h3 style={{ margin: 0, color: "var(--text-main)", fontSize: "18px" }}>Fiscais Salvos</h3>
+              <h3 id="step4-fiscais-salvos-title" style={{ margin: 0, color: "var(--text-main)", fontSize: "18px" }}>Fiscais Salvos</h3>
               <button type="button" onClick={() => setModalFiscalAberto(false)} style={{ background: "none", border: "none", fontSize: "20px", color: "var(--text-muted)" }}>×</button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "300px", overflowY: "auto" }}>
