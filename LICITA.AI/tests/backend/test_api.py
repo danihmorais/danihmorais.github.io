@@ -26,6 +26,7 @@ os.environ["LICITA_QUEUE_MAX_ATTEMPTS"] = "1"
 os.environ["LICITA_UNSLOTH_KEY"] = "test-unsloth"
 os.environ["LICITA_EMAIL_ALLOWED_DOMAINS"] = "example.com"
 os.environ["LICITA_EMAIL_VERIFICATION_SECRET"] = "licita-ai-test-email-verification-secret-2026-11-19"
+os.environ["LICITA_METRICS_TOKEN"] = "licita-ai-test-metrics-token-2026-11-19"
 
 from docx import Document
 
@@ -40,14 +41,49 @@ from main import app
 
 
 class LicitaBackendTests(unittest.TestCase):
-    def test_metrics_prometheus_inclui_metricas_ia(self):
+    def test_metrics_prometheus_exige_token_e_inclui_metricas_ia(self):
         with TestClient(app) as client:
-            resposta = client.get("/metrics")
+            sem_token = client.get("/metrics")
+            token_invalido = client.get("/metrics", headers={"Authorization": "Bearer incorreto"})
+            resposta = client.get("/metrics", headers={"Authorization": f"Bearer {os.environ['LICITA_METRICS_TOKEN']}"})
+        self.assertEqual(sem_token.status_code, 401)
+        self.assertEqual(token_invalido.status_code, 401)
         self.assertEqual(resposta.status_code, 200)
         self.assertIn("licita_ai_completions_total", resposta.text)
         self.assertIn("licita_ai_prompt_tokens_total", resposta.text)
         self.assertIn("licita_ai_completion_tokens_total", resposta.text)
         self.assertIn("licita_ai_completion_duration_seconds_total", resposta.text)
+        self.assertIn("licita_ai_queue_jobs", resposta.text)
+        self.assertIn("licita_ai_queue_stage_duration_seconds_sum", resposta.text)
+        self.assertIn("licita_ai_queue_failures_total", resposta.text)
+
+    def test_metricas_fila_agregam_status_duracao_e_categoria_de_falha(self):
+        job_concluido = {
+            "job_id": "a" * 32,
+            "status": "sent",
+            "created_at": "2026-11-19T10:00:00+00:00",
+            "stage_history": [
+                {"stage": "GERACAO_DFD", "status": "completed", "duration_seconds": 12.5},
+                {"stage": "GERACAO_ETP", "status": "completed", "duration_seconds": 8},
+            ],
+        }
+        job_falhou = {
+            "job_id": "b" * 32,
+            "status": "failed",
+            "created_at": "2026-11-19T10:01:00+00:00",
+            "last_error": "Falha no SMTP ao enviar e-mail.",
+            "stage_history": [
+                {"stage": "GERACAO_DFD", "status": "completed", "duration_seconds": 5},
+            ],
+        }
+        fila._write_json(fila._job_path(job_concluido["job_id"], ".done"), job_concluido)
+        fila._write_json(fila._job_path(job_falhou["job_id"], ".failed"), job_falhou)
+        metricas = fila.obter_metricas_fila_sqlite()
+        self.assertGreaterEqual(metricas["status"].get("sent", 0), 1)
+        self.assertGreaterEqual(metricas["status"].get("failed", 0), 1)
+        self.assertEqual(metricas["stages"]["GERACAO_DFD"]["count"], 2)
+        self.assertEqual(metricas["stages"]["GERACAO_DFD"]["duration_seconds"], 17.5)
+        self.assertGreaterEqual(metricas["failures"]["smtp"], 1)
 
     def test_configuracao_municipal_publica(self):
         with TestClient(app) as client:
