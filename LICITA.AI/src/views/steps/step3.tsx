@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useToast } from "../../components/toast";
+import AccessibleDialog from "../../components/AccessibleDialog";
 import { lerDadosUsuario, salvarDadosUsuario } from "../../utils/storageLocal";
 
 const SECRETARIAS_DEFAULT = [
@@ -20,42 +21,7 @@ export default function Step3({ dados = { secretarias: [], contatosSecretarias: 
   const [modalSecAberto, setModalSecAberto] = useState<string | null>(null);
   const { showToast } = useToast();
 
-  useEffect(() => {
-    if (!modalSecAberto) return;
-    const elementoAnterior = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const obterDialogo = () => document.getElementById("step3-contatos-salvos-dialog");
-    const focarPrimeiroControle = () => {
-      const primeiro = obterDialogo()?.querySelector<HTMLElement>('button:not([disabled]), [tabindex="0"]');
-      primeiro?.focus();
-    };
-    const tratarTecla = (evento: KeyboardEvent) => {
-      if (evento.key === "Escape") {
-        evento.preventDefault();
-        setModalSecAberto(null);
-        return;
-      }
-      if (evento.key !== "Tab") return;
-      const dialogo = obterDialogo();
-      const controles = dialogo ? [...dialogo.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')] : [];
-      if (controles.length === 0) {
-        evento.preventDefault();
-        dialogo?.focus();
-      } else if (evento.shiftKey && document.activeElement === controles[0]) {
-        evento.preventDefault();
-        controles[controles.length - 1].focus();
-      } else if (!evento.shiftKey && document.activeElement === controles[controles.length - 1]) {
-        evento.preventDefault();
-        controles[0].focus();
-      }
-    };
-    window.addEventListener("keydown", tratarTecla);
-    const foco = window.setTimeout(focarPrimeiroControle, 0);
-    return () => {
-      window.clearTimeout(foco);
-      window.removeEventListener("keydown", tratarTecla);
-      elementoAnterior?.focus();
-    };
-  }, [modalSecAberto]);
+
 
   const secretarias = dados.secretarias || [];
   const contatosSecretarias = dados.contatosSecretarias || {};
@@ -264,8 +230,7 @@ export default function Step3({ dados = { secretarias: [], contatosSecretarias: 
       )}
 
       {modalSecAberto && (
-        <div className="step-modal-overlay" style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
-          <div id="step3-contatos-salvos-dialog" className="step-modal" role="dialog" aria-modal="true" aria-labelledby="step3-contatos-salvos-title" tabIndex={-1} style={{ background: "var(--bg-panel)", padding: "24px", borderRadius: "var(--radius-xl)", width: "100%", maxWidth: "450px", boxShadow: "var(--shadow-lg)" }}>
+        <AccessibleDialog className="step-modal" labelledBy="step3-contatos-salvos-title" onClose={() => setModalSecAberto(null)}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
               <h3 id="step3-contatos-salvos-title" style={{ margin: 0, color: "var(--text-main)", fontSize: "18px" }}>Contatos Salvos</h3>
               <button type="button" aria-label="Fechar contatos salvos" onClick={() => setModalSecAberto(null)} style={{ background: "none", border: "none", fontSize: "20px", color: "var(--text-muted)" }}>×</button>
@@ -304,8 +269,7 @@ export default function Step3({ dados = { secretarias: [], contatosSecretarias: 
             <div style={{ marginTop: "20px", textAlign: "right" }}>
               <button type="button" onClick={() => setModalSecAberto(null)} style={{ padding: "8px 16px", background: "var(--bg-subtle)", color: "var(--text-main)", border: "none" }}>Fechar</button>
             </div>
-          </div>
-        </div>
+          </AccessibleDialog>
       )}
     </div>
   );

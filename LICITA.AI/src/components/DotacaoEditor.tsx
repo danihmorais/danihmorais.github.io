@@ -311,7 +311,7 @@ export default function DotacaoEditor({ value, onChange, placeholder }: DotacaoE
             onMouseDown={(e) => { e.preventDefault(); abrirSeletorImagem(); }}
             title="Inserir uma ou várias imagens no ponto do cursor"
             className="dotacao-editor-button dotacao-editor-image-button"
-          ><span style={{ fontSize: "14px" }}>🖼️</span> Inserir Imagem</button>
+          ><span className="dotacao-editor-image-icon">🖼️</span> Inserir Imagem</button>
           <input
             ref={fileInputRef}
             type="file"

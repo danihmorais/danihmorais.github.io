@@ -1996,3 +1996,145 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .dotacao-editor-file-input {
   display: none;
 }
+
+
+.step-form--execution {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.step2-heading {
+  margin: 0 0 8px;
+  color: var(--text-main);
+  font-size: 16px;
+}
+
+.step-required {
+  color: var(--btn-danger);
+}
+
+.step2-description {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.execution-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+  margin-bottom: 8px;
+}
+
+.step2-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--text-main);
+  font-size: 15px;
+}
+
+.step2-checkbox-label input {
+  width: 18px;
+  height: 18px;
+}
+
+.step2-execucao-field {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 220px;
+  padding: 16px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-lg);
+  resize: vertical;
+}
+
+.step2-execucao-field[aria-invalid="true"] {
+  border-color: var(--btn-danger);
+}
+
+.step2-error {
+  display: block;
+  margin-top: 4px;
+  color: var(--btn-danger);
+  font-size: 12px;
+}
+
+.dotacao-editor-image-icon {
+  font-size: 14px;
+}
+
+
+.step5-form { display: flex; flex-direction: column; gap: 28px; }
+.step5-section { display: flex; flex-direction: column; }
+.step5-title { margin: 0 0 16px; color: var(--text-main); font-size: 16px; font-weight: 600; }
+.step5-title-compact { margin-bottom: 4px; }
+.step5-options { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; margin: 0 0 16px; padding: 0; border: 0; min-width: 0; }
+.step5-radio-label, .step5-checkbox-label { display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: max-content; margin: 0; padding: 0; color: var(--text-main); font-size: 14px; cursor: pointer; }
+.step5-radio-label.is-disabled, .step5-checkbox-label.is-disabled { cursor: not-allowed; opacity: .5; }
+.step5-radio-input { width: 16px; height: 16px; margin: 0; padding: 0; flex-shrink: 0; cursor: pointer; }
+.step5-label-text { flex-shrink: 0; margin: 0; padding: 0; }
+.step5-justification { display: flex; flex-direction: column; padding: 16px; border: 1.5px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-subtle); }
+.step5-justification.has-error { border-color: var(--btn-danger); }
+.step5-justification--full { width: 100%; box-sizing: border-box; }
+.step5-justification-title { display: block; margin-bottom: 8px; color: var(--text-main); font-size: 13px; font-weight: 600; }
+.step5-asterisk { color: var(--btn-danger); }
+.step5-description { margin: 0 0 8px; color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+.step5-textarea { min-height: 60px; padding: 12px; border: 1px solid var(--input-border); border-radius: var(--radius); font-size: 13px; resize: vertical; }
+.step5-textarea.has-error { border-color: var(--btn-danger); }
+.step5-textarea--full { width: 100%; box-sizing: border-box; min-height: 100px; }
+.step5-error, .step5-warning { display: block; margin-top: 4px; color: var(--btn-danger); font-size: 12px; }
+.step5-subtitle { margin: 0 0 16px; color: var(--text-muted); font-size: 13px; font-style: italic; }
+.step5-subtitle-margin { margin: 0 0 8px; color: var(--text-muted); font-size: 13px; }
+.step5-subtitle-note { margin: 8px 0 0; color: var(--text-muted); font-size: 13px; }
+.step5-help-text { max-width: 900px; margin: 0; color: var(--text-muted); font-size: 13px; line-height: 1.5; }
+.step5-counter-wrapper, .step5-days-control { display: flex; align-items: center; gap: 8px; }
+.step5-counter-button { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-subtle); color: var(--text-main); font-size: 18px; cursor: pointer; }
+.step5-counter-button:disabled { opacity: .45; cursor: not-allowed; }
+.step5-counter-input { width: 60px; height: 40px; border: 1px solid var(--input-border); border-radius: var(--radius); font-size: 16px; font-weight: 600; text-align: center; }
+.step5-counter-input--days { width: 90px; }
+.step5-select { height: 40px; margin-left: 8px; padding: 0 12px; border: 1px solid var(--input-border); border-radius: var(--radius); font-size: 14px; }
+.step5-select--flush { margin-left: 0; }
+.step5-limit-note { color: var(--text-muted); font-size: 12px; }
+.step5-days-label { color: var(--text-main); font-size: 14px; }
+
+
+.accessible-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, .5);
+}
+
+.accessible-dialog {
+  width: 100%;
+  max-width: 450px;
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--bg-panel);
+  color: var(--text-main);
+  box-shadow: var(--shadow-lg);
+  outline: none;
+}
+
+.accessible-dialog:focus-visible {
+  box-shadow: var(--focus-ring);
+}
+
+.accessible-dialog.step-modal {
+  padding: 24px;
+}
+
+@media (max-width: 640px) {
+  .accessible-dialog-overlay { padding: 10px; align-items: flex-end; }
+  .accessible-dialog { max-height: calc(100dvh - 20px); }
+  .accessible-dialog.step-modal { padding: 16px; }
+}

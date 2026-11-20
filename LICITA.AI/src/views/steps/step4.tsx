@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useToast } from "../../components/toast";
+import AccessibleDialog from "../../components/AccessibleDialog";
 import { lerDadosUsuario, salvarDadosUsuario } from "../../utils/storageLocal";
 
 export default function Step4({
@@ -18,81 +19,6 @@ export default function Step4({
 
   const [modalGestorAberto, setModalGestorAberto] = useState(false);
   const [modalFiscalAberto, setModalFiscalAberto] = useState(false);
-
-  useEffect(() => {
-    if (!modalGestorAberto) return;
-    const elementoAnterior = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const selecionarPrimeiroCampo = () => {
-      const dialogo = document.querySelector('[role="dialog"][aria-modal="true"]') as HTMLElement | null;
-      const primeiro = dialogo?.querySelector<HTMLElement>('input:not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled]), [tabindex="0"]');
-      primeiro?.focus();
-    };
-    const tratarTecla = (evento: KeyboardEvent) => {
-      if (evento.key === "Escape") {
-        evento.preventDefault();
-        setModalGestorAberto(false);
-      }
-      if (evento.key === "Tab") {
-        const dialogo = document.querySelector('[role="dialog"][aria-modal="true"]') as HTMLElement | null;
-        const campos = dialogo ? [...dialogo.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')] : [];
-        if (campos.length === 0) {
-          evento.preventDefault();
-          dialogo?.focus();
-        } else if (evento.shiftKey && document.activeElement === campos[0]) {
-          evento.preventDefault();
-          campos[campos.length - 1].focus();
-        } else if (!evento.shiftKey && document.activeElement === campos[campos.length - 1]) {
-          evento.preventDefault();
-          campos[0].focus();
-        }
-      }
-    };
-    window.addEventListener("keydown", tratarTecla);
-    const foco = window.setTimeout(selecionarPrimeiroCampo, 0);
-    return () => {
-      window.clearTimeout(foco);
-      window.removeEventListener("keydown", tratarTecla);
-      elementoAnterior?.focus();
-    };
-  }, [modalGestorAberto]);
-
-  useEffect(() => {
-    if (!modalFiscalAberto) return;
-    const elementoAnterior = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const selecionarPrimeiroCampo = () => {
-      const dialogo = document.querySelector('[role="dialog"][aria-modal="true"]') as HTMLElement | null;
-      const primeiro = dialogo?.querySelector<HTMLElement>('input:not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled]), [tabindex="0"]');
-      primeiro?.focus();
-    };
-    const tratarTecla = (evento: KeyboardEvent) => {
-      if (evento.key === "Escape") {
-        evento.preventDefault();
-        setModalFiscalAberto(false);
-        return;
-      }
-      if (evento.key === "Tab") {
-        const dialogo = document.getElementById("step4-fiscais-salvos-dialog");
-        const campos = dialogo ? [...dialogo.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')] : [];
-        if (campos.length === 0) {
-          evento.preventDefault();
-          dialogo?.focus();
-        } else if (evento.shiftKey && document.activeElement === campos[0]) {
-          evento.preventDefault();
-          campos[campos.length - 1].focus();
-        } else if (!evento.shiftKey && document.activeElement === campos[campos.length - 1]) {
-          evento.preventDefault();
-          campos[0].focus();
-        }
-      }
-    };
-    window.addEventListener("keydown", tratarTecla);
-    const foco = window.setTimeout(selecionarPrimeiroCampo, 0);
-    return () => {
-      window.clearTimeout(foco);
-      window.removeEventListener("keydown", tratarTecla);
-      elementoAnterior?.focus();
-    };
-  }, [modalFiscalAberto]);
 
   useEffect(() => {
     const dadosSalvos = lerDadosUsuario();
@@ -360,8 +286,7 @@ export default function Step4({
       </div>
 
       {modalGestorAberto && (
-        <div id="step4-gestores-salvos-dialog" className="step-modal-overlay" style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }} role="dialog" aria-modal="true" aria-labelledby="step4-gestores-salvos-title" tabIndex={-1}>
-          <div className="step-modal" style={{ background: "var(--bg-panel)", padding: "24px", borderRadius: "var(--radius-xl)", width: "100%", maxWidth: "450px", boxShadow: "var(--shadow-lg)" }}>
+        <AccessibleDialog className="step-modal" labelledBy="step4-gestores-salvos-title" onClose={() => setModalGestorAberto(false)}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
               <h3 id="step4-gestores-salvos-title" style={{ margin: 0, color: "var(--text-main)", fontSize: "18px" }}>Gestores Salvos</h3>
               <button type="button" onClick={() => setModalGestorAberto(false)} style={{ background: "none", border: "none", fontSize: "20px", color: "var(--text-muted)" }}>×</button>
@@ -397,13 +322,11 @@ export default function Step4({
             <div style={{ marginTop: "20px", textAlign: "right" }}>
               <button type="button" onClick={() => setModalGestorAberto(false)} style={{ padding: "8px 16px", background: "var(--bg-subtle)", color: "var(--text-main)", border: "none" }}>Fechar</button>
             </div>
-          </div>
-        </div>
+          </AccessibleDialog>
       )}
 
       {modalFiscalAberto && (
-        <div id="step4-fiscais-salvos-dialog" className="step-modal-overlay" style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }} role="dialog" aria-modal="true" aria-labelledby="step4-fiscais-salvos-title" tabIndex={-1}>
-          <div className="step-modal" style={{ background: "var(--bg-panel)", padding: "24px", borderRadius: "var(--radius-xl)", width: "100%", maxWidth: "450px", boxShadow: "var(--shadow-lg)" }}>
+        <AccessibleDialog className="step-modal" labelledBy="step4-fiscais-salvos-title" onClose={() => setModalFiscalAberto(false)}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
               <h3 id="step4-fiscais-salvos-title" style={{ margin: 0, color: "var(--text-main)", fontSize: "18px" }}>Fiscais Salvos</h3>
               <button type="button" onClick={() => setModalFiscalAberto(false)} style={{ background: "none", border: "none", fontSize: "20px", color: "var(--text-muted)" }}>×</button>
@@ -439,8 +362,7 @@ export default function Step4({
             <div style={{ marginTop: "20px", textAlign: "right" }}>
               <button type="button" onClick={() => setModalFiscalAberto(false)} style={{ padding: "8px 16px", background: "var(--bg-subtle)", color: "var(--text-main)", border: "none" }}>Fechar</button>
             </div>
-          </div>
-        </div>
+          </AccessibleDialog>
       )}
     </div>
   );
