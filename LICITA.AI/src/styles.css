@@ -2138,3 +2138,256 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .accessible-dialog { max-height: calc(100dvh - 20px); }
   .accessible-dialog.step-modal { padding: 16px; }
 }
+
+
+.pncp-price-research {
+  margin-top: 22px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-panel);
+  overflow: hidden;
+}
+
+.pncp-price-research > details > summary {
+  padding: 16px 18px;
+  color: var(--text-main);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pncp-price-research-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 0 18px 18px;
+}
+
+.pncp-price-intro,
+.pncp-price-disclaimer,
+.pncp-price-footnote {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.pncp-price-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.pncp-price-form > label,
+.pncp-price-date-fields > label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-main);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pncp-price-form select,
+.pncp-price-form input[type="date"] {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  color: var(--text-main);
+  font: inherit;
+  font-weight: 400;
+}
+
+.pncp-price-date-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.pncp-price-modalities {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  min-width: 0;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.pncp-price-modalities legend {
+  padding: 0 5px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.pncp-price-modalities label,
+.pncp-price-estimated-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-main);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.pncp-price-estimated-toggle {
+  grid-column: 1 / -1;
+}
+
+.pncp-price-form > button {
+  justify-self: start;
+}
+
+.pncp-price-error,
+.pncp-price-warning {
+  margin: 0;
+  color: var(--btn-danger);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.pncp-price-success {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 12px;
+}
+
+.pncp-price-results {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pncp-price-results-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-main);
+  font-size: 13px;
+}
+
+.pncp-price-results-heading span {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.pncp-price-results-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.pncp-price-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+}
+
+.pncp-price-card-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 5px 8px;
+}
+
+.pncp-price-kind {
+  display: inline-flex;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--bg-panel);
+  color: var(--text-main);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.pncp-price-kind.is-estimated {
+  border: 1px dashed var(--border);
+}
+
+.pncp-price-value {
+  color: var(--text-main);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.pncp-price-unit {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.pncp-price-description {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.pncp-price-metadata {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 10px;
+  margin: 0;
+}
+
+.pncp-price-metadata div {
+  min-width: 0;
+}
+
+.pncp-price-metadata dt {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.pncp-price-metadata dd {
+  margin: 2px 0 0;
+  color: var(--text-main);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.pncp-price-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: auto;
+}
+
+.pncp-source-link {
+  color: var(--text-main);
+  font-size: 11px;
+  text-decoration: underline;
+}
+
+.pncp-price-card-actions .button {
+  min-height: 32px;
+  padding: 6px 10px;
+  font-size: 11px;
+}
+
+@media (max-width: 760px) {
+  .pncp-price-form,
+  .pncp-price-results-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pncp-price-date-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pncp-price-form > button {
+    width: 100%;
+  }
+}
