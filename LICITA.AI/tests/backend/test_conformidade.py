@@ -98,6 +98,29 @@ class ConformidadeTests(unittest.TestCase):
         self.assertEqual(verificacao["status"], "revisao")
         self.assertFalse(any(a["tipo"] == "artigo_fora_catalogo_lei_14133" for a in relatorio["alertas"]))
 
+    def test_identifica_conflito_entre_tema_do_artigo_e_contexto(self):
+        documentos = documentos_base()
+        documentos["ETP"]["CONCLUSAO"] = "Nos termos do art. 18 da Lei 14.133/2021, aplicam-se as penalidades e sanções administrativas."
+        relatorio = avaliar_conformidade(documentos)
+        ocorrencia = next(a for a in relatorio["alertas"] if a["tipo"] == "citacao_incoerente_lei_14133")
+        self.assertEqual(ocorrencia["ocorrencias"][0]["tema"], "Fase preparatória e elementos do planejamento da contratação, incluindo ETP e análise de riscos")
+        self.assertEqual(ocorrencia["ocorrencias"][0]["coerencia"], "incompativel")
+
+    def test_nao_sinaliza_artigo_18_quando_contexto_trata_da_fase_preparatoria(self):
+        documentos = documentos_base()
+        documentos["ETP"]["CONCLUSAO"] = "Nos termos do art. 18 da Lei 14.133/2021, a fase preparatória contém o estudo técnico preliminar."
+        relatorio = avaliar_conformidade(documentos)
+        self.assertFalse(any(a["tipo"] == "citacao_incoerente_lei_14133" for a in relatorio["alertas"]))
+
+    def test_identifica_decretos_e_sumulas_para_conferencia(self):
+        documentos = documentos_base()
+        documentos["ETP"]["CONCLUSAO"] = "Observar o Decreto nº 12.807/2025 e a Súmula TCU nº 177."
+        relatorio = avaliar_conformidade(documentos)
+        ocorrencia = next(a for a in relatorio["alertas"] if a["tipo"] == "referencias_normativas_complementares")
+        referencias = {item["referencia"] for item in ocorrencia["ocorrencias"]}
+        self.assertIn("Decreto nº 12.807/2025", referencias)
+        self.assertIn("Súmula TCU nº 177", referencias)
+
     def test_fundamentos_legais_exigem_conferencia_manual(self):
         documentos = documentos_base()
         documentos["ETP"]["CONCLUSAO"] = "Nos termos do art. 18 da Lei 14.133/2021."
