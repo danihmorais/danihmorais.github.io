@@ -10,7 +10,6 @@ on:
       - ".github/workflows/licita-ai-checks.yml"
       - ".github/workflows/deploy-fastapi.yml"
       - ".github/workflows/static.yml"
-      - ".github/workflows/licita-ai-tests.yml"
   workflow_dispatch:
 
 permissions:
