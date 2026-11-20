@@ -100,7 +100,7 @@ class ConformidadeTests(unittest.TestCase):
 
     def test_identifica_conflito_entre_tema_do_artigo_e_contexto(self):
         documentos = documentos_base()
-        documentos["ETP"]["CONCLUSAO"] = "Nos termos do art. 18 da Lei 14.133/2021, aplicam-se as penalidades e sanções administrativas."
+        documentos["ETP"]["CONCLUSAO"] = "Nos termos do art. 18 da Lei 14.133/2021, aplica-se a sanção administrativa."
         relatorio = avaliar_conformidade(documentos)
         ocorrencia = next(a for a in relatorio["alertas"] if a["tipo"] == "citacao_incoerente_lei_14133")
         self.assertEqual(ocorrencia["ocorrencias"][0]["tema"], "Fase preparatória e elementos do planejamento da contratação, incluindo ETP e análise de riscos")
