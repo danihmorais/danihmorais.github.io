@@ -610,7 +610,7 @@ def formatar_relatorio_referencias(resultado: dict) -> str:
         for artigo in sorted(artigos):
             tema = ARTIGOS_LEI_14133_TEMAS.get(artigo)
             if tema:
-                linhas.append(f"- artigo {artigo}: {tema['tema']}; confirmar a norma citada, o conteúdo e a pertinência.")
+                linhas.append(f"- artigo {artigo}: No catálogo temático da Lei 14.133/2021 — {tema['tema']}; confirmar a norma citada, o conteúdo e a pertinência.")
             else:
                 linhas.append(f"- artigo {artigo}: Referências fora do catálogo — Revisar a fonte e a numeração.")
     else:
