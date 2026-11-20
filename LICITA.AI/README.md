@@ -99,7 +99,9 @@ A interface solicita a revisão do conteúdo estruturado antes de montar os DOCX
 - O endpoint `POST /api/fila/{job_id}/preview/regenerar` regenera somente DFD, ETP ou TR selecionado, usando schema JSON estrito e contexto dos documentos anteriores.
 - O endpoint `POST /api/fila/{job_id}/approve` reencaminha o mesmo job para a montagem DOCX. Os resultados das etapas são reutilizados e as chamadas anteriores de IA não são repetidas.
 
-Uma edição ou regeneração do DFD marca ETP e TR como dependentes; uma edição ou regeneração do ETP marca TR como dependente. O botão de aprovação fica bloqueado até que esses documentos sejam regenerados. A revisão humana continua obrigatória, inclusive para fundamentos legais e adequação do processo.
+Uma edição ou regeneração do DFD marca ETP e TR como dependentes; uma edição ou regeneração do ETP marca TR como dependente. O botão de aprovação fica bloqueado até que esses documentos sejam regenerados. Pendências estruturais impeditivas — como campos obrigatórios vazios, marcadores não preenchidos, divergências dos documentos adicionais, incompatibilidade da amostra e marcos de pagamento não preservados — também impedem a aprovação. Quando restarem itens de conferência humana, o usuário deve marcar expressamente a confirmação no checklist; o backend recalcula o relatório e grava a confirmação junto ao job.
+
+A verificação numérica da Lei 14.133/2021 sinaliza artigos fora do intervalo numérico 1 a 194, mas não verifica o teor, a vigência, a interpretação, a aplicabilidade nem a autenticidade de citações. As demais normas e jurisprudências continuam sujeitas à conferência em fonte primária. A revisão humana continua obrigatória.
 
 ## Desenvolvimento e testes
 
