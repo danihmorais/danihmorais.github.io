@@ -800,6 +800,88 @@ def get_job(job_id: str) -> dict | None:
     return resultado
 
 
+def atualizar_indice_job_sqlite(job: dict, caminho: str | Path) -> None:
+    _sqlite_fila_gravar(job, caminho)
+
+
+def obter_posicao_fila_sqlite(job_id: str) -> tuple[int | None, int | None]:
+    _sqlite_fila_reindexar()
+    conexao = _sqlite_fila_conectar()
+    try:
+        registro = conexao.execute(
+            "SELECT status, created_at FROM queue_jobs WHERE job_id = ?",
+            (str(job_id),),
+        ).fetchone()
+        if registro is None or str(registro["status"]).lower() != "queued":
+            return None, None
+        a_frente = conexao.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM queue_jobs
+            WHERE status = 'queued'
+              AND (
+                created_at < ?
+                OR (created_at = ? AND job_id < ?)
+              )
+            """,
+            (registro["created_at"], registro["created_at"], str(job_id)),
+        ).fetchone()["total"]
+        return int(a_frente) + 1, int(a_frente)
+    finally:
+        conexao.close()
+
+
+def consumir_limite_taxa_sqlite(chave: str, limite: int, janela_segundos: int, agora: float | None = None) -> int:
+    instante = time.time() if agora is None else float(agora)
+    janela = max(1, int(janela_segundos))
+    teto = max(1, int(limite))
+    conexao = _sqlite_fila_conectar()
+    try:
+        conexao.execute(
+            """
+            CREATE TABLE IF NOT EXISTS rate_limit_buckets (
+                bucket_key TEXT PRIMARY KEY,
+                window_started REAL NOT NULL,
+                request_count INTEGER NOT NULL,
+                updated_at REAL NOT NULL
+            )
+            """
+        )
+        conexao.execute("BEGIN IMMEDIATE")
+        registro = conexao.execute(
+            "SELECT window_started, request_count FROM rate_limit_buckets WHERE bucket_key = ?",
+            (str(chave),),
+        ).fetchone()
+        retry_after = 0
+        if registro is None or instante - float(registro["window_started"]) >= janela:
+            conexao.execute(
+                """
+                INSERT INTO rate_limit_buckets(bucket_key, window_started, request_count, updated_at)
+                VALUES(?, ?, 1, ?)
+                ON CONFLICT(bucket_key) DO UPDATE SET
+                    window_started = excluded.window_started,
+                    request_count = 1,
+                    updated_at = excluded.updated_at
+                """,
+                (str(chave), instante, instante),
+            )
+        elif int(registro["request_count"]) >= teto:
+            retry_after = max(1, int(janela - (instante - float(registro["window_started"])) + 0.999))
+        else:
+            conexao.execute(
+                "UPDATE rate_limit_buckets SET request_count = request_count + 1, updated_at = ? WHERE bucket_key = ?",
+                (instante, str(chave)),
+            )
+        conexao.execute("DELETE FROM rate_limit_buckets WHERE updated_at < ?", (instante - max(86400, janela * 10),))
+        conexao.commit()
+        return retry_after
+    except Exception:
+        conexao.rollback()
+        raise
+    finally:
+        conexao.close()
+
+
 def listar_jobs_sqlite(status: str | None = None, limite: int = 500) -> list[dict]:
     _sqlite_fila_reindexar()
     limite = max(1, min(int(limite), 5000))
