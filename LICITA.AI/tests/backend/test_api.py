@@ -873,6 +873,168 @@ class TestEntregaZipAutenticada(unittest.TestCase):
         enqueue.assert_not_called()
 
 
+class TestPesquisaPrecosPNCP(unittest.TestCase):
+    def payload(self, **alteracoes):
+        dados = {
+            "descricao": "Papel sulfite A4 75 g/m²",
+            "unidade": "RESMA",
+            "data_inicial": "2025-01-01",
+            "data_final": "2025-12-31",
+            "uf": "SP",
+            "modalidades": [4, 6, 8],
+            "incluir_estimados": True,
+        }
+        dados.update(alteracoes)
+        return dados
+
+    def test_endpoint_pncp_retorna_resultados_com_fonte_e_limites(self):
+        from unittest.mock import AsyncMock
+
+        esperado = {
+            "fonte": "PNCP",
+            "resultados": [
+                {
+                    "tipo_preco": "homologado",
+                    "valor_unitario": 34.9,
+                    "descricao_item": "Papel sulfite A4 75 g/m²",
+                    "unidade": "RESMA",
+                    "unidade_compativel": True,
+                    "orgao": "Prefeitura Municipal de Exemplo",
+                    "municipio": "Jales",
+                    "uf": "SP",
+                    "modalidade": "Pregão Eletrônico",
+                    "data_referencia": "2025-10-10",
+                    "numero_controle_pncp": "1234567800019912025000001",
+                    "url_fonte": "https://pncp.gov.br/app/editais/1234567800019912025000001",
+                }
+            ],
+            "total": 1,
+            "contratacoes_consultadas": 1,
+            "contratacoes_com_falha_de_consulta": 0,
+            "mensagem": "Resultados auxiliares encontrados no PNCP.",
+        }
+        with (
+            patch.object(main, "_consultar_precos_pncp", new=AsyncMock(return_value=esperado)),
+            TestClient(app) as client,
+        ):
+            resposta = client.post("/api/pesquisa-precos/pncp", json=self.payload())
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual(resposta.json()["fonte"], "PNCP")
+        self.assertEqual(resposta.json()["resultados"][0]["tipo_preco"], "homologado")
+        self.assertTrue(resposta.json()["resultados"][0]["url_fonte"])
+
+    def test_endpoint_pncp_rejeita_periodo_invertido_e_maior_que_dois_anos(self):
+        with TestClient(app) as client:
+            invertido = client.post(
+                "/api/pesquisa-precos/pncp",
+                json=self.payload(data_inicial="2025-12-31", data_final="2025-01-01"),
+            )
+            longo = client.post(
+                "/api/pesquisa-precos/pncp",
+                json=self.payload(data_inicial="2022-01-01", data_final="2025-01-01"),
+            )
+        self.assertEqual(invertido.status_code, 400)
+        self.assertIn("data inicial", invertido.json()["detail"])
+        self.assertEqual(longo.status_code, 400)
+        self.assertIn("730 dias", longo.json()["detail"])
+
+    def test_consulta_pncp_classifica_resultado_homologado_e_valor_estimado(self):
+        import asyncio
+        from unittest.mock import AsyncMock
+
+        cnpj = "AB123456789012"
+        contrato = {
+            "anoCompra": 2025,
+            "sequencialCompra": 12,
+            "objetoCompra": "Aquisição de papel sulfite A4",
+            "numeroControlePNCP": f"{cnpj}-1-000012/2025",
+            "modalidadeNome": "Pregão Eletrônico",
+            "dataPublicacaoPncp": "2025-03-01",
+            "orgaoEntidade": {"cnpj": cnpj, "razaoSocial": "Prefeitura Municipal de Exemplo"},
+            "unidadeOrgao": {"municipioNome": "Jales", "ufSigla": "SP"},
+        }
+
+        async def responder(_cliente, caminho, parametros=None):
+            if caminho == "/v1/contratacoes/publicacao":
+                return {"data": [contrato]}
+            if caminho.endswith("/itens"):
+                self.assertEqual(parametros["tamanhoPagina"], 50)
+                return {"itens": [
+                    {"numeroItem": 1, "descricao": "Papel sulfite A4 75 g/m²", "unidadeMedida": "RESMA", "quantidade": 10, "valorUnitarioEstimado": 40},
+                    {"numeroItem": 2, "descricao": "Papel sulfite A4 75 g/m²", "unidadeMedida": "RESMA", "quantidade": 10, "valorUnitarioEstimado": 38},
+                ]}
+            if caminho.endswith("/itens/1/resultados"):
+                return {"listaResultados": [
+                    {"situacaoCompraItemResultadoId": 1, "valorUnitarioHomologado": 34.9, "unidadeMedida": "RESMA", "quantidadeHomologada": 10}
+                ]}
+            if caminho.endswith("/itens/2/resultados"):
+                return {"listaResultados": []}
+            raise AssertionError(f"Endpoint PNCP inesperado: {caminho}")
+
+        req = main.PesquisaPrecosPNCPRequest(
+            descricao="Papel sulfite A4",
+            unidade="RESMA",
+            data_inicial="2025-01-01",
+            data_final="2025-12-31",
+            uf="SP",
+            modalidades=[6],
+            incluir_estimados=True,
+        )
+        with patch.object(main, "_pncp_get_json", new=AsyncMock(side_effect=responder)):
+            resposta = asyncio.run(main._consultar_precos_pncp(req))
+        self.assertEqual(resposta["total"], 2)
+        self.assertEqual([item["tipo_preco"] for item in resposta["resultados"]], ["homologado", "estimado"])
+        self.assertTrue(all(item["unidade_compativel"] for item in resposta["resultados"]))
+        self.assertIn(cnpj, resposta["resultados"][0]["url_fonte"])
+
+    def test_endpoint_pncp_rejeita_modalidade_nao_habilitada(self):
+        with TestClient(app) as client:
+            resposta = client.post(
+                "/api/pesquisa-precos/pncp",
+                json=self.payload(modalidades=[999]),
+            )
+        self.assertEqual(resposta.status_code, 400)
+        self.assertIn("Modalidade", resposta.json()["detail"])
+
+    def test_pncp_considera_homologado_somente_status_informado(self):
+        self.assertTrue(main._pncp_resultado_homologado({"situacaoCompraItemResultadoId": 1}))
+        self.assertTrue(main._pncp_resultado_homologado({"situacaoCompraItemResultadoId": "1"}))
+        self.assertFalse(main._pncp_resultado_homologado({"situacaoCompraItemResultadoId": 2}))
+        self.assertFalse(main._pncp_resultado_homologado({"situacaoCompraItemResultadoId": None}))
+        self.assertFalse(main._pncp_resultado_homologado({}))
+
+    def test_normalizador_pncp_descarta_precos_vazios_e_nao_numericos(self):
+        for valor in (None, "", "não informado", 0, -1):
+            with self.subTest(valor=valor):
+                self.assertIsNone(main._pncp_normalizar_preco(
+                    "homologado",
+                    valor,
+                    "Papel A4",
+                    "RESMA",
+                    10,
+                    {},
+                    {"numeroItem": 1},
+                ))
+        valido = main._pncp_normalizar_preco(
+            "homologado",
+            "34.90",
+            "Papel A4",
+            "RESMA",
+            10,
+            {
+                "orgaoEntidade": {"razaoSocial": "Prefeitura Municipal de Exemplo"},
+                "unidadeOrgao": {"municipioNome": "Jales", "ufSigla": "SP"},
+                "numeroControlePNCP": "1234567800019912025000001",
+                "modalidadeNome": "Pregão Eletrônico",
+                "dataPublicacaoPncp": "2025-10-10",
+            },
+            {"numeroItem": 1},
+        )
+        self.assertEqual(valido["valor_unitario"], 34.9)
+        self.assertEqual(valido["orgao"], "Prefeitura Municipal de Exemplo")
+        self.assertEqual(valido["numero_item"], "1")
+
+
 class TestImportacaoItensPlanilha(unittest.TestCase):
     def test_csv_separado_por_ponto_e_virgula_normaliza_cabecalhos(self):
         conteudo = (
