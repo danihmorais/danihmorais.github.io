@@ -32,7 +32,7 @@ from pydantic import BaseModel, Field
 from typing import Literal
 
 from documentos_contexto import MAX_CONTEXT_CHARS, extrair_contexto_documentos
-from fila import EMAIL_RE, MAX_ATTEMPTS, QUEUE_DIR, SMTP_FROM, SMTP_PASSWORD, SMTP_USERNAME, _artifact_path, _job_path, _smtp_client, cancel_job, enqueue_job, get_job, listar_jobs_sqlite
+from fila import EMAIL_RE, MAX_ATTEMPTS, QUEUE_DIR, SMTP_FROM, SMTP_PASSWORD, SMTP_USERNAME, _artifact_path, _job_path, _smtp_client, atualizar_indice_job_sqlite, cancel_job, consumir_limite_taxa_sqlite, enqueue_job, get_job, listar_jobs_sqlite, obter_posicao_fila_sqlite
 from fila_pipeline import _dados_para_prompt, limite_prompt_chars
 from fila_pipeline_unificado import iniciar_worker
 from pipeline_prompts import montar_pipeline
@@ -49,6 +49,10 @@ def _write_json(path: Path, dados: dict) -> None:
     with temporario.open("w", encoding="utf-8") as arquivo:
         json.dump(dados, arquivo, ensure_ascii=False, indent=2)
     os.replace(temporario, path)
+    try:
+        atualizar_indice_job_sqlite(dados, path)
+    except Exception:
+        logger.exception("Não foi possível atualizar o índice SQLite da fila.")
 
 
 class FasePreparatoriaRequest(BaseModel):
@@ -104,7 +108,6 @@ API_UNSLOTH_KEY = os.getenv("LICITA_UNSLOTH_KEY", os.getenv("API_UNSLOTH", "")).
 
 IA_RATE_WINDOW_SECONDS = max(10, int(os.getenv("LICITA_IA_RATE_WINDOW", "60")))
 IA_RATE_LIMIT = max(1, int(os.getenv("LICITA_IA_RATE_LIMIT", "20")))
-IA_GLOBAL_RATE_LIMIT = max(1, int(os.getenv("LICITA_IA_GLOBAL_RATE_LIMIT", "120")))
 _ia_rate_lock = threading.Lock()
 _ia_rate_buckets: dict[str, deque[float]] = {}
 QUEUE_RATE_WINDOW_SECONDS = max(60, int(os.getenv("LICITA_QUEUE_RATE_WINDOW", "600")))
@@ -157,31 +160,42 @@ def _client_identity(request: Request) -> str:
     return str(remote_ip)
 
 
-def _check_rate_limit(buckets: dict[str, deque[float]], lock: threading.Lock, identity: str, limit: int, window_seconds: int, detail: str) -> None:
-    now = time.monotonic()
-    with lock:
-        bucket = buckets.setdefault(identity, deque())
-        cutoff = now - window_seconds
-        while bucket and bucket[0] <= cutoff:
-            bucket.popleft()
-        if len(bucket) >= limit:
-            raise HTTPException(status_code=429, detail=detail, headers={"Retry-After": str(window_seconds)})
-        bucket.append(now)
-        if len(buckets) > 10_000:
-            for key in list(buckets)[:1_000]:
-                if not buckets[key]:
-                    buckets.pop(key, None)
+def _check_rate_limit(
+    buckets: dict[str, deque[float]],
+    lock: threading.Lock,
+    identity: str,
+    limit: int,
+    window_seconds: int,
+    detail: str,
+    scope: str = "default",
+) -> None:
+    try:
+        retry_after = consumir_limite_taxa_sqlite(
+            f"{scope}:{str(identity).casefold()}",
+            limit,
+            window_seconds,
+        )
+    except Exception as exc:
+        logger.exception("Falha ao consultar o limite persistente de requisições.")
+        raise HTTPException(
+            status_code=503,
+            detail="O controle de segurança está temporariamente indisponível. Tente novamente.",
+        ) from exc
+    if retry_after:
+        raise HTTPException(
+            status_code=429,
+            detail=detail,
+            headers={"Retry-After": str(retry_after)},
+        )
 
 
 def _check_ia_rate_limit(request: Request) -> None:
-    _check_rate_limit(_ia_rate_buckets, _ia_rate_lock, _client_identity(request), IA_RATE_LIMIT, IA_RATE_WINDOW_SECONDS, "Limite de requisições de IA excedido. Tente novamente em instantes.")
-    _check_rate_limit(_ia_rate_buckets, _ia_rate_lock, "__global__", IA_GLOBAL_RATE_LIMIT, IA_RATE_WINDOW_SECONDS, "O limite global de requisições de IA foi atingido. Tente novamente em instantes.")
+    _check_rate_limit(_ia_rate_buckets, _ia_rate_lock, _client_identity(request), IA_RATE_LIMIT, IA_RATE_WINDOW_SECONDS, "Limite de requisições de IA excedido. Tente novamente em instantes.", "ia-ip")
 
 
 def _check_queue_rate_limit(request: Request, email: str) -> None:
-    _check_rate_limit(_queue_ip_rate_buckets, _queue_rate_lock, _client_identity(request), QUEUE_RATE_LIMIT, QUEUE_RATE_WINDOW_SECONDS, "Limite de solicitações de geração excedido. Tente novamente mais tarde.")
-    _check_rate_limit(_queue_ip_rate_buckets, _queue_rate_lock, "__global__", max(10, int(os.getenv("LICITA_QUEUE_GLOBAL_RATE_LIMIT", "40"))), QUEUE_RATE_WINDOW_SECONDS, "O limite global de solicitações foi atingido. Tente novamente mais tarde.")
-    _check_rate_limit(_queue_email_rate_buckets, _queue_rate_lock, email.casefold(), QUEUE_EMAIL_RATE_LIMIT, QUEUE_EMAIL_RATE_WINDOW_SECONDS, "Este e-mail atingiu o limite de solicitações. Tente novamente mais tarde.")
+    _check_rate_limit(_queue_ip_rate_buckets, _queue_rate_lock, _client_identity(request), QUEUE_RATE_LIMIT, QUEUE_RATE_WINDOW_SECONDS, "Limite de solicitações de geração excedido. Tente novamente mais tarde.", "queue-ip")
+    _check_rate_limit(_queue_email_rate_buckets, _queue_rate_lock, email.casefold(), QUEUE_EMAIL_RATE_LIMIT, QUEUE_EMAIL_RATE_WINDOW_SECONDS, "Este e-mail atingiu o limite de solicitações. Tente novamente mais tarde.", "queue-email")
 
 
 def _token_matches(esperado: str, recebido: str) -> bool:
@@ -585,27 +599,9 @@ async def gerar_ia_item(request: Request, req: IAItemRequest):
     )
 
 
-def _queue_items() -> list[dict]:
-    if not QUEUE_DIR.exists():
-        return []
-    items: list[dict] = []
-    for path in QUEUE_DIR.glob("[0-9a-f]*.json"):
-        if path.name.endswith((".done.json", ".failed.json", ".cancelled.json", ".review.json")):
-            continue
-        try:
-            job = __import__("json").loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            continue
-        if isinstance(job, dict) and isinstance(job.get("job_id"), str) and job.get("created_at"):
-            items.append({"job_id": job["job_id"], "created_at": str(job["created_at"]), "status": job.get("status", "queued")})
-    return sorted(items, key=lambda item: item["created_at"])
-
-
 def _queue_position(job_id: str) -> tuple[int | None, int | None]:
-    for index, item in enumerate(_queue_items()):
-        if item["job_id"].lower() == job_id.lower():
-            return index + 1, index
-    return None, None
+    return obter_posicao_fila_sqlite(job_id)
+
 
 
 def _montar_pipeline_requisicao(req: FasePreparatoriaRequest, documentos: list[dict] | None = None) -> tuple[dict, dict]:
@@ -725,6 +721,7 @@ async def solicitar_verificacao_email(request: Request, req: EmailVerificationRe
         max(2, EMAIL_VERIFICATION_RATE_LIMIT * 2),
         3600,
         "Muitas solicitações de confirmação deste endereço de rede. Aguarde antes de tentar novamente.",
+        "email-verification-ip",
     )
     _check_rate_limit(
         _email_verification_rate_buckets,
@@ -733,6 +730,7 @@ async def solicitar_verificacao_email(request: Request, req: EmailVerificationRe
         EMAIL_VERIFICATION_RATE_LIMIT,
         3600,
         "Este endereço já recebeu o limite de códigos de confirmação. Tente novamente mais tarde.",
+        "email-verification-address",
     )
     _limpar_verificacoes_email_expiradas()
     code = f"{secrets.randbelow(1_000_000):06d}"
@@ -897,6 +895,7 @@ async def importar_itens_planilha(request: Request, arquivo: UploadFile = File(.
         12,
         3600,
         "Limite de importações atingido. Tente novamente mais tarde.",
+        "import-planilha-ip",
     )
     try:
         itens = _ler_itens_csv(conteudo) if extensao == ".csv" else _ler_itens_xlsx(conteudo)
@@ -1247,6 +1246,7 @@ async def login_admin(request: Request, req: AdminLoginRequest):
         ADMIN_LOGIN_RATE_LIMIT,
         ADMIN_LOGIN_RATE_WINDOW_SECONDS,
         "Muitas tentativas de acesso ao painel. Aguarde antes de tentar novamente.",
+        "admin-login-ip",
     )
     if not _token_matches(req.password, ADMIN_PASSWORD):
         raise HTTPException(status_code=401, detail="Senha administrativa incorreta.")
@@ -1677,13 +1677,4 @@ def _limpar_fila_antiga() -> None:
 
 iniciar_worker()
 threading.Thread(target=_limpar_fila_antiga, name="licita-retencao", daemon=True).start()
-
-_queue_position_arquivos = _queue_position
-
-
-def _queue_position(job_id: str) -> tuple[int, int]:
-    posicao, a_frente = _queue_position_arquivos(job_id)
-    if posicao is None or a_frente is None:
-        return 0, 0
-    return posicao, a_frente
 

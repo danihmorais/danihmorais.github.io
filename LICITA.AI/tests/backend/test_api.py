@@ -5,6 +5,8 @@ from io import BytesIO
 import os
 import re
 import shutil
+import sqlite3
+import threading
 import sys
 import tempfile
 import unittest
@@ -73,6 +75,35 @@ class LicitaBackendTests(unittest.TestCase):
         main._admin_login_rate_buckets.clear()
         main._email_verification_rate_buckets.clear()
         main._email_verification_challenges.clear()
+
+
+    def test_limite_persistente_sqlite_separa_identidades_e_sobrevive_ao_cache(self):
+        from fastapi import HTTPException
+
+        main._check_rate_limit({}, threading.Lock(), "192.0.2.10", 1, 600, "Limite atingido.", "teste-persistente")
+        with self.assertRaises(HTTPException) as contexto:
+            main._check_rate_limit({}, threading.Lock(), "192.0.2.10", 1, 600, "Limite atingido.", "teste-persistente")
+        self.assertEqual(contexto.exception.status_code, 429)
+        self.assertGreater(int(contexto.exception.headers["Retry-After"]), 0)
+        main._check_rate_limit({}, threading.Lock(), "192.0.2.11", 1, 600, "Limite atingido.", "teste-persistente")
+
+    def test_posicao_da_fila_consulta_indice_sqlite(self):
+        jobs = [
+            {
+                "job_id": "1" * 32,
+                "status": "queued",
+                "created_at": "2026-11-19T10:00:00+00:00",
+            },
+            {
+                "job_id": "2" * 32,
+                "status": "queued",
+                "created_at": "2026-11-19T10:01:00+00:00",
+            },
+        ]
+        for job in jobs:
+            fila._write_json(fila._job_path(job["job_id"]), job)
+        self.assertEqual(main._queue_position(jobs[0]["job_id"]), (1, 0))
+        self.assertEqual(main._queue_position(jobs[1]["job_id"]), (2, 1))
 
     def test_endpoint_rejeita_email_invalido(self):
         with TestClient(app) as client:
@@ -458,7 +489,11 @@ class LicitaBackendTests(unittest.TestCase):
                 payload = {**payload_base, "email": "teste-email@example.com"}
                 response = client.post("/api/gerar-fase-preparatoria", json=payload, headers=self._headers_verificacao(payload["email"]))
                 self.assertEqual(response.status_code, 200)
-                main._queue_ip_rate_buckets.clear()
+                with sqlite3.connect(QUEUE_DIR / "queue.sqlite3") as conexao:
+                    conexao.execute(
+                        "DELETE FROM rate_limit_buckets WHERE bucket_key = ?",
+                        ("queue-ip:testclient",),
+                    )
             bloqueado = client.post(
                 "/api/gerar-fase-preparatoria",
                 json={**payload_base, "email": "teste-email@example.com"},
