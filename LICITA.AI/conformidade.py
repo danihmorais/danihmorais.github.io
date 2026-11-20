@@ -466,7 +466,7 @@ def _montar_catalogo_artigos_lei_14133() -> dict[int, dict[str, str | None]]:
 ARTIGOS_LEI_14133_TEMAS = _montar_catalogo_artigos_lei_14133()
 ARTIGOS_LEI_14133 = set(ARTIGOS_LEI_14133_TEMAS)
 CITACAO_ARTIGO_RE = re.compile(r"(?i)\b(?:art\.?|artigo)\s*(\d{1,3})\b")
-CITACAO_DECRETO_RE = re.compile(r"(?i)\b(?P<tipo>decreto(?:-lei)?)\s*(?:federal|estadual|municipal\s*)?(?:n[ºo.]?\s*)?(?P<numero>\d{1,3}(?:\.\d{3})*(?:[./-]\d{2,4})?)\b")
+CITACAO_DECRETO_RE = re.compile(r"(?i)\b(?P<tipo>decreto(?:-lei)?)\s*(?:(?:federal|estadual|municipal)\s*)?(?:n[ºo.]?\s*)?(?P<numero>\d{1,3}(?:\.\d{3})*(?:[./-]\d{2,4})?)\b")
 CITACAO_SUMULA_RE = re.compile(r"(?i)\bS[uú]mula\s+(?:(?P<tribunal>TCU|STF|STJ|TST|TSE|TCE(?:[-/ ]?[A-Z]{2})?)\s*(?:n[ºo.]?\s*)?(?P<num_a>\d{1,4})|(?:n[ºo.]?\s*)?(?P<num_b>\d{1,4})(?:\s+(?:do|da)\s+(?P<tribunal_pos>TCU|STF|STJ|TST|TSE|TCE(?:[-/ ]?[A-Z]{2})?))?)\b")
 
 
