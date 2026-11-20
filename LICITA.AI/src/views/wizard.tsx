@@ -23,11 +23,54 @@ import Step5 from "./steps/step5";
 import PromptModal from "../components/promptModal";
 import ConfirmDialog from "../components/ConfirmDialog";
 import AdminPedidosModal from "../components/AdminPedidosModal";
+import QueueDeliveryPanel from "../components/QueueDeliveryPanel";
 import { ThemeContext } from "../context/ThemeContext";
-import { carregarConfiguracaoMunicipal, cancelarFilaFasePreparatoria, consultarFilaFasePreparatoria, gerarFasePreparatoria, type DocumentosReferenciaUpload, type FasePreparatoriaJob } from "../api";
+import {
+  carregarConfiguracaoMunicipal,
+  cancelarFilaFasePreparatoria,
+  gerarFasePreparatoria,
+  salvarAcompanhamentoJob,
+  recuperarAcompanhamentoJob,
+  limparAcompanhamentoJob,
+  type DocumentosReferenciaUpload,
+  type FasePreparatoriaJob,
+} from "../api";
 import { criarDadosTeste, TipoTesteContratacao } from "../utils/dadosTeste";
 import type { ConfigMunicipalPublica } from "../utils/configMunicipal";
 import { obterLotes, distribuicaoLotesValida } from "../utils/lotes";
+
+function criarDadosIniciais(): Record<string, any> {
+  return {
+    objeto: "",
+    necessidade: "",
+    itens: [],
+    lotes: [],
+    amostra: false,
+    vistoria: false,
+    execucao: "",
+    secretarias: [],
+    contatosSecretarias: {},
+    gestores: [],
+    fiscais: [],
+    instrumento: "CONTRATO",
+    prorrogar: true,
+    meepp: "SIM",
+    criterio: "ITEM",
+    motivoCriterio: "",
+    modalidade: "PREGAO_ELETRONICO",
+    motivoModalidade: "",
+    pac: "SIM",
+    motivoPac: "",
+    vigenciaNum: 1,
+    vigenciaUnidade: "Meses",
+    pagamentoTipo: "CONFORME_ENTREGAS",
+    pagamentoEtapas: "",
+    prazoRefazimentoDias: 5,
+    dotacao: "",
+    caminhoImagemDotacao: "",
+    dotacaoBlocos: [],
+  };
+}
 
 function rotuloEtapa(chave?: string): string {
   const nomes: Record<string, string> = {
@@ -56,6 +99,7 @@ function rotuloStatusPedido(status?: string, cancelRequested = false): string {
     failed: "Falha",
     cancelled: "Cancelado",
     cancelling: "Cancelando",
+    awaiting_review: "Aguardando sua revisão",
     retrying: "Nova tentativa agendada",
     unavailable: "Registro indisponível",
   };
@@ -135,36 +179,7 @@ export default function Wizard() {
   const [etapaAtual, setEtapaAtual] = useState(0);
   const [maiorEtapaAlcancada, setMaiorEtapaAlcancada] = useState(0);
   const [tentouAvancar, setTentouAvancar] = useState(false);
-  const [dados, setDados] = useState<any>({
-    objeto: "",
-    necessidade: "",
-    itens: [],
-    lotes: [],
-    amostra: false,
-    vistoria: false,
-    execucao: "",
-    secretarias: [],
-    contatosSecretarias: {} as Record<string, any[]>,
-    gestores: [],
-    fiscais: [],
-    instrumento: "CONTRATO",
-    prorrogar: true,
-    meepp: "SIM",
-    criterio: "ITEM",
-    motivoCriterio: "",
-    modalidade: "PREGAO_ELETRONICO",
-    motivoModalidade: "",
-    pac: "SIM",
-    motivoPac: "",
-    vigenciaNum: 1,
-    vigenciaUnidade: "Meses",
-    pagamentoTipo: "CONFORME_ENTREGAS",
-    pagamentoEtapas: "",
-    prazoRefazimentoDias: 5,
-    dotacao: "",
-    caminhoImagemDotacao: "",
-    dotacaoBlocos: []
-  });
+  const [dados, setDados] = useState<any>(criarDadosIniciais);
   const [carregando, setCarregando] = useState(false);
   const [statusTexto, setStatusTexto] = useState("Iniciando...");
   const [erroMsg, setErroMsg] = useState<string | null>(null);
@@ -190,6 +205,16 @@ export default function Wizard() {
   const { theme, toggleTheme } = useContext(ThemeContext);
   const isDark = theme === "dark";
   const { showToast } = useToast();
+  const atualizarStatusJob = useCallback((status: any) => {
+    setJobDetalhe(status);
+    setUltimaAtualizacao(new Date().toISOString());
+    const estado = String(status?.status || "").toLowerCase();
+    if (estado === "sent" || estado === "completed") setStatusTexto("Documentos gerados e enviados por e-mail.");
+    else if (estado === "failed") setStatusTexto("O processamento falhou. Consulte o último erro abaixo.");
+    else if (estado === "cancelled") setStatusTexto("Solicitação cancelada; nenhum novo envio será iniciado.");
+    else if (estado === "awaiting_review") setStatusTexto("Os documentos foram gerados e aguardam sua revisão.");
+    else setStatusTexto(status?.cancel_requested ? "Cancelamento solicitado; aguardando o fim da etapa atual." : "A solicitação continua em processamento na fila.");
+  }, []);
   const dadosPreenchidos = Boolean(
     String(dados.objeto || "").trim() || String(dados.necessidade || "").trim() ||
     (Array.isArray(dados.itens) && dados.itens.length > 0) || String(dados.execucao || "").trim() ||
@@ -234,7 +259,9 @@ export default function Wizard() {
     setCarregando(false);
     setErroMsg(null);
     setGeracaoSucesso(false);
+    limparAcompanhamentoJob();
     setJobAgendado(null);
+    setJobDetalhe(null);
     setStatusTexto("Teste carregado. Revise as cinco etapas antes de confeccionar.");
   };
 
@@ -290,6 +317,18 @@ export default function Wizard() {
     } finally {
       setRascunhoInicializado(true);
     }
+    const acompanhamento = recuperarAcompanhamentoJob();
+    if (acompanhamento) {
+      setJobAgendado({
+        job_id: acompanhamento.job_id,
+        status: "processing",
+        email: "",
+        status_token: acompanhamento.status_token,
+        message: "Acompanhamento retomado após recarregar a página.",
+      });
+      setGeracaoSucesso(true);
+      setStatusTexto("Retomando o acompanhamento da solicitação.");
+    }
     if (new URLSearchParams(window.location.search).has("admin")) setMostrarAdminPedidos(true);
   }, []);
 
@@ -329,36 +368,7 @@ export default function Wizard() {
     };
   }, [dadosPreenchidos, geracaoSucesso, salvamentoConcluido]);
 
-  useEffect(() => {
-    if (!geracaoSucesso || !jobAgendado) return;
-    if (["sent", "completed", "failed", "cancelled"].includes(String(jobAgendado.status || "").toLowerCase())) return;
-    let ativo = true;
-    let temporizador: number | undefined;
-    const consultar = async () => {
-      if (!ativo) return;
-      let statusTerminal = false;
-      if (document.visibilityState === "visible") {
-        try {
-          const status = await consultarFilaFasePreparatoria(jobAgendado.job_id, jobAgendado.status_token);
-          if (!ativo) return;
-          setJobDetalhe(status);
-          setErroConsultaJob(null);
-          setUltimaAtualizacao(new Date().toISOString());
-          const statusNormalizado = String(status.status || "").toLowerCase();
-          statusTerminal = ["sent", "completed", "failed", "cancelled"].includes(statusNormalizado);
-          if (statusNormalizado === "sent" || statusNormalizado === "completed") setStatusTexto("Documentos gerados e enviados por e-mail.");
-          else if (statusNormalizado === "failed") setStatusTexto("O processamento falhou. Consulte o último erro abaixo.");
-          else if (statusNormalizado === "cancelled") setStatusTexto("Solicitação cancelada; nenhum novo envio será iniciado.");
-          else setStatusTexto(status.cancel_requested ? "Cancelamento solicitado; aguardando o fim da etapa atual." : "A solicitação continua em processamento na fila.");
-        } catch (falha: any) {
-          if (ativo) setErroConsultaJob(falha?.message || "Não foi possível atualizar o status agora.");
-        }
-      }
-      if (ativo && !statusTerminal) temporizador = window.setTimeout(consultar, 10_000);
-    };
-    void consultar();
-    return () => { ativo = false; if (temporizador !== undefined) window.clearTimeout(temporizador); };
-  }, [geracaoSucesso, jobAgendado?.job_id, jobAgendado?.status_token]);
+
 
   const salvarESair = () => {
     if (rascunhoDisponivel) {
@@ -497,6 +507,7 @@ export default function Wizard() {
     setCarregando(true);
     setErroMsg(null);
     setGeracaoSucesso(false);
+    limparAcompanhamentoJob();
     setJobAgendado(null);
     const quantidadeArquivos = Object.values(arquivos || {}).filter((arquivo): arquivo is File => arquivo instanceof File).length;
     setStatusTexto(quantidadeArquivos > 0
@@ -511,6 +522,7 @@ export default function Wizard() {
         dados_usuario: dados,
       }, arquivos);
       setJobAgendado(resultado);
+      salvarAcompanhamentoJob(resultado.job_id, resultado.status_token);
       setJobDetalhe({ status: resultado.status, fila_posicao: resultado.fila_posicao, current_stage: "AGUARDANDO_FILA", cancel_requested: false });
       setErroConsultaJob(null);
       setUltimaAtualizacao(new Date().toISOString());
@@ -559,6 +571,7 @@ export default function Wizard() {
   };
 
   const voltarAoFormulario = () => {
+    limparAcompanhamentoJob();
     setGeracaoSucesso(false);
     setJobAgendado(null);
     setJobDetalhe(null);
@@ -569,18 +582,11 @@ export default function Wizard() {
   };
 
   const limparParaNovaSolicitacao = () => {
+    limparAcompanhamentoJob();
     localStorage.removeItem("licita-ai-rascunho-v1");
     setRascunhoDisponivel(false);
     setSalvamentoConcluido(false);
-    setDados({
-    lotes: [],
-      objeto: "", necessidade: "", itens: [], amostra: false, vistoria: false, execucao: "",
-      secretarias: [], contatosSecretarias: {}, gestores: [], fiscais: [], instrumento: "CONTRATO",
-      prorrogar: true, meepp: "SIM", criterio: "ITEM", motivoCriterio: "", modalidade: "PREGAO_ELETRONICO",
-      motivoModalidade: "", pac: "SIM", motivoPac: "", vigenciaNum: 1, vigenciaUnidade: "Meses",
-      pagamentoTipo: "CONFORME_ENTREGAS", pagamentoEtapas: "", prazoRefazimentoDias: 5,
-      dotacao: "", caminhoImagemDotacao: "", dotacaoBlocos: [],
-    });
+    setDados(criarDadosIniciais());
     setEtapaAtual(0);
     setMaiorEtapaAlcancada(0);
     setTentouAvancar(false);
@@ -627,6 +633,7 @@ export default function Wizard() {
       : statusPedido === "failed" ? "Falha no processamento"
       : statusPedido === "cancelled" ? "Solicitação cancelada"
       : statusPedido === "cancelling" ? "Cancelamento solicitado"
+      : statusPedido === "awaiting_review" ? "Documentos aguardando revisão"
       : "Solicitação colocada na fila";
     return (
       <main className="status-page">
@@ -637,7 +644,7 @@ export default function Wizard() {
         <section className={"status-content" + (erroMsg || statusFinalFalha ? " status-content-error" : "")} aria-live="polite">
           <h1>{tituloStatus}</h1>
           <p>{erroMsg ? "Os dados do formulário, o e-mail, as instruções e os anexos foram preservados. Corrija o problema ou tente novamente." : statusTexto}</p>
-          {geracaoSucesso && pedidoAindaAtivo && !cancelamentoSolicitado && jobAgendado && (
+          {geracaoSucesso && pedidoAindaAtivo && statusPedido !== "awaiting_review" && !cancelamentoSolicitado && jobAgendado && (
             <div className="status-queue-note" role="status">
               <strong>Você pode fechar esta janela.</strong> A geração continuará em segundo plano e os documentos serão enviados para <strong>{jobAgendado.email}</strong> assim que o processamento terminar. Não é necessário manter esta página aberta.
             </div>
@@ -657,6 +664,29 @@ export default function Wizard() {
                 {jobDetalhe?.retry_at && <div><dt>Nova tentativa</dt><dd>{new Date(jobDetalhe.retry_at).toLocaleString("pt-BR")}</dd></div>}
                 {ultimaAtualizacao && <div><dt>Atualizado às</dt><dd>{new Date(ultimaAtualizacao).toLocaleTimeString("pt-BR")}</dd></div>}
               </dl>
+              <QueueDeliveryPanel
+                jobId={jobAgendado.job_id}
+                statusToken={jobAgendado.status_token}
+                onStatusChange={atualizarStatusJob}
+                onResent={(novo) => {
+                  const atualizado: FasePreparatoriaJob = {
+                    ...jobAgendado,
+                    ...novo,
+                    status: "queued",
+                    message: "O reenvio foi colocado na fila.",
+                  };
+                  setJobAgendado(atualizado);
+                  salvarAcompanhamentoJob(novo.job_id, novo.status_token);
+                  setJobDetalhe({ status: "queued", current_stage: "AGUARDANDO_FILA" });
+                  setStatusTexto("O reenvio foi colocado na fila.");
+                }}
+                onDismiss={() => {
+                  limparAcompanhamentoJob();
+                  setGeracaoSucesso(false);
+                  setJobAgendado(null);
+                  setJobDetalhe(null);
+                }}
+              />
               <div className="status-actions">
                 <button className="button button-secondary" onClick={() => void navigator.clipboard.writeText(jobAgendado.job_id).then(() => showToast("ID copiado.", "success")).catch(() => showToast("Não foi possível copiar o ID.", "error"))}>Copiar ID</button>
                 {pedidoAindaAtivo && (
