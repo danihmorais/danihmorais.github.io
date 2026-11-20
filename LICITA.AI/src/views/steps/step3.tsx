@@ -1,4 +1,138 @@
-NaN 
+import React, { useState, useEffect } from "react";
+import { useToast } from "../../components/toast";
+import AccessibleDialog from "../../components/AccessibleDialog";
+import { lerDadosUsuario, salvarDadosUsuario } from "../../utils/storageLocal";
+
+const SECRETARIAS_DEFAULT = [
+  "Gabinete do Prefeito",
+  "Fundo Social de Solidariedade",
+  "Secretaria de Administração",
+  "Secretaria de Educação, Cultura, Esporte e Lazer",
+  "Secretaria de Desenvolvimento e Promoção Social",
+  "Secretaria de Saúde",
+  "Secretaria de Obras e Serviços Públicos",
+  "Secretaria de Agricultura, Meio Ambiente, Industria e Comércio",
+];
+
+export default function Step3({ dados = { secretarias: [], contatosSecretarias: {} }, atualizarDados }: any) {
+  const [emailsTemp, setEmailsTemp] = useState<Record<string, string>>({});
+  const [telsTemp, setTelsTemp] = useState<Record<string, string>>({});
+  const [contatosSalvos, setContatosSalvos] = useState<any[]>([]);
+  const [modalSecAberto, setModalSecAberto] = useState<string | null>(null);
+  const { showToast } = useToast();
+
+
+
+  const secretarias = dados.secretarias || [];
+  const contatosSecretarias = dados.contatosSecretarias || {};
+
+  const secretariasStr = JSON.stringify(secretarias);
+  const contatosStr = JSON.stringify(contatosSecretarias);
+
+  useEffect(() => {
+    const dadosSalvos = lerDadosUsuario();
+    if (dadosSalvos && dadosSalvos.contatos_salvos) {
+      setContatosSalvos(dadosSalvos.contatos_salvos);
+    }
+  }, []);
+
+  const salvarContatosNoBackend = (novosContatos: any[]) => {
+    try {
+      const dados_usuario = lerDadosUsuario() || {};
+      dados_usuario.contatos_salvos = novosContatos;
+      salvarDadosUsuario(dados_usuario);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    const isValido = secretarias.length > 0 && secretarias.every((sec: string) => contatosSecretarias[sec] && contatosSecretarias[sec].length > 0);
+    if (dados.step3Valido !== isValido) {
+      atualizarDados({ ...dados, step3Valido: isValido });
+    }
+  }, [secretariasStr, contatosStr, dados.step3Valido]);
+
+  const handleToggleSecretaria = (sec: string) => {
+    let novasSecs = [...secretarias];
+    let novosContatos = { ...contatosSecretarias };
+
+    if (novasSecs.includes(sec)) {
+      novasSecs = novasSecs.filter(s => s !== sec);
+      delete novosContatos[sec];
+    } else {
+      novasSecs.push(sec);
+    }
+
+    atualizarDados({ 
+      ...dados, 
+      secretarias: novasSecs, 
+      contatosSecretarias: novosContatos
+    });
+  };
+
+  const handleAddContato = (sec: string) => {
+    const email = emailsTemp[sec] || "";
+    const tel = telsTemp[sec] || "";
+    
+    if (!email && !tel) return;
+
+    const atuais = contatosSecretarias[sec] || [];
+    const novosContatos = { ...contatosSecretarias, [sec]: [...atuais, { email, tel }] };
+
+    atualizarDados({ ...dados, contatosSecretarias: novosContatos });
+    setEmailsTemp({ ...emailsTemp, [sec]: "" });
+    setTelsTemp({ ...telsTemp, [sec]: "" });
+  };
+
+  const handleRemoveContato = (sec: string, index: number) => {
+    const atuais = contatosSecretarias[sec] || [];
+    const novos = atuais.filter((_: any, i: number) => i !== index);
+    const novosContatos = { ...contatosSecretarias, [sec]: novos };
+    atualizarDados({ ...dados, contatosSecretarias: novosContatos });
+  };
+
+  const handleSalvarContatoIndiv = (contato: any) => {
+    const jaExiste = contatosSalvos.some(c => c.email === contato.email && c.tel === contato.tel);
+    
+    if (jaExiste) {
+      showToast("Este contato já está salvo na sua lista.", "warning");
+      return;
+    }
+
+    const novosSalvos = [...contatosSalvos, contato];
+    setContatosSalvos(novosSalvos);
+    salvarContatosNoBackend(novosSalvos);
+    showToast("Contato salvo com sucesso!", "success");
+  };
+
+  const handleUsarContatoSalvo = (sec: string, contato: any) => {
+    const atuais = contatosSecretarias[sec] || [];
+    const novosContatos = { ...contatosSecretarias, [sec]: [...atuais, contato] };
+    atualizarDados({ ...dados, contatosSecretarias: novosContatos });
+    setModalSecAberto(null);
+  };
+
+  const handleRemoverContatoSalvo = (index: number) => {
+    const novosSalvos = contatosSalvos.filter((_, i) => i !== index);
+    setContatosSalvos(novosSalvos);
+    salvarContatosNoBackend(novosSalvos);
+  };
+
+  return (
+    <div className={ ["step-form step-form--departments licita-step3-style-001"].filter(Boolean).join(" ") } >
+      <div className="step-section-heading">
+        <h2  className={ ["licita-step3-style-002"].filter(Boolean).join(" ") } >
+          Secretarias Demandantes <span  className={ ["licita-step3-style-003"].filter(Boolean).join(" ") } >*</span>
+        </h2>
+        <p  className={ ["licita-step3-style-004"].filter(Boolean).join(" ") } >Escolha as unidades demandantes e registre os contatos responsáveis por cada uma.</p>
+        {secretarias.length === 0 && <span  className={ ["licita-step3-style-005"].filter(Boolean).join(" ") } >Selecione pelo menos uma secretaria.</span>}
+      </div>
+
+      <div className={ ["department-selector licita-step3-style-006", (secretarias.length === 0 ? "licita-step3-style-006-p2-a" : "licita-step3-style-006-p2-b")].filter(Boolean).join(" ") } >
+        {SECRETARIAS_DEFAULT.map((sec) => (
+          <label key={sec} className={ ["department-option licita-step3-style-007"].filter(Boolean).join(" ") }  htmlFor={`secretaria-${sec.replace(/[^a-zA-Z0-9_-]/g, "-")}`}>
+            <input id={`secretaria-${sec.replace(/[^a-zA-Z0-9_-]/g, "-")}`} 
               type="checkbox" 
               checked={secretarias.includes(sec)} 
               onChange={() => handleToggleSecretaria(sec)} 
