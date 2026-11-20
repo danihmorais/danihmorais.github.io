@@ -46,6 +46,28 @@ def _ids_documentos_adicionais(texto: str) -> set[int]:
     return {int(match) for match in DOCUMENTO_NUMERO_RE.findall(texto) if int(match) >= 12}
 
 
+def _artigos_lei_14133_fora_do_catalogo(documentos: dict) -> list[dict]:
+    ocorrencias = []
+    for nome, campos in documentos.items():
+        if not isinstance(campos, dict):
+            continue
+        for campo, valor in campos.items():
+            texto = _texto(valor)
+            for trecho in re.split(r"(?<=[.;!?])\s+", texto):
+                if not re.search(r"(?i)\blei\s*(?:federal\s*)?(?:n[ºo.]?\s*)?14\s*[.,]\s*133(?:\s*/\s*2021)?\b", trecho):
+                    continue
+                for match in CITACAO_ARTIGO_RE.finditer(trecho):
+                    artigo = int(match.group(1))
+                    if artigo not in ARTIGOS_LEI_14133:
+                        ocorrencias.append({
+                            "documento": nome,
+                            "campo": campo,
+                            "artigo": artigo,
+                            "trecho": trecho[:500],
+                        })
+    return ocorrencias
+
+
 def avaliar_conformidade(documentos: dict, dados_usuario: dict | None = None) -> dict:
     dados = dados_usuario if isinstance(dados_usuario, dict) else {}
     docs = _documentos_normalizados(documentos if isinstance(documentos, dict) else {})
@@ -96,6 +118,20 @@ def avaliar_conformidade(documentos: dict, dados_usuario: dict | None = None) ->
             "status": "revisao",
             "detalhe": "Não foram detectadas referências normativas identificáveis. Confirme se a fundamentação jurídica exigida está adequada ao objeto.",
         })
+
+    artigos_fora_catalogo = _artigos_lei_14133_fora_do_catalogo(docs)
+    verificacoes.append({
+        "id": "catalogo_artigos_lei_14133",
+        "titulo": "Numeração dos artigos da Lei 14.133/2021",
+        "status": "alerta" if artigos_fora_catalogo else "revisao",
+        "detalhe": (
+            "Foram encontradas citações fora do intervalo numérico conhecido da Lei 14.133/2021 (arts. 1º a 194). Confira a norma e corrija a referência."
+            if artigos_fora_catalogo
+            else "Não foram detectados artigos fora do intervalo numérico conhecido. A numeração válida não confirma a interpretação ou a pertinência do dispositivo."
+        ),
+    })
+    if artigos_fora_catalogo:
+        alertas.append({"tipo": "artigo_fora_catalogo_lei_14133", "ocorrencias": artigos_fora_catalogo})
 
     requisitos_etp = _texto(docs["ETP"].get("REQUISITOS_ETP"))
     requisitos_tr = _texto(docs["TR"].get("REQUISITOS_TR"))
