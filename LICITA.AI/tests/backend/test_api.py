@@ -42,10 +42,14 @@ from main import app
 
 class LicitaBackendTests(unittest.TestCase):
     def test_metrics_prometheus_exige_token_e_inclui_metricas_ia(self):
+        with patch.dict(os.environ, {"LICITA_METRICS_TOKEN": ""}):
+            with TestClient(app) as client:
+                sem_configuracao = client.get("/metrics")
         with TestClient(app) as client:
             sem_token = client.get("/metrics")
             token_invalido = client.get("/metrics", headers={"Authorization": "Bearer incorreto"})
             resposta = client.get("/metrics", headers={"Authorization": f"Bearer {os.environ['LICITA_METRICS_TOKEN']}"})
+        self.assertEqual(sem_configuracao.status_code, 404)
         self.assertEqual(sem_token.status_code, 401)
         self.assertEqual(token_invalido.status_code, 401)
         self.assertEqual(resposta.status_code, 200)
