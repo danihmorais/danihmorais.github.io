@@ -140,7 +140,7 @@ def _artifact_path(job_id: str) -> Path:
 
 
 def _find_job_path(job_id: str) -> Path | None:
-    for suffix in ("", ".processing", ".review", ".done", ".failed", ".cancelled"):
+    for suffix in ("", ".queued", ".processing", ".review", ".done", ".failed", ".cancelled"):
         path = _job_path(job_id, suffix)
         if path.is_file():
             return path
