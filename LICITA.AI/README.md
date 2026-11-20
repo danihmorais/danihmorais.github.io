@@ -159,3 +159,14 @@ Para cadastrar outro município, adicione um identificador em `config/municipios
 ## Observabilidade e retry
 
 O endpoint Prometheus `/metrics` expõe contadores de requisições HTTP e de completions de IA, duração acumulada e tokens de prompt/resposta/total quando o provedor informa `usage`. Os logs de etapa incluem job, request, etapa, modelo e duração, sem registrar prompts ou respostas integrais. Falhas de validação e geração de documentos são permanentes; timeout, conexão, HTTP 5xx e rate limit são retentáveis.
+
+
+## Pesquisa auxiliar de preços no PNCP
+
+A etapa de itens permite consultar referências de contratações publicadas no PNCP. A busca usa a data de publicação, modalidade (concorrência eletrônica, pregão eletrônico e dispensa de licitação) e, opcionalmente, UF. O período máximo é de 730 dias por pesquisa. Para limitar o tempo de resposta, são consultadas até 16 contratações por modalidade e a primeira página de até 50 itens de cada contratação; portanto, os resultados não são exaustivos.
+
+Os resultados são exibidos em categorias separadas: **preço unitário homologado**, consultado no resultado do item e aceito somente quando a situação do resultado é “Informado”, e **valor unitário estimado**, extraído do item do edital apenas quando não há preço homologado disponível e o orçamento não é sigiloso. Um valor estimado nunca é apresentado como preço adjudicado.
+
+A consulta compara palavras da descrição para localizar itens candidatos; não comprova equivalência técnica. A aplicação automática do valor é bloqueada quando a unidade de medida não coincide textualmente. Antes de usar qualquer referência, confira o processo de origem no PNCP, especificação, unidade, quantidade, localidade, data e condições comerciais. A ferramenta não calcula média de mercado, não substitui a pesquisa formal de preços e não integra, nesta etapa, a base do Painel de Preços do Governo Federal.
+
+A API é pública e usa por padrão `https://pncp.gov.br/api/consulta`. A URL-base pode ser alterada por `LICITA_PNCP_CONSULTA_URL` em ambientes que utilizem um proxy institucional.
