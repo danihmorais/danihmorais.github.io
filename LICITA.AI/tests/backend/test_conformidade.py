@@ -112,6 +112,19 @@ class ConformidadeTests(unittest.TestCase):
         relatorio = avaliar_conformidade(documentos)
         self.assertFalse(any(a["tipo"] == "citacao_incoerente_lei_14133" for a in relatorio["alertas"]))
 
+    def test_identifica_decreto_municipal(self):
+        documentos = documentos_base()
+        documentos["ETP"]["CONCLUSAO"] = "Aplicar o Decreto Municipal nº 1.234/2025."
+        relatorio = avaliar_conformidade(documentos)
+        ocorrencia = next(a for a in relatorio["alertas"] if a["tipo"] == "referencias_normativas_complementares")
+        self.assertIn("Decreto nº 1.234/2025", {item["referencia"] for item in ocorrencia["ocorrencias"]})
+
+    def test_artigo_31_e_classificado_como_modalidade_de_leilao(self):
+        documentos = documentos_base()
+        documentos["ETP"]["CONCLUSAO"] = "O leilão eletrônico seguirá o art. 31 da Lei 14.133/2021."
+        ocorrencia = next(a for a in avaliar_conformidade(documentos)["verificacoes"] if a["id"] == "catalogo_artigos_lei_14133")
+        self.assertNotEqual(ocorrencia["status"], "alerta")
+
     def test_identifica_decretos_e_sumulas_para_conferencia(self):
         documentos = documentos_base()
         documentos["ETP"]["CONCLUSAO"] = "Observar o Decreto nº 12.807/2025 e a Súmula TCU nº 177."
