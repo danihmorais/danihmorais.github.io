@@ -1996,3 +1996,72 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .dotacao-editor-file-input {
   display: none;
 }
+
+
+.step-form--execution {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.step2-heading {
+  margin: 0 0 8px;
+  color: var(--text-main);
+  font-size: 16px;
+}
+
+.step-required {
+  color: var(--btn-danger);
+}
+
+.step2-description {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.execution-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+  margin-bottom: 8px;
+}
+
+.step2-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--text-main);
+  font-size: 15px;
+}
+
+.step2-checkbox-label input {
+  width: 18px;
+  height: 18px;
+}
+
+.step2-execucao-field {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 220px;
+  padding: 16px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-lg);
+  resize: vertical;
+}
+
+.step2-execucao-field[aria-invalid="true"] {
+  border-color: var(--btn-danger);
+}
+
+.step2-error {
+  display: block;
+  margin-top: 4px;
+  color: var(--btn-danger);
+  font-size: 12px;
+}
+
+.dotacao-editor-image-icon {
+  font-size: 14px;
+}
