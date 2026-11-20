@@ -36,15 +36,18 @@ export default function Step2({ dados, atualizarDados }: any) {
       </div>
 
       <div className="execution-description">
-        <textarea 
+        <textarea
+          id="step2-execucao"
           required
           value={dados.execucao}
-          aria-label="Campo de descrição da etapa 2"
+          aria-label="Condições de execução e prazos"
+          aria-invalid={!String(dados.execucao || "").trim() || undefined}
+          aria-describedby={!String(dados.execucao || "").trim() ? "step2-execucao-error" : undefined}
           onChange={(e) => atualizarDados({ execucao: e.target.value })}
           placeholder="Descreva aqui as regras de entrega, prazos, locais, garantias e demais condições..."
           style={{ padding: "16px", borderRadius: "var(--radius-lg)", borderColor: dados.execucao.trim() === "" ? "var(--btn-danger)" : "var(--input-border)", minHeight: "220px", resize: "vertical" }}
         />
-        {dados.execucao.trim() === "" && <span style={{ color: "var(--btn-danger)", fontSize: "12px", marginTop: "4px", display: "block" }}>Este campo é obrigatório.</span>}
+        {!String(dados.execucao || "").trim() && <span id="step2-execucao-error" role="alert" style={{ color: "var(--btn-danger)", fontSize: "12px", marginTop: "4px", display: "block" }}>Este campo é obrigatório.</span>}
       </div>
     </div>
   );
