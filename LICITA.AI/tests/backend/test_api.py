@@ -60,6 +60,12 @@ class LicitaBackendTests(unittest.TestCase):
         self.assertIn("licita_ai_queue_stage_duration_seconds_sum", resposta.text)
         self.assertIn("licita_ai_queue_failures_total", resposta.text)
 
+        token_unicode = "métrica-ação"
+        with patch.dict(os.environ, {"LICITA_METRICS_TOKEN": token_unicode}):
+            with TestClient(app) as client:
+                resposta_unicode = client.get("/metrics", headers={"Authorization": f"Bearer {token_unicode}"})
+        self.assertEqual(resposta_unicode.status_code, 200, resposta_unicode.text)
+
     def test_metricas_fila_agregam_status_duracao_e_categoria_de_falha(self):
         job_concluido = {
             "job_id": "a" * 32,
