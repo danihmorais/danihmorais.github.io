@@ -1,6 +1,7 @@
 import React, { useRef, useState } from "react";
 import { useToast } from "../../components/toast";
 import ConfirmDialog from "../../components/ConfirmDialog";
+import { importarItensPlanilha } from "../../api";
 
 import { calcularValorEstimadoItens } from "../../utils/regrasContratacao";
 import { melhorarDescricaoItem } from "../../providers/services/descricaoItensIA";
@@ -207,53 +208,28 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
     }
   };
 
-  const importarXlsx = (evento: React.ChangeEvent<HTMLInputElement>) => {
+  const importarXlsx = async (evento: React.ChangeEvent<HTMLInputElement>) => {
     const arquivo = evento.target.files?.[0];
     if (!arquivo) return;
     setImportandoXlsx(true);
-    const leitor = new FileReader();
-    leitor.onload = async (ev) => {
-      try {
-        const XLSX = await import("xlsx");
-        const wb = XLSX.read(ev.target?.result, { type: "array" });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const linhas = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" }) as any[][];
-        const aliasesNome = ["nome", "descrição", "descricao", "item", "produto", "objeto"];
-        const aliasesQtd = ["quantidade", "qtd", "qtde", "quant.", "quant"];
-        const aliasesUn = ["unidade", "un", "und", "u.m.", "um", "unid", "unidade de medida"];
-        const aliasesValor = ["valor unitário", "valor unitario", "valor", "preço unitário", "preco unitario", "preço", "preco", "vlr", "vlr unitário", "vlr unitario"];
-        const colunaTem = (cabecalhos: string[], aliases: string[]) => aliases.some((alias) => cabecalhos.includes(normalizar(alias)));
-        const indiceCabecalho = linhas.findIndex((linha) => {
-          const cabecalhos = linha.map(normalizar);
-          return colunaTem(cabecalhos, aliasesNome) && colunaTem(cabecalhos, aliasesQtd) && colunaTem(cabecalhos, aliasesUn);
-        });
-        if (indiceCabecalho < 0) {
-          throw new Error("Cabeçalho não encontrado. A planilha deve possuir colunas de descrição/nome, quantidade e unidade.");
-        }
-        const cabecalhos = linhas[indiceCabecalho].map(normalizar);
-        const coluna = (nomes: string[]) => nomes.map(normalizar).map((nome) => cabecalhos.indexOf(nome)).find((i) => i >= 0) ?? -1;
-        const cNome = coluna(aliasesNome);
-        const cQtd = coluna(aliasesQtd);
-        const cUn = coluna(aliasesUn);
-        const cValor = coluna(aliasesValor);
-        if (cNome < 0 || cQtd < 0 || cUn < 0) throw new Error("A planilha precisa possuir descrição/nome, quantidade e unidade.");
-        const importados = linhas.slice(indiceCabecalho + 1).map((linha, index) => ({
-          id: Date.now() + Math.random() + index,
-          numero: index + 1,
-          descricao: String(linha[cNome] || "").trim(),
-          qtd: extrairNumero(linha[cQtd]) || 0,
-          un: String(linha[cUn] || "UN").trim(),
-          valor: cValor >= 0 ? extrairNumero(linha[cValor]) : 0,
-        })).filter((item) => item.descricao);
-        decidirImportacaoItens(importados);
-      } catch (erro: any) {
-        showToast(`Erro ao importar: ${erro.message}`, "error");
-      } finally {
-        setImportandoXlsx(false);
-        if (fileInputRef.current) fileInputRef.current.value = "";
-      }
-    };
-    leitor.readAsArrayBuffer(arquivo);
+    try {
+      const resposta = await importarItensPlanilha(arquivo);
+      const importados = resposta.items.map((item, index) => ({
+        id: Date.now() + Math.random() + index,
+        numero: Number(item.numero) || index + 1,
+        descricao: String(item.descricao || "").trim(),
+        qtd: extrairNumero(item.qtd) || 0,
+        un: String(item.un || "UN").trim(),
+        valor: extrairNumero(item.valor) || 0,
+      })).filter(item => item.descricao);
+      if (!importados.length) throw new Error("Nenhuma linha com descrição válida foi encontrada.");
+      decidirImportacaoItens(importados);
+    } catch (erro: any) {
+      showToast(`Erro ao importar: ${erro?.message || "arquivo inválido"}`, "error");
+    } finally {
+      setImportandoXlsx(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   };
 
   const importarPdf = async (evento: React.ChangeEvent<HTMLInputElement>) => {
@@ -331,7 +307,7 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
   const totalGeral = calcularValorEstimadoItens(itens);
 
   return <div className="step-form step-form--items" style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-    <input ref={fileInputRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={importarXlsx} />
+    <input ref={fileInputRef} type="file" accept=".xlsx,.csv" style={{ display: "none" }} onChange={importarXlsx} />
     <input ref={pdfInputRef} type="file" accept="application/pdf,.pdf" style={{ display: "none" }} onChange={importarPdf} />
     <section className="step-section item-intro-section">
       <label style={{ fontWeight: 600, fontSize: 16, display: "block", marginBottom: 8 }}>Objeto da Licitação: <span style={{ color: "var(--btn-danger)" }}>*</span></label>
