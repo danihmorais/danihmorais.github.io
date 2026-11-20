@@ -114,7 +114,7 @@ def _ensure_queue_dir() -> None:
         pass
 
 
-def _write_json(path: Path, payload: dict) -> None:
+def _write_json_arquivo(path: Path, payload: dict) -> None:
     _ensure_queue_dir()
     fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(QUEUE_DIR), text=True)
     try:
@@ -595,7 +595,7 @@ def cancel_job(job_id: str, origem: str) -> str:
     return "cancelled"
 
 
-def get_job(job_id: str) -> dict | None:
+def _get_job_arquivo(job_id: str) -> dict | None:
     if not re.fullmatch(r"[0-9a-f]{32}", job_id, re.IGNORECASE):
         return None
     path = _find_job_path(job_id)
@@ -642,8 +642,6 @@ def _claim_next_job() -> tuple[Path, dict] | None:
             continue
     return None
 
-_WRITE_JSON_ARQUIVO = _write_json
-_GET_JOB_ARQUIVO = get_job
 _SQLITE_FILA_LOCK = threading.RLock()
 _SQLITE_FILA_INICIALIZADO = False
 _SQLITE_FILA_EXTENSOES = (".queued", ".processing", ".review", ".done", ".failed", ".cancelled")
@@ -783,7 +781,7 @@ def _sqlite_fila_consultar(job_id: str) -> dict | None:
 
 
 def _write_json(caminho: str | Path, dados: dict) -> None:
-    _WRITE_JSON_ARQUIVO(caminho, dados)
+    _write_json_arquivo(Path(caminho), dados)
     try:
         _sqlite_fila_reindexar()
         _sqlite_fila_gravar(dados, caminho)
@@ -798,7 +796,7 @@ def get_job(job_id: str) -> dict | None:
             return resultado
     except Exception:
         logger.exception("Falha ao consultar o índice SQLite da fila.")
-    resultado = _GET_JOB_ARQUIVO(job_id)
+    resultado = _get_job_arquivo(job_id)
     if resultado is not None:
         try:
             caminho = None
@@ -894,6 +892,70 @@ def consumir_limite_taxa_sqlite(chave: str, limite: int, janela_segundos: int, a
         raise
     finally:
         conexao.close()
+
+
+def obter_metricas_fila_sqlite(limite: int = 5000) -> dict:
+    _sqlite_fila_reindexar()
+    conexao = _sqlite_fila_conectar()
+    try:
+        status_rows = conexao.execute(
+            "SELECT status, COUNT(*) AS total FROM queue_jobs GROUP BY status"
+        ).fetchall()
+        payload_rows = conexao.execute(
+            "SELECT payload FROM queue_jobs ORDER BY updated_at DESC, job_id LIMIT ?",
+            (max(1, min(int(limite), 10000)),),
+        ).fetchall()
+    finally:
+        conexao.close()
+
+    status_counts = {str(row["status"]): int(row["total"]) for row in status_rows}
+    stages: dict[str, dict[str, float]] = {}
+    failures = {"ia": 0, "smtp": 0, "documentos": 0, "cancelamento": 0, "outros": 0}
+    for row in payload_rows:
+        try:
+            job = json.loads(row["payload"])
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(job, dict):
+            continue
+        historico = job.get("stage_history")
+        if isinstance(historico, list):
+            for etapa in historico:
+                if not isinstance(etapa, dict):
+                    continue
+                nome = str(etapa.get("stage") or "").upper()
+                if not re.fullmatch(r"[A-Z0-9_]{1,64}", nome):
+                    continue
+                if etapa.get("status") != "completed":
+                    continue
+                try:
+                    duracao = max(0.0, float(etapa.get("duration_seconds") or 0))
+                except (TypeError, ValueError):
+                    continue
+                registro = stages.setdefault(nome, {"count": 0, "duration_seconds": 0.0})
+                registro["count"] += 1
+                registro["duration_seconds"] += duracao
+        if str(job.get("status") or "").lower() != "failed":
+            continue
+        erro = str(job.get("last_error") or "").casefold()
+        if any(chave in erro for chave in ("smtp", "email", "e-mail", "destinat")):
+            categoria = "smtp"
+        elif any(chave in erro for chave in ("ia", "llm", "modelo", "openai", "unsloth", "json_schema", "timeout")):
+            categoria = "ia"
+        elif any(chave in erro for chave in ("docx", "documento", "montagem", "zip", "template")):
+            categoria = "documentos"
+        elif "cancel" in erro:
+            categoria = "cancelamento"
+        else:
+            categoria = "outros"
+        failures[categoria] += 1
+
+    return {
+        "status": status_counts,
+        "stages": stages,
+        "failures": failures,
+        "sampled_jobs": len(payload_rows),
+    }
 
 
 def listar_jobs_sqlite(status: str | None = None, limite: int = 500) -> list[dict]:
