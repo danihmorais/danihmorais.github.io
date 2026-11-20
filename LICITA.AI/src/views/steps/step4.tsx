@@ -119,81 +119,74 @@ export default function Step4({
   };
 
   return (
-    <div className="step-form step-form--people" style={{ display: "flex", flexDirection: "column", gap: "32px" }}>
+    <div className="step-form step-form--people licita-step4-style-001" >
       
       <div className="person-group person-group--managers">
-        <h2 style={{ fontSize: "16px", margin: "0 0 8px 0", color: "var(--text-main)" }}>
-          Gestores do Contrato <span style={{ color: "var(--btn-danger)" }}>*</span>
+        <h2  className={ ["licita-step4-style-002"].filter(Boolean).join(" ") }>
+          Gestores do Contrato <span  className={ ["licita-step4-style-003"].filter(Boolean).join(" ") }>*</span>
         </h2>
-        <p style={{ color: "var(--text-muted)", margin: "0 0 16px 0", fontSize: "13px" }}>Adicione pelo menos um responsável pelo contrato.</p>
+        <p  className={ ["licita-step4-style-004"].filter(Boolean).join(" ") }>Adicione pelo menos um responsável pelo contrato.</p>
         
-        <div className="person-section" style={{ background: "var(--bg-subtle)", border: dados.gestores.length === 0 ? "1px solid var(--btn-danger)" : "1px solid var(--border)", borderRadius: "var(--radius-xl)", padding: "20px" }}>
-          <div className="person-entry-form" style={{ display: "flex", gap: "12px", marginBottom: "20px", alignItems: "flex-end" }}>
-            <div style={{ flex: 1 }}>
-              <label htmlFor="step4-gestor-nome" style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-main)", display: "block", marginBottom: "6px" }}>Nome</label>
+        <div className="person-section licita-step4-style-005" >
+          <div className="person-entry-form licita-step4-style-006" >
+            <div  className={ ["licita-step4-style-007"].filter(Boolean).join(" ") }>
+              <label htmlFor="step4-gestor-nome"  className={ ["licita-step4-style-008"].filter(Boolean).join(" ") }>Nome</label>
               <input
                 id="step4-gestor-nome"
                 type="text"
                 value={gestorNome}
                 onChange={(e) => setGestorNome(e.target.value)}
-                style={{ padding: "10px" }}
-              />
+                
+               className={ ["licita-step4-style-009"].filter(Boolean).join(" ") }/>
             </div>
-            <div style={{ flex: 1 }}>
-              <label htmlFor="step4-gestor-cargo" style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-main)", display: "block", marginBottom: "6px" }}>Cargo</label>
+            <div  className={ ["licita-step4-style-010"].filter(Boolean).join(" ") }>
+              <label htmlFor="step4-gestor-cargo"  className={ ["licita-step4-style-011"].filter(Boolean).join(" ") }>Cargo</label>
               <input
                 id="step4-gestor-cargo"
                 type="text"
                 value={gestorCargo}
                 onChange={(e) => setGestorCargo(e.target.value)}
-                style={{ padding: "10px" }}
-              />
+                
+               className={ ["licita-step4-style-012"].filter(Boolean).join(" ") }/>
             </div>
-            <div style={{ display: "flex", gap: "6px" }}>
+            <div  className={ ["licita-step4-style-013"].filter(Boolean).join(" ") }>
               <button type="button" 
                 onClick={handleAddGestor}
                 disabled={!gestorNome || !gestorCargo}
-                style={{ padding: "0 16px", height: "40px", background: (!gestorNome || !gestorCargo) ? "var(--text-light)" : "var(--btn-primary)", color: "var(--bg-panel)", border: "none", fontSize: "13px", cursor: (!gestorNome || !gestorCargo) ? "not-allowed" : "pointer" }}
-              >
+                
+               className={ ["licita-step4-style-014", ((!gestorNome || !gestorCargo) ? "licita-step4-style-014-p3-a" : "licita-step4-style-014-p3-b"), ((!gestorNome || !gestorCargo) ? "licita-step4-style-014-p7-a" : "licita-step4-style-014-p7-b")].filter(Boolean).join(" ") }>
                 Adicionar Gestor
               </button>
               <button type="button" 
                 onClick={() => setModalGestorAberto(true)}
-                style={{ padding: "0 12px", height: "40px", background: "var(--bg-panel)", color: "var(--text-main)", border: "1px solid var(--border)", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}
-              >
+                
+               className={ ["licita-step4-style-015"].filter(Boolean).join(" ") }>
                 Usar dados salvos ▼
               </button>
             </div>
           </div>
 
-          <div className="people-list" style={{ background: "var(--bg-panel)", borderRadius: "var(--radius)", border: "1px solid var(--border)", minHeight: "80px", maxHeight: "150px", overflowY: "auto", padding: "8px", display: "flex", flexDirection: "column", gap: "4px" }}>
+          <div className="people-list licita-step4-style-016" >
             {dados.gestores.length === 0 && (
-              <div style={{ padding: "20px", textAlign: "center", color: "var(--text-light)", fontSize: "13px" }}>Nenhum gestor adicionado.</div>
+              <div  className={ ["licita-step4-style-017"].filter(Boolean).join(" ") }>Nenhum gestor adicionado.</div>
             )}
             {dados.gestores.map((gestor: any, index: number) => (
-              <div key={gestor.id ?? `${gestor.nome}-${gestor.cargo}-${index}`} className="person-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--bg-subtle)", padding: "8px 16px", borderRadius: "var(--radius)", border: "1px solid var(--border)" }}>
-                <span style={{ fontSize: "13px", color: "var(--text-main)", fontWeight: "500" }}>{gestor.nome} — {gestor.cargo}</span>
-                <div style={{ display: "flex", gap: "6px" }}>
-                  <div style={{ display: "flex", gap: "6px" }}>
+              <div key={gestor.id ?? `${gestor.nome}-${gestor.cargo}-${index}`} className="person-row licita-step4-style-018" >
+                <span  className={ ["licita-step4-style-019"].filter(Boolean).join(" ") }>{gestor.nome} — {gestor.cargo}</span>
+                <div  className={ ["licita-step4-style-020"].filter(Boolean).join(" ") }>
+                  <div  className={ ["licita-step4-style-021"].filter(Boolean).join(" ") }>
                     <button type="button" 
                       onClick={() => handleSalvarGestor(gestor)}
                       disabled={gestoresSalvos.some(g => g.nome === gestor.nome && g.cargo === gestor.cargo)}
-                      style={{ 
-                        padding: "6px 12px", 
-                        background: gestoresSalvos.some(g => g.nome === gestor.nome && g.cargo === gestor.cargo) ? "var(--text-light)" : "var(--btn-success)", 
-                        color: "var(--bg-panel)", 
-                        border: "none", 
-                        fontSize: "11px", 
-                        cursor: gestoresSalvos.some(g => g.nome === gestor.nome && g.cargo === gestor.cargo) ? "default" : "pointer" 
-                      }}
-                    >
+                      
+                     className={ ["licita-step4-style-022", (gestoresSalvos.some(g => g.nome === gestor.nome && g.cargo === gestor.cargo) ? "licita-step4-style-022-p2-a" : "licita-step4-style-022-p2-b"), (gestoresSalvos.some(g => g.nome === gestor.nome && g.cargo === gestor.cargo) ? "licita-step4-style-022-p6-a" : "licita-step4-style-022-p6-b")].filter(Boolean).join(" ") }>
                       {gestoresSalvos.some(g => g.nome === gestor.nome && g.cargo === gestor.cargo) ? "Já Salvo" : "Salvar Gestor"}
                     </button>
                   </div>
                   <button type="button" 
                     onClick={() => handleRemoveGestor(index)}
-                    style={{ padding: "6px 12px", background: "var(--btn-danger)", color: "var(--bg-panel)", border: "none", fontSize: "11px" }}
-                  >
+                    
+                   className={ ["licita-step4-style-023"].filter(Boolean).join(" ") }>
                     Remover
                   </button>
                 </div>
@@ -204,78 +197,71 @@ export default function Step4({
       </div>
 
       <div className="person-group person-group--inspectors">
-        <h2 style={{ fontSize: "16px", margin: "0 0 8px 0", color: "var(--text-main)" }}>
-          Fiscais do Contrato <span style={{ color: "var(--btn-danger)" }}>*</span>
+        <h2  className={ ["licita-step4-style-024"].filter(Boolean).join(" ") }>
+          Fiscais do Contrato <span  className={ ["licita-step4-style-025"].filter(Boolean).join(" ") }>*</span>
         </h2>
-        <p style={{ color: "var(--text-muted)", margin: "0 0 16px 0", fontSize: "13px" }}>Registre pelo menos um fiscal responsável pelo acompanhamento.</p>
+        <p  className={ ["licita-step4-style-026"].filter(Boolean).join(" ") }>Registre pelo menos um fiscal responsável pelo acompanhamento.</p>
         
-        <div className="person-section" style={{ background: "var(--bg-subtle)", border: dados.fiscais.length === 0 ? "1px solid var(--btn-danger)" : "1px solid var(--border)", borderRadius: "var(--radius-xl)", padding: "20px" }}>
-          <div className="person-entry-form" style={{ display: "flex", gap: "12px", marginBottom: "20px", alignItems: "flex-end" }}>
-            <div style={{ flex: 1 }}>
-              <label htmlFor="step4-fiscal-nome" style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-main)", display: "block", marginBottom: "6px" }}>Nome</label>
+        <div className="person-section licita-step4-style-027" >
+          <div className="person-entry-form licita-step4-style-028" >
+            <div  className={ ["licita-step4-style-029"].filter(Boolean).join(" ") }>
+              <label htmlFor="step4-fiscal-nome"  className={ ["licita-step4-style-030"].filter(Boolean).join(" ") }>Nome</label>
               <input
                 id="step4-fiscal-nome"
                 type="text"
                 value={fiscalNome}
                 onChange={(e) => setFiscalNome(e.target.value)}
-                style={{ padding: "10px" }}
-              />
+                
+               className={ ["licita-step4-style-031"].filter(Boolean).join(" ") }/>
             </div>
-            <div style={{ flex: 1 }}>
-              <label htmlFor="step4-fiscal-cargo" style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-main)", display: "block", marginBottom: "6px" }}>Cargo</label>
+            <div  className={ ["licita-step4-style-032"].filter(Boolean).join(" ") }>
+              <label htmlFor="step4-fiscal-cargo"  className={ ["licita-step4-style-033"].filter(Boolean).join(" ") }>Cargo</label>
               <input
                 id="step4-fiscal-cargo"
                 type="text"
                 value={fiscalCargo}
                 onChange={(e) => setFiscalCargo(e.target.value)}
-                style={{ padding: "10px" }}
-              />
+                
+               className={ ["licita-step4-style-034"].filter(Boolean).join(" ") }/>
             </div>
-            <div style={{ display: "flex", gap: "6px" }}>
+            <div  className={ ["licita-step4-style-035"].filter(Boolean).join(" ") }>
               <button type="button" 
                 onClick={handleAddFiscal}
                 disabled={!fiscalNome || !fiscalCargo}
-                style={{ padding: "0 16px", height: "40px", background: (!fiscalNome || !fiscalCargo) ? "var(--text-light)" : "var(--btn-primary)", color: "var(--bg-panel)", border: "none", fontSize: "13px", cursor: (!fiscalNome || !fiscalCargo) ? "not-allowed" : "pointer" }}
-              >
+                
+               className={ ["licita-step4-style-036", ((!fiscalNome || !fiscalCargo) ? "licita-step4-style-036-p3-a" : "licita-step4-style-036-p3-b"), ((!fiscalNome || !fiscalCargo) ? "licita-step4-style-036-p7-a" : "licita-step4-style-036-p7-b")].filter(Boolean).join(" ") }>
                 Adicionar Fiscal
               </button>
               <button type="button" 
                 onClick={() => setModalFiscalAberto(true)}
-                style={{ padding: "0 12px", height: "40px", background: "var(--bg-panel)", color: "var(--text-main)", border: "1px solid var(--border)", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}
-              >
+                
+               className={ ["licita-step4-style-037"].filter(Boolean).join(" ") }>
                 Usar dados salvos ▼
               </button>
             </div>
           </div>
 
-          <div className="people-list" style={{ background: "var(--bg-panel)", borderRadius: "var(--radius)", border: "1px solid var(--border)", minHeight: "80px", maxHeight: "150px", overflowY: "auto", padding: "8px", display: "flex", flexDirection: "column", gap: "4px" }}>
+          <div className="people-list licita-step4-style-038" >
             {dados.fiscais.length === 0 && (
-              <div style={{ padding: "20px", textAlign: "center", color: "var(--text-light)", fontSize: "13px" }}>Nenhum fiscal adicionado.</div>
+              <div  className={ ["licita-step4-style-039"].filter(Boolean).join(" ") }>Nenhum fiscal adicionado.</div>
             )}
             {dados.fiscais.map((fiscal: any, index: number) => (
-              <div key={fiscal.id ?? `${fiscal.nome}-${fiscal.cargo}-${index}`} className="person-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--bg-subtle)", padding: "8px 16px", borderRadius: "var(--radius)", border: "1px solid var(--border)" }}>
-                <span style={{ fontSize: "13px", color: "var(--text-main)", fontWeight: "500" }}>{fiscal.nome} — {fiscal.cargo}</span>
-                <div style={{ display: "flex", gap: "6px" }}>
-                  <div style={{ display: "flex", gap: "6px" }}>
+              <div key={fiscal.id ?? `${fiscal.nome}-${fiscal.cargo}-${index}`} className="person-row licita-step4-style-040" >
+                <span  className={ ["licita-step4-style-041"].filter(Boolean).join(" ") }>{fiscal.nome} — {fiscal.cargo}</span>
+                <div  className={ ["licita-step4-style-042"].filter(Boolean).join(" ") }>
+                  <div  className={ ["licita-step4-style-043"].filter(Boolean).join(" ") }>
                     <button type="button" 
                       onClick={() => handleSalvarFiscal(fiscal)}
                       disabled={fiscaisSalvos.some(f => f.nome === fiscal.nome && f.cargo === fiscal.cargo)}
-                      style={{ 
-                        padding: "6px 12px", 
-                        background: fiscaisSalvos.some(f => f.nome === fiscal.nome && f.cargo === fiscal.cargo) ? "var(--text-light)" : "var(--btn-success)", 
-                        color: "var(--bg-panel)", 
-                        border: "none", 
-                        fontSize: "11px", 
-                        cursor: fiscaisSalvos.some(f => f.nome === fiscal.nome && f.cargo === fiscal.cargo) ? "default" : "pointer" 
-                      }}
-                    >
+                      
+                     className={ ["licita-step4-style-044", (fiscaisSalvos.some(f => f.nome === fiscal.nome && f.cargo === fiscal.cargo) ? "licita-step4-style-044-p2-a" : "licita-step4-style-044-p2-b"), (fiscaisSalvos.some(f => f.nome === fiscal.nome && f.cargo === fiscal.cargo) ? "licita-step4-style-044-p6-a" : "licita-step4-style-044-p6-b")].filter(Boolean).join(" ") }>
                       {fiscaisSalvos.some(f => f.nome === fiscal.nome && f.cargo === fiscal.cargo) ? "Já Salvo" : "Salvar Fiscal"}
                     </button>
                   </div>
                   <button type="button" 
                     onClick={() => handleRemoveFiscal(index)}
-                    style={{ padding: "6px 12px", background: "var(--btn-danger)", color: "var(--bg-panel)", border: "none", fontSize: "11px" }}
-                  >
+                    
+                   className={ ["licita-step4-style-045"].filter(Boolean).join(" ") }>
                     Remover
                   </button>
                 </div>
@@ -287,80 +273,80 @@ export default function Step4({
 
       {modalGestorAberto && (
         <AccessibleDialog className="step-modal" labelledBy="step4-gestores-salvos-title" onClose={() => setModalGestorAberto(false)}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-              <h3 id="step4-gestores-salvos-title" style={{ margin: 0, color: "var(--text-main)", fontSize: "18px" }}>Gestores Salvos</h3>
-              <button type="button" onClick={() => setModalGestorAberto(false)} style={{ background: "none", border: "none", fontSize: "20px", color: "var(--text-muted)" }}>×</button>
+            <div  className={ ["licita-step4-style-046"].filter(Boolean).join(" ") }>
+              <h3 id="step4-gestores-salvos-title"  className={ ["licita-step4-style-047"].filter(Boolean).join(" ") }>Gestores Salvos</h3>
+              <button type="button" onClick={() => setModalGestorAberto(false)}  className={ ["licita-step4-style-048"].filter(Boolean).join(" ") }>×</button>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "300px", overflowY: "auto" }}>
+            <div  className={ ["licita-step4-style-049"].filter(Boolean).join(" ") }>
               {gestoresSalvos.length === 0 ? (
-                <p style={{ color: "var(--text-muted)", fontSize: "14px", textAlign: "center" }}>Nenhum gestor salvo ainda.</p>
+                <p  className={ ["licita-step4-style-050"].filter(Boolean).join(" ") }>Nenhum gestor salvo ainda.</p>
               ) : (
                 gestoresSalvos.map((g, i) => {
                   const emUso = dados.gestores.some((dg: any) => dg.nome === g.nome && dg.cargo === g.cargo);
 
                   return (
-                    <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px", border: "1px solid var(--border)", borderRadius: "var(--radius)", background: "var(--bg-subtle)" }}>
-                      <div style={{ fontSize: "13px", color: "var(--text-main)" }}>
-                        <div style={{ fontWeight: "600" }}>{g.nome}</div>
+                    <div key={i}  className={ ["licita-step4-style-051"].filter(Boolean).join(" ") }>
+                      <div  className={ ["licita-step4-style-052"].filter(Boolean).join(" ") }>
+                        <div  className={ ["licita-step4-style-053"].filter(Boolean).join(" ") }>{g.nome}</div>
                         <div>{g.cargo}</div>
                       </div>
-                      <div style={{ display: "flex", gap: "8px" }}>
+                      <div  className={ ["licita-step4-style-054"].filter(Boolean).join(" ") }>
                         <button type="button" 
                           onClick={() => handleUsarGestorSalvo(g)} 
                           disabled={emUso}
-                          style={{ padding: "6px 12px", background: emUso ? "var(--text-light)" : "var(--btn-primary)", color: "var(--bg-panel)", border: "none", fontSize: "12px", cursor: emUso ? "not-allowed" : "pointer" }}
-                        >
+                          
+                         className={ ["licita-step4-style-055", (emUso ? "licita-step4-style-055-p2-a" : "licita-step4-style-055-p2-b"), (emUso ? "licita-step4-style-055-p6-a" : "licita-step4-style-055-p6-b")].filter(Boolean).join(" ") }>
                           {emUso ? "Em uso" : "Usar"}
                         </button>
-                        <button type="button" onClick={() => handleApagarGestorSalvo(i)} style={{ padding: "6px 8px", background: "rgba(220,38,38,0.15)", color: "var(--btn-danger)", border: "none", fontSize: "12px" }}>Apagar</button>
+                        <button type="button" onClick={() => handleApagarGestorSalvo(i)}  className={ ["licita-step4-style-056"].filter(Boolean).join(" ") }>Apagar</button>
                       </div>
                     </div>
                   );
                 })
               )}
             </div>
-            <div style={{ marginTop: "20px", textAlign: "right" }}>
-              <button type="button" onClick={() => setModalGestorAberto(false)} style={{ padding: "8px 16px", background: "var(--bg-subtle)", color: "var(--text-main)", border: "none" }}>Fechar</button>
+            <div  className={ ["licita-step4-style-057"].filter(Boolean).join(" ") }>
+              <button type="button" onClick={() => setModalGestorAberto(false)}  className={ ["licita-step4-style-058"].filter(Boolean).join(" ") }>Fechar</button>
             </div>
           </AccessibleDialog>
       )}
 
       {modalFiscalAberto && (
         <AccessibleDialog className="step-modal" labelledBy="step4-fiscais-salvos-title" onClose={() => setModalFiscalAberto(false)}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-              <h3 id="step4-fiscais-salvos-title" style={{ margin: 0, color: "var(--text-main)", fontSize: "18px" }}>Fiscais Salvos</h3>
-              <button type="button" onClick={() => setModalFiscalAberto(false)} style={{ background: "none", border: "none", fontSize: "20px", color: "var(--text-muted)" }}>×</button>
+            <div  className={ ["licita-step4-style-059"].filter(Boolean).join(" ") }>
+              <h3 id="step4-fiscais-salvos-title"  className={ ["licita-step4-style-060"].filter(Boolean).join(" ") }>Fiscais Salvos</h3>
+              <button type="button" onClick={() => setModalFiscalAberto(false)}  className={ ["licita-step4-style-061"].filter(Boolean).join(" ") }>×</button>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "300px", overflowY: "auto" }}>
+            <div  className={ ["licita-step4-style-062"].filter(Boolean).join(" ") }>
               {fiscaisSalvos.length === 0 ? (
-                <p style={{ color: "var(--text-muted)", fontSize: "14px", textAlign: "center" }}>Nenhum fiscal salvo ainda.</p>
+                <p  className={ ["licita-step4-style-063"].filter(Boolean).join(" ") }>Nenhum fiscal salvo ainda.</p>
               ) : (
                 fiscaisSalvos.map((f, i) => {
                   const emUso = dados.fiscais.some((df: any) => df.nome === f.nome && df.cargo === f.cargo);
 
                   return (
-                    <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px", border: "1px solid var(--border)", borderRadius: "var(--radius)", background: "var(--bg-subtle)" }}>
-                      <div style={{ fontSize: "13px", color: "var(--text-main)" }}>
-                        <div style={{ fontWeight: "600" }}>{f.nome}</div>
+                    <div key={i}  className={ ["licita-step4-style-064"].filter(Boolean).join(" ") }>
+                      <div  className={ ["licita-step4-style-065"].filter(Boolean).join(" ") }>
+                        <div  className={ ["licita-step4-style-066"].filter(Boolean).join(" ") }>{f.nome}</div>
                         <div>{f.cargo}</div>
                       </div>
-                      <div style={{ display: "flex", gap: "8px" }}>
+                      <div  className={ ["licita-step4-style-067"].filter(Boolean).join(" ") }>
                         <button type="button" 
                           onClick={() => handleUsarFiscalSalvo(f)} 
                           disabled={emUso}
-                          style={{ padding: "6px 12px", background: emUso ? "var(--text-light)" : "var(--btn-primary)", color: "var(--bg-panel)", border: "none", fontSize: "12px", cursor: emUso ? "not-allowed" : "pointer" }}
-                        >
+                          
+                         className={ ["licita-step4-style-068", (emUso ? "licita-step4-style-068-p2-a" : "licita-step4-style-068-p2-b"), (emUso ? "licita-step4-style-068-p6-a" : "licita-step4-style-068-p6-b")].filter(Boolean).join(" ") }>
                           {emUso ? "Em uso" : "Usar"}
                         </button>
-                        <button type="button" onClick={() => handleApagarFiscalSalvo(i)} style={{ padding: "6px 8px", background: "rgba(220,38,38,0.15)", color: "var(--btn-danger)", border: "none", fontSize: "12px" }}>Apagar</button>
+                        <button type="button" onClick={() => handleApagarFiscalSalvo(i)}  className={ ["licita-step4-style-069"].filter(Boolean).join(" ") }>Apagar</button>
                       </div>
                     </div>
                   );
                 })
               )}
             </div>
-            <div style={{ marginTop: "20px", textAlign: "right" }}>
-              <button type="button" onClick={() => setModalFiscalAberto(false)} style={{ padding: "8px 16px", background: "var(--bg-subtle)", color: "var(--text-main)", border: "none" }}>Fechar</button>
+            <div  className={ ["licita-step4-style-070"].filter(Boolean).join(" ") }>
+              <button type="button" onClick={() => setModalFiscalAberto(false)}  className={ ["licita-step4-style-071"].filter(Boolean).join(" ") }>Fechar</button>
             </div>
           </AccessibleDialog>
       )}
