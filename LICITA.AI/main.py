@@ -1563,6 +1563,12 @@ class PreviewEdicaoRequest(BaseModel):
     conteudo: str = Field(min_length=1, max_length=30000)
 
 
+class PreviewAprovarRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    confirmar_alertas: bool = False
+
+
 @app.get("/api/fila/{job_id}/preview")
 async def visualizar_documentos_fila(job_id: str, request: Request):
     token = request.headers.get("x-status-token", "")
@@ -1726,7 +1732,7 @@ async def editar_documento_fila(job_id: str, request: Request, req: PreviewEdica
 
 
 @app.post("/api/fila/{job_id}/approve")
-async def aprovar_documentos_fila(job_id: str, request: Request):
+async def aprovar_documentos_fila(job_id: str, request: Request, req: PreviewAprovarRequest = PreviewAprovarRequest()):
     token = request.headers.get("x-status-token", "")
     job = get_job(job_id)
     if job is None:
@@ -1741,6 +1747,36 @@ async def aprovar_documentos_fila(job_id: str, request: Request):
     obsoletos = job.get("review_stale_documents") or []
     if obsoletos:
         raise HTTPException(status_code=409, detail="Regere os documentos dependentes antes de aprovar: " + ", ".join(obsoletos) + ".")
+    dados_usuario = job.get("dados_usuario_processados") or job.get("pipeline_dados_usuario") or job.get("dados_usuario") or {}
+    relatorio = avaliar_conformidade(documentos, dados_usuario)
+    tipos_impeditivos = {
+        "campo_vazio",
+        "marcador_pendente",
+        "requisitos_habilitacao_divergentes",
+        "amostra_incoerente",
+        "pagamento_etapas_tokens",
+    }
+    impeditivos = [alerta for alerta in relatorio.get("alertas", []) if alerta.get("tipo") in tipos_impeditivos]
+    if impeditivos or int(relatorio.get("summary", {}).get("pendencias", 0)) > 0 or int(relatorio.get("summary", {}).get("matriz_alertas", 0)) > 0:
+        raise HTTPException(
+            status_code=409,
+            detail="Há pendências impeditivas na revisão. Corrija campos vazios, marcadores ou divergências antes de aprovar.",
+        )
+    exige_confirmacao = (
+        int(relatorio.get("summary", {}).get("revisao", 0)) > 0
+        or int(relatorio.get("summary", {}).get("matriz_revisao", 0)) > 0
+    )
+    if exige_confirmacao and not req.confirmar_alertas:
+        raise HTTPException(
+            status_code=409,
+            detail="Leia o checklist e confirme expressamente que revisou os itens pendentes de conferência humana.",
+        )
+    job["review_conformidade_aprovada"] = {
+        "confirmada": bool(req.confirmar_alertas),
+        "summary": relatorio.get("summary", {}),
+        "matriz_summary": relatorio.get("matriz_conformidade", {}).get("summary", {}),
+        "confirmed_at": datetime.now(timezone.utc).isoformat(),
+    }
     job["review_approved"] = True
     job["status"] = "queued"
     job["current_stage"] = "MONTAGEM_DOCX"
