@@ -24,14 +24,13 @@ test("fila normal envia somente os dados estruturados e as instruções", async 
   };
   await modulo.gerarFasePreparatoria({
     email: "teste@example.com",
-    emailVerificationToken: "token-verificado",
     instrucoes: "Gerar com coerência global.",
     dados_usuario: dadosUsuario,
   });
 
   const body = JSON.parse(chamada.options.body);
   assert.equal(chamada.url, "https://api.example.test/licita/api/gerar-fase-preparatoria");
-  assert.equal(chamada.options.headers["X-Email-Verification"], "token-verificado");
+  assert.equal(Object.hasOwn(chamada.options.headers || {}, "X-Email-Verification"), false);
   assert.deepEqual(Object.keys(body).sort(), ["dados_usuario", "email", "instrucoes"]);
   assert.deepEqual(body.dados_usuario, dadosUsuario);
   assert.equal("dados_ia" in body, false);
@@ -60,7 +59,6 @@ test("fila de contratação direta também delega a criação do pipeline ao ser
   };
   await modulo.gerarFasePreparatoria({
     email: "teste@example.com",
-    emailVerificationToken: "token-verificado",
     instrucoes: "Contratação direta.",
     dados_usuario: dadosUsuario,
   });
