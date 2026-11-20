@@ -74,7 +74,6 @@ function montarRegrasMinimas(chavesEtapa: string[], dadosUsuario: Record<string,
 export function construirPrompt(dadosUsuario: Record<string, string>, meeppExclusivo: boolean, etapa: string, instrucoesDoUsuario = "", usarMarcadorDados = false): string {
     const objeto = dadosUsuario["{{OBJETO}}"] || "";
     const execucaoRaw = dadosUsuario["RAW_EXECUCAO"] || "";
-    const instrucoesExtras = dadosUsuario["INSTRUCOES_EXTRAS"] || "";
     const exclusividadeTexto = meeppExclusivo ? "Sim" : "Não";
     const necessidade = dadosUsuario["{{NECESSIDADE}}"] || "";
     const criterioTipo = dadosUsuario["{{CRITERIOS}}"] || "ITEM";
@@ -113,7 +112,6 @@ SITUAÇÃO DO PAC: ${pacRaw}
 INSTRUMENTO: ${instrumento}
 VIGÊNCIA: ${vigencia}
 SECRETARIA/SETOR SOLICITANTE: ${secretaria}`;
-    if (instrucoesExtras) basePrompt += `\n\nINSTRUÇÕES COMPLEMENTARES OBRIGATÓRIAS:\n${instrucoesExtras}`;
     let chaves = "{}";
     let diretrizEtapa = "";
     if (etapa === "DFD") {

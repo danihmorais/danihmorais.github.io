@@ -112,11 +112,13 @@ test("pré-visualização, edição e aprovação usam o token da fila", async (
   const preview = await api.consultarPreviewFila("job-1", "token-1");
   assert.equal(preview.documentos.DFD.OBJETO, "Objeto");
   await api.salvarCampoPreviewFila("job-1", "token-1", "DFD", "OBJETO", "Objeto revisado");
-  await api.aprovarPreviewFila("job-1", "token-1");
+  await api.aprovarPreviewFila("job-1", "token-1", true);
   assert.equal(chamadas[0].options.headers["X-Status-Token"], "token-1");
   assert.equal(chamadas[1].options.method, "PUT");
   assert.equal(JSON.parse(chamadas[1].options.body).conteudo, "Objeto revisado");
   assert.equal(chamadas[2].options.method, "POST");
   assert.equal(chamadas[2].options.headers["X-Status-Token"], "token-1");
+  assert.equal(chamadas[2].options.headers["Content-Type"], "application/json");
+  assert.deepEqual(JSON.parse(chamadas[2].options.body), { confirmar_alertas: true });
 });
 

@@ -33,7 +33,7 @@ from pydantic import BaseModel, Field
 from typing import Literal
 
 from documentos_contexto import MAX_CONTEXT_CHARS, extrair_contexto_documentos
-from fila import EMAIL_RE, MAX_ATTEMPTS, QUEUE_DIR, SMTP_FROM, SMTP_PASSWORD, SMTP_USERNAME, _artifact_path, _job_path, _smtp_client, atualizar_indice_job_sqlite, cancel_job, consumir_limite_taxa_sqlite, enqueue_job, get_job, listar_jobs_sqlite, obter_posicao_fila_sqlite
+from fila import EMAIL_RE, MAX_ATTEMPTS, QUEUE_DIR, SMTP_FROM, SMTP_PASSWORD, SMTP_USERNAME, _artifact_path, _job_path, _smtp_client, atualizar_indice_job_sqlite, cancel_job, consumir_limite_taxa_sqlite, enqueue_job, get_job, listar_jobs_sqlite, obter_metricas_fila_sqlite, obter_posicao_fila_sqlite
 from fila_pipeline import _dados_para_prompt, limite_prompt_chars
 from fila_pipeline_unificado import iniciar_worker
 from pipeline_prompts import montar_pipeline
@@ -675,9 +675,16 @@ async def correlacionar_requisicao_e_medir(request: Request, call_next):
 
 
 @app.get("/metrics", include_in_schema=False)
-async def metricas_prometheus():
+async def metricas_prometheus(request: Request):
+    token_configurado = os.getenv("LICITA_METRICS_TOKEN", "").strip()
+    if not token_configurado:
+        raise HTTPException(status_code=404, detail="Not Found")
+    esquema, _, token_recebido = request.headers.get("authorization", "").partition(" ")
+    if esquema.casefold() != "bearer" or not hmac.compare_digest(token_configurado, token_recebido.strip()):
+        raise HTTPException(status_code=401, detail="Token de métricas inválido.")
     from fila_pipeline import obter_metricas_ia
     metricas_ia = obter_metricas_ia()
+    metricas_fila = obter_metricas_fila_sqlite()
     linhas = [
         "# HELP licita_ai_http_requests_total Total de requisicoes HTTP processadas.",
         "# TYPE licita_ai_http_requests_total counter",
@@ -693,12 +700,27 @@ async def metricas_prometheus():
         "# TYPE licita_ai_completion_tokens_total counter",
         "# HELP licita_ai_tokens_total Total de tokens reportados pelo provedor.",
         "# TYPE licita_ai_tokens_total counter",
+        "# HELP licita_ai_queue_jobs Quantidade de solicitações registradas por status.",
+        "# TYPE licita_ai_queue_jobs gauge",
+        "# HELP licita_ai_queue_stage_duration_seconds_sum Tempo acumulado por etapa concluída.",
+        "# TYPE licita_ai_queue_stage_duration_seconds_sum counter",
+        "# HELP licita_ai_queue_stage_duration_seconds_count Quantidade de execuções concluídas por etapa.",
+        "# TYPE licita_ai_queue_stage_duration_seconds_count counter",
+        "# HELP licita_ai_queue_failures_total Falhas registradas por categoria.",
+        "# TYPE licita_ai_queue_failures_total counter",
         f"licita_ai_completions_total {metricas_ia['calls']}",
         f"licita_ai_completion_duration_seconds_total {metricas_ia['duration_seconds']:.6f}",
         f"licita_ai_prompt_tokens_total {metricas_ia['prompt_tokens']}",
         f"licita_ai_completion_tokens_total {metricas_ia['completion_tokens']}",
         f"licita_ai_tokens_total {metricas_ia['total_tokens']}",
     ]
+    for status, total in sorted(metricas_fila["status"].items()):
+        linhas.append(f'licita_ai_queue_jobs{{status="{status}"}} {int(total)}')
+    for etapa, valores in sorted(metricas_fila["stages"].items()):
+        linhas.append(f'licita_ai_queue_stage_duration_seconds_sum{{stage="{etapa}"}} {float(valores["duration_seconds"]):.6f}')
+        linhas.append(f'licita_ai_queue_stage_duration_seconds_count{{stage="{etapa}"}} {int(valores["count"])}')
+    for categoria, total in sorted(metricas_fila["failures"].items()):
+        linhas.append(f'licita_ai_queue_failures_total{{type="{categoria}"}} {int(total)}')
     with _METRICAS_HTTP_LOCK:
         registros = sorted(_METRICAS_HTTP.items(), key=lambda item: item[0])
     for (metodo, rota, status_code), valores in registros:
@@ -1541,6 +1563,12 @@ class PreviewEdicaoRequest(BaseModel):
     conteudo: str = Field(min_length=1, max_length=30000)
 
 
+class PreviewAprovarRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    confirmar_alertas: bool = False
+
+
 @app.get("/api/fila/{job_id}/preview")
 async def visualizar_documentos_fila(job_id: str, request: Request):
     token = request.headers.get("x-status-token", "")
@@ -1704,7 +1732,7 @@ async def editar_documento_fila(job_id: str, request: Request, req: PreviewEdica
 
 
 @app.post("/api/fila/{job_id}/approve")
-async def aprovar_documentos_fila(job_id: str, request: Request):
+async def aprovar_documentos_fila(job_id: str, request: Request, req: PreviewAprovarRequest = PreviewAprovarRequest()):
     token = request.headers.get("x-status-token", "")
     job = get_job(job_id)
     if job is None:
@@ -1719,6 +1747,36 @@ async def aprovar_documentos_fila(job_id: str, request: Request):
     obsoletos = job.get("review_stale_documents") or []
     if obsoletos:
         raise HTTPException(status_code=409, detail="Regere os documentos dependentes antes de aprovar: " + ", ".join(obsoletos) + ".")
+    dados_usuario = job.get("dados_usuario_processados") or job.get("pipeline_dados_usuario") or job.get("dados_usuario") or {}
+    relatorio = avaliar_conformidade(documentos, dados_usuario)
+    tipos_impeditivos = {
+        "campo_vazio",
+        "marcador_pendente",
+        "requisitos_habilitacao_divergentes",
+        "amostra_incoerente",
+        "pagamento_etapas_tokens",
+    }
+    impeditivos = [alerta for alerta in relatorio.get("alertas", []) if alerta.get("tipo") in tipos_impeditivos]
+    if impeditivos or int(relatorio.get("summary", {}).get("pendencias", 0)) > 0 or int(relatorio.get("summary", {}).get("matriz_alertas", 0)) > 0:
+        raise HTTPException(
+            status_code=409,
+            detail="Há pendências impeditivas na revisão. Corrija campos vazios, marcadores ou divergências antes de aprovar.",
+        )
+    exige_confirmacao = (
+        int(relatorio.get("summary", {}).get("revisao", 0)) > 0
+        or int(relatorio.get("summary", {}).get("matriz_revisao", 0)) > 0
+    )
+    if exige_confirmacao and not req.confirmar_alertas:
+        raise HTTPException(
+            status_code=409,
+            detail="Leia o checklist e confirme expressamente que revisou os itens pendentes de conferência humana.",
+        )
+    job["review_conformidade_aprovada"] = {
+        "confirmada": bool(req.confirmar_alertas),
+        "summary": relatorio.get("summary", {}),
+        "matriz_summary": relatorio.get("matriz_conformidade", {}).get("summary", {}),
+        "confirmed_at": datetime.now(timezone.utc).isoformat(),
+    }
     job["review_approved"] = True
     job["status"] = "queued"
     job["current_stage"] = "MONTAGEM_DOCX"

@@ -24,3 +24,15 @@ test("calcula o total dos itens sem acumular erros de ponto flutuante", () => {
     { valor: "0,20", qtd: "4" },
   ]), 1.1);
 });
+
+
+test("mapearDadosWizard formata estimativa somente a partir de centavos inteiros", () => {
+  const modulo = loadTsModule("src/utils/mapearDados.ts");
+  const resultado = modulo.mapearDadosWizard({
+    itens: [
+      { numero: 1, descricao: "Item 1", qtd: "3", valor: "0,10" },
+      { numero: 2, descricao: "Item 2", qtd: "4", valor: "0,20" },
+    ],
+  });
+  assert.equal(resultado["{{VALOR_ESTIMADO}}"], "R$ 1,10");
+});

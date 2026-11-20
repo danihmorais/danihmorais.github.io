@@ -40,6 +40,7 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDis
   const [edicoes, setEdicoes] = useState<Record<string, Record<string, string>>>({});
   const [pollingNonce, setPollingNonce] = useState(0);
   const [previewAberto, setPreviewAberto] = useState(false);
+  const [confirmouAlertas, setConfirmouAlertas] = useState(false);
 
 
 
@@ -100,6 +101,7 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDis
       const resultado = await consultarPreviewFila(jobId, statusToken);
       setPreview(resultado);
       setEdicoes({});
+      setConfirmouAlertas(false);
       setPreviewAberto(true);
     } catch (erro: any) {
       setError(erro?.message || "Não foi possível abrir a pré-visualização.");
@@ -129,6 +131,7 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDis
       const atualizado = await consultarPreviewFila(jobId, statusToken);
       setPreview(atualizado);
       setEdicoes({});
+      setConfirmouAlertas(false);
       setNotice("Alterações salvas. Revise o conteúdo antes de aprovar.");
     } catch (erro: any) {
       setError(erro?.message || "Não foi possível salvar todas as alterações.");
@@ -146,6 +149,7 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDis
       const atualizado = await consultarPreviewFila(jobId, statusToken);
       setPreview(atualizado);
       setEdicoes({});
+      setConfirmouAlertas(false);
       setNotice(resultado.message);
     } catch (erro: any) {
       setError(erro?.message || "Não foi possível regenerar o documento.");
@@ -159,7 +163,7 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDis
     setError("");
     setNotice("");
     try {
-      await aprovarPreviewFila(jobId, statusToken);
+      await aprovarPreviewFila(jobId, statusToken, confirmouAlertas);
       const statusAtualizado = { status: "queued", current_stage: "MONTAGEM_DOCX" };
       setJob(statusAtualizado);
       onStatusChange?.(statusAtualizado);
@@ -244,7 +248,7 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDis
           </div>
           {preview.conformidade && (
             <details className="queue-conformity-report" open>
-              <summary>Checklist automatizado de revisão — {preview.conformidade.summary.ok} OK · {preview.conformidade.summary.pendencias} pendência(s) · {preview.conformidade.summary.revisao} para revisão</summary>
+              <summary>Checklist automatizado de revisão — {preview.conformidade.summary.ok} OK · {(preview.conformidade?.summary.pendencias ?? 0)} pendência(s) · {(preview.conformidade?.summary.revisao ?? 0)} para revisão</summary>
               <ul className="queue-conformity-checks">
                 {preview.conformidade.verificacoes.map(item => (
                   <li className={`queue-conformity-check status-${item.status}`} key={item.id}>
@@ -254,7 +258,7 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDis
                 ))}
               </ul>
               <details className="queue-conformity-report">
-                <summary>Matriz da Lei 14.133/2021 — {preview.conformidade.matriz_conformidade.summary.alertas} pendência(s) · {preview.conformidade.matriz_conformidade.summary.revisao} para revisão</summary>
+                <summary>Matriz da Lei 14.133/2021 — {(preview.conformidade?.matriz_conformidade.summary.alertas ?? 0)} pendência(s) · {(preview.conformidade?.matriz_conformidade.summary.revisao ?? 0)} para revisão</summary>
                 <p className="queue-conformity-limit">Referência: <a href={preview.conformidade.matriz_conformidade.fonte} target="_blank" rel="noreferrer">Lei 14.133/2021 — texto oficial</a></p>
                 <ul className="queue-conformity-checks">
                   {preview.conformidade.matriz_conformidade.itens.map(item => (
@@ -289,11 +293,32 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDis
             </details>
           ))}
           {preview.stale_documents?.length ? <p role="alert">Documentos dependentes precisam ser regenerados: {preview.stale_documents.join(", ")}.</p> : null}
+          {(
+            (preview.conformidade?.summary.pendencias ?? 0) > 0
+            || (preview.conformidade?.matriz_conformidade.summary.alertas ?? 0) > 0
+          ) && (
+            <p role="alert" className="queue-conformity-blocker">
+              Existem pendências impeditivas. Corrija os campos vazios, marcadores e divergências apontados no checklist antes de aprovar.
+            </p>
+          )}
+          {(
+            (preview.conformidade?.summary.revisao ?? 0) > 0
+            || (preview.conformidade?.matriz_conformidade.summary.revisao ?? 0) > 0
+          ) && (
+            <label className="queue-conformity-confirm">
+              <input
+                type="checkbox"
+                checked={confirmouAlertas}
+                onChange={evento => setConfirmouAlertas(evento.target.checked)}
+              />
+              Confirmo que li o checklist, conferi os fundamentos legais e os demais itens indicados para revisão humana e assumo a responsabilidade pela aprovação do conteúdo.
+            </label>
+          )}
           <div className="queue-delivery-actions">
             <button type="button" className="button button-secondary" disabled={salvandoPreview || aprovando || !!regenerandoDocumento} onClick={salvarEdicoes}>
               {salvandoPreview ? "Salvando..." : "Salvar alterações"}
             </button>
-            <button type="button" className="button button-primary" disabled={salvandoPreview || aprovando || !!preview.stale_documents?.length || Object.values(edicoes).some(campos => Object.values(campos).some(valor => !valor.trim()))} onClick={aprovar}>
+            <button type="button" className="button button-primary" disabled={salvandoPreview || aprovando || !!preview.stale_documents?.length || (preview.conformidade?.summary.pendencias ?? 0) > 0 || (preview.conformidade?.matriz_conformidade.summary.alertas ?? 0) > 0 || (((preview.conformidade?.summary.revisao ?? 0) > 0 || (preview.conformidade?.matriz_conformidade.summary.revisao ?? 0) > 0) && !confirmouAlertas) || Object.values(edicoes).some(campos => Object.values(campos).some(valor => !valor.trim()))} onClick={aprovar}>
               {aprovando ? "Aprovando..." : "Aprovar e montar DOCX"}
             </button>
           </div>

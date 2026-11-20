@@ -69,7 +69,6 @@ def _dados_para_prompt(dados_usuario: dict) -> dict:
     for chave in (
         "{{CAMINHO_IMAGEM_DOTACAO}}", "{{CONTATOS_SECRETARIAS}}", "ITENS_NOMES",
         "GESTORES_DADOS", "FISCAIS_DADOS",
-        "INSTRUCOES_EXTRAS", "REQUISITOS_ETP_ANTERIOR",
     ):
         dados.pop(chave, None)
 

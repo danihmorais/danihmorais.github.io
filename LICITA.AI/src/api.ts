@@ -272,10 +272,11 @@ export async function regenerarDocumentoPreviewFila(
   return payload;
 }
 
-export async function aprovarPreviewFila(jobId: string, statusToken: string): Promise<void> {
+export async function aprovarPreviewFila(jobId: string, statusToken: string, confirmarAlertas = false): Promise<void> {
   const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}/approve`, {
     method: "POST",
-    headers: { "X-Status-Token": statusToken },
+    headers: { "Content-Type": "application/json", "X-Status-Token": statusToken },
+    body: JSON.stringify({ confirmar_alertas: confirmarAlertas }),
   });
   let payload: any = {};
   try { payload = await response.json(); } catch {}

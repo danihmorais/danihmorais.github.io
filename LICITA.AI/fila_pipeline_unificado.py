@@ -1094,7 +1094,6 @@ def _process_pipeline(job: dict) -> None:
         opcoes_chamada = _opcoes_chamada_ia_etapa(etapa_tipo, etapa_id, exigir_amostra_tr=exigir_amostra_tr)
         temperatura_etapa = _temperatura_valida(etapa.get("temperature"), temperatura)
         inicio_stage = time.perf_counter()
-        inicio_stage = time.perf_counter()
         if opcoes_chamada:
             resultado, modelo_resolvido = _chamar_ia(prompt_processado, modelo, temperatura_etapa, **opcoes_chamada)
         else:
