@@ -81,17 +81,6 @@ PLACEHOLDERS_PREENCHIMENTO_MANUAL = {
     "{{VALOR_CONTRATADO}}",
 }
 
-DEFAULT_SETTINGS = {
-    "textos": {
-        "clausula_padrao": "A prorrogação, quando aplicável, deverá respeitar os limites legais e será formalizada por meio de termo aditivo, mediante prévia manifestação técnica e jurídica, assegurando a continuidade do atendimento às necessidades de {{MUNICIPIO}}. Para viabilizar a prorrogação, o pedido deverá ser encaminhado ao Setor de Licitações com antecedência mínima de 60 (sessenta) dias do término da vigência contratual, conforme dispõe {{DECRETO}}.",
-        "clausula_ata": "A vigência da Ata de Registro de Preços poderá ser prorrogada por igual período, desde que comprovado que o preço registrado permanece vantajoso para a Administração, nos termos do art. 84 da Lei Federal nº 14.133/2021, mediante formalização do instrumento próprio antes do término da vigência original.",
-        "meepp_exclusivo": "Nos termos dos arts. 47 e 48 da Lei Complementar nº 123/2006, a Administração deverá realizar processo licitatório destinado exclusivamente à participação de microempresas e empresas de pequeno porte nos itens de contratação cujo valor seja de até {{LIMITE_ME_EPP}}, observadas as hipóteses legais de afastamento e a vantajosidade para a Administração.",
-        "meepp_nao_exclusivo": "Nos termos da Lei Complementar nº 123/2006, o tratamento diferenciado e simplificado para microempresas e empresas de pequeno porte poderá ser afastado nas hipóteses legais, especialmente quando não for vantajoso para a Administração ou representar prejuízo ao conjunto ou complexo do objeto. Nesta licitação, não haverá exclusividade para ME/EPP, sem prejuízo dos demais benefícios legalmente aplicáveis.",
-        "amostra_tr": "Será exigida amostra do licitante vencedor provisório, conforme estipulado neste Termo de Referência.",
-        "vistoria_tr": "Em vista das especificidades do objeto, o licitante poderá realizar visita ao local de execução, às suas expensas, durante o prazo de envio das propostas. A visita, quando solicitada, poderá ser acompanhada pelo Fiscal {{FISCAL}}, cujo acompanhamento individualizado deverá ser solicitado pelo telefone {{TELEFONE}}. O local de visita será {{ENDERECO_PREFEITURA}}, em dias úteis e horários previamente informados pela Administração. Independentemente da visita, o licitante declarará na habilitação que conhece as condições e peculiaridades do objeto, observados os requisitos legais aplicáveis."
-    }
-}
-
 ALIASES = [
     ("{{ESTIMATIVA}}", "{{ESTIMATIVA_QUANTIDADES}}"),
     ("{{RESULTADOS}}", "{{RESULTADOS_ESPERADOS}}"),
@@ -102,7 +91,7 @@ ALIASES = [
 _TEXTOS_MUNICIPAIS = _MUNICIPIO_ATIVO.get("textos", {}) if isinstance(_MUNICIPIO_ATIVO.get("textos"), dict) else {}
 TEXTOS = {
     chave: _substituir_campos_municipais(valor)
-    for chave, valor in {**DEFAULT_SETTINGS["textos"], **_TEXTOS_MUNICIPAIS}.items()
+    for chave, valor in _TEXTOS_MUNICIPAIS.items()
     if isinstance(valor, str)
 }
 SETTINGS = {"textos": TEXTOS.copy()}
