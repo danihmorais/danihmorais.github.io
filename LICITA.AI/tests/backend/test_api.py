@@ -1046,11 +1046,53 @@ class TestRevisaoPreviaDocumentos(unittest.TestCase):
         self.assertEqual(resposta.status_code, 409)
         self.assertIn("TR", resposta.json()["detail"])
 
+    def _relatorio_revisao_sem_pendencias_impeditivas(self):
+        return {
+            "alertas": [],
+            "summary": {"pendencias": 0, "revisao": 1, "matriz_alertas": 0, "matriz_revisao": 1},
+            "matriz_conformidade": {"summary": {"alertas": 0, "revisao": 1}},
+        }
+
+    def test_aprovacao_exige_confirmacao_dos_itens_de_revisao_humana(self):
+        job = self.job_revisao()
+        with (
+            patch.object(main, "get_job", return_value=job),
+            patch.object(main, "_token_matches", return_value=True),
+            patch.object(main, "avaliar_conformidade", return_value=self._relatorio_revisao_sem_pendencias_impeditivas()),
+            TestClient(app) as client,
+        ):
+            resposta = client.post(
+                f"/api/fila/{job['job_id']}/approve",
+                headers={"X-Status-Token": "token-revisao"},
+            )
+        self.assertEqual(resposta.status_code, 409)
+        self.assertIn("confirme expressamente", resposta.json()["detail"])
+
+    def test_aprovacao_bloqueia_pendencias_impeditivas_mesmo_com_confirmacao(self):
+        job = self.job_revisao()
+        relatorio = self._relatorio_revisao_sem_pendencias_impeditivas()
+        relatorio["summary"]["pendencias"] = 1
+        relatorio["alertas"] = [{"tipo": "marcador_pendente"}]
+        with (
+            patch.object(main, "get_job", return_value=job),
+            patch.object(main, "_token_matches", return_value=True),
+            patch.object(main, "avaliar_conformidade", return_value=relatorio),
+            TestClient(app) as client,
+        ):
+            resposta = client.post(
+                f"/api/fila/{job['job_id']}/approve",
+                headers={"X-Status-Token": "token-revisao"},
+                json={"confirmar_alertas": True},
+            )
+        self.assertEqual(resposta.status_code, 409)
+        self.assertIn("pendências impeditivas", resposta.json()["detail"])
+
     def test_aprovacao_move_job_de_review_para_queued(self):
         from tempfile import TemporaryDirectory
         from pathlib import Path
 
         job = self.job_revisao()
+        relatorio = self._relatorio_revisao_sem_pendencias_impeditivas()
         with TemporaryDirectory() as diretorio:
             revisao = Path(diretorio) / "job.review.json"
             queued = Path(diretorio) / "job.queued.json"
@@ -1062,17 +1104,20 @@ class TestRevisaoPreviaDocumentos(unittest.TestCase):
             with (
                 patch.object(main, "get_job", return_value=job),
                 patch.object(main, "_token_matches", return_value=True),
+                patch.object(main, "avaliar_conformidade", return_value=relatorio),
                 patch.object(main, "_job_path", side_effect=caminho),
                 TestClient(app) as client,
             ):
                 resposta = client.post(
                     f"/api/fila/{job['job_id']}/approve",
                     headers={"X-Status-Token": "token-revisao"},
+                    json={"confirmar_alertas": True},
                 )
             self.assertEqual(resposta.status_code, 200, resposta.text)
             self.assertTrue(queued.is_file())
             self.assertFalse(revisao.exists())
         self.assertTrue(job["review_approved"])
+        self.assertTrue(job["review_conformidade_aprovada"]["confirmada"])
         self.assertEqual(job["status"], "queued")
 
 
