@@ -417,3 +417,56 @@ export async function refazerAdminPedido(
   return respostaAdmin(response);
 }
 
+
+export type PesquisaPrecosPNCPResultado = {
+  tipo_preco: "homologado" | "estimado";
+  valor_unitario: number;
+  descricao_item: string;
+  unidade: string;
+  quantidade?: number | null;
+  unidade_compativel: boolean;
+  orgao: string;
+  municipio: string;
+  uf: string;
+  modalidade: string;
+  data_referencia: string;
+  numero_controle_pncp: string;
+  numero_item: string;
+  url_fonte: string;
+};
+
+export type PesquisaPrecosPNCPResposta = {
+  fonte: "PNCP";
+  resultados: PesquisaPrecosPNCPResultado[];
+  total: number;
+  contratacoes_consultadas: number;
+  contratacoes_com_falha_de_consulta: number;
+  mensagem: string;
+};
+
+export type PesquisaPrecosPNCPParametros = {
+  descricao: string;
+  unidade: string;
+  data_inicial: string;
+  data_final: string;
+  uf?: string;
+  modalidades: number[];
+  incluir_estimados: boolean;
+};
+
+export async function pesquisarPrecosPNCP(
+  parametros: PesquisaPrecosPNCPParametros,
+): Promise<PesquisaPrecosPNCPResposta> {
+  const response = await fetch(`${BASE_URL}/licita/api/pesquisa-precos/pncp`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(parametros),
+  });
+  let payload: any = {};
+  try { payload = await response.json(); } catch {}
+  if (!response.ok) {
+    throw new Error(payload?.detail || "Não foi possível consultar os preços no PNCP.");
+  }
+  return payload as PesquisaPrecosPNCPResposta;
+}
+
