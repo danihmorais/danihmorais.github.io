@@ -590,7 +590,7 @@ def _queue_items() -> list[dict]:
         return []
     items: list[dict] = []
     for path in QUEUE_DIR.glob("[0-9a-f]*.json"):
-        if path.name.endswith((".done.json", ".failed.json", ".cancelled.json")):
+        if path.name.endswith((".done.json", ".failed.json", ".cancelled.json", ".review.json")):
             continue
         try:
             job = __import__("json").loads(path.read_text(encoding="utf-8"))
@@ -931,6 +931,8 @@ async def agendar_fase_preparatoria(request: Request):
             dados_usuario=req.dados_usuario,
             dados_ia=dados_ia,
             instrucoes=req.instrucoes,
+            request_id=getattr(request.state, "request_id", None),
+            require_review=request.headers.get("x-licita-review") == "1",
         )
         position, ahead = _queue_position(job["job_id"])
         job["fila_posicao"] = position
@@ -1395,7 +1397,7 @@ async def visualizar_documentos_fila(job_id: str, request: Request):
         raise HTTPException(status_code=403, detail="Token de consulta inválido.")
     if str(job.get("status", "")).lower() != "awaiting_review":
         raise HTTPException(status_code=409, detail="A pré-visualização ficará disponível quando a geração do conteúdo estiver pronta para revisão.")
-    documentos = job.get("dados_ia_final")
+    documentos = job.get("review_documents") or job.get("dados_ia_final")
     if not isinstance(documentos, dict):
         raise HTTPException(status_code=409, detail="O conteúdo estruturado não está disponível para revisão.")
     documentos_preview = {
@@ -1426,7 +1428,7 @@ async def regenerar_documento_fila(job_id: str, request: Request, req: PreviewRe
         raise HTTPException(status_code=403, detail="Token de consulta inválido.")
     if str(job.get("status", "")).lower() != "awaiting_review":
         raise HTTPException(status_code=409, detail="O documento não está aguardando revisão.")
-    documentos = job.get("dados_ia_final")
+    documentos = job.get("review_documents") or job.get("dados_ia_final")
     dados_usuario = job.get("dados_usuario_processados") or job.get("pipeline_dados_usuario") or job.get("dados_usuario") or {}
     if not isinstance(documentos, dict) or not isinstance(dados_usuario, dict):
         raise HTTPException(status_code=409, detail="Os dados necessários para regenerar o documento não estão disponíveis.")
@@ -1480,7 +1482,14 @@ async def regenerar_documento_fila(job_id: str, request: Request, req: PreviewRe
     obsoletos.discard(req.documento)
     job["review_stale_documents"] = sorted(obsoletos)
     job["review_regenerations"] = int(job.get("review_regenerations", 0)) + 1
-    job["dados_ia_final"] = documentos
+    if isinstance(job.get("review_documents"), dict):
+        job["review_documents"] = documentos
+        dados_ia_plano = job.get("dados_ia_final")
+        if isinstance(dados_ia_plano, dict):
+            dados_ia_plano.update(validado[req.documento])
+            job["dados_ia_final"] = dados_ia_plano
+    else:
+        job["dados_ia_final"] = documentos
     job["updated_at"] = datetime.now(timezone.utc).isoformat()
     _write_json(_job_path(job_id, ".review"), job)
     return {
@@ -1501,7 +1510,7 @@ async def editar_documento_fila(job_id: str, request: Request, req: PreviewEdica
         raise HTTPException(status_code=403, detail="Token de consulta inválido.")
     if str(job.get("status", "")).lower() != "awaiting_review":
         raise HTTPException(status_code=409, detail="O documento não está aguardando revisão.")
-    documentos = job.get("dados_ia_final")
+    documentos = job.get("review_documents") or job.get("dados_ia_final")
     if not isinstance(documentos, dict) or not isinstance(documentos.get(req.documento), dict):
         raise HTTPException(status_code=404, detail="Documento não encontrado para revisão.")
     bloco = documentos[req.documento]
@@ -1526,7 +1535,14 @@ async def editar_documento_fila(job_id: str, request: Request, req: PreviewEdica
         obsoletos.add("TR")
     obsoletos.discard(req.documento)
     job["review_stale_documents"] = sorted(obsoletos)
-    job["dados_ia_final"] = documentos
+    if isinstance(job.get("review_documents"), dict):
+        job["review_documents"] = documentos
+        dados_ia_plano = job.get("dados_ia_final")
+        if isinstance(dados_ia_plano, dict):
+            dados_ia_plano[req.campo] = bloco[req.campo]
+            job["dados_ia_final"] = dados_ia_plano
+    else:
+        job["dados_ia_final"] = documentos
     job["review_edits"] = int(job.get("review_edits", 0)) + 1
     job["updated_at"] = datetime.now(timezone.utc).isoformat()
     _write_json(_job_path(job_id, ".review"), job)
@@ -1543,7 +1559,7 @@ async def aprovar_documentos_fila(job_id: str, request: Request):
         raise HTTPException(status_code=403, detail="Token de consulta inválido.")
     if str(job.get("status", "")).lower() != "awaiting_review":
         raise HTTPException(status_code=409, detail="A solicitação não está aguardando revisão.")
-    documentos = job.get("dados_ia_final")
+    documentos = job.get("review_documents") or job.get("dados_ia_final")
     if not isinstance(documentos, dict) or not all(isinstance(documentos.get(nome), dict) for nome in ("DFD", "ETP", "TR")):
         raise HTTPException(status_code=409, detail="Os três documentos devem estar disponíveis antes da aprovação.")
     obsoletos = job.get("review_stale_documents") or []

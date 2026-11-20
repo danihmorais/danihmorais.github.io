@@ -890,3 +890,99 @@ class TestIAExtracaoTotalTR(unittest.TestCase):
             "R$ 200,00",
         )
 
+
+
+
+class TestRevisaoHumanaIntegracaoWorker(unittest.TestCase):
+    def test_worker_pausa_apos_ia_e_retorna_da_aprovacao_sem_repetir_geracao(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        import fila_pipeline_unificado as pipeline
+
+        job_id = "a" * 32
+        with tempfile.TemporaryDirectory() as diretorio:
+            raiz = Path(diretorio)
+            resposta = {
+                nome: {campo: f"Conteúdo de {campo}." for campo in campos}
+                for nome, campos in pipeline._FASE_PREPARATORIA_CAMPOS.items()
+            }
+            resposta["DFD"]["OBJETO"] = "Objeto original"
+            resposta["TR"]["REQUISITOS_TR"] = "Não há documentos adicionais"
+            chamadas_ia = []
+
+            def chamar_ia(*args, **kwargs):
+                chamadas_ia.append((args, kwargs))
+                return resposta, "modelo-teste"
+
+            def gravar_json(caminho, dados):
+                caminho = Path(caminho)
+                caminho.parent.mkdir(parents=True, exist_ok=True)
+                caminho.write_text(json.dumps(dados, ensure_ascii=False), encoding="utf-8")
+
+            def gerar_zip(dados_usuario, dados_ia, _job_id):
+                pasta = raiz / "gerados"
+                pasta.mkdir(exist_ok=True)
+                arquivo = pasta / "documentos.zip"
+                arquivo.write_bytes(b"zip de teste")
+                dados_gerados.append(dict(dados_ia))
+                return arquivo, "documentos.zip"
+
+            dados_gerados = []
+            job = {
+                "job_id": job_id,
+                "email": "teste@example.com",
+                "status": "processing",
+                "attempts": 1,
+                "require_review": True,
+                "dados_usuario": {"{{OBJETO}}": "Objeto de teste", "{{AMOST}}": "sim"},
+                "dados_ia": {
+                    "__LICITA_PIPELINE__": {
+                        "model": "unsloth-auto",
+                        "temperature": 0.3,
+                        "etapas": [
+                            {"id": "FASE_PREPARATORIA", "tipo": "geracao_unificada", "prompt": "PROMPT"}
+                        ],
+                    }
+                },
+            }
+
+            with (
+                patch.object(pipeline, "QUEUE_DIR", raiz),
+                patch.object(pipeline, "_job_path", side_effect=lambda _id, suffix="": raiz / f"{_id}{suffix}.json"),
+                patch.object(pipeline, "_artifact_path", side_effect=lambda _id: raiz / f"{_id}.artifact.zip"),
+                patch.object(pipeline, "_write_json", side_effect=gravar_json),
+                patch.object(pipeline, "_chamar_ia", side_effect=chamar_ia) as chamar,
+                patch.object(pipeline, "gerar_zip", side_effect=gerar_zip) as montar,
+                patch.object(pipeline, "_enviar_email") as enviar,
+            ):
+                pipeline._process_pipeline(job)
+
+                caminho_revisao = raiz / f"{job_id}.review.json"
+                self.assertTrue(caminho_revisao.is_file())
+                revisao = json.loads(caminho_revisao.read_text(encoding="utf-8"))
+                self.assertEqual(revisao["status"], "awaiting_review")
+                self.assertEqual(revisao["current_stage"], "REVISAO_USUARIO")
+                self.assertEqual(revisao["review_documents"]["DFD"]["OBJETO"], "Objeto original")
+                self.assertNotIn("DFD", revisao["dados_ia_final"])
+                self.assertFalse((raiz / f"{job_id}.processing.json").exists())
+                montar.assert_not_called()
+                enviar.assert_not_called()
+
+                revisao["review_documents"]["DFD"]["OBJETO"] = "Objeto aprovado e editado"
+                revisao["dados_ia_final"]["OBJETO"] = "Objeto aprovado e editado"
+                revisao["review_approved"] = True
+                revisao["status"] = "queued"
+                revisao["current_stage"] = "MONTAGEM_DOCX"
+                caminho_revisao.unlink()
+                gravar_json(raiz / f"{job_id}.queued.json", revisao)
+
+                pipeline._process_pipeline(revisao)
+
+                chamar.assert_called_once()
+                montar.assert_called_once()
+                enviar.assert_called_once()
+                self.assertEqual(dados_gerados[0]["OBJETO"], "Objeto aprovado e editado")
+                self.assertEqual(revisao["status"], "sent")
+                self.assertTrue((raiz / f"{job_id}.done.json").is_file())
