@@ -1,11 +1,8 @@
-import ImportarItensPlanilha from "../../components/ImportarItensPlanilha";
 import React from "react";
 
 export default function Step2({ dados, atualizarDados }: any) {
   return (
     <div className="step-form step-form--execution">
-      <ImportarItensPlanilha onImport={(itens) => atualizarDados("itens", itens)} />
-
       <div className="step-section-heading">
         <h2 className="step2-heading">
           Condições de Execução e Prazos <span className="step-required">*</span>
