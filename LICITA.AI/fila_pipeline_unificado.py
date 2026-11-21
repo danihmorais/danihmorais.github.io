@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import atexit
 import json
 import logging
 import os
 import re
 import shutil
+import smtplib
 import threading
 import time
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from pathlib import Path
 import unicodedata
 
 logger = logging.getLogger(__name__)
@@ -16,10 +19,48 @@ logger = logging.getLogger(__name__)
 from fila import MAX_ATTEMPTS, POLL_INTERVAL_SECONDS, QUEUE_DIR, SMTP_FROM, SMTP_USERNAME, _artifact_path, _claim_next_job, _enviar_email, _enviar_email_alerta_falha, _finalizar_etapa, _finalizar_tentativa, _iniciar_etapa, _job_path, _retry_delay_seconds, _write_json, gerar_zip
 from fila_pipeline import ErroPermanente, _aplicar_auditoria_marcas, _chamar_ia as _chamar_ia_primaria, _substituir_contextos, _validar_json_geracao, limite_prompt_chars
 from montador_variaveis import amostra_exigida, arredondar_valor_estimado_decimal, calcular_valor_estimado_decimal
+from conformidade import formatar_relatorio_referencias
 
 
 class JobCancelado(Exception):
     """Cancelamento solicitado; o worker deve interromper entre etapas."""
+
+
+def _classificar_erro_permanente(exc: Exception) -> bool:
+    if isinstance(exc, ErroPermanente):
+        return True
+    if isinstance(exc, smtplib.SMTPServerDisconnected):
+        return False
+    codigo_smtp = getattr(exc, "smtp_code", None)
+    if codigo_smtp is not None:
+        try:
+            codigo_smtp = int(codigo_smtp)
+        except (TypeError, ValueError):
+            codigo_smtp = None
+        if codigo_smtp is not None:
+            if 400 <= codigo_smtp < 500:
+                return False
+            if 500 <= codigo_smtp < 600:
+                return True
+    status = getattr(exc, "status_code", None)
+    if status is not None:
+        try:
+            status = int(status)
+        except (TypeError, ValueError):
+            status = None
+        if status is not None:
+            return 400 <= status < 500 and status not in {408, 425, 429}
+    nome = type(exc).__name__.casefold()
+    if isinstance(exc, (TimeoutError, ConnectionError)) or any(token in nome for token in ("timeout", "connecterror", "networkerror", "requesterror")):
+        return False
+    if isinstance(exc, (ValueError, TypeError, KeyError, IndexError, AssertionError, OSError)):
+        return True
+    if isinstance(exc, RuntimeError):
+        mensagem = str(exc).casefold()
+        if any(token in mensagem for token in ("http 5", "http 429", "http 408", "http 425", "timeout", "timed out", "falha de comunicacao", "falha de comunicação", "conexao", "conexão", "fora do ar")):
+            return False
+        return True
+    return True
 
 
 def _utc_now() -> str:
@@ -330,6 +371,33 @@ def _json_schema_fase_preparatoria(exigir_amostra_tr: bool = True) -> dict:
     }
 
 
+def _json_schema_documento(nome: str, exigir_amostra_tr: bool = True) -> dict:
+    if nome not in _FASE_PREPARATORIA_CAMPOS:
+        raise ErroPermanente("Documento sem esquema JSON configurado.")
+    campos = _FASE_PREPARATORIA_CAMPOS[nome]
+    if nome == "TR" and not exigir_amostra_tr:
+        campos = tuple(campo for campo in campos if campo != "AMOSTRA_TR")
+    bloco = {
+        "type": "object",
+        "properties": {campo: {"type": "string", "minLength": 1} for campo in campos},
+        "required": list(campos),
+        "additionalProperties": False,
+    }
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "documento_" + nome.casefold(),
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "properties": {nome: bloco},
+                "required": [nome],
+                "additionalProperties": False,
+            },
+        },
+    }
+
+
 _JSON_ESTRUTURADO_SYSTEM_PROMPT = """
 Você é um assistente jurídico-administrativo especializado em contratações públicas brasileiras.
 Esta é uma tarefa de redação ou extração sobre o texto fornecido no prompt do usuário. Não use ferramentas nem faça pesquisa; não invente fatos, valores, normas ou documentos.
@@ -388,32 +456,157 @@ def _json_schema_itens_tr() -> dict:
     )
 
 
-def _opcoes_chamada_ia_etapa(etapa_tipo: str, etapa_id: str = "", *, exigir_amostra_tr: bool = True) -> dict:
-    """Saída estruturada nas etapas de JSON fechado; sem ferramentas nas etapas puramente mecânicas.
+def _schema_objeto_estrito(propriedades: dict, obrigatorios: list[str], nome: str) -> dict:
+    return _response_format_estrito(
+        nome,
+        {
+            "type": "object",
+            "properties": propriedades,
+            "required": obrigatorios,
+            "additionalProperties": False,
+        },
+    )
 
-    A consulta de habilitação (que usa pesquisa web) e a contratação direta (que ainda descreve o
-    formato no prompt e roda com ferramentas) ficam de fora: combinar gramática estrita com o laço
-    de ferramentas precisa ser validado no servidor antes de ser ligado.
-    """
+
+def _json_schema_auditoria_marcas() -> dict:
+    item = _schema_objeto_estrito(
+        {
+            "numero": {"type": "string", "minLength": 1},
+            "nome_revisado": {"type": "string", "minLength": 1},
+            "motivo": {"type": "string", "minLength": 1},
+        },
+        ["numero", "nome_revisado", "motivo"],
+        "item_auditoria_marca",
+    )["json_schema"]["schema"]
+    return _schema_objeto_estrito(
+        {"itens": {"type": "array", "items": item}},
+        ["itens"],
+        "auditoria_marcas",
+    )
+
+
+def _json_schema_consulta_habilitacao() -> dict:
+    documento = {
+        "type": "object",
+        "properties": {
+            "numero_documento": {"type": "string"},
+            "categoria": {"type": "string"},
+            "documento": {"type": "string"},
+            "aplicabilidade": {"type": "string"},
+            "justificativa": {"type": "string"},
+            "fundamento_legal": {"type": "string"},
+            "fonte_oficial_url": {"type": "string"},
+        },
+        "required": [
+            "numero_documento", "categoria", "documento", "aplicabilidade",
+            "justificativa", "fundamento_legal", "fonte_oficial_url",
+        ],
+        "additionalProperties": False,
+    }
+    exigencia = {
+        "type": "object",
+        "properties": {
+            "exigencia": {"type": "string"},
+            "motivo": {"type": "string"},
+            "fonte_oficial_url": {"type": "string"},
+        },
+        "required": ["exigencia", "motivo", "fonte_oficial_url"],
+        "additionalProperties": False,
+    }
+    fonte = {
+        "type": "object",
+        "properties": {
+            "orgao": {"type": "string"},
+            "titulo": {"type": "string"},
+            "url": {"type": "string"},
+            "relevancia": {"type": "string"},
+        },
+        "required": ["orgao", "titulo", "url", "relevancia"],
+        "additionalProperties": False,
+    }
+    return _schema_objeto_estrito(
+        {
+            "ENQUADRAMENTO_DO_OBJETO": {"type": "string", "minLength": 1},
+            "LEGISLACAO_E_REGULACAO_APLICAVEL": {"type": "string", "minLength": 1},
+            "REQUISITOS_TECNICOS_E_REGULATORIOS": {"type": "string", "minLength": 1},
+            "DOCUMENTOS_ADICIONAIS_HABILITACAO": {"type": "array", "items": documento},
+            "EXIGENCIAS_NAO_RECOMENDADAS": {"type": "array", "items": exigencia},
+            "FONTES_OFICIAIS": {"type": "array", "items": fonte},
+            "CONCLUSAO": {"type": "string", "minLength": 1},
+        },
+        [
+            "ENQUADRAMENTO_DO_OBJETO", "LEGISLACAO_E_REGULACAO_APLICAVEL",
+            "REQUISITOS_TECNICOS_E_REGULATORIOS", "DOCUMENTOS_ADICIONAIS_HABILITACAO",
+            "EXIGENCIAS_NAO_RECOMENDADAS", "FONTES_OFICIAIS", "CONCLUSAO",
+        ],
+        "consulta_habilitacao",
+    )
+
+
+def _json_schema_contratacao_direta() -> dict:
+    return _schema_objeto_estrito(
+        {campo: {"type": "string", "minLength": 1} for campo in _CAMPOS_CONTRATACAO_DIRETA},
+        list(_CAMPOS_CONTRATACAO_DIRETA),
+        "contratacao_direta",
+    )
+
+
+def _opcoes_chamada_ia_etapa(etapa_tipo: str, etapa_id: str = "", *, exigir_amostra_tr: bool = True) -> dict:
     tipo = str(etapa_tipo or "").strip().casefold()
+    identificador = str(etapa_id or "").strip().upper()
     if tipo == "auditoria_marcas":
-        # O próprio prompt de sistema manda não pesquisar em tarefas mecânicas; desligar as
-        # ferramentas evita minutos de busca inútil numa remoção de marca.
-        return {"enable_tools": False}
-    if tipo == "geracao_json" and str(etapa_id or "").strip().upper() == "PAGAMENTO_ETAPAS":
+        return {
+            "response_format": _json_schema_auditoria_marcas(),
+            "enable_tools": False,
+            "system_prompt": _JSON_ESTRUTURADO_SYSTEM_PROMPT,
+            "enable_thinking": False,
+        }
+    if tipo == "geracao_json" and identificador == "PAGAMENTO_ETAPAS":
         return {
             "response_format": _json_schema_pagamento_etapas(),
             "enable_tools": False,
             "system_prompt": _JSON_ESTRUTURADO_SYSTEM_PROMPT,
+            "enable_thinking": False,
         }
-    if tipo != "geracao_unificada":
-        return {}
-    return {
-        "response_format": _json_schema_fase_preparatoria(exigir_amostra_tr),
-        "enable_tools": False,
-        "system_prompt": _FASE_PREPARATORIA_SYSTEM_PROMPT,
-    }
-
+    if tipo == "consulta_habilitacao":
+        return {
+            "response_format": _json_schema_consulta_habilitacao(),
+            "enable_tools": True,
+            "enable_thinking": False,
+        }
+    if tipo == "geracao_json":
+        return {
+            "enable_tools": False,
+            "system_prompt": _JSON_ESTRUTURADO_SYSTEM_PROMPT,
+            "enable_thinking": False,
+        }
+    if tipo in {"geracao_dfd", "geracao_etp", "geracao_tr"}:
+        documento = {
+            "geracao_dfd": "DFD",
+            "geracao_etp": "ETP",
+            "geracao_tr": "TR",
+        }[tipo]
+        return {
+            "response_format": _json_schema_documento(documento, exigir_amostra_tr),
+            "enable_tools": False,
+            "system_prompt": _FASE_PREPARATORIA_SYSTEM_PROMPT,
+            "enable_thinking": True,
+        }
+    if tipo == "geracao_contratacao_direta":
+        return {
+            "response_format": _json_schema_contratacao_direta(),
+            "enable_tools": False,
+            "system_prompt": _JSON_ESTRUTURADO_SYSTEM_PROMPT,
+            "enable_thinking": True,
+        }
+    if tipo == "geracao_unificada":
+        return {
+            "response_format": _json_schema_fase_preparatoria(exigir_amostra_tr),
+            "enable_tools": False,
+            "system_prompt": _FASE_PREPARATORIA_SYSTEM_PROMPT,
+            "enable_thinking": True,
+        }
+    return {}
 
 def _chamar_ia(
     prompt: str,
@@ -423,10 +616,10 @@ def _chamar_ia(
     response_format: dict | None = None,
     enable_tools: bool = True,
     system_prompt: str | None = None,
+    enable_thinking: bool = True,
 ) -> tuple[dict, str]:
     modelo = str(model or "unsloth-auto").strip()
-    # Preserva compatibilidade com as chamadas simples existentes.
-    if response_format is None and enable_tools is True and system_prompt is None:
+    if response_format is None and enable_tools is True and system_prompt is None and enable_thinking is True:
         return _chamar_ia_primaria(prompt, modelo, temperature)
     return _chamar_ia_primaria(
         prompt,
@@ -435,6 +628,7 @@ def _chamar_ia(
         response_format=response_format,
         enable_tools=enable_tools,
         system_prompt=system_prompt,
+        enable_thinking=enable_thinking,
     )
 
 
@@ -506,7 +700,8 @@ def _validar_json_unificado(resultado: dict, exigir_amostra_tr: bool = True) -> 
 # O pipeline chega do navegador (dados_ia.__LICITA_PIPELINE__). O servidor só aceita os tipos
 # de etapa que o próprio front gera e limita quantidade, identificadores e temperatura.
 TIPOS_ETAPA_PERMITIDOS = frozenset({
-    "auditoria_marcas", "geracao_json", "consulta_habilitacao", "geracao_unificada", "geracao_contratacao_direta",
+    "auditoria_marcas", "geracao_json", "consulta_habilitacao", "geracao_unificada",
+    "geracao_contratacao_direta", "geracao_dfd", "geracao_etp", "geracao_tr",
 })
 MAX_ETAPAS = 8
 _ETAPA_ID_RE = re.compile(r"[A-Z0-9_]{1,40}")
@@ -543,6 +738,80 @@ def _validar_etapas(etapas: list) -> None:
             raise ErroPermanente(f"Tipo de etapa de IA não permitido: {tipo[:60]!r}.")
         if not _ETAPA_ID_RE.fullmatch(str(etapa.get("id", "")).strip().upper()):
             raise ErroPermanente("Identificador de etapa de IA inválido.")
+
+
+def _validar_json_documento(resultado: dict, nome: str, exigir_amostra_tr: bool = True) -> dict:
+    if nome not in _FASE_PREPARATORIA_CAMPOS:
+        raise ErroPermanente("Documento sem validador JSON configurado.")
+    resultado = _validar_json_geracao(resultado)
+    if set(resultado) != {nome}:
+        raise RuntimeError(f"A resposta da etapa deve conter exclusivamente o bloco {nome}.")
+    bloco = resultado[nome]
+    campos = _FASE_PREPARATORIA_CAMPOS[nome]
+    if nome == "TR" and not exigir_amostra_tr:
+        campos = tuple(campo for campo in campos if campo != "AMOSTRA_TR")
+        if isinstance(bloco, dict):
+            bloco = {chave: valor for chave, valor in bloco.items() if chave != "AMOSTRA_TR"}
+    if not isinstance(bloco, dict) or set(bloco) != set(campos):
+        recebidos = set(bloco) if isinstance(bloco, dict) else set()
+        ausentes = sorted(set(campos) - recebidos)
+        extras = sorted(recebidos - set(campos))
+        detalhe = []
+        if ausentes:
+            detalhe.append("campos ausentes: " + ", ".join(ausentes))
+        if extras:
+            detalhe.append("campos extras: " + ", ".join(str(campo) for campo in extras))
+        raise RuntimeError(
+            f"O bloco {nome} não corresponde ao esquema JSON obrigatório (" + "; ".join(detalhe) + ")."
+        )
+    invalidos = [
+        str(chave) for chave, valor in bloco.items()
+        if not isinstance(valor, str) or not valor.strip()
+    ]
+    if invalidos:
+        raise RuntimeError(f"O bloco {nome} contém campos não textuais ou vazios: {', '.join(invalidos)}.")
+    return {nome: bloco}
+
+
+def _validar_json_consulta_habilitacao(resultado: dict) -> dict:
+    campos_textuais = (
+        "ENQUADRAMENTO_DO_OBJETO",
+        "LEGISLACAO_E_REGULACAO_APLICAVEL",
+        "REQUISITOS_TECNICOS_E_REGULATORIOS",
+        "CONCLUSAO",
+    )
+    campos_lista = (
+        "DOCUMENTOS_ADICIONAIS_HABILITACAO",
+        "EXIGENCIAS_NAO_RECOMENDADAS",
+        "FONTES_OFICIAIS",
+    )
+    if not isinstance(resultado, dict):
+        raise RuntimeError("A consulta de habilitação não retornou um objeto JSON válido.")
+    ausentes = [campo for campo in (*campos_textuais, *campos_lista) if campo not in resultado]
+    if ausentes:
+        raise RuntimeError("A consulta de habilitação não retornou os campos: " + ", ".join(ausentes) + ".")
+    for campo in campos_textuais:
+        if not isinstance(resultado[campo], str) or not resultado[campo].strip():
+            raise RuntimeError(f"A consulta de habilitação retornou o campo textual vazio: {campo}.")
+    esquemas_listas = {
+        "DOCUMENTOS_ADICIONAIS_HABILITACAO": (
+            "numero_documento", "categoria", "documento", "aplicabilidade",
+            "justificativa", "fundamento_legal", "fonte_oficial_url",
+        ),
+        "EXIGENCIAS_NAO_RECOMENDADAS": ("exigencia", "motivo", "fonte_oficial_url"),
+        "FONTES_OFICIAIS": ("orgao", "titulo", "url", "relevancia"),
+    }
+    for campo, obrigatorios in esquemas_listas.items():
+        lista = resultado[campo]
+        if not isinstance(lista, list):
+            raise RuntimeError(f"A consulta de habilitação retornou uma lista inválida em {campo}.")
+        for indice, item in enumerate(lista, start=1):
+            if not isinstance(item, dict) or set(item) != set(obrigatorios):
+                raise RuntimeError(f"O registro {indice} de {campo} não corresponde ao esquema obrigatório.")
+            vazios = [chave for chave in obrigatorios if not isinstance(item[chave], str)]
+            if vazios:
+                raise RuntimeError(f"O registro {indice} de {campo} contém campos não textuais: " + ", ".join(vazios) + ".")
+    return {campo: resultado[campo] for campo in (*campos_textuais, *campos_lista)}
 
 
 def _validar_json_contratacao_direta(resultado: dict) -> dict:
@@ -707,7 +976,73 @@ def _adicionar_documentos_de_referencia(prompt: str, documentos: list[dict]) -> 
     return prompt + "\n\n" + contexto
 
 
+def _montar_documentos_revisao(resultados: dict) -> dict:
+    documentos = {}
+    unificada = resultados.get("FASE_PREPARATORIA")
+    if isinstance(unificada, dict):
+        for nome in ("DFD", "ETP", "TR"):
+            bloco = unificada.get(nome)
+            if isinstance(bloco, dict):
+                documentos[nome] = dict(bloco)
+    for nome, etapa_id in (("DFD", "GERACAO_DFD"), ("ETP", "GERACAO_ETP"), ("TR", "GERACAO_TR")):
+        if nome in documentos:
+            continue
+        bloco = resultados.get(nome)
+        if not isinstance(bloco, dict):
+            etapa = resultados.get(etapa_id)
+            bloco = etapa.get(nome) if isinstance(etapa, dict) else None
+        if isinstance(bloco, dict):
+            documentos[nome] = dict(bloco)
+    return documentos
+
+
+def _gerar_documentos_e_enviar(job: dict, dados_usuario: dict, dados_ia_final: dict) -> None:
+    _checar_cancelamento(job)
+    _iniciar_etapa(job, "GERACAO_DOCUMENTOS")
+    _write_json(_job_path(job["job_id"], ".processing"), job)
+    generated_path, zip_filename = gerar_zip(dados_usuario, dados_ia_final, job["job_id"])
+    temp_root = generated_path.parent
+    artifact_path = _artifact_path(job["job_id"])
+    try:
+        artifact_path.unlink(missing_ok=True)
+        shutil.move(str(generated_path), str(artifact_path))
+    finally:
+        shutil.rmtree(temp_root, ignore_errors=True)
+
+    _finalizar_etapa(job, "GERACAO_DOCUMENTOS", "completed")
+    job["dados_usuario_processados"] = dados_usuario
+    job["dados_ia_final"] = dados_ia_final
+    _write_json(_job_path(job["job_id"], ".processing"), job)
+    _checar_cancelamento(job)
+    _iniciar_etapa(job, "ENVIO_EMAIL")
+    job["email_started_at"] = _utc_now()
+    _write_json(_job_path(job["job_id"], ".processing"), job)
+    _checar_cancelamento(job)
+    _enviar_email(job["email"], artifact_path, zip_filename, job["job_id"])
+
+    job["dados_ia"] = dados_ia_final
+    _finalizar_etapa(job, "ENVIO_EMAIL", "completed")
+    _finalizar_tentativa(job, "sent")
+    job.update({"status": "sent", "completed_at": _utc_now(), "current_stage": "CONCLUIDO", "result": {"filename": zip_filename, "recipient": job["email"]}})
+    _write_json(_job_path(job["job_id"], ".done"), job)
+    _job_path(job["job_id"], ".processing").unlink(missing_ok=True)
+
+
 def _process_pipeline(job: dict) -> None:
+    if job.get("review_approved"):
+        dados_usuario = job.get("dados_usuario_processados") or job.get("pipeline_dados_usuario") or job.get("dados_usuario")
+        dados_ia_final = job.get("dados_ia_final")
+        documentos = job.get("review_documents")
+        if not isinstance(dados_usuario, dict) or not isinstance(dados_ia_final, dict):
+            raise ErroPermanente("Os dados aprovados não estão disponíveis para a montagem dos documentos.")
+        if not isinstance(documentos, dict) or not all(isinstance(documentos.get(nome), dict) for nome in ("DFD", "ETP", "TR")):
+            raise ErroPermanente("A revisão aprovada não contém DFD, ETP e TR válidos.")
+        dados_ia_final = dict(dados_ia_final)
+        for nome in ("DFD", "ETP", "TR"):
+            dados_ia_final.update(documentos[nome])
+        _gerar_documentos_e_enviar(job, dados_usuario, dados_ia_final)
+        return
+
     if job.get("retry_mode") == "email_only":
         _process_email_only_retry(job)
         return
@@ -746,7 +1081,7 @@ def _process_pipeline(job: dict) -> None:
         _write_json(_job_path(job["job_id"], ".processing"), job)
 
         prompt_processado = _substituir_contextos(prompt, dados_usuario, resultados)
-        if etapa_tipo in {"consulta_habilitacao", "geracao_unificada", "geracao_contratacao_direta", "geracao_json"}:
+        if etapa_tipo in {"consulta_habilitacao", "geracao_unificada", "geracao_dfd", "geracao_etp", "geracao_tr", "geracao_contratacao_direta", "geracao_json"}:
             prompt_processado = _adicionar_documentos_de_referencia(prompt_processado, documentos_anteriores)
 
         limite_prompt = limite_prompt_chars()
@@ -758,10 +1093,21 @@ def _process_pipeline(job: dict) -> None:
         exigir_amostra_tr = amostra_exigida(dados_usuario)
         opcoes_chamada = _opcoes_chamada_ia_etapa(etapa_tipo, etapa_id, exigir_amostra_tr=exigir_amostra_tr)
         temperatura_etapa = _temperatura_valida(etapa.get("temperature"), temperatura)
+        inicio_stage = time.perf_counter()
         if opcoes_chamada:
             resultado, modelo_resolvido = _chamar_ia(prompt_processado, modelo, temperatura_etapa, **opcoes_chamada)
         else:
             resultado, modelo_resolvido = _chamar_ia(prompt_processado, modelo, temperatura_etapa)
+        logger.info(
+            "ai_stage_completed",
+            extra={
+                "job_id": job["job_id"],
+                "request_id": job.get("request_id"),
+                "stage": etapa_id,
+                "model": modelo_resolvido or modelo,
+                "duration_seconds": round(time.perf_counter() - inicio_stage, 3),
+            },
+        )
         _checar_cancelamento(job)
         if modelo_resolvido:
             modelo = modelo_resolvido
@@ -773,8 +1119,15 @@ def _process_pipeline(job: dict) -> None:
         elif etapa_tipo == "geracao_unificada":
             resultado_final = _validar_json_unificado(resultado, exigir_amostra_tr)
             resultados[etapa_id] = resultado_final
+        elif etapa_tipo in {"geracao_dfd", "geracao_etp", "geracao_tr"}:
+            documento = {"geracao_dfd": "DFD", "geracao_etp": "ETP", "geracao_tr": "TR"}[etapa_tipo]
+            resultado_final = _validar_json_documento(resultado, documento, exigir_amostra_tr)
+            resultados[etapa_id] = resultado_final
+            resultados[documento] = resultado_final[documento]
         elif etapa_tipo == "geracao_contratacao_direta":
             resultados[etapa_id] = _validar_json_contratacao_direta(resultado)
+        elif etapa_tipo == "consulta_habilitacao":
+            resultados[etapa_id] = _validar_json_consulta_habilitacao(resultado)
         elif etapa_id == "PAGAMENTO_ETAPAS":
             resultados[etapa_id] = _validar_json_pagamento_etapas(resultado)
         else:
@@ -789,9 +1142,17 @@ def _process_pipeline(job: dict) -> None:
 
     dados_ia_final: dict = {}
     for etapa_id, resultado in resultados.items():
-        if etapa_id in {"AUDITORIA_MARCAS", "CONSULTA_HABILITACAO"} or not isinstance(resultado, dict):
+        if etapa_id in {"AUDITORIA_MARCAS", "CONSULTA_HABILITACAO", "DFD", "ETP", "TR"} or not isinstance(resultado, dict):
             continue
-        blocos = resultado if etapa_id == "FASE_PREPARATORIA" and all(isinstance(resultado.get(bloco), dict) for bloco in ("DFD", "ETP", "TR")) else {"_": resultado}
+        documento_etapa = {
+            "GERACAO_DFD": "DFD",
+            "GERACAO_ETP": "ETP",
+            "GERACAO_TR": "TR",
+        }.get(etapa_id)
+        if documento_etapa:
+            blocos = {documento_etapa: resultado[documento_etapa]} if isinstance(resultado.get(documento_etapa), dict) else {}
+        else:
+            blocos = resultado if etapa_id == "FASE_PREPARATORIA" and all(isinstance(resultado.get(bloco), dict) for bloco in ("DFD", "ETP", "TR")) else {"_": resultado}
         for bloco in blocos.values():
             if not isinstance(bloco, dict):
                 continue
@@ -837,44 +1198,31 @@ def _process_pipeline(job: dict) -> None:
     if valor_estimado_aproximado:
         # O valor aproximado é derivado dos itens, com margem de 5% e arredondamento para cima.
         dados_ia_final["VALOR_ESTIMADO_APROXIMADO"] = valor_estimado_aproximado
-    _checar_cancelamento(job)
-    _iniciar_etapa(job, "GERACAO_DOCUMENTOS")
-    _write_json(_job_path(job["job_id"], ".processing"), job)
-    generated_path, zip_filename = gerar_zip(dados_usuario, dados_ia_final, job["job_id"])
-    temp_root = generated_path.parent
-    artifact_path = _artifact_path(job["job_id"])
-    try:
-        artifact_path.unlink(missing_ok=True)
-        shutil.move(str(generated_path), str(artifact_path))
-    finally:
-        shutil.rmtree(temp_root, ignore_errors=True)
+    if job.get("require_review") and not job.get("review_approved"):
+        documentos_revisao = _montar_documentos_revisao(resultados)
+        if not all(isinstance(documentos_revisao.get(nome), dict) and documentos_revisao[nome] for nome in ("DFD", "ETP", "TR")):
+            raise ErroPermanente("A revisão não pode ser aberta porque DFD, ETP e TR não foram gerados integralmente.")
+        job.update({
+            "status": "awaiting_review",
+            "current_stage": "REVISAO_USUARIO",
+            "dados_usuario_processados": dados_usuario,
+            "dados_ia_final": dados_ia_final,
+            "review_documents": documentos_revisao,
+            "review_results": resultados,
+            "updated_at": _utc_now(),
+        })
+        _write_json(_job_path(job["job_id"], ".review"), job)
+        _job_path(job["job_id"], ".processing").unlink(missing_ok=True)
+        return
 
-    _finalizar_etapa(job, "GERACAO_DOCUMENTOS", "completed")
-    job["dados_usuario_processados"] = dados_usuario
-    _checar_cancelamento(job)
-    _iniciar_etapa(job, "ENVIO_EMAIL")
-    job["email_started_at"] = _utc_now()
-    _write_json(_job_path(job["job_id"], ".processing"), job)
-
-    _checar_cancelamento(job)
-    _enviar_email(job["email"], artifact_path, zip_filename, job["job_id"])
-
-    # Só substitui a entrada do pipeline pelos resultados depois do envio bem-sucedido.
-    # Assim, se o SMTP falhar, o JSON de falha ainda terá os dados necessários para refazer.
-    job["dados_ia"] = dados_ia_final
-    _finalizar_etapa(job, "ENVIO_EMAIL", "completed")
-    _finalizar_tentativa(job, "sent")
-    job.update({"status": "sent", "completed_at": _utc_now(), "current_stage": "CONCLUIDO", "result": {"filename": zip_filename, "recipient": job["email"]}})
-    _write_json(_job_path(job["job_id"], ".done"), job)
-    artifact_path.unlink(missing_ok=True)
-    _job_path(job["job_id"], ".processing").unlink(missing_ok=True)
+    _gerar_documentos_e_enviar(job, dados_usuario, dados_ia_final)
 
 
 
 def _process_email_only_retry(job: dict) -> None:
     """Reenvia arquivos já gerados em registros antigos cuja falha ocorreu apenas no SMTP."""
     dados_usuario = job.get("dados_usuario_processados")
-    dados_ia = job.get("dados_ia")
+    dados_ia = job.get("dados_ia_final") or job.get("dados_ia")
     if not isinstance(dados_usuario, dict) or not isinstance(dados_ia, dict) or not dados_ia:
         raise RuntimeError("Não há documentos gerados suficientes para refazer somente o envio de e-mail.")
 
@@ -907,8 +1255,24 @@ def _process_email_only_retry(job: dict) -> None:
         "result": {"filename": zip_filename, "recipient": job["email"]},
     })
     _write_json(_job_path(job["job_id"], ".done"), job)
-    artifact_path.unlink(missing_ok=True)
     _job_path(job["job_id"], ".processing").unlink(missing_ok=True)
+
+
+def _heartbeat_processing_file(caminho: Path) -> bool:
+    try:
+        os.utime(caminho, None)
+        return True
+    except OSError:
+        return False
+
+
+def _heartbeat_processing_loop(caminho: Path, encerramento: threading.Event) -> None:
+    while not encerramento.wait(HEARTBEAT_INTERVAL_SECONDS):
+        if not _heartbeat_processing_file(caminho):
+            return
+
+
+HEARTBEAT_INTERVAL_SECONDS = max(15, int(os.getenv("LICITA_QUEUE_HEARTBEAT_SECONDS", "45")))
 
 
 def _process_one_job() -> None:
@@ -916,6 +1280,14 @@ def _process_one_job() -> None:
     if claimed is None:
         return
     processing_path, job = claimed
+    heartbeat_stop = threading.Event()
+    heartbeat_thread = threading.Thread(
+        target=_heartbeat_processing_loop,
+        args=(processing_path, heartbeat_stop),
+        name=f"licita-heartbeat-{job.get('job_id', 'job')}",
+        daemon=True,
+    )
+    heartbeat_thread.start()
     try:
         _process_pipeline(job)
     except JobCancelado:
@@ -927,7 +1299,7 @@ def _process_one_job() -> None:
         attempts = int(job.get("attempts", 1))
         # str() de algumas exceções (ex.: timeouts) é vazio; registre ao menos o tipo.
         erro_texto = str(exc) or type(exc).__name__
-        permanente = isinstance(exc, ErroPermanente)
+        permanente = _classificar_erro_permanente(exc)
         logger.warning(
             "Solicitação %s falhou na tentativa %s (%s): %s",
             job.get("job_id"), attempts, "permanente" if permanente else "transitória", erro_texto,
@@ -968,10 +1340,14 @@ def _process_one_job() -> None:
                 )
             _write_json(_job_path(job["job_id"], ".failed"), job)
             processing_path.unlink(missing_ok=True)
-            _artifact_path(job["job_id"]).unlink(missing_ok=True)
+            if str(job.get("current_stage") or "").upper() != "ENVIO_EMAIL":
+                _artifact_path(job["job_id"]).unlink(missing_ok=True)
+    finally:
+        heartbeat_stop.set()
+        heartbeat_thread.join(timeout=2)
 
 
-STALE_PROCESSING_SECONDS = max(600, int(os.getenv("LICITA_QUEUE_STALE_PROCESSING_SECONDS", "3600")))
+STALE_PROCESSING_SECONDS = max(120, int(os.getenv("LICITA_QUEUE_STALE_PROCESSING_SECONDS", "300")))
 _RECUPERACAO_A_CADA_CICLOS = 20
 
 
@@ -1023,21 +1399,42 @@ def _recuperar_orfaos(agora: float | None = None) -> int:
     return recuperados
 
 
+_worker_thread: threading.Thread | None = None
+_worker_stop_event = threading.Event()
+
+
 def _worker_loop() -> None:
     ciclo = 0
-    while True:
+    while not _worker_stop_event.is_set():
         try:
             if ciclo % _RECUPERACAO_A_CADA_CICLOS == 0:
                 _recuperar_orfaos()
             _process_one_job()
         except Exception:
-            # Nunca derrube o worker, mas também nunca engula o erro em silêncio.
             logger.exception("Erro inesperado no worker da fila.")
         ciclo += 1
-        time.sleep(POLL_INTERVAL_SECONDS)
+        _worker_stop_event.wait(POLL_INTERVAL_SECONDS)
 
 
-_worker_thread: threading.Thread | None = None
+def parar_worker(timeout: float | None = None) -> bool:
+    global _worker_thread
+    _worker_stop_event.set()
+    thread = _worker_thread
+    if thread is None:
+        return True
+    if thread is threading.current_thread():
+        return False
+    limite = (
+        max(1, int(os.getenv("LICITA_QUEUE_SHUTDOWN_TIMEOUT_SECONDS", "1250")))
+        if timeout is None
+        else max(0, float(timeout))
+    )
+    thread.join(timeout=limite)
+    if thread.is_alive():
+        logger.warning("O worker da fila não encerrou dentro do prazo de shutdown configurado.")
+        return False
+    _worker_thread = None
+    return True
 
 
 def iniciar_worker() -> None:
@@ -1045,5 +1442,13 @@ def iniciar_worker() -> None:
     if _worker_thread is not None and _worker_thread.is_alive():
         return
     QUEUE_DIR.mkdir(parents=True, exist_ok=True)
+    _worker_stop_event.clear()
     _worker_thread = threading.Thread(target=_worker_loop, name="licita-ai-pipeline-unificado", daemon=True)
     _worker_thread.start()
+
+
+atexit.register(parar_worker)
+
+
+def _gerar_relatorio_conformidade(resultado: dict) -> str:
+    return formatar_relatorio_referencias(resultado)

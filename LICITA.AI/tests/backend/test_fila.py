@@ -279,5 +279,70 @@ class FilaTests(unittest.TestCase):
 
 
 
+    def test_gerar_zip_inclui_checklist_de_conformidade(self):
+        import json
+        import shutil
+        import tempfile
+        import zipfile
+        from unittest.mock import patch
+
+        documentos = {
+            "OBJETO": "Aquisição de materiais",
+            "TIPO_OBJ": "Aquisição",
+            "JUSTIFICATIVA": "Justificativa",
+            "ESTIMATIVA_QUANTIDADES": "Estimativa",
+            "RESULTADOS_ESPERADOS": "Resultados",
+            "REQUISITOS_ETP": "Não há documentos adicionais",
+            "SUBCONTRATACAO_ETP": "Vedada",
+            "ME_EPP_ETP": "Aplicável",
+            "JUSTIFICATIVA_PAC": "PAC",
+            "MERCADO": "Mercado",
+            "SOLUCAO": "Solução",
+            "CRITERIOS_JUSTIFICATIVA_ETP": "Critérios",
+            "CRITERIOS_SUSTENTABILIDADE": "Sustentabilidade",
+            "MODALIDADE_JUSTIFICATIVA_ETP": "Modalidade",
+            "PROVIDENCIAS_CONT": "Providências",
+            "CORRELATAS_INTER": "Correlatas",
+            "JUSTIFICATIVA_ESTIMATIVA": "Estimativa",
+            "GARANTIAS_ETP": "Garantias",
+            "VISTORIA_ETP": "Vistoria dispensada",
+            "AMOSTRA_ETP": "Amostra dispensada",
+            "PARCELAMENTO": "Parcelamento",
+            "CONCLUSAO": "Viável",
+            "REQUISITOS_TR": "Não há documentos adicionais",
+            "OBRIGACOES_CONTRATADA": "Obrigações",
+            "OBRIGACOES_CONTRANTE": "Administração",
+            "QUALIFICACAO_TECNICA": "Qualificação",
+            "GARANTIAS_TR": "Garantias",
+            "EXECUCAO": "Execução",
+            "PRAZO_EXEC": "Prazo",
+            "LOCAL": "Local",
+            "AMOSTRA_TR": "Amostra dispensada",
+        }
+
+        with tempfile.TemporaryDirectory() as modelos:
+            for nome in ("DFD - BASE.docx", "ETP - BASE.docx", "TR - BASE.docx"):
+                (Path(modelos) / nome).write_bytes(b"modelo")
+
+            def modificar_falso(_origem, destino, _modificacoes):
+                Path(destino).write_bytes(b"docx")
+
+            with (
+                patch.object(fila.config, "PASTA_MODELOS", modelos),
+                patch.object(fila.config, "BASE_FILES", ["DFD - BASE.docx", "ETP - BASE.docx", "TR - BASE.docx"]),
+                patch.object(fila, "modificar_documento", side_effect=modificar_falso),
+            ):
+                caminho_zip, _ = fila.gerar_zip({"{{AMOST}}": "nao"}, documentos, "checklist")
+                try:
+                    with zipfile.ZipFile(caminho_zip) as arquivo:
+                        self.assertIn("RELATORIO_CONFORMIDADE.json", arquivo.namelist())
+                        self.assertIn("RELATORIO_CONFORMIDADE.txt", arquivo.namelist())
+                        self.assertIn("RELATORIO_REFERENCIAS_LEGAIS.txt", arquivo.namelist())
+                        relatorio = json.loads(arquivo.read("RELATORIO_CONFORMIDADE.json"))
+                    self.assertEqual(relatorio["summary"]["pendencias"], 0)
+                finally:
+                    shutil.rmtree(caminho_zip.parent, ignore_errors=True)
+
+
 if __name__ == "__main__":
     unittest.main()

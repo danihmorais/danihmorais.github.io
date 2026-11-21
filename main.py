@@ -153,6 +153,14 @@ app_biblioteca.init_db()
 app.mount("/biblioteca-api", app_biblioteca)
 
 
+@app.on_event("shutdown")
+async def encerrar_worker_licita():
+    worker = sys.modules.get("fila_pipeline_unificado")
+    parar = getattr(worker, "parar_worker", None) if worker else None
+    if callable(parar):
+        await asyncio.to_thread(parar)
+
+
 DEFAULT_DOCUMENTS_DIR = "/run/media/daniel/c1eb5cb7-675f-4e8c-9564-4dabc66d9164"
 
 

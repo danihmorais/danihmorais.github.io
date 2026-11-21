@@ -1,3 +1,66 @@
+
+const MAX_DOTACAO_IMAGE_BYTES = 2 * 1024 * 1024;
+const MAX_DOTACAO_IMAGES = 8;
+
+function inserirImagemNoCursor(src: string, alt = "Imagem da dotação"): boolean {
+
+  if (!src || !/^data:image\/(?:png|jpeg|jpg|webp|gif);base64,/i.test(src)) return false;
+  const base64 = src.slice(src.indexOf(",") + 1);
+  const bytes = Math.floor(base64.length * 3 / 4);
+  if (bytes > MAX_DOTACAO_IMAGE_BYTES) return false;
+  const editor = document.activeElement instanceof HTMLElement
+    ? document.activeElement
+    : null;
+  const alvo = editor?.isContentEditable
+    ? editor
+    : document.querySelector<HTMLElement>('[contenteditable="true"]');
+  if (!alvo || alvo.querySelectorAll("img").length >= MAX_DOTACAO_IMAGES) return false;
+  const imagem = document.createElement("img");
+  imagem.src = src;
+  imagem.alt = alt;
+  imagem.loading = "lazy";
+  imagem.className = "dotacao-editor-image";
+  const selecao = window.getSelection();
+  if (selecao && selecao.rangeCount > 0 && alvo.contains(selecao.getRangeAt(0).commonAncestorContainer)) {
+    const range = selecao.getRangeAt(0);
+    range.deleteContents();
+    range.insertNode(imagem);
+    range.setStartAfter(imagem);
+    range.collapse(true);
+    selecao.removeAllRanges();
+    selecao.addRange(range);
+  } else {
+    alvo.appendChild(imagem);
+  }
+  return true;
+}
+
+function sanitizarHtmlColado(html: string): string {
+  const documento = new DOMParser().parseFromString(html, "text/html");
+  documento.querySelectorAll("script, style, iframe, object, embed, link, meta, form").forEach(no => no.remove());
+  documento.body.querySelectorAll("*").forEach(elemento => {
+    [...elemento.attributes].forEach(atributo => {
+      const nome = atributo.name.toLowerCase();
+      const valor = atributo.value.trim().toLowerCase();
+      if (nome.startsWith("on") || nome === "style" || (nome === "src" && !valor.startsWith("data:image/"))) {
+        elemento.removeAttribute(atributo.name);
+      }
+    });
+  });
+  documento.body.querySelectorAll("img").forEach(imagem => {
+    const src = imagem.getAttribute("src") || "";
+    if (!/^data:image\/(?:png|jpeg|jpg|webp|gif);base64,/i.test(src) || Math.floor(src.length * 3 / 4) > MAX_DOTACAO_IMAGE_BYTES) {
+      imagem.remove();
+    } else {
+      imagem.setAttribute("alt", imagem.getAttribute("alt") || "Imagem da dotação");
+      imagem.setAttribute("class", "dotacao-editor-image");
+      imagem.removeAttribute("onerror");
+      imagem.removeAttribute("onload");
+    }
+  });
+  return documento.body.innerHTML;
+}
+
 import React, { useCallback, useEffect, useRef } from "react";
 
 export interface DotacaoBloco {
@@ -25,7 +88,7 @@ function blocosParaHtml(blocos: DotacaoBloco[]): string {
     .map((bloco) => {
       if (bloco.tipo === "imagem") {
         if (!bloco.imagemBase64) return "";
-        return `<img src="${bloco.imagemBase64}" />`;
+        return `<img class="dotacao-editor-image" src="${bloco.imagemBase64}" alt="Imagem da dotação" />`;
       }
       return (bloco.texto || "")
         .split("\n")
@@ -105,6 +168,14 @@ export default function DotacaoEditor({ value, onChange, placeholder }: DotacaoE
   const montouRef = useRef(false);
 
   useEffect(() => {
+    const editor = editorRef.current as HTMLElement | null;
+    if (!editor) return;
+    const conteudo = String(value ?? "");
+    if (editor.innerHTML !== conteudo) editor.innerHTML = conteudo;
+  }, [value]);
+
+
+  useEffect(() => {
     if (montouRef.current) return;
     montouRef.current = true;
     if (editorRef.current) {
@@ -132,9 +203,28 @@ export default function DotacaoEditor({ value, onChange, placeholder }: DotacaoE
   };
 
   const aplicarNegrito = () => {
-    editorRef.current?.focus();
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.focus();
     restaurarSelecao();
-    document.execCommand("bold");
+    const selecao = window.getSelection();
+    if (!selecao || selecao.rangeCount === 0) return;
+    const range = selecao.getRangeAt(0);
+    if (!editor.contains(range.commonAncestorContainer)) return;
+
+    const negrito = document.createElement("strong");
+    if (range.collapsed) {
+      range.insertNode(negrito);
+      range.setStart(negrito, 0);
+      range.collapse(true);
+    } else {
+      negrito.appendChild(range.extractContents());
+      range.insertNode(negrito);
+      range.selectNodeContents(negrito);
+    }
+    selecao.removeAllRanges();
+    selecao.addRange(range);
+    savedRangeRef.current = range.cloneRange();
     sincronizar();
   };
 
@@ -158,7 +248,7 @@ export default function DotacaoEditor({ value, onChange, placeholder }: DotacaoE
 
       const sel = window.getSelection();
       if (sel && sel.rangeCount > 0 && editorRef.current?.contains(sel.anchorNode)) {
-        document.execCommand("insertImage", false, dataUrl);
+        inserirImagemNoCursor(String(dataUrl));
       } else {
         const img = document.createElement("img");
         img.src = dataUrl;
@@ -171,37 +261,63 @@ export default function DotacaoEditor({ value, onChange, placeholder }: DotacaoE
   };
 
   return (
-    <div>
-      <div style={{ position: "relative" }}>
+    <div className="dotacao-editor-container">
+      <div className="dotacao-editor-shell">
         <div
           ref={editorRef}
           className="dotacao-editor"
           contentEditable
           suppressContentEditableWarning
+          role="textbox"
+          aria-label="Editor de dotação orçamentária"
+          aria-multiline="true"
+          aria-describedby="dotacao-editor-hint"
+          tabIndex={0}
           data-placeholder={placeholder}
           onInput={sincronizar}
           onBlur={sincronizar}
-        />
-        <div style={{ position: "absolute", bottom: "8px", left: "8px", display: "flex", gap: "6px" }}>
+        onPaste={(evento) => {
+            const html = evento.clipboardData.getData("text/html");
+            if (!html) return;
+            evento.preventDefault();
+            const editor = evento.currentTarget as HTMLElement;
+            const imagensAtuais = editor.querySelectorAll("img").length;
+            const container = document.createElement("div");
+            container.innerHTML = sanitizarHtmlColado(html);
+            const imagens = [...container.querySelectorAll("img")];
+            imagens.slice(Math.max(0, MAX_DOTACAO_IMAGES - imagensAtuais)).forEach(imagem => imagem.remove());
+            const fragmento = document.createDocumentFragment();
+            while (container.firstChild) fragmento.appendChild(container.firstChild);
+            const selecao = window.getSelection();
+            if (selecao && selecao.rangeCount > 0 && editor.contains(selecao.getRangeAt(0).commonAncestorContainer)) {
+            const range = selecao.getRangeAt(0);
+            range.deleteContents();
+            range.insertNode(fragmento);
+            } else {
+            editor.appendChild(fragmento);
+            }
+          }}
+        ></div>
+        <div className="dotacao-editor-toolbar">
           <button
             type="button"
             onMouseDown={(e) => { e.preventDefault(); salvarSelecao(); }}
             onClick={aplicarNegrito}
             title="Negrito (selecione o texto e clique)"
-            style={{ padding: "4px 10px", fontSize: "12px", fontWeight: 700, cursor: "pointer", borderRadius: "6px", background: "var(--bg-panel)", border: "1px solid var(--border)", margin: 0 }}
+            className="dotacao-editor-button dotacao-editor-bold"
           >B</button>
           <button
             type="button"
             onMouseDown={(e) => { e.preventDefault(); abrirSeletorImagem(); }}
             title="Inserir uma ou várias imagens no ponto do cursor"
-            style={{ padding: "4px 10px", fontSize: "12px", cursor: "pointer", borderRadius: "6px", display: "flex", gap: "6px", alignItems: "center", background: "var(--bg-panel)", border: "1px solid var(--border)", margin: 0 }}
-          ><span style={{ fontSize: "14px" }}>🖼️</span> Inserir Imagem</button>
+            className="dotacao-editor-button dotacao-editor-image-button"
+          ><span className="dotacao-editor-image-icon">🖼️</span> Inserir Imagem</button>
           <input
             ref={fileInputRef}
             type="file"
             multiple
             accept="image/*"
-            style={{ display: "none" }}
+            className="dotacao-editor-file-input"
             onChange={(e) => {
               const files = Array.from(e.target.files || []);
               if (files.length > 0) void inserirImagens(files);
@@ -210,7 +326,7 @@ export default function DotacaoEditor({ value, onChange, placeholder }: DotacaoE
           />
         </div>
       </div>
-      <div className="dotacao-hint">
+      <div className="dotacao-hint" id="dotacao-editor-hint">
         Digite o texto e use o botão de imagem para inserir várias imagens no documento, inclusive intercaladas com o texto.
       </div>
     </div>

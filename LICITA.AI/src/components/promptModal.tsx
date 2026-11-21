@@ -64,6 +64,10 @@ export default function PromptModal({
     definirArquivo(campo, null);
   };
 
+  const handleEmailChange = (valor: string) => {
+    onEmailChange(valor);
+  };
+
   const handleConfirmar = () => {
     if (!emailValido) return;
     onConfirm({ instrucoes: texto.trim(), email: email.trim(), arquivos });
@@ -105,7 +109,7 @@ export default function PromptModal({
                   <input
                     ref={(elemento) => { inputArquivoRefs.current[campo.chave] = elemento; }}
                     type="file"
-                    accept=".pdf,.docx"
+                    accept=".pdf,.docx,.txt"
                     aria-label={"Anexar " + campo.titulo}
                     onChange={(e) => definirArquivo(campo.chave, e.target.files?.[0] || null)}
                   />
@@ -125,7 +129,7 @@ export default function PromptModal({
             })}
           </div>
           <p className="reference-footnote">
-            Formatos aceitos: PDF e DOCX. Documentos digitalizados podem passar por OCR quando não houver texto extraível. Ao anexar um Edital/Aviso, apenas os anexos DFD, ETP e TR encontrados serão encaminhados como contexto.
+            Formatos aceitos: PDF, DOCX e TXT. Documentos digitalizados podem passar por OCR quando não houver texto extraível. Ao anexar um Edital/Aviso, apenas os anexos DFD, ETP e TR encontrados serão encaminhados como contexto.
           </p>
         </div>
 
@@ -134,7 +138,7 @@ export default function PromptModal({
           <input
             type="email"
             value={email}
-            onChange={(e) => onEmailChange(e.target.value)}
+            onChange={(e) => handleEmailChange(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && emailValido) handleConfirmar();
             }}
@@ -143,7 +147,7 @@ export default function PromptModal({
             autoComplete="email"
             required
           />
-          <span className="field-hint">O arquivo ZIP final será enviado para este endereço.</span>
+          <span className="field-hint">O arquivo ZIP final será enviado para este endereço. Confira se o endereço foi digitado corretamente.</span>
         </label>
 
         <label className="prompt-field">

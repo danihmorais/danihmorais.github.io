@@ -27,6 +27,17 @@ class MontadorVariaveisTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "supera R\$ 80.000,00"):
             montar_variaveis_fixas(acima)
 
+    def test_referencia_de_decreto_e_obtida_da_configuracao_municipal(self):
+        import config
+
+        resultado = montar_variaveis_fixas({
+            "{{INSTRUMENTO}}": "CONTRATO",
+            "{{PRORROGA}}": "SIM",
+        })
+        if config.DECRETO_MUNICIPAL:
+            self.assertIn(config.DECRETO_MUNICIPAL, resultado["{{PRORROGA}}"])
+        self.assertNotIn("2056/24", resultado["{{PRORROGA}}"])
+
     def test_ata_usa_clausula_especifica_e_nao_clausula_de_contrato(self):
         resultado = montar_variaveis_fixas({
             "{{INSTRUMENTO}}": "ATA",

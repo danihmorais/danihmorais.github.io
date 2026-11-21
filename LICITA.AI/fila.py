@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import sqlite3
+import threading
+import time
+
 import json
 import logging
 import os
@@ -17,6 +21,7 @@ from email.message import EmailMessage
 from pathlib import Path
 
 import config
+from conformidade import avaliar_conformidade, formatar_relatorio_conformidade, formatar_relatorio_referencias
 from montador_variaveis import amostra_exigida, arredondar_valor_estimado_decimal, calcular_valor_estimado_decimal, filtrar_chaves_docx, formatar_moeda, montar_variaveis_fixas, total_linha_item, valor_decimal, validar_consistencia_dados
 from processador_docx import extrair_placeholders_documento, modificar_documento
 
@@ -109,7 +114,7 @@ def _ensure_queue_dir() -> None:
         pass
 
 
-def _write_json(path: Path, payload: dict) -> None:
+def _write_json_arquivo(path: Path, payload: dict) -> None:
     _ensure_queue_dir()
     fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(QUEUE_DIR), text=True)
     try:
@@ -136,7 +141,7 @@ def _artifact_path(job_id: str) -> Path:
 
 
 def _find_job_path(job_id: str) -> Path | None:
-    for suffix in ("", ".processing", ".done", ".failed", ".cancelled"):
+    for suffix in ("", ".queued", ".processing", ".review", ".done", ".failed", ".cancelled"):
         path = _job_path(job_id, suffix)
         if path.is_file():
             return path
@@ -384,6 +389,11 @@ def gerar_zip(dados_usuario: dict, dados_ia: dict, session_id: str) -> tuple[Pat
         with zipfile.ZipFile(caminho_zip, "w", zipfile.ZIP_DEFLATED) as zipf:
             for arq in arquivos_gerados:
                 zipf.write(arq, arq.name)
+            if not _eh_contratacao_direta(dados_usuario):
+                relatorio = avaliar_conformidade(dados_ia, dados_usuario)
+                zipf.writestr("RELATORIO_CONFORMIDADE.json", json.dumps(relatorio, ensure_ascii=False, indent=2))
+                zipf.writestr("RELATORIO_CONFORMIDADE.txt", formatar_relatorio_conformidade(relatorio))
+                zipf.writestr("RELATORIO_REFERENCIAS_LEGAIS.txt", formatar_relatorio_referencias(dados_ia))
         return caminho_zip, zip_filename
     except Exception:
         shutil.rmtree(temp_dir, ignore_errors=True)
@@ -476,15 +486,32 @@ def enqueue_job(
     retry_of: str | None = None,
     retry_mode: str | None = None,
     dados_usuario_processados: dict | None = None,
+    request_id: str | None = None,
+    require_review: bool = False,
+    job_id: str | None = None,
 ) -> dict:
     email = email.strip()
     if not EMAIL_RE.fullmatch(email):
         raise ValueError("Informe um e-mail válido para receber os documentos.")
     validar_consistencia_dados(dados_usuario)
     _ensure_queue_dir()
-    job_id = uuid.uuid4().hex
+    job_id = str(job_id or uuid.uuid4().hex).lower()
+    if not re.fullmatch(r"[0-9a-f]{32}", job_id):
+        raise ValueError("Identificador interno da solicitação inválido.")
+    if any(candidato.exists() for candidato in (
+        _job_path(job_id),
+        _job_path(job_id, ".queued"),
+        _job_path(job_id, ".processing"),
+        _job_path(job_id, ".review"),
+        _job_path(job_id, ".done"),
+        _job_path(job_id, ".failed"),
+        _job_path(job_id, ".cancelled"),
+    )):
+        raise ValueError("Já existe uma solicitação com este identificador.")
     status_token = secrets.token_urlsafe(32)
-    job = {"version": 3, "job_id": job_id, "status": "queued", "created_at": _utc_now(), "attempts": 0, "email": email, "status_token": status_token, "instrucoes": instrucoes.strip(), "dados_usuario": dados_usuario, "dados_ia": dados_ia}
+    job = {
+        "request_id": request_id,
+        "require_review": bool(require_review),"version": 3, "job_id": job_id, "status": "queued", "created_at": _utc_now(), "attempts": 0, "email": email, "status_token": status_token, "instrucoes": instrucoes.strip(), "dados_usuario": dados_usuario, "dados_ia": dados_ia}
     if retry_of:
         job["retry_of"] = retry_of
     if retry_mode:
@@ -568,7 +595,7 @@ def cancel_job(job_id: str, origem: str) -> str:
     return "cancelled"
 
 
-def get_job(job_id: str) -> dict | None:
+def _get_job_arquivo(job_id: str) -> dict | None:
     if not re.fullmatch(r"[0-9a-f]{32}", job_id, re.IGNORECASE):
         return None
     path = _find_job_path(job_id)
@@ -584,7 +611,7 @@ def _claim_next_job() -> tuple[Path, dict] | None:
     _ensure_queue_dir()
     pending = sorted(QUEUE_DIR.glob("[0-9a-f]*.json"), key=lambda path: path.stat().st_mtime)
     for path in pending:
-        if path.name.endswith((".processing.json", ".done.json", ".failed.json", ".cancelled.json")):
+        if path.name.endswith((".processing.json", ".review.json", ".done.json", ".failed.json", ".cancelled.json")):
             continue
         try:
             job = json.loads(path.read_text(encoding="utf-8"))
@@ -614,3 +641,349 @@ def _claim_next_job() -> tuple[Path, dict] | None:
         except (OSError, json.JSONDecodeError, ValueError):
             continue
     return None
+
+_SQLITE_FILA_LOCK = threading.RLock()
+_SQLITE_FILA_INICIALIZADO = False
+_SQLITE_FILA_EXTENSOES = (".queued", ".processing", ".review", ".done", ".failed", ".cancelled")
+
+
+def _sqlite_fila_caminho() -> Path:
+    diretorio = Path(_job_path("0" * 32, ".queued")).parent
+    diretorio.mkdir(parents=True, exist_ok=True)
+    return diretorio / "queue.sqlite3"
+
+
+def _sqlite_fila_conectar():
+    conexao = sqlite3.connect(_sqlite_fila_caminho(), timeout=30)
+    conexao.row_factory = sqlite3.Row
+    conexao.execute("PRAGMA journal_mode=WAL")
+    conexao.execute("PRAGMA synchronous=NORMAL")
+    conexao.execute("PRAGMA busy_timeout=30000")
+    conexao.execute(
+        """
+        CREATE TABLE IF NOT EXISTS queue_jobs (
+            job_id TEXT PRIMARY KEY,
+            status TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT '',
+            updated_at TEXT NOT NULL DEFAULT '',
+            file_path TEXT NOT NULL DEFAULT '',
+            payload TEXT NOT NULL
+        )
+        """
+    )
+    conexao.execute("CREATE INDEX IF NOT EXISTS idx_queue_jobs_status_created ON queue_jobs(status, created_at, job_id)")
+    conexao.execute("CREATE INDEX IF NOT EXISTS idx_queue_jobs_updated ON queue_jobs(updated_at DESC)")
+    return conexao
+
+
+def _sqlite_fila_gravar(job: dict, caminho: str | Path) -> None:
+    if not isinstance(job, dict):
+        return
+    job_id = str(job.get("job_id") or "").strip()
+    if not job_id:
+        return
+    status = str(job.get("status") or "").strip().lower() or "unknown"
+    caminho_str = str(caminho)
+    created_at = str(job.get("created_at") or job.get("criado_em") or "")
+    updated_at = str(job.get("updated_at") or job.get("atualizado_em") or created_at)
+    payload = json.dumps(job, ensure_ascii=False, default=str)
+    conexao = _sqlite_fila_conectar()
+    try:
+        with conexao:
+            conexao.execute(
+                """
+                INSERT INTO queue_jobs(job_id, status, created_at, updated_at, file_path, payload)
+                VALUES(?, ?, ?, ?, ?, ?)
+                ON CONFLICT(job_id) DO UPDATE SET
+                    status=excluded.status,
+                    created_at=CASE WHEN excluded.created_at='' THEN queue_jobs.created_at ELSE excluded.created_at END,
+                    updated_at=excluded.updated_at,
+                    file_path=excluded.file_path,
+                    payload=excluded.payload
+                """,
+                (job_id, status, created_at, updated_at, caminho_str, payload),
+            )
+    finally:
+        conexao.close()
+
+
+def _sqlite_fila_reindexar() -> None:
+    global _SQLITE_FILA_INICIALIZADO
+    with _SQLITE_FILA_LOCK:
+        if _SQLITE_FILA_INICIALIZADO:
+            return
+        conexao = _sqlite_fila_conectar()
+        try:
+            diretorio = _sqlite_fila_caminho().parent
+            arquivos = []
+            for arquivo in diretorio.iterdir():
+                if not arquivo.is_file() or arquivo.name == "queue.sqlite3":
+                    continue
+                if not arquivo.name.endswith(".json") and not any(extensao in arquivo.name for extensao in _SQLITE_FILA_EXTENSOES):
+                    continue
+                try:
+                    job = json.loads(arquivo.read_text(encoding="utf-8"))
+                except (OSError, ValueError, UnicodeDecodeError):
+                    continue
+                if isinstance(job, dict) and job.get("job_id"):
+                    arquivos.append((job, arquivo))
+            with conexao:
+                for job, arquivo in arquivos:
+                    status = str(job.get("status") or "").lower() or "unknown"
+                    created_at = str(job.get("created_at") or job.get("criado_em") or "")
+                    updated_at = str(job.get("updated_at") or job.get("atualizado_em") or created_at)
+                    conexao.execute(
+                        """
+                        INSERT INTO queue_jobs(job_id, status, created_at, updated_at, file_path, payload)
+                        VALUES(?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(job_id) DO UPDATE SET
+                            status=excluded.status,
+                            created_at=CASE WHEN excluded.created_at='' THEN queue_jobs.created_at ELSE excluded.created_at END,
+                            updated_at=excluded.updated_at,
+                            file_path=excluded.file_path,
+                            payload=excluded.payload
+                        """,
+                        (
+                            str(job["job_id"]),
+                            status,
+                            created_at,
+                            updated_at,
+                            str(arquivo),
+                            json.dumps(job, ensure_ascii=False, default=str),
+                        ),
+                    )
+            _SQLITE_FILA_INICIALIZADO = True
+        finally:
+            conexao.close()
+
+
+def _sqlite_fila_consultar(job_id: str) -> dict | None:
+    _sqlite_fila_reindexar()
+    conexao = _sqlite_fila_conectar()
+    try:
+        registro = conexao.execute(
+            "SELECT payload, file_path FROM queue_jobs WHERE job_id = ?",
+            (str(job_id),),
+        ).fetchone()
+        if registro is None:
+            return None
+        caminho = Path(registro["file_path"]) if registro["file_path"] else None
+        if caminho is not None and caminho.is_file():
+            try:
+                payload = json.loads(registro["payload"])
+                if isinstance(payload, dict):
+                    return payload
+            except (TypeError, ValueError):
+                pass
+        return None
+    finally:
+        conexao.close()
+
+
+def _write_json(caminho: str | Path, dados: dict) -> None:
+    _write_json_arquivo(Path(caminho), dados)
+    try:
+        _sqlite_fila_reindexar()
+        _sqlite_fila_gravar(dados, caminho)
+    except Exception:
+        logger.exception("Não foi possível atualizar o índice SQLite da fila.")
+
+
+def get_job(job_id: str) -> dict | None:
+    try:
+        resultado = _sqlite_fila_consultar(job_id)
+        if resultado is not None:
+            return resultado
+    except Exception:
+        logger.exception("Falha ao consultar o índice SQLite da fila.")
+    resultado = _get_job_arquivo(job_id)
+    if resultado is not None:
+        try:
+            caminho = None
+            for extensao in _SQLITE_FILA_EXTENSOES:
+                candidato = _job_path(job_id, extensao)
+                if Path(candidato).is_file():
+                    caminho = candidato
+                    break
+            if caminho is not None:
+                _sqlite_fila_gravar(resultado, caminho)
+        except Exception:
+            logger.exception("Não foi possível reconstruir o índice do job.")
+    return resultado
+
+
+def atualizar_indice_job_sqlite(job: dict, caminho: str | Path) -> None:
+    _sqlite_fila_gravar(job, caminho)
+
+
+def obter_posicao_fila_sqlite(job_id: str) -> tuple[int | None, int | None]:
+    _sqlite_fila_reindexar()
+    conexao = _sqlite_fila_conectar()
+    try:
+        registro = conexao.execute(
+            "SELECT status, created_at FROM queue_jobs WHERE job_id = ?",
+            (str(job_id),),
+        ).fetchone()
+        if registro is None or str(registro["status"]).lower() != "queued":
+            return None, None
+        a_frente = conexao.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM queue_jobs
+            WHERE status = 'queued'
+              AND (
+                created_at < ?
+                OR (created_at = ? AND job_id < ?)
+              )
+            """,
+            (registro["created_at"], registro["created_at"], str(job_id)),
+        ).fetchone()["total"]
+        return int(a_frente) + 1, int(a_frente)
+    finally:
+        conexao.close()
+
+
+def consumir_limite_taxa_sqlite(chave: str, limite: int, janela_segundos: int, agora: float | None = None) -> int:
+    instante = time.time() if agora is None else float(agora)
+    janela = max(1, int(janela_segundos))
+    teto = max(1, int(limite))
+    conexao = _sqlite_fila_conectar()
+    try:
+        conexao.execute(
+            """
+            CREATE TABLE IF NOT EXISTS rate_limit_buckets (
+                bucket_key TEXT PRIMARY KEY,
+                window_started REAL NOT NULL,
+                request_count INTEGER NOT NULL,
+                updated_at REAL NOT NULL
+            )
+            """
+        )
+        conexao.execute("BEGIN IMMEDIATE")
+        registro = conexao.execute(
+            "SELECT window_started, request_count FROM rate_limit_buckets WHERE bucket_key = ?",
+            (str(chave),),
+        ).fetchone()
+        retry_after = 0
+        if registro is None or instante - float(registro["window_started"]) >= janela:
+            conexao.execute(
+                """
+                INSERT INTO rate_limit_buckets(bucket_key, window_started, request_count, updated_at)
+                VALUES(?, ?, 1, ?)
+                ON CONFLICT(bucket_key) DO UPDATE SET
+                    window_started = excluded.window_started,
+                    request_count = 1,
+                    updated_at = excluded.updated_at
+                """,
+                (str(chave), instante, instante),
+            )
+        elif int(registro["request_count"]) >= teto:
+            retry_after = max(1, int(janela - (instante - float(registro["window_started"])) + 0.999))
+        else:
+            conexao.execute(
+                "UPDATE rate_limit_buckets SET request_count = request_count + 1, updated_at = ? WHERE bucket_key = ?",
+                (instante, str(chave)),
+            )
+        conexao.execute("DELETE FROM rate_limit_buckets WHERE updated_at < ?", (instante - max(86400, janela * 10),))
+        conexao.commit()
+        return retry_after
+    except Exception:
+        conexao.rollback()
+        raise
+    finally:
+        conexao.close()
+
+
+def obter_metricas_fila_sqlite(limite: int = 5000) -> dict:
+    _sqlite_fila_reindexar()
+    conexao = _sqlite_fila_conectar()
+    try:
+        status_rows = conexao.execute(
+            "SELECT status, COUNT(*) AS total FROM queue_jobs GROUP BY status"
+        ).fetchall()
+        payload_rows = conexao.execute(
+            "SELECT payload FROM queue_jobs ORDER BY updated_at DESC, job_id LIMIT ?",
+            (max(1, min(int(limite), 10000)),),
+        ).fetchall()
+    finally:
+        conexao.close()
+
+    status_counts = {str(row["status"]): int(row["total"]) for row in status_rows}
+    stages: dict[str, dict[str, float]] = {}
+    failures = {"ia": 0, "smtp": 0, "documentos": 0, "cancelamento": 0, "outros": 0}
+    for row in payload_rows:
+        try:
+            job = json.loads(row["payload"])
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(job, dict):
+            continue
+        historico = job.get("stage_history")
+        if isinstance(historico, list):
+            for etapa in historico:
+                if not isinstance(etapa, dict):
+                    continue
+                nome = str(etapa.get("stage") or "").upper()
+                if not re.fullmatch(r"[A-Z0-9_]{1,64}", nome):
+                    continue
+                if etapa.get("status") != "completed":
+                    continue
+                try:
+                    duracao = max(0.0, float(etapa.get("duration_seconds") or 0))
+                except (TypeError, ValueError):
+                    continue
+                registro = stages.setdefault(nome, {"count": 0, "duration_seconds": 0.0})
+                registro["count"] += 1
+                registro["duration_seconds"] += duracao
+        if str(job.get("status") or "").lower() != "failed":
+            continue
+        erro = str(job.get("last_error") or "").casefold()
+        if any(chave in erro for chave in ("smtp", "email", "e-mail", "destinat")):
+            categoria = "smtp"
+        elif re.search(r"\b(?:ia|llm)\b", erro) or any(chave in erro for chave in ("modelo", "openai", "unsloth", "json_schema", "response_format", "timeout")):
+            categoria = "ia"
+        elif any(chave in erro for chave in ("docx", "documento", "montagem", "zip", "template")):
+            categoria = "documentos"
+        elif "cancel" in erro:
+            categoria = "cancelamento"
+        else:
+            categoria = "outros"
+        failures[categoria] += 1
+
+    return {
+        "status": status_counts,
+        "stages": stages,
+        "failures": failures,
+        "sampled_jobs": len(payload_rows),
+    }
+
+
+def listar_jobs_sqlite(status: str | None = None, limite: int = 500) -> list[dict]:
+    _sqlite_fila_reindexar()
+    limite = max(1, min(int(limite), 5000))
+    conexao = _sqlite_fila_conectar()
+    try:
+        if status:
+            registros = conexao.execute(
+                "SELECT payload FROM queue_jobs WHERE status = ? ORDER BY created_at DESC, job_id LIMIT ?",
+                (status.lower(), limite),
+            ).fetchall()
+        else:
+            registros = conexao.execute(
+                "SELECT payload FROM queue_jobs ORDER BY created_at DESC, job_id LIMIT ?",
+                (limite,),
+            ).fetchall()
+        resultado = []
+        for registro in registros:
+            try:
+                job = json.loads(registro["payload"])
+            except (TypeError, ValueError):
+                continue
+            if isinstance(job, dict):
+                resultado.append(job)
+        return resultado
+    finally:
+        conexao.close()
+
+
+

@@ -1,3 +1,6 @@
+import { obterTagsMunicipais } from "./configMunicipal";
+import { calcularTotalEmCentavos } from "./regrasContratacao";
+
 export const mapearDadosWizard = (dados: any) => {
   const itens = dados.itens || [];
   const lotesExplicitos = Array.isArray(dados.lotes) ? dados.lotes : [];
@@ -24,8 +27,10 @@ export const mapearDadosWizard = (dados: any) => {
     : "Pagamento até o 10º dia útil após a entrega, emissão da Nota Fiscal e aceite pelo setor Contábil.";
   const pagamentoMapeado = pagamentoTipo === "POR_ETAPAS" ? pagamentoEtapas : pagamentoPadrao;
   const prazoRefazimentoDias = Math.max(1, Number.parseInt(String(dados.prazoRefazimentoDias ?? 5), 10) || 5);
-  const totalItens = itens.reduce((acc: number, i: any) => acc + (Number(i.qtd || 0) * Number(i.valor || 0)), 0);
-  const valorEstimadoFormatado = totalItens.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const totalItensCentavos = calcularTotalEmCentavos(itens);
+  const valorReais = Math.floor(Math.abs(totalItensCentavos) / 100);
+  const valorCentavos = String(Math.abs(totalItensCentavos) % 100).padStart(2, "0");
+  const valorEstimadoFormatado = `R$ ${totalItensCentavos < 0 ? "-" : ""}${valorReais.toLocaleString("pt-BR")},${valorCentavos}`;
 
   const itensNomes = itens
     .map((item: any, index: number) => ({
@@ -94,11 +99,10 @@ export const mapearDadosWizard = (dados: any) => {
     "{{CAMINHO_IMAGEM_DOTACAO}}": !Array.isArray(dados.dotacaoBlocos) || dados.dotacaoBlocos.length === 0
       ? (dados.caminhoImagemDotacao ? `__IMG__${dados.caminhoImagemDotacao}` : "")
       : "",
-    "INSTRUCOES_EXTRAS": dados.instrucoesExtras || "",
     "RAW_EXECUCAO": dados.execucao || "",
     "RAW_MOTIVO_CRITERIO": dados.motivoCriterio || "",
     "RAW_MOTIVO_MODALIDADE": dados.motivoModalidade || "",
     "RAW_PAC": dados.pac === "SIM" ? "Previsto no PAC" : `Não previsto: ${dados.motivoPac || 'sem justificativa'}`,
-    "REQUISITOS_ETP_ANTERIOR": dados.requisitosEtpAnterior || "Não informados."
+    ...obterTagsMunicipais()
   };
 };

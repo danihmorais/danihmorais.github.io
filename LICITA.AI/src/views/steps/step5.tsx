@@ -8,38 +8,10 @@ import {
   LIMITE_EXCLUSIVIDADE_MEEPP,
 } from "../../utils/regrasContratacao";
 
-const styles = {
-  container: { display: "flex", flexDirection: "column" as const, gap: "28px" },
-  sectionGroup: { display: "flex", flexDirection: "column" as const },
-  section: { display: "flex", flexDirection: "column" as const, gap: "12px", alignItems: "flex-start" },
-  sectionMargin: { display: "flex", flexDirection: "column" as const, gap: "12px", marginBottom: "16px", alignItems: "flex-start" },
-  title: { fontSize: "16px", margin: "0 0 16px 0", color: "var(--text-main)", fontWeight: "600" as const },
-  titleCompact: { fontSize: "16px", margin: "0 0 4px 0", color: "var(--text-main)", fontWeight: "600" as const },
-  subtitle: { color: "var(--text-muted)", margin: "0 0 16px 0", fontSize: "13px", fontStyle: "italic" },
-  subtitleMargin: { color: "var(--text-muted)", margin: "0 0 8px 0", fontSize: "13px" },
-  label: (disabled: boolean) => ({ display: "flex", flexDirection: "row" as const, alignItems: "center", justifyContent: "flex-start", gap: "8px", cursor: disabled ? "not-allowed" : "pointer", fontSize: "14px", color: "var(--text-main)", width: "max-content", margin: 0, padding: 0, opacity: disabled ? 0.5 : 1 }),
-  checkboxLabel: (disabled: boolean) => ({ display: "flex", flexDirection: "row" as const, alignItems: "center", justifyContent: "flex-start", gap: "8px", cursor: disabled ? "not-allowed" : "pointer", fontSize: "14px", color: "var(--text-main)", opacity: disabled ? 0.5 : 1, width: "max-content", margin: 0, padding: 0 }),
-  radioInput: { margin: 0, padding: 0, width: "16px", height: "16px", cursor: "pointer", flexShrink: 0 },
-  labelText: { margin: 0, padding: 0, flexShrink: 0 },
-  justificationBox: (error: boolean) => ({ background: "var(--bg-subtle)", padding: "16px", borderRadius: "var(--radius-lg)", border: error ? "1.5px solid var(--btn-danger)" : "1.5px solid var(--border)", display: "flex", flexDirection: "column" as const }),
-  justificationTitle: { fontWeight: "600" as const, fontSize: "13px", color: "var(--text-main)", display: "block", marginBottom: "8px" },
-  textarea: (error: boolean) => ({ padding: "12px", borderRadius: "var(--radius)", borderColor: error ? "var(--btn-danger)" : "var(--input-border)", fontSize: "13px", minHeight: "60px", resize: "vertical" as const }),
-  textareaLarge: (error: boolean) => ({ flex: 1, padding: "12px", borderRadius: "var(--radius-lg)", borderColor: error ? "var(--btn-danger)" : "var(--input-border)", minHeight: "80px", fontSize: "14px", resize: "vertical" as const }),
-  errorText: { color: "var(--btn-danger)", fontSize: "12px", display: "block", marginTop: "4px" },
-  warningText: { color: "var(--btn-danger)", fontSize: "12px", display: "block", marginTop: "4px" },
-  asterisk: { color: "var(--btn-danger)" },
-  counterWrapper: { display: "flex", alignItems: "center", gap: "8px" },
-  btn: { width: "40px", height: "40px", borderRadius: "var(--radius)", background: "var(--bg-subtle)", border: "1px solid var(--border)", fontSize: "18px", color: "var(--text-main)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" },
-  counterInput: { width: "60px", height: "40px", textAlign: "center" as const, borderRadius: "var(--radius)", borderColor: "var(--input-border)", fontSize: "16px", fontWeight: "600" as const },
-  select: { height: "40px", padding: "0 12px", borderRadius: "var(--radius)", borderColor: "var(--input-border)", fontSize: "14px", marginLeft: "8px" },
-  attachWrapper: { display: "flex", gap: "16px", alignItems: "flex-start" },
-  attachBtn: (hasImg: boolean) => ({ padding: "0 24px", height: "44px", background: hasImg ? "var(--btn-success)" : "var(--btn-primary)", color: "var(--bg-panel)", border: "none", borderRadius: "var(--radius-lg)", fontSize: "14px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" })
-};
-
 const RadioOption = ({ label, value, checked, onChange, disabled = false, name }: any) => (
-  <label style={styles.label(disabled)}>
-    <input type="radio" name={name} value={value} checked={checked} onChange={onChange} disabled={disabled} style={styles.radioInput} />
-    <span style={styles.labelText}>{label}</span>
+  <label className={"step5-radio-label" + (disabled ? " is-disabled" : "")}>
+    <input type="radio" name={name} value={value} checked={checked} onChange={onChange} disabled={disabled} className="step5-radio-input" />
+    <span className="step5-label-text">{label}</span>
   </label>
 );
 
@@ -47,11 +19,11 @@ const JustificationBox = ({ label, value, onChange, errorMsg, mostrarErro = fals
   const id = React.useId();
   const hasError = mostrarErro && String(value || "").trim() === "";
   return (
-    <div className="setting-justification" style={styles.justificationBox(hasError)}>
-      <label htmlFor={id} style={styles.justificationTitle}>
-        {label} <span style={styles.asterisk}>*</span>
+    <div className={"setting-justification step5-justification" + (hasError ? " has-error" : "")}>
+      <label htmlFor={id} className="step5-justification-title">
+        {label} <span className="step5-asterisk">*</span>
       </label>
-      {description && <p style={{ color: "var(--text-muted)", fontSize: 12, lineHeight: 1.5, margin: "0 0 8px" }}>{description}</p>}
+      {description && <p className="step5-description">{description}</p>}
       <textarea
         id={id}
         value={value}
@@ -59,9 +31,9 @@ const JustificationBox = ({ label, value, onChange, errorMsg, mostrarErro = fals
         onChange={onChange}
         aria-invalid={hasError || undefined}
         aria-describedby={hasError ? id + "-error" : undefined}
-        style={styles.textarea(hasError)}
+        className={"step5-textarea" + (hasError ? " has-error" : "")}
       />
-      {hasError && <span id={id + "-error"} style={styles.errorText}>{errorMsg}</span>}
+      {hasError && <span id={id + "-error"} className="step5-error">{errorMsg}</span>}
     </div>
   );
 };
@@ -148,10 +120,10 @@ export default function Step5({ dados, atualizarDados, tentouAvancar = false }: 
   }, [meeppExclusivoPermitido, dados.meepp, atualizarDados]);
 
   return (
-    <div className="step-form step-form--settings" style={styles.container}>
-      <div className="setting-section" style={styles.sectionGroup}>
-        <h2 style={styles.title}>Tipo de Instrumento</h2>
-        <fieldset className="setting-options" style={{ ...styles.sectionMargin, border: 0, padding: 0, minWidth: 0 }}>
+    <div className="step-form step-form--settings step5-form">
+      <div className="setting-section step5-section">
+        <h2 className="step5-title">Tipo de Instrumento</h2>
+        <fieldset className="setting-options step5-options">
           <legend className="sr-only">Tipo de Instrumento</legend>
           <RadioOption 
             name="instrumento" label="CONTRATO (Certeza da quantidade)" 
@@ -172,21 +144,21 @@ export default function Step5({ dados, atualizarDados, tentouAvancar = false }: 
             onChange={(e: any) => atualizarDados({ instrumento: e.target.value, prorrogar: false })} 
           />
         </fieldset>
-        <label style={styles.checkboxLabel(dados.instrumento === "SEM_CONTRATO")}>
+        <label className={"step5-checkbox-label" + (dados.instrumento === "SEM_CONTRATO" ? " is-disabled" : "")}>
           <input 
             type="checkbox" 
             checked={dados.prorrogar} 
             disabled={dados.instrumento === "SEM_CONTRATO"}
             onChange={(e) => atualizarDados({ prorrogar: e.target.checked })}
-            style={styles.radioInput}
+            className="step5-radio-input"
           />
-          <span style={styles.labelText}>Permitir prorrogação?</span>
+          <span className="step5-label-text">Permitir prorrogação?</span>
         </label>
       </div>
 
-      <div className="setting-section" style={styles.sectionGroup}>
-        <h2 style={styles.title}>Participação ME/EPP</h2>
-        <fieldset className="setting-options" style={{ ...styles.section, border: 0, padding: 0, minWidth: 0 }}>
+      <div className="setting-section step5-section">
+        <h2 className="step5-title">Participação ME/EPP</h2>
+        <fieldset className="setting-options step5-options">
           <legend className="sr-only">Participação ME/EPP</legend>
           <RadioOption 
             name="meepp" label={`Exclusiva para ME/EPP (Até ${formatarLimiteMeepp()})`} 
@@ -196,27 +168,27 @@ export default function Step5({ dados, atualizarDados, tentouAvancar = false }: 
             onChange={(e: any) => atualizarDados({ meepp: e.target.value })} 
           />
           <RadioOption 
-            name="meepp" label="Não Exclusiva (Maior que R$ 80.000,00 ou ampla participação)" 
+            name="meepp" label={`Não Exclusiva (Maior que ${formatarLimiteMeepp()} ou ampla participação)`} 
             value="NAO" 
             checked={dados.meepp === "NAO"} 
             onChange={(e: any) => atualizarDados({ meepp: e.target.value })} 
           />
           {totalAcimaDoLimite && (
-            <span style={styles.warningText}>
+            <span className="step5-warning">
               A exclusividade integral para ME/EPP foi bloqueada porque o valor estimado desta contratação ({valorEstimadoFormatado}) supera o limite de {formatarLimiteMeepp()}.
             </span>
           )}
         </fieldset>
       </div>
 
-      <div className="setting-section" style={styles.sectionGroup}>
-        <h2 style={styles.titleCompact}>Critério de Julgamento</h2>
-        <p style={styles.subtitle}>
+      <div className="setting-section step5-section">
+        <h2 className="step5-title step5-title-compact">Critério de Julgamento</h2>
+        <p className="step5-subtitle">
           {temLote
             ? `${lotes.length} ${lotes.length === 1 ? "lote criado" : "lotes criados"}. O critério é automaticamente definido como menor preço por lote.`
             : "Sem lotes cadastrados, você pode escolher menor preço por item ou menor preço global. A opção por lote permanece visível, mas bloqueada."}
         </p>
-        <fieldset className="setting-options" style={{ ...styles.sectionMargin, border: 0, padding: 0, minWidth: 0 }}>
+        <fieldset className="setting-options step5-options">
           <legend className="sr-only">Critério de Julgamento</legend>
           <RadioOption name="criterio" label="Menor preço por item" value="ITEM" checked={!temLote && dados.criterio === "ITEM"} disabled={temLote} onChange={() => { if (!temLote) atualizarDados({ criterio: "ITEM", motivoCriterio: "" }); }} />
           <RadioOption name="criterio" label="Menor preço global" value="GLOBAL" checked={!temLote && dados.criterio === "GLOBAL"} disabled={temLote} onChange={() => { if (!temLote) atualizarDados({ criterio: "GLOBAL" }); }} />
@@ -240,10 +212,10 @@ export default function Step5({ dados, atualizarDados, tentouAvancar = false }: 
         )}
       </div>
 
-      <div className="setting-section" style={styles.sectionGroup}>
-        <h2 style={styles.titleCompact}>Modalidade</h2>
-        <p style={styles.subtitle}>Regra geral da Lei 14.133/21: O Pregão Eletrônico é a modalidade obrigatória padrão.</p>
-        <fieldset className="setting-options" style={{ ...styles.sectionMargin, border: 0, padding: 0, minWidth: 0 }}>
+      <div className="setting-section step5-section">
+        <h2 className="step5-title step5-title-compact">Modalidade</h2>
+        <p className="step5-subtitle">Regra geral da Lei 14.133/21: O Pregão Eletrônico é a modalidade obrigatória padrão.</p>
+        <fieldset className="setting-options step5-options">
           <legend className="sr-only">Modalidade</legend>
           <RadioOption name="modalidade" label="Pregão Eletrônico" value="PREGAO_ELETRONICO" checked={dados.modalidade === "PREGAO_ELETRONICO"} onChange={(e: any) => atualizarDados({ modalidade: e.target.value })} />
           <RadioOption name="modalidade" label="Dispensa por e-mail" value="DISPENSA_EMAIL" checked={dados.modalidade === "DISPENSA_EMAIL"} onChange={(e: any) => atualizarDados({ modalidade: e.target.value })} />
@@ -261,40 +233,40 @@ export default function Step5({ dados, atualizarDados, tentouAvancar = false }: 
         )}
       </div>
 
-      <div className="setting-section" style={styles.sectionGroup}>
-        <h2 style={styles.title}>Vigência do Contrato/Ata (Máximo 1 ano)</h2>
-        <div className="counter-wrapper" style={styles.counterWrapper}>
-          <button type="button" onClick={decrementarVigencia} disabled={vigenciaAtual <= 1} style={{ ...styles.btn, opacity: vigenciaAtual <= 1 ? 0.45 : 1 }}>-</button>
+      <div className="setting-section step5-section">
+        <h2 className="step5-title">Vigência do Contrato/Ata (Máximo 1 ano)</h2>
+        <div className="counter-wrapper step5-counter-wrapper">
+          <button type="button" onClick={decrementarVigencia} disabled={vigenciaAtual <= 1} className="step5-counter-button">-</button>
           <input
             type="text"
             value={vigenciaAtual}
             readOnly
             aria-label={"Vigência em " + dados.vigenciaUnidade}
-            style={styles.counterInput}
+            className="step5-counter-input"
           />
-          <button type="button" onClick={incrementarVigencia} disabled={vigenciaAtual >= vigenciaMaxima} style={{ ...styles.btn, opacity: vigenciaAtual >= vigenciaMaxima ? 0.45 : 1 }}>+</button>
+          <button type="button" onClick={incrementarVigencia} disabled={vigenciaAtual >= vigenciaMaxima} className="step5-counter-button">+</button>
           <select 
             value={dados.vigenciaUnidade}
             onChange={(e) => alterarUnidadeVigencia(e.target.value)}
-            style={styles.select}
+            className="step5-select"
           >
             <option value="Dias">Dias</option>
             <option value="Meses">Meses</option>
             <option value="Ano(s)">Ano(s)</option>
           </select>
-          <span role="status" style={{ color: "var(--text-muted)", fontSize: 12 }}>Máximo: {vigenciaMaxima} {dados.vigenciaUnidade || "Meses"} (365 dias).</span>
+          <span role="status" className="step5-limit-note">Máximo: {vigenciaMaxima} {dados.vigenciaUnidade || "Meses"} (365 dias).</span>
         </div>
       </div>
 
-      <div className="setting-section" style={styles.sectionGroup}>
-        <h2 style={styles.titleCompact}>Condições de Pagamento</h2>
-        <p style={styles.subtitleMargin}>
+      <div className="setting-section step5-section">
+        <h2 className="step5-title step5-title-compact">Condições de Pagamento</h2>
+        <p className="step5-subtitle-margin">
           Selecione a forma de pagamento. Nas opções padronizadas, o texto será aplicado diretamente, sem geração pela IA.
         </p>
         <select
           value={dados.pagamentoTipo || "CONFORME_ENTREGAS"}
           onChange={(e) => atualizarDados({ pagamentoTipo: e.target.value })}
-          style={{ ...styles.select, marginLeft: 0 }}
+          className="step5-select step5-select--flush"
         >
           <option value="CONFORME_ENTREGAS">CONFORME ENTREGAS</option>
           <option value="MENSALMENTE">MENSALMENTE</option>
@@ -302,30 +274,25 @@ export default function Step5({ dados, atualizarDados, tentouAvancar = false }: 
         </select>
 
         {dados.pagamentoTipo === "POR_ETAPAS" ? (
-          <div className="setting-justification" style={{ ...styles.justificationBox(String(dados.pagamentoEtapas || "").trim() === ""), width: "100%", boxSizing: "border-box" }}>
-            <label style={styles.justificationTitle}>
-              Descreva como será o pagamento por etapas <span style={styles.asterisk}>*</span>
+          <div className={"setting-justification step5-justification step5-justification--full" + (String(dados.pagamentoEtapas || "").trim() === "" ? " has-error" : "")}>
+            <label className="step5-justification-title">
+              Descreva como será o pagamento por etapas <span className="step5-asterisk">*</span>
             </label>
             <textarea
               value={dados.pagamentoEtapas || ""}
               onChange={(e) => atualizarDados({ pagamentoEtapas: e.target.value })}
               placeholder="Informe como será o pagamento, indicando as etapas e as respectivas condições de pagamento..."
-              style={{
-                ...styles.textarea(String(dados.pagamentoEtapas || "").trim() === ""),
-                width: "100%",
-                boxSizing: "border-box",
-                minHeight: "100px",
-              }}
+              className={"step5-textarea step5-textarea--full" + (String(dados.pagamentoEtapas || "").trim() === "" ? " has-error" : "")}
             />
             {!String(dados.pagamentoEtapas || "").trim() && (
-              <span style={styles.errorText}>Este campo é obrigatório.</span>
+              <span className="step5-error">Este campo é obrigatório.</span>
             )}
-            <span style={{ ...styles.subtitleMargin, margin: "8px 0 0" }}>
+            <span className="step5-subtitle-note">
               O texto informado será revisado pela IA antes de substituir {`{{PAGAMENTO}}`} no documento.
             </span>
           </div>
         ) : (
-          <div style={{ color: "var(--text-muted)", fontSize: "13px", lineHeight: 1.5, maxWidth: "900px" }}>
+          <div className="step5-help-text">
             {dados.pagamentoTipo === "MENSALMENTE"
               ? "Pagamento será efetuado mensalmente, até o 10º dia útil após a prestação de serviços, emissão da Nota Fiscal e aceite pelo setor Contábil."
               : "Pagamento até o 10º dia útil após a entrega, emissão da Nota Fiscal e aceite pelo setor Contábil."}
@@ -333,12 +300,12 @@ export default function Step5({ dados, atualizarDados, tentouAvancar = false }: 
         )}
       </div>
 
-      <div className="setting-section" style={styles.sectionGroup}>
-        <h2 style={styles.titleCompact}>Prazo para Refazimento</h2>
-        <p style={styles.subtitleMargin}>
+      <div className="setting-section step5-section">
+        <h2 className="step5-title step5-title-compact">Prazo para Refazimento</h2>
+        <p className="step5-subtitle-margin">
           Informe o prazo fixo para refazimento/correção, sempre em dias úteis. Este valor não é gerado nem alterado pela IA.
         </p>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        <div className="step5-days-control">
           <input
             type="number"
             min={1}
@@ -348,16 +315,16 @@ export default function Step5({ dados, atualizarDados, tentouAvancar = false }: 
               const valor = Number.parseInt(e.target.value, 10);
               atualizarDados({ prazoRefazimentoDias: Number.isFinite(valor) && valor > 0 ? valor : 1 });
             }}
-            style={{ ...styles.counterInput, width: "90px", textAlign: "center" }}
+            className="step5-counter-input step5-counter-input--days"
           />
-          <span style={{ color: "var(--text-main)", fontSize: "14px" }}>dias úteis</span>
+          <span className="step5-days-label">dias úteis</span>
         </div>
       </div>
-      <div className="setting-section" style={styles.sectionGroup}>
-        <h2 style={styles.title}>
-          Dotação Orçamentária <span style={styles.asterisk}>*</span>
+      <div className="setting-section step5-section">
+        <h2 className="step5-title">
+          Dotação Orçamentária <span className="step5-asterisk">*</span>
         </h2>
-        <p style={styles.subtitleMargin}>
+        <p className="step5-subtitle-margin">
           Digite a dotação e insira quantas imagens forem necessárias, na ordem em que devem aparecer no documento.
         </p>
         <DotacaoEditor
@@ -365,12 +332,12 @@ export default function Step5({ dados, atualizarDados, tentouAvancar = false }: 
           onChange={atualizarBlocosDotacao}
           placeholder="Digite a dotação orçamentária..."
         />
-        {faltaDotacao && <span style={styles.errorText}>É obrigatório preencher a dotação ou inserir uma imagem.</span>}
+        {faltaDotacao && <span className="step5-error">É obrigatório preencher a dotação ou inserir uma imagem.</span>}
       </div>
 
-      <div className="setting-section" style={styles.sectionGroup}>
-        <h2 style={styles.title}>Plano Anual de Contratações (PAC)</h2>
-        <fieldset className="setting-options" style={{ ...styles.sectionMargin, border: 0, padding: 0, minWidth: 0 }}>
+      <div className="setting-section step5-section">
+        <h2 className="step5-title">Plano Anual de Contratações (PAC)</h2>
+        <fieldset className="setting-options step5-options">
           <legend className="sr-only">Plano Anual de Contratações</legend>
           <RadioOption name="pac" label="Sim, previsto no PAC" value="SIM" checked={dados.pac === "SIM"} onChange={(e: any) => atualizarDados({ pac: e.target.value })} />
           <RadioOption name="pac" label="Não previsto no PAC" value="NAO" checked={dados.pac === "NAO"} onChange={(e: any) => atualizarDados({ pac: e.target.value })} />
