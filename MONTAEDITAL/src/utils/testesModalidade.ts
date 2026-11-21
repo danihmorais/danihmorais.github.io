@@ -3,7 +3,9 @@ export type ModalidadeTeste =
   | "PREGAO_PRESENCIAL"
   | "DISPENSA"
   | "DISPENSA_BLL"
-  | "LEILAO_ELETRONICO";
+  | "LEILAO_ELETRONICO"
+  | "CONCORRENCIA_ELETRONICA";
+  
 
 export const MODALIDADES_TESTE: ReadonlyArray<{
   value: ModalidadeTeste;
@@ -35,6 +37,11 @@ export const MODALIDADES_TESTE: ReadonlyArray<{
     label: "Leilão Eletrônico",
     descricao: "Maior preço por item • sem contrato",
   },
+  {
+    value: "CONCORRENCIA_ELETRONICA",
+    label: "Concorrência Eletrônica",
+    descricao: "Global • contrato • procedimento completo",
+  }
 ];
 
 const DOCX_TESTE_B64 =
@@ -160,6 +167,7 @@ export function criarDadosTeste(modalidade: ModalidadeTeste) {
     DISPENSA: { processo: "44/2026", edital: "60/2026" },
     DISPENSA_BLL: { processo: "45/2026", edital: "61/2026" },
     LEILAO_ELETRONICO: { processo: "46/2026", edital: "62/2026" },
+    CONCORRENCIA_ELETRONICA: { processo: "47/2026", edital: "63/2026" },
   };
 
   return {

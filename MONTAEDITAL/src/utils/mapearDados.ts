@@ -48,6 +48,10 @@ export const mapearDadosWizard = async (dados: any) => {
       modalidadeFormatada = "Leilão Eletrônico";
       arquivoBase = "leilao_eletronico";
       break;
+    case "CONCORRENCIA_ELETRONICA":
+      modalidadeFormatada = "Concorrência Eletrônica";
+      arquivoBase = "concorrencia_eletronica";
+      break;
     default:
       modalidadeFormatada = "Pregão Eletrônico";
       arquivoBase = "pregao_eletronico";

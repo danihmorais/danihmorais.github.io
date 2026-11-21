@@ -357,6 +357,7 @@ function numeroProcessoValido(valor: string): boolean {
       else if (dados.modalidade === "DISPENSA_BLL") tipoEditalStr = "dispensa_bll";
       else if (dados.modalidade === "PREGAO_PRESENCIAL") tipoEditalStr = "pregao_presencial";
       else if (dados.modalidade === "LEILAO_ELETRONICO") tipoEditalStr = "leilao_eletronico";
+      else if (dados.modalidade === "CONCORRENCIA_ELETRONICA") tipoEditalStr = "concorrencia_eletronica";
 
       payload.publicar_diario_estadual = publicarDiarioEstadual;
       payload.publicar_diario_federal = publicarDiarioFederal;

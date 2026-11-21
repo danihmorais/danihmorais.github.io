@@ -265,7 +265,7 @@ def montar_variaveis_fixas(dados_usuario: dict) -> dict:
 
     if modalidade_raw == "DISPENSA":
         resultado["{{FORMATO}}"] = "por e-mail e presencialmente, uma vez que se trata de objeto possivelmente local, e eventual realização por plataforma da BLL pode restringir o acesso, "
-    elif modalidade_raw in {"DISPENSA_BLL", "PREGAO_ELETRONICO", "LEILAO_ELETRONICO"}:
+    elif modalidade_raw in {"DISPENSA_BLL", "PREGAO_ELETRONICO", "LEILAO_ELETRONICO", "CONCORRENCIA_ELETRONICA"}:
         resultado["{{FORMATO}}"] = "por meio da plataforma BLL, "
     elif modalidade_raw == "PREGAO_PRESENCIAL":
         resultado["{{FORMATO}}"] = ""

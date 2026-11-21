@@ -177,6 +177,7 @@ export default function Step1({ dados, atualizarDados }: any) {
               <option value="DISPENSA">Dispensa por E-Mail</option>
               <option value="DISPENSA_BLL">Dispensa Eletrônica BLL</option>
               <option value="LEILAO_ELETRONICO">Leilão Eletrônico</option>
+              <option value="CONCORRENCIA_ELETRONICA">Concorrência Eletrônica</option>
             </select>
           </div>
           <div className="wiz-field">

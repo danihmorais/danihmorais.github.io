@@ -30,7 +30,8 @@ MODELOS_DISPONIVEIS = {
     "dispensa_bll": "modelos/Dispensa xx Proc xx -  MINUTA DE.docx",
     "pregao_eletronico": "modelos/Pregão xx Proc xx -  MINUTA PE.docx",
     "pregao_presencial": "modelos/Pregão xx Proc xx -  MINUTA PP.docx",
-    "leilao_eletronico": "modelos/Leilão xx Proc xx -  MINUTA LE.docx"
+    "leilao_eletronico": "modelos/Leilão xx Proc xx -  MINUTA LE.docx",
+    "concorrencia_eletronica": "modelos/Concorrência xx Proc xx -  MINUTA CE.docx",
 }
 
 MOD_ABR_MAP = {
@@ -38,7 +39,8 @@ MOD_ABR_MAP = {
     "PREGAO_ELETRONICO": "PE",
     "LEILAO_ELETRONICO": "LE",
     "DISPENSA_BLL": "DE",
-    "DISPENSA": "DP"
+    "DISPENSA": "DP",
+    "CONCORRENCIA_ELETRONICA": "CE"
 }
 
 MODALIDADE_TEXTO = {
@@ -46,7 +48,8 @@ MODALIDADE_TEXTO = {
     "DISPENSA": "Dispensa",
     "DISPENSA_BLL": "Dispensa Eletrônica BLL",
     "PREGAO_PRESENCIAL": "Pregão Presencial",
-    "LEILAO_ELETRONICO": "Leilão Eletrônico"
+    "LEILAO_ELETRONICO": "Leilão Eletrônico",
+    "CONCORRENCIA_ELETRONICA": "Concorrência Eletrônica"
 }
 
 AVISO_MODELO = os.path.join(BASE_DIR, "modelos", "AVISO XX.XX.XXXX.rtf")
@@ -62,6 +65,7 @@ AVISOS_MUNICIPAIS = {
     "PREGAO_ELETRONICO": "modelos/AVISO MUNICIPAL PREGÃO ELETRÔNICO {{N.MODALIDADE}}.docx",
     "PREGAO_PRESENCIAL": "modelos/AVISO MUNICIPAL PREGÃO PRESENCIAL {{N.MODALIDADE}}.docx",
     "LEILAO_ELETRONICO": "modelos/AVISO MUNICIPAL LEILÃO ELETRÔNICO {{N.MODALIDADE}}.docx",
+    "CONCORRENCIA_ELETRONICA": "modelos/AVISO MUNICIPAL CONCORRÊNCIA ELETRÔNICA {{N.MODALIDADE}}.docx",
 }
 
 class EditalRequest(BaseModel):
@@ -442,6 +446,7 @@ async def gerar_edital_endpoint(req: EditalRequest, background_tasks: Background
             "PREGAO_ELETRONICO": "Cadastro",
             "PREGAO_PRESENCIAL": "Protocolo",
             "LEILAO_ELETRONICO": "Cadastro",
+            "CONCORRENCIA_ELETRONICA": "Cadastro"
         }.get(modalidade_raw, "Cadastro")
 
         data_sessao_aviso = dados_processados.get("{{DATA DA SESSAO}}", "")
