@@ -154,27 +154,6 @@ export const gerarFasePreparatoria = async (dados: any, arquivos?: DocumentosRef
   return response.json();
 };
 
-export type ItemPlanilhaImportado = {
-  numero: string;
-  descricao: string;
-  un: string;
-  qtd: string;
-  valor: string;
-};
-
-export async function importarItensPlanilha(arquivo: File): Promise<{ items: ItemPlanilhaImportado[]; count: number; filename: string }> {
-  const formData = new FormData();
-  formData.append("arquivo", arquivo, arquivo.name);
-  const response = await fetch(`${BASE_URL}/licita/api/importar-itens-planilha`, {
-    method: "POST",
-    body: formData,
-  });
-  let payload: any = {};
-  try { payload = await response.json(); } catch {}
-  if (!response.ok) throw new Error(payload?.detail || "Não foi possível importar a planilha.");
-  return payload;
-}
-
 export type RelatorioConformidadePreview = {
   version: number;
   generated_at: string;

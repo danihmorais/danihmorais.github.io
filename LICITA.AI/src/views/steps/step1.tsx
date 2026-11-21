@@ -1,7 +1,6 @@
 import React, { useRef, useState } from "react";
 import { useToast } from "../../components/toast";
 import ConfirmDialog from "../../components/ConfirmDialog";
-import { importarItensPlanilha } from "../../api";
 
 import { calcularValorEstimadoItens } from "../../utils/regrasContratacao";
 import { melhorarDescricaoItem } from "../../providers/services/descricaoItensIA";
@@ -15,10 +14,8 @@ function ajustarAlturaDescricao(elemento: HTMLTextAreaElement | null) {
 }
 
 export default function Step1({ dados = { itens: [], objeto: "", necessidade: "" }, atualizarDados, tentouAvancar = false }: any) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const [importandoPdf, setImportandoPdf] = useState(false);
-  const [importandoXlsx, setImportandoXlsx] = useState(false);
   const [itemEmMelhoria, setItemEmMelhoria] = useState<number | string | null>(null);
   const [importacaoPendente, setImportacaoPendente] = useState<any[] | null>(null);
   const [loteEmEdicao, setLoteEmEdicao] = useState<any | null>(null);
@@ -35,11 +32,6 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
 
   const formatarMoeda = (valor: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(valor);
   const parseMoeda = (texto: string) => Number(String(texto).replace(/[^\d]/g, "")) / 100;
-  const extrairNumero = (valor: any) => {
-    if (typeof valor === "number") return valor;
-    const texto = String(valor || "0").replace(/[^\d,.-]/g, "").replace(/\.(?=\d{3})/g, "").replace(",", ".");
-    return Number(texto) || 0;
-  };
   const normalizar = (valor: any) => String(valor || "").trim().toLowerCase();
 
   const iniciarNovoLote = () => {
@@ -208,30 +200,6 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
     }
   };
 
-  const importarXlsx = async (evento: React.ChangeEvent<HTMLInputElement>) => {
-    const arquivo = evento.target.files?.[0];
-    if (!arquivo) return;
-    setImportandoXlsx(true);
-    try {
-      const resposta = await importarItensPlanilha(arquivo);
-      const importados = resposta.items.map((item, index) => ({
-        id: Date.now() + Math.random() + index,
-        numero: Number(item.numero) || index + 1,
-        descricao: String(item.descricao || "").trim(),
-        qtd: extrairNumero(item.qtd) || 0,
-        un: String(item.un || "UN").trim(),
-        valor: extrairNumero(item.valor) || 0,
-      })).filter(item => item.descricao);
-      if (!importados.length) throw new Error("Nenhuma linha com descrição válida foi encontrada.");
-      decidirImportacaoItens(importados);
-    } catch (erro: any) {
-      showToast(`Erro ao importar: ${erro?.message || "arquivo inválido"}`, "error");
-    } finally {
-      setImportandoXlsx(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  };
-
   const importarPdf = async (evento: React.ChangeEvent<HTMLInputElement>) => {
     const arquivo = evento.target.files?.[0];
     if (!arquivo) return;
@@ -307,7 +275,6 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
   const totalGeral = calcularValorEstimadoItens(itens);
 
   return <div className="step-form step-form--items licita-step1-style-001" >
-    <input ref={fileInputRef} type="file" accept=".xlsx,.csv"  onChange={importarXlsx}  className={ ["licita-step1-style-002"].filter(Boolean).join(" ") }/>
     <input ref={pdfInputRef} type="file" accept="application/pdf,.pdf"  onChange={importarPdf}  className={ ["licita-step1-style-003"].filter(Boolean).join(" ") }/>
     <section className="step-section item-intro-section">
       <label  className={ ["licita-step1-style-004"].filter(Boolean).join(" ") }>Objeto da Licitação: <span  className={ ["licita-step1-style-005"].filter(Boolean).join(" ") }>*</span></label>
@@ -407,7 +374,6 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
     <section className="step-section items-section licita-step1-style-044" >
       <div className="items-toolbar licita-step1-style-045" >
         <button type="button" className="item-action-primary licita-step1-style-046" onClick={adicionarItem} >+ Novo Item</button>
-        <button type="button" className="item-action-secondary licita-step1-style-047" onClick={() => fileInputRef.current?.click()} disabled={importandoXlsx || importandoPdf} >{importandoXlsx ? "Lendo XLSX..." : "Importar XLSX"}</button>
         <button type="button" className="item-action-secondary licita-step1-style-048" onClick={() => pdfInputRef.current?.click()} disabled={importandoPdf} >{importandoPdf ? "Lendo PDF..." : "Importar Cotação PDF"}</button>
       </div>
       <div className="items-table-scroll licita-step1-style-049" >

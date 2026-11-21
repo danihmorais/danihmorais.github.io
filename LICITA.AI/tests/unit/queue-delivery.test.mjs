@@ -63,36 +63,6 @@ test("acompanhamento da fila é salvo apenas durante a sessão e pode ser descar
   assert.equal(api.recuperarAcompanhamentoJob(), null);
 });
 
-test("importação de itens envia a planilha ao endpoint de normalização", async () => {
-  let chamada;
-  const arquivo = { name: "itens.csv", type: "text/csv", size: 32 };
-  class FormDataFake {
-    values = new Map();
-    append(key, value, filename) { this.values.set(key, { value, filename }); }
-  }
-  const api = loadTsModule("src/api.ts", {
-    globals: {
-      FormData: FormDataFake,
-      fetch: async (url, options) => {
-        chamada = { url, options };
-        return {
-          ok: true,
-          async json() {
-            return { count: 1, filename: "itens.csv", items: [{ numero: "1", descricao: "Papel A4", un: "RESMA", qtd: "10", valor: "32.50" }] };
-          },
-        };
-      },
-    },
-  });
-  const resultado = await api.importarItensPlanilha(arquivo);
-  assert.equal(chamada.url, "https://api.example.test/licita/api/importar-itens-planilha");
-  assert.equal(chamada.options.method, "POST");
-  assert.equal(chamada.options.body.values.get("arquivo").filename, "itens.csv");
-  assert.equal(resultado.count, 1);
-  assert.equal(resultado.items[0].descricao, "Papel A4");
-});
-
-
 test("pré-visualização, edição e aprovação usam o token da fila", async () => {
   const chamadas = [];
   const respostas = [
