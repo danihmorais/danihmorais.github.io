@@ -218,7 +218,7 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onSta
   const status = String(job?.status || "").toLowerCase();
   const terminal = ["sent", "failed", "cancelled"].includes(status);
   const aguardandoRevisao = status === "awaiting_review";
-  const semAcaoDisponivel = terminal && !aguardandoRevisao && !job?.download_available && !job?.can_resend && !error && !notice;
+  const semAcaoDisponivel = !aguardandoRevisao && !job?.download_available && !job?.can_resend && !error;
 
   if (semAcaoDisponivel) return null;
 
