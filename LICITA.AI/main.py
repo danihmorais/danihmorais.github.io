@@ -88,6 +88,8 @@ API_UNSLOTH_URL = os.getenv("LICITA_UNSLOTH_URL", os.getenv("UNSLOTH_URL", "http
 MAX_UPLOAD_BYTES = max(1_000_000, int(os.getenv("LICITA_DOCUMENT_MAX_BYTES", str(15 * 1024 * 1024))))
 UPLOAD_FIELDS = ("dfd", "etp", "tr", "edital")
 API_UNSLOTH_KEY = os.getenv("LICITA_UNSLOTH_KEY", os.getenv("API_UNSLOTH", "")).strip()
+UNSLOTH_RAG_KB_ID = os.getenv("LICITA_UNSLOTH_RAG_KB_ID", "").strip()
+UNSLOTH_RAG_TOP_K = max(1, min(20, int(os.getenv("LICITA_UNSLOTH_RAG_TOP_K", "5"))))
 
 IA_RATE_WINDOW_SECONDS = max(10, int(os.getenv("LICITA_IA_RATE_WINDOW", "60")))
 IA_RATE_LIMIT = max(1, int(os.getenv("LICITA_IA_RATE_LIMIT", "20")))
@@ -264,6 +266,13 @@ async def _gerar_ia(req: IAChatRequest) -> dict:
     }
     if req.response_format is not None:
         payload["response_format"] = req.response_format
+    # Sem KB ID configurado, não envie rag_scope: o Unsloth não pesquisa a base implicitamente.
+    if UNSLOTH_RAG_KB_ID:
+        payload["rag_scope"] = {
+            "kb_id": UNSLOTH_RAG_KB_ID,
+            "autoinject": True,
+            "default_top_k": UNSLOTH_RAG_TOP_K,
+        }
 
     data, status = await _upstream_chat(API_UNSLOTH_URL, API_UNSLOTH_KEY, payload)
     modelo_solicitado = str(req.model or "").strip()
