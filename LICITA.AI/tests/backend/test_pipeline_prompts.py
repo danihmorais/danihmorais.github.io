@@ -31,7 +31,7 @@ class TestPipelinePromptsNoServidor(unittest.TestCase):
         resultado = montar_pipeline(dados, "Preservar o objeto e não acrescentar marca.")
         pipeline = resultado["__LICITA_PIPELINE__"]
         self.assertEqual(pipeline["version"], 8)
-        self.assertEqual(pipeline["model"], "unsloth-auto")
+        self.assertEqual(pipeline["model"], "auto")
         self.assertEqual(
             [etapa["id"] for etapa in pipeline["etapas"]],
             ["AUDITORIA_MARCAS", "CONSULTA_HABILITACAO", "GERACAO_DFD", "GERACAO_ETP", "GERACAO_TR"],

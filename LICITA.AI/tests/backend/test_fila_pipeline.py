@@ -1,4 +1,5 @@
 import json
+import os
 import unittest
 
 from fila_pipeline import _aplicar_auditoria_marcas, _dados_para_prompt, _extrair_json, _substituir_contextos, _validar_json_geracao
@@ -177,8 +178,7 @@ class TestAutomaticModelResolution(unittest.TestCase):
         }
 
         with (
-            patch.object(pipeline, "API_UNSLOTH_URL", "http://unsloth.test/v1"),
-            patch.object(pipeline, "API_UNSLOTH_KEY", "chave-de-teste"),
+            patch.dict(os.environ, {"OPENROUTER_API_KEY": "chave-de-teste"}),
             patch.object(pipeline.httpx, "Client") as cliente_http,
         ):
             cliente = cliente_http.return_value.__enter__.return_value
@@ -189,8 +189,10 @@ class TestAutomaticModelResolution(unittest.TestCase):
         self.assertEqual(modelo, "modelo-teste")
         self.assertEqual(cliente.post.call_count, 2)
         payload_correcao = cliente.post.call_args.kwargs["json"]
-        self.assertFalse(payload_correcao["enable_tools"])
-        self.assertFalse(payload_correcao["enable_thinking"])
+        self.assertNotIn("tools", payload_correcao)
+        self.assertEqual(payload_correcao["reasoning"], {"enabled": False})
+        self.assertNotIn("enable_tools", payload_correcao)
+        self.assertNotIn("enable_thinking", payload_correcao)
         self.assertNotIn("max_tokens", payload_correcao)
         self.assertNotIn("max_completion_tokens", payload_correcao)
         self.assertIn("JSON_MALFORMADO", payload_correcao["messages"][1]["content"])
@@ -210,8 +212,7 @@ class TestAutomaticModelResolution(unittest.TestCase):
         }
 
         with (
-            patch.object(pipeline, "API_UNSLOTH_URL", "http://unsloth.test/v1"),
-            patch.object(pipeline, "API_UNSLOTH_KEY", "chave-de-teste"),
+            patch.dict(os.environ, {"OPENROUTER_API_KEY": "chave-de-teste"}),
             patch.object(pipeline.httpx, "Client") as cliente_http,
         ):
             cliente_http.return_value.__enter__.return_value.post.return_value = resposta
@@ -229,8 +230,7 @@ class TestAutomaticModelResolution(unittest.TestCase):
         resposta.text = '{"error":"invalid schema"}'
 
         with (
-            patch.object(pipeline, "API_UNSLOTH_URL", "http://unsloth.test/v1"),
-            patch.object(pipeline, "API_UNSLOTH_KEY", "chave-de-teste"),
+            patch.dict(os.environ, {"OPENROUTER_API_KEY": "chave-de-teste"}),
             patch.object(pipeline.httpx, "Client") as cliente_http,
         ):
             cliente_http.return_value.__enter__.return_value.post.return_value = resposta
@@ -246,8 +246,7 @@ class TestAutomaticModelResolution(unittest.TestCase):
         resposta.text = '{"error":"temporarily unavailable"}'
 
         with (
-            patch.object(pipeline, "API_UNSLOTH_URL", "http://unsloth.test/v1"),
-            patch.object(pipeline, "API_UNSLOTH_KEY", "chave-de-teste"),
+            patch.dict(os.environ, {"OPENROUTER_API_KEY": "chave-de-teste"}),
             patch.object(pipeline.httpx, "Client") as cliente_http,
         ):
             cliente_http.return_value.__enter__.return_value.post.return_value = resposta
@@ -275,42 +274,123 @@ class TestAutomaticModelResolution(unittest.TestCase):
                 )
         chamada.assert_called_once()
 
-    def test_auto_model_falls_back_to_first_model_reported_by_unsloth(self):
-        from unittest.mock import MagicMock, patch
+    def _completion(self, modelo="modelo-servido"):
+        from unittest.mock import MagicMock
+
+        resposta = MagicMock()
+        resposta.status_code = 200
+        resposta.json.return_value = {
+            "choices": [{"message": {"content": '{"ok": true}'}, "finish_reason": "stop"}],
+            "model": modelo,
+        }
+        return resposta
+
+    def test_alias_auto_usa_o_modelo_configurado_sem_consultar_lista_de_modelos(self):
+        from unittest.mock import patch
         import fila_pipeline as pipeline
 
-        not_found = MagicMock()
-        not_found.status_code = 404
-        not_found.text = '{"error":"model not downloaded"}'
-
-        model_list = MagicMock()
-        model_list.status_code = 200
-        model_list.json.return_value = {"data": [{"id": "gemma-loaded-model"}]}
-
-        completion = MagicMock()
-        completion.status_code = 200
-        completion.json.return_value = {
-            "choices": [{"message": {"content": '{"ok": true}'}}],
-            "model": "gemma-loaded-model",
-        }
-
+        ambiente = {"OPENROUTER_API_KEY": "chave-de-teste", "OPENROUTER_MODEL": "provedor/modelo-teste"}
         with (
-            patch.object(pipeline, "API_UNSLOTH_URL", "http://unsloth.test/v1"),
-            patch.object(pipeline, "API_UNSLOTH_KEY", "chave-de-teste"),
+            patch.dict(os.environ, ambiente),
             patch.object(pipeline.httpx, "Client") as cliente_http,
         ):
             cliente = cliente_http.return_value.__enter__.return_value
-            cliente.post.side_effect = [not_found, completion]
-            cliente.get.return_value = model_list
-            resultado, modelo = pipeline._chamar_ia("prompt de teste", "unsloth-auto")
+            cliente.post.return_value = self._completion("provedor/modelo-teste-20261101")
+            resultado, modelo = pipeline._chamar_ia("prompt de teste", "auto")
 
         self.assertEqual(resultado, {"ok": True})
-        self.assertEqual(modelo, "gemma-loaded-model")
-        self.assertEqual(cliente.post.call_count, 2)
-        self.assertEqual(cliente.post.call_args_list[1].kwargs["json"]["model"], "gemma-loaded-model")
-        cliente.get.assert_called_once_with("http://unsloth.test/v1/models", headers={
-            "Content-Type": "application/json", "Authorization": "Bearer chave-de-teste"
-        })
+        # Modelo explícito: o identificador configurado é preservado para as próximas etapas.
+        self.assertEqual(modelo, "provedor/modelo-teste")
+        cliente.post.assert_called_once()
+        self.assertEqual(cliente.post.call_args.args[0], "https://openrouter.ai/api/v1/chat/completions")
+        self.assertEqual(cliente.post.call_args.kwargs["json"]["model"], "provedor/modelo-teste")
+        cabecalhos = cliente.post.call_args.kwargs["headers"]
+        self.assertEqual(cabecalhos["Authorization"], "Bearer chave-de-teste")
+        self.assertEqual(cabecalhos["X-Title"], "LICITA.AI")
+        self.assertIn("HTTP-Referer", cabecalhos)
+        cliente.get.assert_not_called()
+
+    def test_alias_legado_unsloth_auto_de_pedidos_antigos_usa_o_modelo_configurado(self):
+        from unittest.mock import patch
+        import fila_pipeline as pipeline
+
+        ambiente = {"OPENROUTER_API_KEY": "chave-de-teste", "OPENROUTER_MODEL": "provedor/modelo-teste"}
+        with (
+            patch.dict(os.environ, ambiente),
+            patch.object(pipeline.httpx, "Client") as cliente_http,
+        ):
+            cliente = cliente_http.return_value.__enter__.return_value
+            cliente.post.return_value = self._completion("provedor/modelo-teste")
+            pipeline._chamar_ia("prompt de teste", "auto")
+
+        self.assertEqual(cliente.post.call_args.kwargs["json"]["model"], "provedor/modelo-teste")
+
+    def test_roteador_automatico_fixa_o_modelo_informado_pelo_openrouter(self):
+        from unittest.mock import patch
+        import fila_pipeline as pipeline
+
+        with (
+            patch.dict(os.environ, {"OPENROUTER_API_KEY": "chave-de-teste", "OPENROUTER_MODEL": ""}),
+            patch.object(pipeline.httpx, "Client") as cliente_http,
+        ):
+            cliente = cliente_http.return_value.__enter__.return_value
+            cliente.post.return_value = self._completion("anthropic/modelo-escolhido")
+            _, modelo = pipeline._chamar_ia("prompt de teste", "auto")
+
+        self.assertEqual(cliente.post.call_args.kwargs["json"]["model"], "openrouter/auto")
+        self.assertEqual(modelo, "anthropic/modelo-escolhido")
+
+    def test_erro_embutido_no_http_200_e_tratado_como_erro_do_provedor(self):
+        from unittest.mock import MagicMock, patch
+        import fila_pipeline as pipeline
+
+        resposta = MagicMock()
+        resposta.status_code = 200
+        resposta.json.return_value = {"error": {"code": 502, "message": "Provider returned error"}}
+        with (
+            patch.dict(os.environ, {"OPENROUTER_API_KEY": "chave-de-teste"}),
+            patch.object(pipeline.httpx, "Client") as cliente_http,
+        ):
+            cliente_http.return_value.__enter__.return_value.post.return_value = resposta
+            with self.assertRaises(RuntimeError) as contexto:
+                pipeline._chamar_ia("prompt de teste", "modelo-teste")
+        self.assertNotIsInstance(contexto.exception, pipeline.ErroPermanente)
+        self.assertIn("Provider returned error", str(contexto.exception))
+
+    def test_finish_reason_error_e_retentavel(self):
+        from unittest.mock import MagicMock, patch
+        import fila_pipeline as pipeline
+
+        resposta = MagicMock()
+        resposta.status_code = 200
+        resposta.json.return_value = {
+            "choices": [{"message": {"content": ""}, "finish_reason": "error", "error": {"code": 500, "message": "upstream caiu"}}],
+            "model": "modelo-teste",
+        }
+        with (
+            patch.dict(os.environ, {"OPENROUTER_API_KEY": "chave-de-teste"}),
+            patch.object(pipeline.httpx, "Client") as cliente_http,
+        ):
+            cliente_http.return_value.__enter__.return_value.post.return_value = resposta
+            with self.assertRaises(RuntimeError) as contexto:
+                pipeline._chamar_ia("prompt de teste", "modelo-teste")
+        self.assertNotIsInstance(contexto.exception, pipeline.ErroPermanente)
+        self.assertIn("upstream caiu", str(contexto.exception))
+
+    def test_creditos_insuficientes_402_e_erro_permanente_com_orientacao(self):
+        from unittest.mock import MagicMock, patch
+        import fila_pipeline as pipeline
+
+        resposta = MagicMock()
+        resposta.status_code = 402
+        resposta.text = '{"error":{"code":402,"message":"Insufficient credits"}}'
+        with (
+            patch.dict(os.environ, {"OPENROUTER_API_KEY": "chave-de-teste"}),
+            patch.object(pipeline.httpx, "Client") as cliente_http,
+        ):
+            cliente_http.return_value.__enter__.return_value.post.return_value = resposta
+            with self.assertRaisesRegex(pipeline.ErroPermanente, "Insufficient credits.*Créditos insuficientes"):
+                pipeline._chamar_ia("prompt de teste", "modelo-teste")
 
 
 class TestStaleQueueCancellation(unittest.TestCase):
@@ -616,7 +696,7 @@ class TestPipelineUnificado(unittest.TestCase):
                 },
                 "dados_ia": {
                     "__LICITA_PIPELINE__": {
-                        "model": "unsloth-auto",
+                        "model": "auto",
                         "temperature": 0.3,
                         "documentos_anteriores": [
                             {
@@ -648,7 +728,7 @@ class TestPipelineUnificado(unittest.TestCase):
             ):
                 pipeline._process_pipeline(job)
 
-        self.assertEqual(chamadas_modelo, ["unsloth-auto", "modelo-resolvido"])
+        self.assertEqual(chamadas_modelo, ["auto", "modelo-resolvido"])
         self.assertEqual(job["status"], "sent")
         self.assertEqual(job["dados_ia"]["VALOR_ESTIMADO_APROXIMADO"], "R$ 305,00")
         enviar_email.assert_called_once()
@@ -688,7 +768,7 @@ class TestPipelineUnificado(unittest.TestCase):
                 "dados_usuario": dados_usuario,
                 "dados_ia": {
                     "__LICITA_PIPELINE__": {
-                        "model": "unsloth-auto",
+                        "model": "auto",
                         "temperature": 0.3,
                         "etapas": [{"id": "FASE_PREPARATORIA", "tipo": "geracao_unificada", "prompt": "PROMPT"}],
                     }
@@ -737,7 +817,7 @@ class TestPipelineUnificado(unittest.TestCase):
 
 
 class TestConfiguracaoThinking(unittest.TestCase):
-    def test_chamar_ia_habilita_thinking_para_modelo_nao_gemma(self):
+    def test_chamar_ia_habilita_raciocinio_e_pesquisa_web_por_padrao(self):
         from unittest.mock import MagicMock, patch
         import fila_pipeline as pipeline
 
@@ -748,8 +828,7 @@ class TestConfiguracaoThinking(unittest.TestCase):
             "model": "qwen-modelo-de-teste",
         }
         with (
-            patch.object(pipeline, "API_UNSLOTH_URL", "http://unsloth.test/v1"),
-            patch.object(pipeline, "API_UNSLOTH_KEY", "chave-de-teste"),
+            patch.dict(os.environ, {"OPENROUTER_API_KEY": "chave-de-teste"}),
             patch.object(pipeline.httpx, "Client") as cliente_http,
         ):
             cliente = cliente_http.return_value.__enter__.return_value
@@ -757,11 +836,14 @@ class TestConfiguracaoThinking(unittest.TestCase):
             resultado, modelo = pipeline._chamar_ia("prompt de teste", "qwen-modelo-de-teste")
 
         payload = cliente.post.call_args.kwargs["json"]
-        self.assertTrue(payload["enable_thinking"])
-        self.assertTrue(payload["enable_tools"])
+        self.assertEqual(payload["reasoning"], {"effort": "medium", "exclude": True})
+        self.assertEqual(payload["tools"][0]["type"], "openrouter:web_search")
+        self.assertNotIn("enable_thinking", payload)
+        self.assertNotIn("enable_tools", payload)
         self.assertNotIn("max_tokens", payload)
         self.assertNotIn("max_completion_tokens", payload)
         self.assertNotIn("response_format", payload)
+        self.assertNotIn("provider", payload)
         self.assertEqual(payload["messages"][0]["role"], "system")
         self.assertIn("1200 segundos", payload["messages"][0]["content"])
         self.assertIn("pesquisa na web", payload["messages"][0]["content"])
@@ -840,7 +922,7 @@ class TestIAExtracaoTotalTR(unittest.TestCase):
         documentos = [{"tipo": "TR", "nome": "TR anterior.pdf", "texto": texto_tr}]
 
         with patch.object(pipeline, "_chamar_ia", return_value=(resposta_ia, "modelo-resolvido")) as chamar:
-            total, modelo = pipeline._total_itens_tr_por_ia(documentos, "unsloth-auto", 0.3)
+            total, modelo = pipeline._total_itens_tr_por_ia(documentos, "auto", 0.3)
 
         self.assertEqual(total, Decimal("290.00"))
         self.assertEqual(modelo, "modelo-resolvido")
@@ -939,7 +1021,7 @@ class TestRevisaoHumanaIntegracaoWorker(unittest.TestCase):
                 "dados_usuario": {"{{OBJETO}}": "Objeto de teste", "{{AMOST}}": "sim"},
                 "dados_ia": {
                     "__LICITA_PIPELINE__": {
-                        "model": "unsloth-auto",
+                        "model": "auto",
                         "temperature": 0.3,
                         "etapas": [
                             {"id": "FASE_PREPARATORIA", "tipo": "geracao_unificada", "prompt": "PROMPT"}

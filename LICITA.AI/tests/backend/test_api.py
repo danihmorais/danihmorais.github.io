@@ -23,7 +23,7 @@ QUEUE_DIR = Path(tempfile.mkdtemp(prefix="licita_ai_tests_"))
 os.environ["LICITA_QUEUE_DIR"] = str(QUEUE_DIR)
 os.environ["LICITA_QUEUE_POLL_SECONDS"] = "3600"
 os.environ["LICITA_QUEUE_MAX_ATTEMPTS"] = "1"
-os.environ["LICITA_UNSLOTH_KEY"] = "test-unsloth"
+os.environ["OPENROUTER_API_KEY"] = "test-openrouter"
 os.environ["LICITA_EMAIL_ALLOWED_DOMAINS"] = "example.com"
 os.environ["LICITA_METRICS_TOKEN"] = "licita-ai-test-metrics-token-2026-11-19"
 
@@ -262,7 +262,7 @@ class LicitaBackendTests(unittest.TestCase):
     def test_ia_item_usa_prompt_servidor_schema_estrito_e_desativa_thinking(self):
         captura = {}
 
-        async def mock_upstream(base_url, api_key, payload):
+        async def mock_upstream(payload):
             captura.update(payload)
             return {
                 "choices": [{"message": {"content": json.dumps({"itens": [{
@@ -274,7 +274,6 @@ class LicitaBackendTests(unittest.TestCase):
             }, 200
 
         with (
-            patch.object(main, "API_UNSLOTH_URL", "http://unsloth.test/v1"),
             patch.object(main, "_upstream_chat", side_effect=mock_upstream),
             TestClient(app) as client,
         ):
@@ -296,7 +295,7 @@ class LicitaBackendTests(unittest.TestCase):
     def test_ia_item_usa_modelo_e_schema_controlados_pelo_servidor(self):
         captura = {}
 
-        async def mock_upstream(base_url, api_key, payload):
+        async def mock_upstream(payload):
             captura.update(payload)
             return {
                 "choices": [{"message": {"content": json.dumps({"itens": [{
@@ -308,7 +307,7 @@ class LicitaBackendTests(unittest.TestCase):
             }, 200
 
         with (
-            patch.object(main, "API_UNSLOTH_URL", "http://unsloth.test/v1"),
+            patch.dict(os.environ, {"OPENROUTER_MODEL": "provedor/modelo-teste"}),
             patch.object(main, "_upstream_chat", side_effect=mock_upstream),
             TestClient(app) as client,
         ):
@@ -322,8 +321,12 @@ class LicitaBackendTests(unittest.TestCase):
             )
 
         self.assertEqual(response.status_code, 200, response.text)
-        self.assertEqual(captura["model"], "unsloth-auto")
-        self.assertFalse(captura["enable_thinking"])
+        self.assertEqual(response.json()["provider"], "openrouter")
+        self.assertEqual(captura["model"], "provedor/modelo-teste")
+        self.assertEqual(captura["reasoning"], {"enabled": False})
+        self.assertNotIn("enable_thinking", captura)
+        self.assertNotIn("tools", captura)
+        self.assertTrue(captura["provider"]["require_parameters"])
         self.assertEqual(captura["temperature"], 0.0)
         self.assertEqual(captura["response_format"]["type"], "json_schema")
         self.assertEqual(captura["response_format"]["json_schema"]["strict"], True)
@@ -478,7 +481,7 @@ class LicitaBackendTests(unittest.TestCase):
                     "{{DOTACAO}}": "__IMG__" + segredo + "\nFonte 123.456.789/0001-00",
                     "{{CAMINHO_IMAGEM_DOTACAO}}": "data:image/png;base64," + segredo,
                 },
-                dados_ia={"__LICITA_PIPELINE__": {"model": "unsloth-auto", "etapas": []}},
+                dados_ia={"__LICITA_PIPELINE__": {"model": "auto", "etapas": []}},
             )
             headers = {"Authorization": "Bearer " + token}
             detalhe = client.get("/api/admin/jobs/" + job["job_id"], headers=headers)
@@ -548,9 +551,9 @@ class LicitaBackendTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertTrue(body["ok"])
-        self.assertTrue(body["unsloth"])
+        self.assertTrue(body["openrouter"])
         self.assertNotIn("key", json.dumps(body).lower())
-        self.assertNotIn("test-unsloth", json.dumps(body))
+        self.assertNotIn("test-openrouter", json.dumps(body))
 
     def test_gerar_zip_produz_os_tres_documentos_base(self):
         dados_usuario = {
@@ -609,7 +612,7 @@ class LicitaBackendTests(unittest.TestCase):
             dados_ia = {
                 "__LICITA_PIPELINE__": {
                     "version": 4,
-                    "model": "unsloth-auto",
+                    "model": "auto",
                     "temperature": 0.3,
                     "etapas": [{"id": "FASE_PREPARATORIA", "tipo": "geracao_unificada", "prompt": "prompt de teste"}],
                 }
@@ -646,7 +649,7 @@ class LicitaBackendTests(unittest.TestCase):
             dados_ia = {
                 "__LICITA_PIPELINE__": {
                     "version": 4,
-                    "model": "unsloth-auto",
+                    "model": "auto",
                     "temperature": 0.3,
                     "etapas": [{"id": "FASE_PREPARATORIA", "tipo": "geracao_unificada", "prompt": "prompt original preservado"}],
                 }
@@ -691,7 +694,7 @@ class LicitaBackendTests(unittest.TestCase):
                 job = fila.enqueue_job(
                     email=f"excluir-{status}@example.com",
                     dados_usuario={"{{OBJETO}}": f"Objeto {status}"},
-                    dados_ia={"__LICITA_PIPELINE__": {"model": "unsloth-auto", "etapas": [{"id": "FASE_PREPARATORIA", "tipo": "geracao_unificada", "prompt": "teste"}]}},
+                    dados_ia={"__LICITA_PIPELINE__": {"model": "auto", "etapas": [{"id": "FASE_PREPARATORIA", "tipo": "geracao_unificada", "prompt": "teste"}]}},
                 )
                 registro = json.loads(fila._job_path(job["job_id"]).read_text(encoding="utf-8"))
                 registro["status"] = status
@@ -713,7 +716,7 @@ class LicitaBackendTests(unittest.TestCase):
             job = fila.enqueue_job(
                 email="ativo@example.com",
                 dados_usuario={"{{OBJETO}}": "Pedido ativo"},
-                dados_ia={"__LICITA_PIPELINE__": {"model": "unsloth-auto", "etapas": [{"id": "FASE_PREPARATORIA", "tipo": "geracao_unificada", "prompt": "teste"}]}},
+                dados_ia={"__LICITA_PIPELINE__": {"model": "auto", "etapas": [{"id": "FASE_PREPARATORIA", "tipo": "geracao_unificada", "prompt": "teste"}]}},
             )
             resposta = client.delete(
                 "/api/admin/jobs/" + job["job_id"],
@@ -731,7 +734,7 @@ class LicitaBackendTests(unittest.TestCase):
                 dados_ia={
                     "__LICITA_PIPELINE__": {
                         "version": 4,
-                        "model": "unsloth-auto",
+                        "model": "auto",
                         "temperature": 0.3,
                         "etapas": [{"id": "FASE_PREPARATORIA", "tipo": "geracao_unificada", "prompt": "prompt"}],
                     }

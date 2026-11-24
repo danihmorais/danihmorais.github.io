@@ -55,7 +55,7 @@ async function chamarBackend(payload: Record<string, any>): Promise<any> {
   let data: any;
   try { data = raw ? JSON.parse(raw) : null; } catch { throw new Error("A API do backend retornou uma resposta inválida."); }
   if (!data?.content) throw new Error("A API do backend retornou uma resposta vazia.");
-  return { json: extrairEConverterJSON(String(data.content)), model: typeof data.model === "string" ? data.model : "unsloth-auto" };
+  return { json: extrairEConverterJSON(String(data.content)), model: typeof data.model === "string" ? data.model : "auto" };
 }
 
 export type TarefaIAItem = "auditoria_marcas" | "melhorar_descricao";

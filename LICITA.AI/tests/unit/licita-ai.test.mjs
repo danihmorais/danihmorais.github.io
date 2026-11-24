@@ -127,7 +127,7 @@ test("llm usa endpoint tipado do backend sem enviar prompts ou configuração do
       localStorage: storage,
       fetch: async (url, options) => {
         chamada = { url, options };
-        return response({ json: { model: "modelo-backend", provider: "unsloth", content: "{\"resultado\":\"ok\"}" } });
+        return response({ json: { model: "modelo-backend", provider: "openrouter", content: "{\"resultado\":\"ok\"}" } });
       },
     },
   });

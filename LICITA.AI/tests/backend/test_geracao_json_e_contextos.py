@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -66,8 +67,7 @@ class TestSubstituirContextos(unittest.TestCase):
 class TestChamarIaFalhasDeRede(unittest.TestCase):
     def _chamar(self, erro):
         with (
-            patch.object(pipeline, "API_UNSLOTH_URL", "http://unsloth.test/v1"),
-            patch.object(pipeline, "API_UNSLOTH_KEY", "chave"),
+            patch.dict(os.environ, {"OPENROUTER_API_KEY": "chave"}),
             patch.object(pipeline.httpx, "Client") as cliente_http,
         ):
             cliente_http.return_value.__enter__.return_value.post.side_effect = erro
@@ -89,8 +89,7 @@ class TestChamarIaFalhasDeRede(unittest.TestCase):
 
     def _chamar_resposta(self, resposta):
         with (
-            patch.object(pipeline, "API_UNSLOTH_URL", "http://unsloth.test/v1"),
-            patch.object(pipeline, "API_UNSLOTH_KEY", "chave"),
+            patch.dict(os.environ, {"OPENROUTER_API_KEY": "chave"}),
             patch.object(pipeline.httpx, "Client") as cliente_http,
         ):
             cliente_http.return_value.__enter__.return_value.post.return_value = resposta
@@ -98,14 +97,13 @@ class TestChamarIaFalhasDeRede(unittest.TestCase):
 
     def test_prompt_acima_do_limite_e_erro_permanente(self):
         with (
-            patch.object(pipeline, "API_UNSLOTH_URL", "http://unsloth.test/v1"),
-            patch.object(pipeline, "API_UNSLOTH_KEY", "chave"),
+            patch.dict(os.environ, {"OPENROUTER_API_KEY": "chave"}),
         ):
             with self.assertRaises(ErroPermanente):
                 pipeline._chamar_ia("x" * (pipeline.limite_prompt_chars() + 1), "modelo")
 
     def test_provedor_nao_configurado_e_erro_permanente(self):
-        with patch.object(pipeline, "API_UNSLOTH_KEY", ""):
+        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "", "LICITA_OPENROUTER_API_KEY": ""}):
             with self.assertRaises(ErroPermanente):
                 pipeline._chamar_ia("prompt", "modelo")
 

@@ -174,7 +174,7 @@ export default function Step1({ dados = { itens: [], objeto: "", necessidade: ""
   const melhorarItem = async (item: any) => {
     if (!String(item.descricao || "").trim()) return;
     const apiKey = "backend";
-    const modelo = "unsloth-auto";
+    const modelo = "auto";
     setItemEmMelhoria(item.id);
     try {
       const melhoria = await melhorarDescricaoItem(
