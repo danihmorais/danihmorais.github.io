@@ -485,64 +485,6 @@ def _json_schema_auditoria_marcas() -> dict:
     )
 
 
-def _json_schema_consulta_habilitacao() -> dict:
-    documento = {
-        "type": "object",
-        "properties": {
-            "numero_documento": {"type": "string"},
-            "categoria": {"type": "string"},
-            "documento": {"type": "string"},
-            "aplicabilidade": {"type": "string"},
-            "justificativa": {"type": "string"},
-            "fundamento_legal": {"type": "string"},
-            "fonte_oficial_url": {"type": "string"},
-        },
-        "required": [
-            "numero_documento", "categoria", "documento", "aplicabilidade",
-            "justificativa", "fundamento_legal", "fonte_oficial_url",
-        ],
-        "additionalProperties": False,
-    }
-    exigencia = {
-        "type": "object",
-        "properties": {
-            "exigencia": {"type": "string"},
-            "motivo": {"type": "string"},
-            "fonte_oficial_url": {"type": "string"},
-        },
-        "required": ["exigencia", "motivo", "fonte_oficial_url"],
-        "additionalProperties": False,
-    }
-    fonte = {
-        "type": "object",
-        "properties": {
-            "orgao": {"type": "string"},
-            "titulo": {"type": "string"},
-            "url": {"type": "string"},
-            "relevancia": {"type": "string"},
-        },
-        "required": ["orgao", "titulo", "url", "relevancia"],
-        "additionalProperties": False,
-    }
-    return _schema_objeto_estrito(
-        {
-            "ENQUADRAMENTO_DO_OBJETO": {"type": "string", "minLength": 1},
-            "LEGISLACAO_E_REGULACAO_APLICAVEL": {"type": "string", "minLength": 1},
-            "REQUISITOS_TECNICOS_E_REGULATORIOS": {"type": "string", "minLength": 1},
-            "DOCUMENTOS_ADICIONAIS_HABILITACAO": {"type": "array", "items": documento},
-            "EXIGENCIAS_NAO_RECOMENDADAS": {"type": "array", "items": exigencia},
-            "FONTES_OFICIAIS": {"type": "array", "items": fonte},
-            "CONCLUSAO": {"type": "string", "minLength": 1},
-        },
-        [
-            "ENQUADRAMENTO_DO_OBJETO", "LEGISLACAO_E_REGULACAO_APLICAVEL",
-            "REQUISITOS_TECNICOS_E_REGULATORIOS", "DOCUMENTOS_ADICIONAIS_HABILITACAO",
-            "EXIGENCIAS_NAO_RECOMENDADAS", "FONTES_OFICIAIS", "CONCLUSAO",
-        ],
-        "consulta_habilitacao",
-    )
-
-
 def _json_schema_contratacao_direta() -> dict:
     return _schema_objeto_estrito(
         {campo: {"type": "string", "minLength": 1} for campo in _CAMPOS_CONTRATACAO_DIRETA},
