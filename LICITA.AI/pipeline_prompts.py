@@ -323,7 +323,7 @@ def montar_pipeline(dados_usuario: dict, instrucoes: str = "") -> dict:
     return {
         "__LICITA_PIPELINE__": {
             "version": 8,
-            "model": "unsloth-auto",
+            "model": "auto",
             "temperature": 0.3,
             "eh_contratacao_direta": direta,
             "etapas": etapas,

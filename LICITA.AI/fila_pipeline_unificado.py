@@ -618,7 +618,7 @@ def _chamar_ia(
     system_prompt: str | None = None,
     enable_thinking: bool = True,
 ) -> tuple[dict, str]:
-    modelo = str(model or "unsloth-auto").strip()
+    modelo = str(model or "auto").strip()
     if response_format is None and enable_tools is True and system_prompt is None and enable_thinking is True:
         return _chamar_ia_primaria(prompt, modelo, temperature)
     return _chamar_ia_primaria(
@@ -850,7 +850,7 @@ def _total_itens_tr_por_ia(
         and str(documento.get("tipo") or "").strip().upper() == "TR"
         and str(documento.get("texto") or "").strip()
     ]
-    modelo_atual = str(modelo or "unsloth-auto").strip()
+    modelo_atual = str(modelo or "auto").strip()
 
     for documento in documentos_tr:
         texto = str(documento.get("texto") or "").strip()
@@ -1060,7 +1060,10 @@ def _process_pipeline(job: dict) -> None:
     dados_usuario = dict(job.get("pipeline_dados_usuario") or job.get("dados_usuario") or {})
     resultados = dict(job.get("pipeline_results") or {})
     completed = {str(item).upper() for item in job.get("completed_stages", [])}
-    modelo = str(job.get("resolved_model") or pipeline.get("model") or "unsloth-auto")
+    # O modelo fixado só vale se foi resolvido pelo OpenRouter; pedidos antigos podem trazer um
+    # identificador de outro provedor.
+    modelo_fixado = job.get("resolved_model") if job.get("resolved_provider") == "openrouter" else None
+    modelo = str(modelo_fixado or pipeline.get("model") or "auto")
     temperatura = _temperatura_valida(pipeline.get("temperature"), 0.3)
     documentos_anteriores = pipeline.get("documentos_anteriores")
     if not isinstance(documentos_anteriores, list):
@@ -1112,6 +1115,7 @@ def _process_pipeline(job: dict) -> None:
         if modelo_resolvido:
             modelo = modelo_resolvido
             job["resolved_model"] = modelo_resolvido
+            job["resolved_provider"] = "openrouter"
 
         if etapa_tipo == "auditoria_marcas":
             dados_usuario, resultado_final = _aplicar_auditoria_marcas(dados_usuario, resultado)
@@ -1188,6 +1192,7 @@ def _process_pipeline(job: dict) -> None:
         if modelo_analise:
             modelo = modelo_analise
             job["resolved_model"] = modelo_analise
+            job["resolved_provider"] = "openrouter"
         job["analise_valor_tr_concluida"] = True
         job["total_anterior_ia"] = str(total_anterior_ia) if total_anterior_ia is not None else None
         _finalizar_etapa(job, "ANALISE_VALOR_TR", "completed")

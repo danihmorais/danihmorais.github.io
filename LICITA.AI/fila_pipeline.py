@@ -9,9 +9,9 @@ import re
 
 import httpx
 
+import openrouter_client
 
-API_UNSLOTH_URL = os.getenv("LICITA_UNSLOTH_URL", os.getenv("UNSLOTH_URL", "http://127.0.0.1:8888/v1")).rstrip("/")
-API_UNSLOTH_KEY = os.getenv("LICITA_UNSLOTH_KEY", os.getenv("API_UNSLOTH", "")).strip()
+
 AI_TIMEOUT_SECONDS = max(60, min(1800, int(os.getenv("LICITA_QUEUE_AI_TIMEOUT", "1200"))))
 AI_CONNECT_TIMEOUT_SECONDS = 10.0
 
@@ -34,7 +34,7 @@ def limite_prompt_chars() -> int:
 
 
 PESQUISA_WEB_SYSTEM_PROMPT = """
-Você é um especialista em planejamento de contratações públicas brasileiras, com rigor jurídico e técnico. Quando a tarefa envolver a elaboração ou análise de DFD, ETP, TR, edital, contratação direta ou requisitos relacionados ao objeto, use a ferramenta de pesquisa na web do Unsloth antes de concluir. Você dispõe de até 1200 segundos para concluir a tarefa atual, incluindo pesquisa, leitura das páginas e redação; organize o trabalho para terminar nesse prazo e evite buscas repetitivas.
+Você é um especialista em planejamento de contratações públicas brasileiras, com rigor jurídico e técnico. Quando a tarefa envolver a elaboração ou análise de DFD, ETP, TR, edital, contratação direta ou requisitos relacionados ao objeto, use a ferramenta de pesquisa na web disponível antes de concluir. Você dispõe de até 1200 segundos para concluir a tarefa atual, incluindo pesquisa, leitura das páginas e redação; organize o trabalho para terminar nesse prazo e evite buscas repetitivas.
 
 Pesquise especificamente o objeto, suas características e riscos relevantes, a legislação vigente aplicável e os documentos/requisitos de habilitação juridicamente cabíveis para aquele objeto. Priorize fontes oficiais e atuais: Planalto (texto legal consolidado), órgãos federais, Compras.gov.br, TCU, TCE-SP, reguladores/conselhos competentes e páginas oficiais dos órgãos responsáveis. Abra e confira a fonte primária sempre que possível; verifique vigência, alterações e âmbito de aplicação. Use páginas de fornecedores apenas para especificações técnicas pontuais, nunca como fundamento jurídico.
 
@@ -340,19 +340,14 @@ def _aplicar_auditoria_marcas(dados_usuario: dict, resposta: dict) -> tuple[dict
     return novos_dados, {"itens": auditoria}
 
 
-def _provider_config(model: str) -> tuple[str, str, str]:
-    modelo = str(model or "unsloth-auto").strip()
-    return API_UNSLOTH_URL, API_UNSLOTH_KEY, modelo
-
-
 def _timeout_ia() -> httpx.Timeout:
     # Timeout total generoso para a geração, mas conexão curta: provedor fora do ar não
     # deve prender a fila por AI_TIMEOUT_SECONDS a cada tentativa.
     return httpx.Timeout(AI_TIMEOUT_SECONDS, connect=AI_CONNECT_TIMEOUT_SECONDS)
 
 
-def _erro_http_provedor(status: int, detalhe: str) -> RuntimeError:
-    mensagem = f"IA HTTP {status}: {str(detalhe or '')[:500]}"
+def _erro_http_provedor(status: int, detalhe: object) -> RuntimeError:
+    mensagem = openrouter_client.descrever_erro_http(status, detalhe)
     if status in {408, 425, 429} or status >= 500:
         return RuntimeError(mensagem)
     return ErroPermanente(mensagem)
@@ -428,59 +423,33 @@ def _chamar_ia(
     enable_thinking: bool = True,
 ) -> tuple[dict, str]:
     inicio_chamada = time.perf_counter()
-    base_url, api_key, modelo = _provider_config(model)
-    if not base_url or not api_key:
-        raise ErroPermanente("O provedor de IA da fila não está configurado no backend.")
+    if not openrouter_client.configurado():
+        raise ErroPermanente("O OpenRouter não está configurado no backend (defina OPENROUTER_API_KEY).")
     limite_prompt = limite_prompt_chars()
     if len(prompt) > limite_prompt:
         raise ErroPermanente(
             f"O prompt excede o limite de contexto seguro ({len(prompt):,} caracteres; limite {limite_prompt:,}). "
             "Reduza a quantidade de texto dos dados ou dos documentos de referência."
         )
-    # Não defina max_tokens/max_completion_tokens: no Unsloth, omitir o parâmetro
-    # permite gerar até EOS. A única limitação restante é a capacidade intrínseca do
-    # contexto/modelo/servidor, e não um teto arbitrário da aplicação.
-    payload = {
-        "model": modelo,
-        "temperature": float(temperature),
-        "messages": [
+    # O payload (modelo, reasoning, pesquisa na web, roteamento de provedores) é montado por
+    # openrouter_client. Não há max_tokens por padrão: um teto arbitrário da aplicação truncaria
+    # documentos longos; OPENROUTER_MAX_TOKENS permite definir um, se necessário.
+    payload = openrouter_client.montar_payload(
+        model,
+        [
             {"role": "system", "content": system_prompt or PESQUISA_WEB_SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ],
-        "enable_tools": bool(enable_tools),
-    }
-    if response_format is not None:
-        payload["response_format"] = response_format
-    # O Unsloth aplica o modo de raciocínio quando suportado pelo modelo/template ativo.
-    # Enviar em todas as chamadas evita acoplar esse comportamento ao nome de uma família específica.
-    payload["enable_thinking"] = bool(enable_thinking)
-    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
+        temperature=temperature,
+        response_format=response_format,
+        enable_thinking=enable_thinking,
+        enable_tools=enable_tools,
+    )
+    modelo = payload["model"]
+    url = openrouter_client.url_chat_completions()
+    headers = openrouter_client.headers()
     with httpx.Client(timeout=_timeout_ia()) as client:
-        response = _post_ia(client, f"{base_url}/chat/completions", headers=headers, json=payload)
-        if response.status_code == 404 and modelo.casefold() in {"", "auto", "unsloth-auto"}:
-            try:
-                lista_modelos = client.get(f"{base_url}/models", headers=headers)
-                if lista_modelos.status_code >= 400:
-                    raise _erro_http_provedor(lista_modelos.status_code, lista_modelos.text)
-                dados_modelos = lista_modelos.json()
-                itens_modelos = dados_modelos.get("data", []) if isinstance(dados_modelos, dict) else []
-                disponiveis = [
-                    str(item.get("id", "")).strip()
-                    for item in itens_modelos
-                    if isinstance(item, dict) and str(item.get("id", "")).strip()
-                ] if isinstance(itens_modelos, list) else []
-            except Exception as exc:
-                raise RuntimeError(
-                    "O modelo automático não foi reconhecido pelo Unsloth e não foi possível consultar /v1/models. "
-                    "Carregue um modelo no Studio e tente novamente."
-                ) from exc
-            if not disponiveis:
-                raise RuntimeError(
-                    "O Unsloth não informou modelos disponíveis em /v1/models. Carregue um modelo no Studio e tente novamente."
-                )
-            modelo = disponiveis[0]
-            payload["model"] = modelo
-            response = _post_ia(client, f"{base_url}/chat/completions", headers=headers, json=payload)
+        response = _post_ia(client, url, headers=headers, json=payload)
     if response.status_code >= 400:
         raise _erro_http_provedor(response.status_code, response.text)
     try:
@@ -489,18 +458,31 @@ def _chamar_ia(
         raise RuntimeError("O provedor de IA retornou JSON inválido.") from exc
     if not isinstance(data, dict):
         raise RuntimeError("O provedor de IA retornou JSON inválido.")
+    # O OpenRouter pode devolver erro do provedor com HTTP 200 e sem "choices".
+    erro_provedor = openrouter_client.erro_embutido(data)
+    if erro_provedor is not None:
+        raise _erro_http_provedor(*erro_provedor)
     choice = (data.get("choices") or [None])[0]
     if not isinstance(choice, dict):
         raise RuntimeError("O provedor de IA não retornou uma escolha de resposta válida.")
+    if choice.get("finish_reason") == "error":
+        detalhe_choice = (
+            openrouter_client.detalhe_erro({"error": choice["error"]})
+            if isinstance(choice.get("error"), dict)
+            else "sem detalhe"
+        )
+        raise RuntimeError(f"O provedor de IA encerrou a geração com erro: {detalhe_choice}")
     content = ((choice.get("message") or {}).get("content"))
     if isinstance(content, list):
         content = "".join(str(part.get("text", "")) if isinstance(part, dict) else str(part) for part in content)
     content = str(content or "")
-    modelo_resolvido = str(data.get("model") or modelo)
+    modelo_servido = str(data.get("model") or modelo)
+    # Modelo a reutilizar nas próximas etapas do pedido (ver openrouter_client.modelo_para_fixar).
+    modelo_resolvido = openrouter_client.modelo_para_fixar(modelo, modelo_servido)
 
-    # finish_reason=length indica que o modelo/servidor encerrou a geração por limite
-    # de contexto ou geração. A aplicação não impõe um teto fixo de tokens de saída.
-    # Não tente "reparar" uma resposta truncada: isso poderia inventar ou omitir conteúdo.
+    # finish_reason=length indica que o modelo/provedor encerrou a geração por limite
+    # de contexto ou de saída. Não tente "reparar" uma resposta truncada: isso poderia
+    # inventar ou omitir conteúdo.
     if choice.get("finish_reason") == "length":
         raise ErroPermanente(
             "A resposta desta etapa documental foi truncada pelo limite de contexto/geração do modelo ou servidor. "
@@ -515,10 +497,9 @@ def _chamar_ia(
                 "A IA não respeitou o schema JSON estrito da etapa. O resultado não será reparado "
                 "automaticamente para evitar alteração do conteúdo jurídico."
             ) from erro_json
-        payload_correcao = {
-            "model": modelo_resolvido,
-            "temperature": 0.0,
-            "messages": [
+        payload_correcao = openrouter_client.montar_payload(
+            modelo_resolvido,
+            [
                 {
                     "role": "system",
                     "content": (
@@ -540,13 +521,14 @@ def _chamar_ia(
                     ),
                 },
             ],
-            "enable_tools": False,
-            "enable_thinking": False,
-        }
+            temperature=0.0,
+            enable_tools=False,
+            enable_thinking=False,
+        )
         with httpx.Client(timeout=_timeout_ia()) as cliente_correcao:
             resposta_correcao = _post_ia(
                 cliente_correcao,
-                f"{base_url}/chat/completions",
+                url,
                 headers=headers,
                 json=payload_correcao,
             )
@@ -584,7 +566,7 @@ def _chamar_ia(
                 f"{erro_json}. A tentativa automática de correção também não produziu JSON válido: "
                 f"{erro_correcao}"
             ) from erro_correcao
-        modelo_resolvido = str(dados_correcao.get("model") or modelo_resolvido)
+        modelo_servido = str(dados_correcao.get("model") or modelo_servido)
 
-    _registrar_metricas_ia(dados_correcao if "dados_correcao" in locals() else data, time.perf_counter() - inicio_chamada, modelo_resolvido)
+    _registrar_metricas_ia(dados_correcao if "dados_correcao" in locals() else data, time.perf_counter() - inicio_chamada, modelo_servido)
     return resultado, modelo_resolvido
