@@ -14,7 +14,6 @@ type Props = {
   jobId: string;
   statusToken: string;
   onResent: (job: { job_id: string; status_token: string }) => void;
-  onDismiss: () => void;
   onStatusChange?: (job: JobStatus) => void;
 };
 
@@ -27,7 +26,7 @@ type JobStatus = {
   can_resend?: boolean;
 };
 
-export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDismiss, onStatusChange }: Props) {
+export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onStatusChange }: Props) {
   const [job, setJob] = useState<JobStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -220,6 +219,9 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDis
   const etapa = job?.current_stage || job?.etapa_atual || "";
   const terminal = ["sent", "failed", "cancelled"].includes(status);
   const aguardandoRevisao = status === "awaiting_review";
+  const semAcaoDisponivel = terminal && !aguardandoRevisao && !job?.download_available && !job?.can_resend && !error && !notice;
+
+  if (semAcaoDisponivel) return null;
 
   return (
     <section className="queue-delivery-panel" aria-live="polite">
@@ -229,9 +231,7 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDis
           {status === "sent" ? "Concluída" : status === "failed" ? "Falha" : status === "cancelled" ? "Cancelada" : status === "processing" ? "Em processamento" : status === "queued" ? "Na fila" : status === "awaiting_review" ? "Aguardando revisão" : "Consultando"}
         </span>
       </div>
-      <p>Solicitação: <code>{jobId}</code></p>
-      {etapa && <p>Etapa atual: {etapa}</p>}
-      {job?.message && <p>{job.message}</p>}
+      {job?.message && status !== "failed" && <p>{job.message}</p>}
       {aguardandoRevisao && (
         <div className="queue-review-actions">
           <p>O conteúdo de DFD, ETP e TR foi gerado. Revise e aprove antes da montagem dos DOCX.</p>
@@ -333,11 +333,6 @@ export default function QueueDeliveryPanel({ jobId, statusToken, onResent, onDis
         {job?.can_resend && (
           <button type="button" className="button button-secondary" disabled={busy} onClick={reenviar}>
             Reenviar por e-mail
-          </button>
-        )}
-        {terminal && (
-          <button type="button" className="button button-ghost" disabled={busy} onClick={onDismiss}>
-            Fechar acompanhamento
           </button>
         )}
       </div>
