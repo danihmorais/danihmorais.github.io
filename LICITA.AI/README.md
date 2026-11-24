@@ -24,11 +24,15 @@ Configure as variáveis no serviço do backend. Não grave senhas, chaves ou tok
 | Variável | Finalidade |
 | --- | --- |
 | `API_UNSLOTH_URL` | URL do servidor de modelos compatível com OpenAI. |
-| `API_UNSLOTH_KEY` | Chave de acesso ao servidor de modelos. |\n| `LICITA_UNSLOTH_RAG_KB_ID` | ID da base de conhecimento do Unsloth a ser consultada. Quando vazia ou ausente, nenhuma requisição envia `rag_scope` e o RAG permanece desativado. |\n| `LICITA_UNSLOTH_RAG_TOP_K` | Quantidade padrão de trechos recuperados pelo RAG (1 a 20; padrão: 5). Só tem efeito quando o ID da base está configurado. |
+| `API_UNSLOTH_KEY` | Chave de acesso ao servidor de modelos. |
+| `LICITA_UNSLOTH_RAG_KB_ID` | ID da base de conhecimento do Unsloth a ser consultada. Quando vazia ou ausente, nenhuma requisição envia `rag_scope` e o RAG permanece desativado. |
+| `LICITA_UNSLOTH_RAG_TOP_K` | Quantidade padrão de trechos recuperados pelo RAG (1 a 20; padrão: 5). Só tem efeito quando o ID da base está configurado. |
 | `AI_TIMEOUT_SECONDS` | Timeout geral das chamadas de IA. O valor recomendado para a configuração atual é 1200 segundos. |
 | `VITE_API_URL` | URL-base da API usada na compilação do front-end. |
 
-Para habilitar a base de conhecimento **Licitação**, obtenha o `kb_id` no endpoint de listagem de bases do Unsloth e configure `LICITA_UNSLOTH_RAG_KB_ID` no ambiente do serviço do backend. O backend então acrescenta explicitamente `rag_scope` às chamadas da fila e da API pontual, com `autoinject: true` e `default_top_k` configurável. A configuração é exclusivamente no servidor: o navegador não pode escolher outro `kb_id`. Sem essa variável, o payload permanece sem `rag_scope` e o Unsloth não consulta a base. Após alterar as variáveis, reinicie o serviço do backend e o worker da fila.\n\n### SMTP e destinatário
+Para habilitar a base de conhecimento **Licitação**, obtenha o `kb_id` no endpoint de listagem de bases do Unsloth e configure `LICITA_UNSLOTH_RAG_KB_ID` no ambiente do serviço do backend. O backend então acrescenta explicitamente `rag_scope` às chamadas da fila e da API pontual, com `autoinject: true` e `default_top_k` configurável. A configuração é exclusivamente no servidor: o navegador não pode escolher outro `kb_id`. Sem essa variável, o payload permanece sem `rag_scope` e o Unsloth não consulta a base. Após alterar as variáveis, reinicie o serviço do backend e o worker da fila.
+
+### SMTP e destinatário
 
 | Variável | Finalidade |
 | --- | --- |
