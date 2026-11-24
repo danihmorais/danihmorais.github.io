@@ -1,10 +1,9 @@
 name: Deploy FastAPI to Ubuntu
 
 on:
-  workflow_run:
-    workflows: ["LICITA.AI checks"]
-    types: [completed]
+  push:
     branches: ["main"]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -16,21 +15,20 @@ concurrency:
 jobs:
   deploy:
     name: Deploy FastAPI to Ubuntu
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
-    runs-on: ubuntu-latest
+        runs-on: ubuntu-latest
     outputs:
       previous_sha: ${{ steps.previous.outputs.sha }}
 
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 2
 
       - name: Resolve previous revision
         id: previous
         env:
-          SHA: ${{ github.event.workflow_run.head_sha }}
+          SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           previous_sha="$(git rev-parse "${SHA}^1")"
@@ -207,9 +205,7 @@ jobs:
     needs: deploy
     if: >-
       always() &&
-      needs.deploy.result == 'failure' &&
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push'
+      needs.deploy.result == 'failure'
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
