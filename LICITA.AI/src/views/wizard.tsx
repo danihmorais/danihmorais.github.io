@@ -649,10 +649,15 @@ export default function Wizard() {
               <strong>Você pode fechar esta janela.</strong> A geração continuará em segundo plano e os documentos serão enviados para <strong>{jobAgendado.email}</strong> assim que o processamento terminar. Não é necessário manter esta página aberta.
             </div>
           )}
-          {erroMsg && <pre className="status-error-detail">{erroMsg}</pre>}
+          {erroMsg && (
+            <div className="status-error-block" role="alert">
+              <strong>Detalhes do erro</strong>
+              <pre className="status-error-detail">{erroMsg}</pre>
+            </div>
+          )}
           {geracaoSucesso && !erroMsg && jobAgendado && (
             <>
-              <p><strong>Status:</strong> {rotuloStatusPedido(statusPedido, cancelamentoSolicitado)}</p>
+              <p className={"status-summary status-" + String(statusPedido).toLowerCase()}><strong>Status</strong><span>{rotuloStatusPedido(statusPedido, cancelamentoSolicitado)}</span></p>
               <dl className="job-details">
                 {jobAgendado.email && <div><dt>E-mail de destino</dt><dd>{jobAgendado.email}</dd></div>}
                 <div><dt>ID da solicitação</dt><dd><code>{jobAgendado.job_id}</code></dd></div>
@@ -664,6 +669,13 @@ export default function Wizard() {
                 {jobDetalhe?.retry_at && <div><dt>Nova tentativa</dt><dd>{new Date(jobDetalhe.retry_at).toLocaleString("pt-BR")}</dd></div>}
                 {ultimaAtualizacao && <div><dt>Atualizado às</dt><dd>{new Date(ultimaAtualizacao).toLocaleTimeString("pt-BR")}</dd></div>}
               </dl>
+              {jobDetalhe?.last_error && (statusFinalFalha || jobDetalhe.retry_at) && (
+                <div className="status-error-block" role="alert">
+                  <strong>Último erro registrado pelo backend</strong>
+                  <pre className="status-error-detail">{String(jobDetalhe.last_error)}</pre>
+                </div>
+              )}
+              {erroConsultaJob && <p role="status">{erroConsultaJob}</p>}
               <QueueDeliveryPanel
                 jobId={jobAgendado.job_id}
                 statusToken={jobAgendado.status_token}
@@ -680,12 +692,6 @@ export default function Wizard() {
                   setJobDetalhe({ status: "queued", current_stage: "AGUARDANDO_FILA" });
                   setStatusTexto("O reenvio foi colocado na fila.");
                 }}
-                onDismiss={() => {
-                  limparAcompanhamentoJob();
-                  setGeracaoSucesso(false);
-                  setJobAgendado(null);
-                  setJobDetalhe(null);
-                }}
               />
               <div className="status-actions">
                 <button className="button button-secondary" onClick={() => void navigator.clipboard.writeText(jobAgendado.job_id).then(() => showToast("ID copiado.", "success")).catch(() => showToast("Não foi possível copiar o ID.", "error"))}>Copiar ID</button>
@@ -695,8 +701,6 @@ export default function Wizard() {
                   </button>
                 )}
               </div>
-              {jobDetalhe?.last_error && (statusFinalFalha || jobDetalhe.retry_at) && <pre className="status-error-detail">{String(jobDetalhe.last_error)}</pre>}
-              {erroConsultaJob && <p role="status">{erroConsultaJob}</p>}
             </>
           )}
           <div className="status-actions">

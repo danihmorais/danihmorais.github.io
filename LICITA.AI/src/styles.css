@@ -2364,3 +2364,169 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .licita-step4-style-069 { padding: 6px 8px; background: rgba(220,38,38,0.15); color: var(--btn-danger); border: none; font-size: 12px; }
 .licita-step4-style-070 { margin-top: 20px; text-align: right; }
 .licita-step4-style-071 { padding: 8px 16px; background: var(--bg-subtle); color: var(--text-main); border: none; }
+
+
+/* Tela de status e acompanhamento em fluxo único, sem elementos flutuantes. */
+.status-page {
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 100svh;
+  padding: clamp(24px, 4vh, 48px) clamp(16px, 3vw, 32px);
+}
+.status-brand,
+.status-content {
+  box-sizing: border-box;
+  width: min(100%, 960px);
+  margin-inline: auto;
+}
+.status-brand {
+  padding-bottom: 16px;
+  font-size: 18px;
+}
+.status-content {
+  margin: 22px auto 0;
+  padding: clamp(24px, 4vw, 44px);
+  border-radius: 20px;
+}
+.status-content h1 {
+  margin-bottom: 12px;
+  font-size: clamp(30px, 3.4vw, 38px);
+  line-height: 1.12;
+}
+.status-content > p {
+  max-width: 72ch;
+  font-size: 15px;
+  line-height: 1.6;
+}
+.status-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 24px 0 12px !important;
+  padding: 13px 15px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-glass-strong);
+  color: var(--text-main) !important;
+}
+.status-summary strong {
+  font-size: 13px;
+}
+.status-summary span {
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  font-size: 13px;
+  font-weight: 700;
+}
+.status-summary.status-failed span {
+  color: var(--btn-danger);
+  background: color-mix(in srgb, var(--btn-danger) 10%, var(--surface-glass-strong));
+}
+.job-details {
+  margin: 14px 0 22px;
+}
+.job-details > div {
+  padding: 13px 15px;
+}
+.job-details dt {
+  font-size: 13px;
+}
+.job-details dd {
+  font-size: 14px;
+}
+.job-details code {
+  font-size: 13px;
+}
+.status-error-block {
+  margin: 20px 0;
+  padding: 17px 19px;
+  border: 1px solid color-mix(in srgb, var(--btn-danger) 24%, var(--border));
+  border-left: 4px solid var(--btn-danger);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--btn-danger) 5%, var(--surface-glass-strong));
+}
+.status-error-block > strong {
+  display: block;
+  color: var(--btn-danger);
+  font-size: 14px;
+}
+.status-error-block .status-error-detail {
+  max-height: 240px;
+  margin: 9px 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-main);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.queue-delivery-panel {
+  position: static;
+  inset: auto;
+  z-index: auto;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 18px 0 0;
+  overflow: visible;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-glass-strong);
+  box-shadow: none;
+}
+.queue-delivery-heading strong {
+  font-size: 14px;
+}
+.queue-delivery-panel p {
+  font-size: 14px;
+  line-height: 1.5;
+}
+.queue-delivery-actions {
+  gap: 10px;
+}
+.status-actions {
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+.status-actions .button {
+  min-height: 42px;
+  padding-inline: 16px;
+}
+@media (max-width: 640px) {
+  .status-page {
+    padding: 18px 12px 28px;
+  }
+  .status-brand,
+  .status-content {
+    width: 100%;
+  }
+  .status-content {
+    margin-top: 16px;
+    padding: 22px 18px;
+    border-radius: 16px;
+  }
+  .status-content h1 {
+    font-size: clamp(27px, 7vw, 32px);
+  }
+  .status-summary {
+    align-items: flex-start;
+  }
+  .job-details > div {
+    gap: 6px;
+  }
+  .queue-delivery-panel {
+    padding: 16px;
+  }
+  .status-actions {
+    justify-content: stretch;
+  }
+  .status-actions .button {
+    flex: 1 1 180px;
+  }
+}
