@@ -81,21 +81,13 @@ class TestFerramentasEmEtapasMecanicas(unittest.TestCase):
             {"itens"},
         )
 
-    def test_consulta_de_habilitacao_preserva_pesquisa_com_schema_estrito(self):
+    def test_consulta_de_habilitacao_usa_ferramentas_sem_response_format_e_retorna_texto_contextual(self):
         opcoes = pipeline._opcoes_chamada_ia_etapa("consulta_habilitacao")
         self.assertTrue(opcoes["enable_tools"])
         self.assertFalse(opcoes["enable_thinking"])
-        self.assertTrue(opcoes["response_format"]["json_schema"]["strict"])
-        campos = set(opcoes["response_format"]["json_schema"]["schema"]["properties"])
-        self.assertEqual(campos, {
-            "ENQUADRAMENTO_DO_OBJETO",
-            "LEGISLACAO_E_REGULACAO_APLICAVEL",
-            "REQUISITOS_TECNICOS_E_REGULATORIOS",
-            "DOCUMENTOS_ADICIONAIS_HABILITACAO",
-            "EXIGENCIAS_NAO_RECOMENDADAS",
-            "FONTES_OFICIAIS",
-            "CONCLUSAO",
-        })
+        self.assertNotIn("response_format", opcoes)
+        self.assertTrue(opcoes["retornar_texto"])
+        self.assertIn("somente como contexto", opcoes["system_prompt"])
 
     def test_contratacao_direta_usa_schema_estrito_e_pensamento_juridico(self):
         opcoes = pipeline._opcoes_chamada_ia_etapa("geracao_contratacao_direta")
