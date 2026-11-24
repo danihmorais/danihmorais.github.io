@@ -784,45 +784,14 @@ def _validar_json_documento(resultado: dict, nome: str, exigir_amostra_tr: bool 
     return {nome: bloco}
 
 
-def _validar_json_consulta_habilitacao(resultado: dict) -> dict:
-    campos_textuais = (
-        "ENQUADRAMENTO_DO_OBJETO",
-        "LEGISLACAO_E_REGULACAO_APLICAVEL",
-        "REQUISITOS_TECNICOS_E_REGULATORIOS",
-        "CONCLUSAO",
-    )
-    campos_lista = (
-        "DOCUMENTOS_ADICIONAIS_HABILITACAO",
-        "EXIGENCIAS_NAO_RECOMENDADAS",
-        "FONTES_OFICIAIS",
-    )
+def _validar_pesquisa_habilitacao(resultado: dict) -> dict:
+    """Valida a resposta textual da pesquisa auxiliar, sem exigir um JSON de campos."""
     if not isinstance(resultado, dict):
-        raise RuntimeError("A consulta de habilitação não retornou um objeto JSON válido.")
-    ausentes = [campo for campo in (*campos_textuais, *campos_lista) if campo not in resultado]
-    if ausentes:
-        raise RuntimeError("A consulta de habilitação não retornou os campos: " + ", ".join(ausentes) + ".")
-    for campo in campos_textuais:
-        if not isinstance(resultado[campo], str) or not resultado[campo].strip():
-            raise RuntimeError(f"A consulta de habilitação retornou o campo textual vazio: {campo}.")
-    esquemas_listas = {
-        "DOCUMENTOS_ADICIONAIS_HABILITACAO": (
-            "numero_documento", "categoria", "documento", "aplicabilidade",
-            "justificativa", "fundamento_legal", "fonte_oficial_url",
-        ),
-        "EXIGENCIAS_NAO_RECOMENDADAS": ("exigencia", "motivo", "fonte_oficial_url"),
-        "FONTES_OFICIAIS": ("orgao", "titulo", "url", "relevancia"),
-    }
-    for campo, obrigatorios in esquemas_listas.items():
-        lista = resultado[campo]
-        if not isinstance(lista, list):
-            raise RuntimeError(f"A consulta de habilitação retornou uma lista inválida em {campo}.")
-        for indice, item in enumerate(lista, start=1):
-            if not isinstance(item, dict) or set(item) != set(obrigatorios):
-                raise RuntimeError(f"O registro {indice} de {campo} não corresponde ao esquema obrigatório.")
-            vazios = [chave for chave in obrigatorios if not isinstance(item[chave], str)]
-            if vazios:
-                raise RuntimeError(f"O registro {indice} de {campo} contém campos não textuais: " + ", ".join(vazios) + ".")
-    return {campo: resultado[campo] for campo in (*campos_textuais, *campos_lista)}
+        raise RuntimeError("A consulta de habilitação não retornou um resultado válido.")
+    pesquisa = resultado.get("PESQUISA")
+    if not isinstance(pesquisa, str) or not pesquisa.strip():
+        raise RuntimeError("A consulta de habilitação não retornou conteúdo textual.")
+    return {"PESQUISA": pesquisa.strip()}
 
 
 def _validar_json_contratacao_direta(resultado: dict) -> dict:
@@ -1138,7 +1107,7 @@ def _process_pipeline(job: dict) -> None:
         elif etapa_tipo == "geracao_contratacao_direta":
             resultados[etapa_id] = _validar_json_contratacao_direta(resultado)
         elif etapa_tipo == "consulta_habilitacao":
-            resultados[etapa_id] = _validar_json_consulta_habilitacao(resultado)
+            resultados[etapa_id] = _validar_pesquisa_habilitacao(resultado)
         elif etapa_id == "PAGAMENTO_ETAPAS":
             resultados[etapa_id] = _validar_json_pagamento_etapas(resultado)
         else:
