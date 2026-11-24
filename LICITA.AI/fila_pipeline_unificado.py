@@ -570,9 +570,18 @@ def _opcoes_chamada_ia_etapa(etapa_tipo: str, etapa_id: str = "", *, exigir_amos
         }
     if tipo == "consulta_habilitacao":
         return {
-            "response_format": _json_schema_consulta_habilitacao(),
             "enable_tools": True,
+            "system_prompt": (
+                "Você é um pesquisador jurídico-técnico de contratações públicas brasileiras. "
+                "Pesquise na web usando as ferramentas disponíveis, priorizando fontes oficiais e vigentes. "
+                "Apresente os achados em texto claro e estruturado, com requisitos de habilitação pertinentes, "
+                "fundamentos legais, justificativas, ressalvas de competitividade e URLs das fontes. "
+                "Não invente exigências nem trate recomendações como obrigações. "
+                "Este conteúdo será usado somente como contexto por uma etapa posterior de geração documental; "
+                "não produza JSON nem tente obedecer a um esquema de saída."
+            ),
             "enable_thinking": False,
+            "retornar_texto": True,
         }
     if tipo == "geracao_json":
         return {
@@ -617,6 +626,7 @@ def _chamar_ia(
     enable_tools: bool = True,
     system_prompt: str | None = None,
     enable_thinking: bool = True,
+    retornar_texto: bool = False,
 ) -> tuple[dict, str]:
     modelo = str(model or "unsloth-auto").strip()
     if response_format is None and enable_tools is True and system_prompt is None and enable_thinking is True:
@@ -629,6 +639,7 @@ def _chamar_ia(
         enable_tools=enable_tools,
         system_prompt=system_prompt,
         enable_thinking=enable_thinking,
+        retornar_texto=retornar_texto,
     )
 
 
