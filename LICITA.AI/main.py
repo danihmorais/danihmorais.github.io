@@ -29,7 +29,6 @@ from typing import Literal
 
 from documentos_contexto import MAX_CONTEXT_CHARS, extrair_contexto_documentos
 from fila import EMAIL_RE, MAX_ATTEMPTS, QUEUE_DIR, _artifact_path, _job_path, atualizar_indice_job_sqlite, cancel_job, consumir_limite_taxa_sqlite, enqueue_job, get_job, listar_jobs_sqlite, obter_metricas_fila_sqlite, obter_posicao_fila_sqlite
-import openrouter_client
 from fila_pipeline import _dados_para_prompt, limite_prompt_chars
 from fila_pipeline_unificado import iniciar_worker
 from pipeline_prompts import montar_pipeline
@@ -61,7 +60,7 @@ class FasePreparatoriaRequest(BaseModel):
 
 
 class IAChatRequest(BaseModel):
-    model: str = Field(default="auto", min_length=1, max_length=200)
+    model: str = Field(default="unsloth-auto", min_length=1, max_length=200)
     prompt: str = Field(min_length=1, max_length=120_000)
     temperature: float = Field(default=0.3, ge=0, le=1.5)
     response_format: dict | None = None
@@ -85,8 +84,10 @@ class AdminLoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=1024)
 
 
+API_UNSLOTH_URL = os.getenv("LICITA_UNSLOTH_URL", os.getenv("UNSLOTH_URL", "http://127.0.0.1:8888/v1")).rstrip("/")
 MAX_UPLOAD_BYTES = max(1_000_000, int(os.getenv("LICITA_DOCUMENT_MAX_BYTES", str(15 * 1024 * 1024))))
 UPLOAD_FIELDS = ("dfd", "etp", "tr", "edital")
+API_UNSLOTH_KEY = os.getenv("LICITA_UNSLOTH_KEY", os.getenv("API_UNSLOTH", "")).strip()
 
 IA_RATE_WINDOW_SECONDS = max(10, int(os.getenv("LICITA_IA_RATE_WINDOW", "60")))
 IA_RATE_LIMIT = max(1, int(os.getenv("LICITA_IA_RATE_LIMIT", "20")))
@@ -193,25 +194,18 @@ def _email_permitido(email: str) -> bool:
     return any(dominio == item or dominio.endswith("." + item) for item in permitidos)
 
 
-async def _upstream_chat(payload: dict) -> tuple[dict, int]:
-    """Chamada assíncrona ao OpenRouter. Devolve (corpo, status); em falha de rede, status 502/504."""
+async def _upstream_chat(base_url: str, api_key: str, payload: dict) -> tuple[dict, int]:
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(180, connect=10)) as client:
-            response = await client.post(
-                openrouter_client.url_chat_completions(),
-                headers=openrouter_client.headers(),
-                json=payload,
-            )
+            response = await client.post(f"{base_url}/chat/completions", headers=headers, json=payload)
     except httpx.TimeoutException:
         return {}, 504
     except httpx.RequestError:
         return {}, 502
     if response.status_code >= 400:
-        # O detalhe vai para o log do servidor; o cliente recebe apenas uma mensagem genérica.
-        logger.warning(
-            "openrouter_http_error",
-            extra={"status": response.status_code, "detalhe": openrouter_client.detalhe_erro(response.text)[:300]},
-        )
         return {}, response.status_code
     try:
         return response.json(), response.status_code
@@ -219,36 +213,69 @@ async def _upstream_chat(payload: dict) -> tuple[dict, int]:
         return {}, 502
 
 
+def _modelo_automatico(modelo: str) -> bool:
+    return str(modelo or "").strip().casefold() in {"", "auto", "unsloth-auto"}
+
+
+async def _listar_modelo_disponivel() -> str:
+    """Resolve o alias automático para um identificador real exposto pelo Unsloth."""
+    headers = {"Content-Type": "application/json"}
+    if API_UNSLOTH_KEY:
+        headers["Authorization"] = f"Bearer {API_UNSLOTH_KEY}"
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.get(f"{API_UNSLOTH_URL}/models", headers=headers)
+        if response.status_code >= 400:
+            raise RuntimeError(f"HTTP {response.status_code}")
+        payload = response.json()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Não foi possível descobrir o modelo carregado no Unsloth. Confira se há um modelo carregado no Studio.",
+        ) from exc
+
+    modelos = payload.get("data", []) if isinstance(payload, dict) else []
+    identificadores = [
+        str(item.get("id", "")).strip()
+        for item in modelos
+        if isinstance(item, dict) and str(item.get("id", "")).strip()
+    ] if isinstance(modelos, list) else []
+    if not identificadores:
+        raise HTTPException(
+            status_code=503,
+            detail="O Unsloth não informou modelos disponíveis. Carregue um modelo no Unsloth Studio e tente novamente.",
+        )
+    return identificadores[0]
+
+
 async def _gerar_ia(req: IAChatRequest) -> dict:
-    if not openrouter_client.configurado():
-        raise HTTPException(status_code=503, detail="O OpenRouter não está configurado no backend.")
+    if not API_UNSLOTH_URL or not API_UNSLOTH_KEY:
+        raise HTTPException(status_code=503, detail="Unsloth local não está configurado no backend.")
 
     mensagens = []
     if req.system_prompt:
         mensagens.append({"role": "system", "content": req.system_prompt})
     mensagens.append({"role": "user", "content": req.prompt.strip()})
-    payload = openrouter_client.montar_payload(
-        req.model,
-        mensagens,
-        temperature=req.temperature,
-        response_format=req.response_format,
-        enable_thinking=req.enable_thinking,
-        enable_tools=False,
-    )
+    payload = {
+        "model": req.model,
+        "temperature": float(req.temperature),
+        "enable_thinking": bool(req.enable_thinking),
+        "messages": mensagens,
+    }
+    if req.response_format is not None:
+        payload["response_format"] = req.response_format
 
-    data, status = await _upstream_chat(payload)
-    erro_provedor = openrouter_client.erro_embutido(data) if status < 400 else None
-    if erro_provedor is not None:
-        status = erro_provedor[0]
-        logger.warning("openrouter_embedded_error", extra={"status": status, "detalhe": erro_provedor[1][:300]})
+    data, status = await _upstream_chat(API_UNSLOTH_URL, API_UNSLOTH_KEY, payload)
+    modelo_solicitado = str(req.model or "").strip()
+    if status == 404 and _modelo_automatico(modelo_solicitado):
+        payload["model"] = await _listar_modelo_disponivel()
+        data, status = await _upstream_chat(API_UNSLOTH_URL, API_UNSLOTH_KEY, payload)
     if status >= 400:
         if status == 429:
-            raise HTTPException(status_code=429, detail="O serviço de IA está limitando as requisições no momento.")
-        if status in {408, 504}:
-            raise HTTPException(status_code=504, detail="O serviço de IA não respondeu dentro do tempo limite.")
-        if status in {401, 402, 403}:
-            raise HTTPException(status_code=503, detail="O serviço de IA está indisponível no momento. Avise o administrador.")
-        raise HTTPException(status_code=502, detail=f"O serviço de IA retornou HTTP {status}.")
+            raise HTTPException(status_code=429, detail="O Unsloth local está limitando as requisições no momento.")
+        if status == 504:
+            raise HTTPException(status_code=504, detail="O Unsloth local não respondeu dentro do tempo limite.")
+        raise HTTPException(status_code=502, detail=f"O Unsloth local retornou HTTP {status}.")
 
     choice = (data.get("choices") or [None])[0]
     if (choice or {}).get("finish_reason") == "length":
@@ -257,8 +284,8 @@ async def _gerar_ia(req: IAChatRequest) -> dict:
     content = ((choice or {}).get("message") or {}).get("content")
     model = data.get("model") or payload["model"]
     if not content:
-        raise HTTPException(status_code=502, detail="O serviço de IA retornou uma resposta vazia.")
-    return {"content": content, "model": model, "provider": "openrouter"}
+        raise HTTPException(status_code=502, detail="O Unsloth local retornou uma resposta vazia.")
+    return {"content": content, "model": model, "provider": "unsloth"}
 
 
 @app.get("/api/configuracao")
@@ -278,8 +305,7 @@ def configuracao_publica():
 
 @app.get("/api/ia/status")
 async def status_ia():
-    configurado = openrouter_client.configurado()
-    return {"ok": configurado, "openrouter": configurado}
+    return {"ok": bool(API_UNSLOTH_URL and API_UNSLOTH_KEY), "unsloth": bool(API_UNSLOTH_URL and API_UNSLOTH_KEY)}
 
 
 def _schema_ia_item(tarefa: str) -> dict:
@@ -498,7 +524,7 @@ async def gerar_ia_item(request: Request, req: IAItemRequest):
     sistema, dados, response_format, temperature = _preparar_ia_item(req)
     return await _gerar_ia(
         IAChatRequest(
-            model="auto",
+            model="unsloth-auto",
             prompt=dados,
             temperature=temperature,
             response_format=response_format,
@@ -1159,9 +1185,7 @@ async def regenerar_documento_fila(job_id: str, request: Request, req: PreviewRe
             prompt = prompt.replace("__LICITA_PIPE_ETP__", json.dumps(documentos.get("ETP", {}), ensure_ascii=False, default=str))
         if req.instrucoes.strip():
             prompt += "\n\nORIENTAÇÃO ADICIONAL PARA ESTA REGENERAÇÃO:\n" + req.instrucoes.strip()
-        # Reutiliza o modelo já fixado no pedido, desde que tenha sido resolvido pelo OpenRouter.
-        modelo = str(job.get("resolved_model") or "") if job.get("resolved_provider") == "openrouter" else ""
-        modelo = modelo or "auto"
+        modelo = str(job.get("modelo") or os.getenv("AI_MODEL") or os.getenv("UNSLOTH_MODEL") or "auto")
         opcoes = {
             "temperature": 0.3,
             "response_format": _json_schema_documento(req.documento, exige_amostra),
