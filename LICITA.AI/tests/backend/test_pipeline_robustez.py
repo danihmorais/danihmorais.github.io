@@ -121,20 +121,13 @@ class TestFerramentasEmEtapasMecanicas(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "vazios"):
             pipeline._validar_json_documento(resultado, "DFD")
 
-    def test_consulta_de_habilitacao_valida_campos_e_listas(self):
-        resposta = {
-            "ENQUADRAMENTO_DO_OBJETO": "Bem comum.",
-            "LEGISLACAO_E_REGULACAO_APLICAVEL": "Lei aplicável.",
-            "REQUISITOS_TECNICOS_E_REGULATORIOS": "Requisitos proporcionais.",
-            "DOCUMENTOS_ADICIONAIS_HABILITACAO": [],
-            "EXIGENCIAS_NAO_RECOMENDADAS": [],
-            "FONTES_OFICIAIS": [],
-            "CONCLUSAO": "Conferir antes da publicação.",
-        }
-        self.assertEqual(pipeline._validar_json_consulta_habilitacao(resposta), resposta)
-        resposta["FONTES_OFICIAIS"] = [{"orgao": "TCU"}]
-        with self.assertRaisesRegex(RuntimeError, "não corresponde ao esquema"):
-            pipeline._validar_json_consulta_habilitacao(resposta)
+    def test_consulta_de_habilitacao_preserva_pesquisa_textual_para_contexto(self):
+        resposta = {"PESQUISA": "Legislação aplicável, requisitos proporcionais e fontes oficiais."}
+        self.assertEqual(pipeline._validar_pesquisa_habilitacao(resposta), resposta)
+
+    def test_consulta_de_habilitacao_rejeita_pesquisa_textual_vazia(self):
+        with self.assertRaisesRegex(RuntimeError, "conteúdo textual"):
+            pipeline._validar_pesquisa_habilitacao({"PESQUISA": "  "})
 
 
 class TestErroPermanenteNaoRepete(unittest.TestCase):
