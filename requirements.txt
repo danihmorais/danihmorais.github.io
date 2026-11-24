@@ -2,4 +2,5 @@
 -r LICITA.AI/requirements.txt
 -r EMAIL-ATAS-CONTRATOS/requirements.txt
 -r GERADOREXTRATO/requirements.txt
+-r BIBLIOTECA-MUNICIPAL/backend/requirements.txt
 imageio-ffmpeg>=0.5.1,<0.7
