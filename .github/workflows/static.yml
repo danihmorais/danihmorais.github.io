@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 
@@ -119,6 +120,26 @@ jobs:
         with:
           name: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
           path: './site'
+      # O deploy-pages consulta o artefato menos de 1 s após o upload e, às
+      # vezes, a listagem ainda não o inclui ("No artifacts named ..."). Espera
+      # o artefato aparecer na mesma API antes de publicar.
+      - name: Wait for artifact to be listed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_NAME: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 18); do
+            names="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100" --jq '.artifacts[].name' || true)"
+            if printf '%s\n' "$names" | grep -Fxq "$ARTIFACT_NAME"; then
+              echo "Artefato $ARTIFACT_NAME listado (tentativa $i)."
+              sleep 3
+              exit 0
+            fi
+            echo "[$i/18] aguardando $ARTIFACT_NAME aparecer na listagem..."
+            sleep 5
+          done
+          echo "::warning::Artefato não apareceu na listagem em 90 s; seguindo para o deploy mesmo assim."
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
