@@ -15,7 +15,7 @@ concurrency:
 jobs:
   deploy:
     name: Deploy FastAPI to Ubuntu
-        runs-on: ubuntu-latest
+    runs-on: ubuntu-latest
     outputs:
       previous_sha: ${{ steps.previous.outputs.sha }}
 
@@ -40,7 +40,7 @@ jobs:
         env:
           WEBHOOK_SECRET: ${{ secrets.DEPLOY_WEBHOOK_SECRET }}
           API_URL: ${{ secrets.API_URL }}
-          SHA: ${{ github.event.workflow_run.head_sha }}
+          SHA: ${{ github.sha }}
           REPOSITORY: ${{ github.repository }}
           PROJECT: DANIHMORAIS-GITHUB-PAGES
         run: |
@@ -71,7 +71,7 @@ jobs:
       - name: Wait for deployment
         env:
           API_URL: ${{ secrets.API_URL }}
-          SHA: ${{ github.event.workflow_run.head_sha }}
+          SHA: ${{ github.sha }}
           PROJECT: DANIHMORAIS-GITHUB-PAGES
         run: |
           set -euo pipefail
