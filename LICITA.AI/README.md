@@ -1,14 +1,13 @@
 # LICITA.AI
 
-Aplicação web para preparação de documentos de contratação pública, com interface React/Vite, API FastAPI, fila de processamento e geração de texto exclusivamente pelo [OpenRouter](https://openrouter.ai).
+Aplicação web para preparação de documentos de contratação pública, com interface React/Vite, API FastAPI, fila de processamento e integração com servidor de modelos compatível com a API OpenAI.
 
 ## Arquitetura
 
 - `src/`: aplicação React, validação e interação com o usuário.
 - `main.py`: API FastAPI do LICITA.AI, montada pelo agregador na rota `/licita`.
 - `fila.py`: persistência e operações da fila em arquivos JSON.
-- `openrouter_client.py`: cliente único do OpenRouter (configuração, cabeçalhos e montagem do payload). Nenhum outro módulo conhece o formato da API.
-- `fila_pipeline.py`: chamadas de IA da fila, controle de timeout, classificação de erros e validação de respostas.
+- `fila_pipeline.py`: integração com o servidor de IA, controle de timeout e validação de respostas.
 - `fila_pipeline_unificado.py`: worker, etapas da geração, persistência de resultados e montagem do ZIP.
 - `pipeline_prompts.py`: templates de instrução mantidos no servidor. Dados do processo são enviados como conteúdo JSON, não como instruções de sistema.
 - `processador_docx.py`: preenchimento dos modelos DOCX.
@@ -22,26 +21,12 @@ Configure as variáveis no serviço do backend. Não grave senhas, chaves ou tok
 
 ### API e IA
 
-Toda a geração de IA usa o OpenRouter, sempre a partir do backend. A chave nunca é enviada ao navegador. Cada variável também aceita o prefixo `LICITA_` (por exemplo, `LICITA_OPENROUTER_API_KEY`), que tem precedência.
-
 | Variável | Finalidade |
 | --- | --- |
-| `OPENROUTER_API_KEY` | Chave do OpenRouter. Obrigatória; sem ela as chamadas de IA falham e `/api/ia/status` retorna `ok: false`. |
-| `OPENROUTER_MODEL` | Identificador do modelo (`provedor/modelo`). Padrão: `openrouter/auto`, que deixa o OpenRouter escolher e fixa o modelo escolhido para as demais etapas do mesmo pedido. Para qualidade e custo previsíveis, defina um modelo explícito que suporte `response_format` com schema JSON, `reasoning` e `tools`. |
-| `OPENROUTER_BASE_URL` | URL-base da API. Padrão: `https://openrouter.ai/api/v1`. |
-| `OPENROUTER_SITE_URL`, `OPENROUTER_APP_TITLE` | Atribuição do aplicativo no OpenRouter (cabeçalhos `HTTP-Referer` e `X-Title`). |
-| `OPENROUTER_REASONING_EFFORT` | Esforço de raciocínio das etapas com raciocínio: `minimal`, `low`, `medium` (padrão), `high` ou `xhigh`. Use `off` para não enviar `reasoning` (modelos sem suporte). Etapas mecânicas enviam `reasoning: {enabled: false}`. |
-| `OPENROUTER_WEB_SEARCH` | `1` (padrão) ou `0`. Liga a ferramenta de servidor `openrouter:web_search` nas etapas de pesquisa (consulta de habilitação e chamadas sem schema); o modelo decide quando e o que pesquisar. A busca tem custo por requisição no OpenRouter. |
-| `OPENROUTER_WEB_MAX_RESULTS`, `OPENROUTER_WEB_MAX_TOTAL_RESULTS`, `OPENROUTER_WEB_ENGINE` | Ajustes da busca. Padrões: 5 resultados por busca, 20 no total e engine escolhida pelo OpenRouter. |
-| `OPENROUTER_REQUIRE_PARAMETERS` | `auto` (padrão), `true` ou `false`. Em `auto`, chamadas com schema JSON estrito enviam `provider.require_parameters`, para que o OpenRouter só use provedores que respeitam todos os parâmetros. Se o modelo escolhido não aceitar `temperature`, `reasoning` ou `tools` junto com o schema, o OpenRouter responde 404 (sem provedor disponível); nesse caso troque o modelo ou use `false`. |
-| `OPENROUTER_DATA_COLLECTION` | `allow` ou `deny`. Com `deny`, só são usados provedores que não coletam dados. |
-| `OPENROUTER_MAX_TOKENS` | Teto opcional de tokens de saída. Por padrão não é enviado. |
+| `API_UNSLOTH_URL` | URL do servidor de modelos compatível com OpenAI. |
+| `API_UNSLOTH_KEY` | Chave de acesso ao servidor de modelos. |
 | `AI_TIMEOUT_SECONDS` | Timeout geral das chamadas de IA. O valor recomendado para a configuração atual é 1200 segundos. |
 | `VITE_API_URL` | URL-base da API usada na compilação do front-end. |
-
-As variáveis antigas `API_UNSLOTH_URL`, `API_UNSLOTH_KEY`, `LICITA_UNSLOTH_*`, `UNSLOTH_URL`, `AI_MODEL` e `UNSLOTH_MODEL` não são mais lidas. Pedidos gravados na fila antes da migração continuam processáveis: o nome de modelo `unsloth-auto` é tratado como o modelo configurado em `OPENROUTER_MODEL`.
-
-Erros de configuração (HTTP 401, 402, 403 e 404 do OpenRouter) são tratados como permanentes e trazem orientação no `last_error` do pedido; timeout, HTTP 408/429/5xx e erros do provedor devolvidos com HTTP 200 são retentados.
 
 ### SMTP e destinatário
 
@@ -177,4 +162,4 @@ Para cadastrar outro município, adicione um identificador em `config/municipios
 
 ## Observabilidade e retry
 
-O endpoint Prometheus `/metrics` expõe contadores de requisições HTTP e de completions de IA, duração acumulada e tokens de prompt/resposta/total quando o OpenRouter informa `usage`. Os logs de etapa incluem job, request, etapa, modelo e duração, sem registrar prompts ou respostas integrais. Falhas de validação e geração de documentos são permanentes; timeout, conexão, HTTP 5xx e rate limit são retentáveis.
+O endpoint Prometheus `/metrics` expõe contadores de requisições HTTP e de completions de IA, duração acumulada e tokens de prompt/resposta/total quando o provedor informa `usage`. Os logs de etapa incluem job, request, etapa, modelo e duração, sem registrar prompts ou respostas integrais. Falhas de validação e geração de documentos são permanentes; timeout, conexão, HTTP 5xx e rate limit são retentáveis.

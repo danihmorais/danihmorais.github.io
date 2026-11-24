@@ -940,7 +940,7 @@ def obter_metricas_fila_sqlite(limite: int = 5000) -> dict:
         erro = str(job.get("last_error") or "").casefold()
         if any(chave in erro for chave in ("smtp", "email", "e-mail", "destinat")):
             categoria = "smtp"
-        elif re.search(r"\b(?:ia|llm)\b", erro) or any(chave in erro for chave in ("modelo", "openai", "openrouter", "json_schema", "response_format", "timeout")):
+        elif re.search(r"\b(?:ia|llm)\b", erro) or any(chave in erro for chave in ("modelo", "openai", "unsloth", "json_schema", "response_format", "timeout")):
             categoria = "ia"
         elif any(chave in erro for chave in ("docx", "documento", "montagem", "zip", "template")):
             categoria = "documentos"
