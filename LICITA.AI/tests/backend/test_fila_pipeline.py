@@ -415,10 +415,11 @@ class TestStaleQueueCancellation(unittest.TestCase):
         resultado = _validar_json_unificado(com_extra, exigir_amostra_tr=False)
         self.assertNotIn("AMOSTRA_TR", resultado["TR"])
 
-    def test_todas_as_etapas_juridicas_e_de_consulta_usam_formato_estrito(self):
+    def test_consulta_habilitacao_pesquisa_sem_schema_e_geracoes_mantem_schema_estrito(self):
         consulta = _opcoes_chamada_ia_etapa("consulta_habilitacao")
         self.assertTrue(consulta["enable_tools"])
-        self.assertTrue(consulta["response_format"]["json_schema"]["strict"])
+        self.assertNotIn("response_format", consulta)
+        self.assertTrue(consulta["retornar_texto"])
         pagamento = _opcoes_chamada_ia_etapa("geracao_json", "PAGAMENTO_ETAPAS")
         self.assertFalse(pagamento["enable_tools"])
         self.assertTrue(pagamento["response_format"]["json_schema"]["strict"])
