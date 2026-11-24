@@ -203,6 +203,7 @@ export default function Wizard() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const etapaAnteriorRef = useRef(etapaAtual);
   const beforeUnloadHandlerRef = useRef<((evento: BeforeUnloadEvent) => void) | null>(null);
+  const importDadosRef = useRef<HTMLInputElement>(null);
   const { theme, toggleTheme } = useContext(ThemeContext);
   const isDark = theme === "dark";
   const { showToast } = useToast();
@@ -370,6 +371,71 @@ export default function Wizard() {
   }, [dadosPreenchidos, geracaoSucesso, salvamentoConcluido]);
 
 
+
+  const exportarDados = () => {
+    try {
+      const pacote = {
+        tipo: "LICITA_AI_DADOS",
+        versao: 1,
+        exportadoEm: new Date().toISOString(),
+        dados,
+        emailEnvio,
+        instrucoesEnvio,
+        etapaAtual: Math.min(4, etapaAtual),
+      };
+      const blob = new Blob([JSON.stringify(pacote, null, 2)], { type: "application/json;charset=utf-8" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const nomeBase = String(dados.objeto || "dados")
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9._-]+/g, "_").replace(/^_+|_+$/g, "") || "dados";
+      link.href = url;
+      link.download = `licita-ai-${nomeBase}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      showToast("Dados exportados para arquivo JSON. Anexos da etapa final não são incluídos.", "success");
+    } catch (erro: any) {
+      showToast(erro?.message || "Não foi possível exportar os dados.", "error");
+    }
+  };
+
+  const importarDados = async (evento: React.ChangeEvent<HTMLInputElement>) => {
+    const arquivo = evento.target.files?.[0];
+    evento.target.value = "";
+    if (!arquivo) return;
+    try {
+      const pacote = JSON.parse(await arquivo.text());
+      const dadosImportados = pacote?.dados && typeof pacote.dados === "object" ? pacote.dados : pacote;
+      if (!dadosImportados || typeof dadosImportados !== "object" || Array.isArray(dadosImportados)) {
+        throw new Error("O arquivo selecionado não contém dados válidos do LICITA.AI.");
+      }
+      const etapa = Number.isInteger(pacote?.etapaAtual) ? Math.max(0, Math.min(4, pacote.etapaAtual)) : 0;
+      setDados({ ...criarDadosIniciais(), ...dadosImportados });
+      setEmailEnvio(typeof pacote?.emailEnvio === "string" ? pacote.emailEnvio : "");
+      setInstrucoesEnvio(typeof pacote?.instrucoesEnvio === "string" ? pacote.instrucoesEnvio : "");
+      setArquivosEnvio({});
+      setEtapaAtual(etapa);
+      setMaiorEtapaAlcancada(etapa);
+      setTentouAvancar(false);
+      setSalvamentoConcluido(false);
+      setRascunhoDisponivel(false);
+      setJobAgendado(null);
+      setJobDetalhe(null);
+      setErroConsultaJob(null);
+      setUltimaAtualizacao(null);
+      setErroMsg(null);
+      setGeracaoSucesso(false);
+      setCarregando(false);
+      setMostrarPromptModal(false);
+      limparAcompanhamentoJob();
+      localStorage.removeItem("licita-ai-rascunho-v1");
+      showToast("Dados importados com sucesso. Anexe novamente os arquivos da etapa final.", "success");
+    } catch (erro: any) {
+      showToast(erro?.message || "Não foi possível importar o arquivo JSON.", "error");
+    }
+  };
 
   const salvarESair = () => {
     if (rascunhoDisponivel) {
@@ -722,6 +788,9 @@ export default function Wizard() {
         <a className="wizard-brand" href="/" aria-label="LICITA.AI — página inicial">LICITA<span>.</span>AI</a>
         {configMunicipalAtiva?.municipio.display && <span className="wizard-municipio">{configMunicipalAtiva.municipio.display}</span>}
         <div className="wizard-header-actions">
+          <input ref={importDadosRef} type="file" accept=".json,application/json" hidden onChange={importarDados} />
+          <button type="button" className="button button-secondary" onClick={exportarDados} title="Exportar os dados preenchidos para JSON">Exportar</button>
+          <button type="button" className="button button-secondary" onClick={() => importDadosRef.current?.click()} title="Importar dados de um arquivo JSON">Importar</button>
           <button
             type="button"
             className="button button-secondary admin-pedidos-trigger"
