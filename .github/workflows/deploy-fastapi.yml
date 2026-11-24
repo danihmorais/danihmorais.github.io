@@ -212,10 +212,10 @@ jobs:
     steps:
       - name: Trigger rollback deployment
         env:
-          WEBHOOK_SECRET: \${{ secrets.DEPLOY_WEBHOOK_SECRET }}
-          API_URL: \${{ secrets.API_URL }}
-          SHA: \${{ needs.deploy.outputs.previous_sha }}
-          REPOSITORY: \${{ github.repository }}
+          WEBHOOK_SECRET: ${{ secrets.DEPLOY_WEBHOOK_SECRET }}
+          API_URL: ${{ secrets.API_URL }}
+          SHA: ${{ needs.deploy.outputs.previous_sha }}
+          REPOSITORY: ${{ github.repository }}
           PROJECT: DANIHMORAIS-GITHUB-PAGES
         run: |
           set -euo pipefail
@@ -223,7 +223,7 @@ jobs:
           test -n "$API_URL" || { echo 'Secret API_URL não configurado.'; exit 1; }
           test -n "$SHA" || { echo 'Não foi possível determinar a versão anterior; rollback manual necessário.'; exit 1; }
 
-          DEPLOY_URL="\${API_URL%/}/deploy"
+          DEPLOY_URL="${API_URL%/}/deploy"
           body=$(jq -nc \
             --arg ref 'refs/heads/main' \
             --arg after "$SHA" \
@@ -245,14 +245,14 @@ jobs:
 
       - name: Wait for rollback
         env:
-          API_URL: \${{ secrets.API_URL }}
-          SHA: \${{ needs.deploy.outputs.previous_sha }}
+          API_URL: ${{ secrets.API_URL }}
+          SHA: ${{ needs.deploy.outputs.previous_sha }}
           PROJECT: DANIHMORAIS-GITHUB-PAGES
         run: |
           set -euo pipefail
           test -n "$API_URL"
           test -n "$SHA"
-          STATUS_URL="\${API_URL%/}/deploy-status"
+          STATUS_URL="${API_URL%/}/deploy-status"
           for i in $(seq 1 60); do
             response=$(curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 30 \
               --get --url "$STATUS_URL" \
@@ -275,11 +275,11 @@ jobs:
 
       - name: Validate restored public API
         env:
-          API_URL: \${{ secrets.API_URL }}
+          API_URL: ${{ secrets.API_URL }}
         run: |
           set -euo pipefail
           test -n "$API_URL"
-          BASE_URL="\${API_URL%/}"
+          BASE_URL="${API_URL%/}"
           ORIGIN='https://danihmorais.github.io'
           BODY_FILE="$(mktemp)"
           HEADERS_FILE="$(mktemp)"
