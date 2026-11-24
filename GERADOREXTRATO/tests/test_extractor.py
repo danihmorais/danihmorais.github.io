@@ -24,7 +24,8 @@ Número: 08/2026
         self.assertEqual(instrument_info(text), ("Contrato", "08/2026"))
 
     def test_split_pdf_number(self):
-        self.assertEqual(normalize_text("ATA nº 01 /202 6"), "ATA nº 01/2026")
+        # A normalização NFKC converte "º" em "o"; o que importa é o número.
+        self.assertIn("01/2026", normalize_text("ATA nº 01 /202 6"))
 
     def test_does_not_guess_instrument_number(self):
         self.assertEqual(instrument_info("Processo nº 76/2025\nATA DE REGISTRO DE PREÇOS"), ("Ata", None))

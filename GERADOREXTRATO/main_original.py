@@ -265,7 +265,9 @@ def extract(data,filename):
     mod,modality_num=modality(text)
     if not mod and raw: mod,modality_num=modality(raw)
     inst,inst_number=instrument_info(text)
-    if not inst and raw: inst,inst_number=instrument_info(raw)
+    if not inst_number and raw:
+        raw_inst,raw_number=instrument_info(raw)
+        if raw_number or not inst: inst,inst_number=raw_inst,raw_number
     contractor_name=contractor(text) or contractor(raw)
     body_cnpjs=_cnpj_candidates(text); raw_cnpjs=_cnpj_candidates(raw); all_cnpjs=body_cnpjs if len(body_cnpjs)>=2 else raw_cnpjs
     selected_cnpj=all_cnpjs[1] if len(all_cnpjs)>=2 else (all_cnpjs[0] if all_cnpjs else None)

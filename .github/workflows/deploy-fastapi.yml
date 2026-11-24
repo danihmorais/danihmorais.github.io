@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: "deploy-fastapi"
@@ -45,6 +46,10 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip check
 
+      - name: Gerador de Extrato unit tests
+        working-directory: GERADOREXTRATO
+        run: python -m unittest discover -s tests -v
+
       - name: Boot aggregator and smoke test routes
         run: python scripts/smoke_aggregator.py
 
@@ -61,16 +66,29 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 2
 
+      # O alvo do rollback é o último deploy concluído com sucesso (inclui a
+      # validação da API pública), não simplesmente o commit pai: se vários
+      # commits seguidos falharem, o commit pai pode nunca ter ido ao ar.
       - name: Resolve previous revision
         id: previous
         env:
           SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          previous_sha="$(git rev-parse "${SHA}^1")"
+          last_good="$(gh api "repos/${REPOSITORY}/actions/workflows/deploy-fastapi.yml/runs?branch=main&status=success&per_page=30" \
+            --jq '[.workflow_runs[] | select(.head_sha != $ENV.SHA)][0].head_sha // empty' || true)"
+          if [ -n "$last_good" ]; then
+            previous_sha="$last_good"
+            echo "Último deploy bem-sucedido: $previous_sha"
+          else
+            previous_sha="$(git rev-parse "${SHA}^1")"
+            echo "::warning::Nenhum deploy bem-sucedido encontrado; o rollback usará o commit pai."
+            echo "Commit pai: $previous_sha"
+          fi
           test -n "$previous_sha"
           echo "sha=$previous_sha" >> "$GITHUB_OUTPUT"
-          echo "Versão anterior: $previous_sha"
 
       - name: Trigger Ubuntu deployment
         env:

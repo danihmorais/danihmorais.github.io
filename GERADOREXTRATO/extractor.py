@@ -24,7 +24,8 @@ def normalize_text(value: str) -> str:
     value = unicodedata.normalize("NFKC", value or "").replace("\xa0", " ").replace("\u200b", "")
     value = re.sub(r"[ \t]+", " ", value)
     value = re.sub(r"(?<=\d)\s*/\s*(?=\d)", "/", value)
-    value = re.sub(r"(\d{1,4})/(\d{2})\s+(\d)(?!\d)", r"\1/\2\3", value)
+    # Ano quebrado pelo PDF: "01/202 6" -> "01/2026".
+    value = re.sub(r"(?<![\d.])(\d{1,4})/(\d{3})[ \t]+(\d)(?!\d)", r"\1/\2\3", value)
     return "\n".join(line.rstrip() for line in value.splitlines()).strip()
 
 
@@ -74,6 +75,15 @@ def instrument_info(text: str):
     """Identifica ATA/CONTRATO por contexto, sem capturar processo, lei ou decreto."""
     ls = [x.strip() for x in normalize_text(text).splitlines()]
     candidates = []
+    # Tipo do instrumento por título (linha que começa com ATA/CONTRATO), usado
+    # só quando nenhum número confiável for encontrado: o tipo é informado e o
+    # número fica vazio, em vez de ser adivinhado.
+    heading_instrument = None
+    for line in ls:
+        heading = INSTRUMENT_RE.match(line)
+        if heading:
+            heading_instrument = heading.group(1).capitalize()
+            break
     for i, line in enumerate(ls):
         hits = list(INSTRUMENT_RE.finditer(line))
         for hit in hits:
@@ -101,7 +111,7 @@ def instrument_info(text: str):
                     if m and number(m.group()):
                         candidates.append((90 - d * 10, instrument, number(m.group())))
     if not candidates:
-        return None, None
+        return heading_instrument, None
     _, instrument, n = max(candidates, key=lambda x: x[0])
     return instrument, n
 

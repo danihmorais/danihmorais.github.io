@@ -1,6 +1,6 @@
 import unittest
 
-from GERADOREXTRATO.main import instrument_info
+from extractor import instrument_info
 
 
 class InstrumentInfoTests(unittest.TestCase):
