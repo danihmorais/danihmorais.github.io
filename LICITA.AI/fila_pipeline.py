@@ -12,6 +12,8 @@ import httpx
 
 API_UNSLOTH_URL = os.getenv("LICITA_UNSLOTH_URL", os.getenv("UNSLOTH_URL", "http://127.0.0.1:8888/v1")).rstrip("/")
 API_UNSLOTH_KEY = os.getenv("LICITA_UNSLOTH_KEY", os.getenv("API_UNSLOTH", "")).strip()
+UNSLOTH_RAG_KB_ID = os.getenv("LICITA_UNSLOTH_RAG_KB_ID", "").strip()
+UNSLOTH_RAG_TOP_K = max(1, min(20, int(os.getenv("LICITA_UNSLOTH_RAG_TOP_K", "5"))))
 AI_TIMEOUT_SECONDS = max(60, min(1800, int(os.getenv("LICITA_QUEUE_AI_TIMEOUT", "1200"))))
 AI_CONNECT_TIMEOUT_SECONDS = 10.0
 
@@ -345,6 +347,13 @@ def _provider_config(model: str) -> tuple[str, str, str]:
     return API_UNSLOTH_URL, API_UNSLOTH_KEY, modelo
 
 
+def _rag_scope_unsloth() -> dict | None:
+    """Ativa a base do Unsloth somente quando um KB ID foi configurado explicitamente."""
+    if not UNSLOTH_RAG_KB_ID:
+        return None
+    return {"kb_id": UNSLOTH_RAG_KB_ID, "autoinject": True, "default_top_k": UNSLOTH_RAG_TOP_K}
+
+
 def _timeout_ia() -> httpx.Timeout:
     # Timeout total generoso para a geração, mas conexão curta: provedor fora do ar não
     # deve prender a fila por AI_TIMEOUT_SECONDS a cada tentativa.
@@ -454,6 +463,9 @@ def _chamar_ia(
     # O Unsloth aplica o modo de raciocínio quando suportado pelo modelo/template ativo.
     # Enviar em todas as chamadas evita acoplar esse comportamento ao nome de uma família específica.
     payload["enable_thinking"] = bool(enable_thinking)
+    rag_scope = _rag_scope_unsloth()
+    if rag_scope is not None:
+        payload["rag_scope"] = rag_scope
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
     with httpx.Client(timeout=_timeout_ia()) as client:
         response = _post_ia(client, f"{base_url}/chat/completions", headers=headers, json=payload)
