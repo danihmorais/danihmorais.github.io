@@ -1,0 +1,988 @@
+import json
+import unittest
+
+from fila_pipeline import _aplicar_auditoria_marcas, _dados_para_prompt, _extrair_json, _substituir_contextos, _validar_json_geracao
+from fila_pipeline_unificado import (
+    _adicionar_documentos_de_referencia,
+    _json_schema_fase_preparatoria,
+    _json_schema_itens_tr,
+    _opcoes_chamada_ia_etapa,
+    _validar_json_unificado,
+)
+
+
+class TestFilaPipeline(unittest.TestCase):
+    def test_metricas_ia_acumulam_tokens_e_duracao(self):
+        from fila_pipeline import _registrar_metricas_ia, obter_metricas_ia
+
+        antes = obter_metricas_ia()
+        _registrar_metricas_ia(
+            {"usage": {"prompt_tokens": 101, "completion_tokens": 23, "total_tokens": 124}},
+            1.25,
+            "modelo-teste",
+        )
+        depois = obter_metricas_ia()
+        self.assertEqual(depois["calls"] - antes["calls"], 1)
+        self.assertEqual(depois["prompt_tokens"] - antes["prompt_tokens"], 101)
+        self.assertEqual(depois["completion_tokens"] - antes["completion_tokens"], 23)
+        self.assertEqual(depois["total_tokens"] - antes["total_tokens"], 124)
+        self.assertGreaterEqual(depois["duration_seconds"] - antes["duration_seconds"], 1.24)
+
+    def test_documentos_de_referencia_entram_no_prompt_com_prioridade(self):
+        prompt = _adicionar_documentos_de_referencia(
+            "PROMPT BASE",
+            [
+                {
+                    "tipo": "DFD",
+                    "origem": "documento_anterior",
+                    "nome": "DFD anterior.docx",
+                    "texto": "Objeto anterior e justificativa relevante.",
+                },
+                {
+                    "tipo": "TR",
+                    "origem": "anexo_do_edital",
+                    "nome": "Edital — ANEXO III - TERMO DE REFERÊNCIA",
+                    "texto": "Condição operacional do TR anterior.",
+                },
+            ],
+        )
+        self.assertIn("DOCUMENTOS DE REFERÊNCIA PRIORITÁRIA", prompt)
+        self.assertIn("principal referência factual e estrutural", prompt)
+        self.assertIn("Objeto anterior e justificativa relevante.", prompt)
+        self.assertIn("Condição operacional do TR anterior.", prompt)
+        self.assertIn("dados atuais do usuário e as instruções atuais prevalecem", prompt)
+
+
+    def test_substitui_contextos(self):
+        texto = "DFD={{DFD}} ET={{ETP}} CONSULTA={{CONSULTA}} DADOS={{DADOS}} STAGES={{STAGES}}"
+        resultado = _substituir_contextos(
+            texto.replace("{{DFD}}", "__LICITA_PIPE_DFD__")
+            .replace("{{ETP}}", "__LICITA_PIPE_ETP__")
+            .replace("{{CONSULTA}}", "__LICITA_PIPE_CONSULTA_HABILITACAO__")
+            .replace("{{DADOS}}", "__LICITA_PIPE_DADOS_USUARIO__")
+            .replace("{{STAGES}}", "__LICITA_PIPE_ETAPAS__"),
+            {"{{OBJETO}}": "Aquisição de bens"},
+            {
+                "DFD": {"OBJETO": "Aquisição"},
+                "ETP": {"MERCADO": "Análise"},
+                "CONSULTA_HABILITACAO": {"DOCUMENTOS_ADICIONAIS_HABILITACAO": [], "CONCLUSAO": "Requisitos gerais suficientes."},
+            },
+        )
+        self.assertIn('"OBJETO": "Aquisição"', resultado)
+        self.assertIn('"MERCADO": "Análise"', resultado)
+        self.assertIn('"DOCUMENTOS_ADICIONAIS_HABILITACAO": []', resultado)
+        self.assertIn('"{{OBJETO}}": "Aquisição de bens"', resultado)
+
+    def test_saneia_base64_antes_de_inserir_dados_no_prompt(self):
+        segredo = "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo="
+        dados = {
+            "{{DOTACAO}}": "__IMG__" + segredo + chr(10) + "Fonte 123.456.789/0001-00",
+            "{{CAMINHO_IMAGEM_DOTACAO}}": "data:image/png;base64," + segredo,
+            "RAW_PAC": "campo interno",
+        }
+        saneado = _dados_para_prompt(dados)
+        self.assertNotIn(segredo, json.dumps(saneado))
+        self.assertIn("2 imagem(ns)", saneado["{{DOTACAO}}"])
+        self.assertIn("Fonte 123.456.789/0001-00", saneado["{{DOTACAO}}"])
+        self.assertNotIn("{{CAMINHO_IMAGEM_DOTACAO}}", saneado)
+        self.assertEqual(saneado["RAW_PAC"], "campo interno")
+
+        prompt = _substituir_contextos("__LICITA_PIPE_DADOS_USUARIO__", dados, {})
+        self.assertNotIn(segredo, prompt)
+        self.assertIn("Fonte 123.456.789/0001-00", prompt)
+
+    def test_extrair_json(self):
+        resultado = _extrair_json('texto antes {"ok": "sim",} texto depois')
+        self.assertEqual(resultado, {"ok": "sim"})
+
+    def test_extrair_json_corrige_barras_invalidas_sem_alterar_escapes_validos(self):
+        bruto = r'{"caminho": "C:\Licita\edital.docx", "expressao": "x\q + y", "quebra": "linha\nseguinte", "unicode": "\u00e7"}'
+        resultado = _extrair_json(bruto)
+        self.assertEqual(resultado["caminho"], r"C:\Licita\edital.docx")
+        self.assertEqual(resultado["expressao"], r"x\q + y")
+        self.assertEqual(resultado["quebra"], "linha\nseguinte")
+        self.assertEqual(resultado["unicode"], "ç")
+
+    def test_extrair_json_corrige_quebras_de_linha_cruas_em_strings(self):
+        bruto = """{"texto":"linha
+seguinte"}"""
+        resultado = _extrair_json(bruto)
+        self.assertEqual(resultado["texto"], "linha\nseguinte")
+
+    def test_valida_json(self):
+        self.assertEqual(_validar_json_geracao({"A": "texto"}), {"A": "texto"})
+        with self.assertRaises(RuntimeError):
+            _validar_json_geracao({"A": ""})
+
+    def test_json_unificado_exige_exatamente_dfd_etp_tr_com_campos_textuais(self):
+        campos = {
+            "DFD": ["OBJETO", "TIPO_OBJ", "JUSTIFICATIVA", "ESTIMATIVA_QUANTIDADES", "RESULTADOS_ESPERADOS"],
+            "ETP": [
+                "REQUISITOS_ETP", "SUBCONTRATACAO_ETP", "ME_EPP_ETP", "JUSTIFICATIVA_PAC", "MERCADO",
+                "SOLUCAO", "CRITERIOS_JUSTIFICATIVA_ETP", "CRITERIOS_SUSTENTABILIDADE",
+                "MODALIDADE_JUSTIFICATIVA_ETP", "PROVIDENCIAS_CONT", "CORRELATAS_INTER",
+                "JUSTIFICATIVA_ESTIMATIVA", "GARANTIAS_ETP", "VISTORIA_ETP", "AMOSTRA_ETP",
+                "PARCELAMENTO", "CONCLUSAO",
+            ],
+            "TR": [
+                "REQUISITOS_TR", "OBRIGACOES_CONTRATADA", "OBRIGACOES_CONTRANTE", "QUALIFICACAO_TECNICA",
+                "GARANTIAS_TR", "EXECUCAO", "PRAZO_EXEC", "LOCAL", "AMOSTRA_TR",
+            ],
+        }
+        valido = {bloco: {campo: "Texto válido." for campo in nomes} for bloco, nomes in campos.items()}
+        valido["TR"]["REQUISITOS_TR"] = "Não há documentos adicionais"
+        self.assertEqual(_validar_json_unificado(valido), valido)
+        with self.assertRaisesRegex(RuntimeError, "exatamente DFD, ETP e TR"):
+            _validar_json_unificado({"DFD": {}, "ETP": {}, "OUTRO": {}})
+        incompleto = {bloco: dict(conteudo) for bloco, conteudo in valido.items()}
+        incompleto["DFD"].pop("TIPO_OBJ")
+        with self.assertRaisesRegex(RuntimeError, "campos ausentes"):
+            _validar_json_unificado(incompleto)
+        vazio = {bloco: dict(conteudo) for bloco, conteudo in valido.items()}
+        vazio["ETP"]["REQUISITOS_ETP"] = ""
+        with self.assertRaisesRegex(RuntimeError, "vazios"):
+            _validar_json_unificado(vazio)
+
+    def test_auditoria_apenas_remove_marca(self):
+        dados = {"{{ITENS}}": json.dumps([{"numero": 1, "descricao": "Pneu Michelin aro 15"}])}
+        resposta = {"itens": [{"numero": 1, "nome_revisado": "Pneu aro 15", "motivo": "Marca identificada"}]}
+        novos_dados, auditoria = _aplicar_auditoria_marcas(dados, resposta)
+        itens = json.loads(novos_dados["{{ITENS}}"])
+        self.assertEqual(itens[0]["descricao"], "Pneu aro 15")
+        self.assertTrue(auditoria["itens"][0]["alterado"])
+
+
+class TestAutomaticModelResolution(unittest.TestCase):
+    def test_json_syntax_error_triggers_one_repair_attempt(self):
+        from unittest.mock import MagicMock, patch
+        import fila_pipeline as pipeline
+
+        resposta_invalida = MagicMock()
+        resposta_invalida.status_code = 200
+        resposta_invalida.json.return_value = {
+            "choices": [{
+                "message": {"content": '{"primeiro":"texto" "segundo":"texto"}'},
+                "finish_reason": "stop",
+            }],
+            "model": "modelo-teste",
+        }
+        resposta_corrigida = MagicMock()
+        resposta_corrigida.status_code = 200
+        resposta_corrigida.json.return_value = {
+            "choices": [{
+                "message": {"content": '{"primeiro":"texto","segundo":"texto"}'},
+                "finish_reason": "stop",
+            }],
+            "model": "modelo-teste",
+        }
+
+        with (
+            patch.object(pipeline, "API_UNSLOTH_URL", "http://unsloth.test/v1"),
+            patch.object(pipeline, "API_UNSLOTH_KEY", "chave-de-teste"),
+            patch.object(pipeline.httpx, "Client") as cliente_http,
+        ):
+            cliente = cliente_http.return_value.__enter__.return_value
+            cliente.post.side_effect = [resposta_invalida, resposta_corrigida]
+            resultado, modelo = pipeline._chamar_ia("prompt de teste", "modelo-teste")
+
+        self.assertEqual(resultado, {"primeiro": "texto", "segundo": "texto"})
+        self.assertEqual(modelo, "modelo-teste")
+        self.assertEqual(cliente.post.call_count, 2)
+        payload_correcao = cliente.post.call_args.kwargs["json"]
+        self.assertFalse(payload_correcao["enable_tools"])
+        self.assertFalse(payload_correcao["enable_thinking"])
+        self.assertNotIn("max_tokens", payload_correcao)
+        self.assertNotIn("max_completion_tokens", payload_correcao)
+        self.assertIn("JSON_MALFORMADO", payload_correcao["messages"][1]["content"])
+
+    def test_resposta_truncada_e_identificada_sem_tentar_reparar(self):
+        from unittest.mock import MagicMock, patch
+        import fila_pipeline as pipeline
+
+        resposta = MagicMock()
+        resposta.status_code = 200
+        resposta.json.return_value = {
+            "choices": [{
+                "message": {"content": '{"incompleto":'},
+                "finish_reason": "length",
+            }],
+            "model": "modelo-teste",
+        }
+
+        with (
+            patch.object(pipeline, "API_UNSLOTH_URL", "http://unsloth.test/v1"),
+            patch.object(pipeline, "API_UNSLOTH_KEY", "chave-de-teste"),
+            patch.object(pipeline.httpx, "Client") as cliente_http,
+        ):
+            cliente_http.return_value.__enter__.return_value.post.return_value = resposta
+            with self.assertRaisesRegex(pipeline.ErroPermanente, "geração já foi dividida por documento"):
+                pipeline._chamar_ia("prompt de teste", "modelo-teste")
+
+        cliente_http.return_value.__enter__.return_value.post.assert_called_once()
+
+    def test_erro_400_do_provedor_e_permanente(self):
+        from unittest.mock import MagicMock, patch
+        import fila_pipeline as pipeline
+
+        resposta = MagicMock()
+        resposta.status_code = 400
+        resposta.text = '{"error":"invalid schema"}'
+
+        with (
+            patch.object(pipeline, "API_UNSLOTH_URL", "http://unsloth.test/v1"),
+            patch.object(pipeline, "API_UNSLOTH_KEY", "chave-de-teste"),
+            patch.object(pipeline.httpx, "Client") as cliente_http,
+        ):
+            cliente_http.return_value.__enter__.return_value.post.return_value = resposta
+            with self.assertRaises(pipeline.ErroPermanente):
+                pipeline._chamar_ia("prompt de teste", "modelo-teste")
+
+    def test_erro_503_do_provedor_permanece_retentavel(self):
+        from unittest.mock import MagicMock, patch
+        import fila_pipeline as pipeline
+
+        resposta = MagicMock()
+        resposta.status_code = 503
+        resposta.text = '{"error":"temporarily unavailable"}'
+
+        with (
+            patch.object(pipeline, "API_UNSLOTH_URL", "http://unsloth.test/v1"),
+            patch.object(pipeline, "API_UNSLOTH_KEY", "chave-de-teste"),
+            patch.object(pipeline.httpx, "Client") as cliente_http,
+        ):
+            cliente_http.return_value.__enter__.return_value.post.return_value = resposta
+            with self.assertRaises(RuntimeError) as contexto:
+                pipeline._chamar_ia("prompt de teste", "modelo-teste")
+        self.assertNotIsInstance(contexto.exception, pipeline.ErroPermanente)
+
+    def test_schema_estrito_nao_dispara_reparo_json_automatico(self):
+        from unittest.mock import MagicMock, patch
+        import fila_pipeline as pipeline
+
+        resposta = MagicMock()
+        resposta.status_code = 200
+        resposta.json.return_value = {
+            "choices": [{"message": {"content": "{json incompleto"}}],
+            "model": "modelo-teste",
+        }
+        with patch.object(pipeline, "_post_ia", return_value=resposta) as chamada:
+            with self.assertRaises(pipeline.ErroPermanente):
+                pipeline._chamar_ia(
+                    "prompt",
+                    "modelo-teste",
+                    response_format={"type": "json_schema", "json_schema": {"strict": True}},
+                    enable_tools=False,
+                )
+        chamada.assert_called_once()
+
+    def test_auto_model_falls_back_to_first_model_reported_by_unsloth(self):
+        from unittest.mock import MagicMock, patch
+        import fila_pipeline as pipeline
+
+        not_found = MagicMock()
+        not_found.status_code = 404
+        not_found.text = '{"error":"model not downloaded"}'
+
+        model_list = MagicMock()
+        model_list.status_code = 200
+        model_list.json.return_value = {"data": [{"id": "gemma-loaded-model"}]}
+
+        completion = MagicMock()
+        completion.status_code = 200
+        completion.json.return_value = {
+            "choices": [{"message": {"content": '{"ok": true}'}}],
+            "model": "gemma-loaded-model",
+        }
+
+        with (
+            patch.object(pipeline, "API_UNSLOTH_URL", "http://unsloth.test/v1"),
+            patch.object(pipeline, "API_UNSLOTH_KEY", "chave-de-teste"),
+            patch.object(pipeline.httpx, "Client") as cliente_http,
+        ):
+            cliente = cliente_http.return_value.__enter__.return_value
+            cliente.post.side_effect = [not_found, completion]
+            cliente.get.return_value = model_list
+            resultado, modelo = pipeline._chamar_ia("prompt de teste", "unsloth-auto")
+
+        self.assertEqual(resultado, {"ok": True})
+        self.assertEqual(modelo, "gemma-loaded-model")
+        self.assertEqual(cliente.post.call_count, 2)
+        self.assertEqual(cliente.post.call_args_list[1].kwargs["json"]["model"], "gemma-loaded-model")
+        cliente.get.assert_called_once_with("http://unsloth.test/v1/models", headers={
+            "Content-Type": "application/json", "Authorization": "Bearer chave-de-teste"
+        })
+
+
+class TestStaleQueueCancellation(unittest.TestCase):
+    def test_cancel_finishes_abandoned_processing_job_instead_of_leaving_cancelling_forever(self):
+        import json
+        import tempfile
+        from datetime import datetime, timedelta, timezone
+        from pathlib import Path
+        from unittest.mock import patch
+        import fila
+
+        job_id = "d" * 32
+        with tempfile.TemporaryDirectory() as directorio:
+            raiz = Path(directorio)
+            antigo = (datetime.now(timezone.utc) - timedelta(hours=614)).isoformat()
+            job = {
+                "job_id": job_id,
+                "status": "processing",
+                "created_at": antigo,
+                "started_at": antigo,
+                "last_attempt_started_at": antigo,
+                "current_stage_started_at": antigo,
+                "email": "teste@example.com",
+            }
+            with patch.object(fila, "QUEUE_DIR", raiz):
+                fila._write_json(fila._job_path(job_id, ".processing"), job)
+                estado = fila.cancel_job(job_id, "admin")
+                self.assertEqual(estado, "cancelled")
+                cancelado = json.loads(fila._job_path(job_id, ".cancelled").read_text(encoding="utf-8"))
+                self.assertEqual(cancelado["status"], "cancelled")
+                self.assertEqual(cancelado["cancelled_by"], "admin")
+                self.assertTrue((raiz / f"{job_id}.cancel").exists())
+                self.assertFalse(fila._job_path(job_id, ".processing").exists())
+
+    def test_fase_preparatoria_configura_json_schema_estrito_sem_ferramentas(self):
+        opcoes = _opcoes_chamada_ia_etapa("geracao_unificada")
+        self.assertFalse(opcoes["enable_tools"])
+        self.assertEqual(opcoes["response_format"], _json_schema_fase_preparatoria())
+        self.assertEqual(opcoes["response_format"]["type"], "json_schema")
+        self.assertEqual(opcoes["response_format"]["json_schema"]["name"], "fase_preparatoria")
+        self.assertTrue(opcoes["response_format"]["json_schema"]["strict"])
+
+        schema = opcoes["response_format"]["json_schema"]["schema"]
+        self.assertEqual(set(schema["properties"]), {"DFD", "ETP", "TR"})
+        self.assertEqual(set(schema["required"]), {"DFD", "ETP", "TR"})
+        self.assertFalse(schema["additionalProperties"])
+
+        for nome, campos in {
+            "DFD": {"OBJETO", "TIPO_OBJ", "JUSTIFICATIVA", "ESTIMATIVA_QUANTIDADES", "RESULTADOS_ESPERADOS"},
+            "ETP": {
+                "REQUISITOS_ETP", "SUBCONTRATACAO_ETP", "ME_EPP_ETP", "JUSTIFICATIVA_PAC", "MERCADO",
+                "SOLUCAO", "CRITERIOS_JUSTIFICATIVA_ETP", "CRITERIOS_SUSTENTABILIDADE",
+                "MODALIDADE_JUSTIFICATIVA_ETP", "PROVIDENCIAS_CONT", "CORRELATAS_INTER",
+                "JUSTIFICATIVA_ESTIMATIVA", "GARANTIAS_ETP", "VISTORIA_ETP", "AMOSTRA_ETP",
+                "PARCELAMENTO", "CONCLUSAO",
+            },
+            "TR": {
+                "REQUISITOS_TR", "OBRIGACOES_CONTRATADA", "OBRIGACOES_CONTRANTE", "QUALIFICACAO_TECNICA",
+                "GARANTIAS_TR", "EXECUCAO", "PRAZO_EXEC", "LOCAL", "AMOSTRA_TR",
+            },
+        }.items():
+            bloco = schema["properties"][nome]
+            self.assertEqual(set(bloco["properties"]), campos)
+            self.assertEqual(set(bloco["required"]), campos)
+            self.assertFalse(bloco["additionalProperties"])
+            self.assertTrue(all(item == {"type": "string"} for item in bloco["properties"].values()))
+
+    def test_amostra_tr_sai_do_schema_e_da_validacao_quando_nao_ha_amostra(self):
+        com_amostra = _json_schema_fase_preparatoria()["json_schema"]["schema"]["properties"]["TR"]
+        sem_amostra = _json_schema_fase_preparatoria(exigir_amostra_tr=False)["json_schema"]["schema"]["properties"]["TR"]
+
+        self.assertIn("AMOSTRA_TR", com_amostra["properties"])
+        self.assertIn("AMOSTRA_TR", com_amostra["required"])
+        self.assertNotIn("AMOSTRA_TR", sem_amostra["properties"])
+        self.assertNotIn("AMOSTRA_TR", sem_amostra["required"])
+        self.assertEqual(set(com_amostra["properties"]) - set(sem_amostra["properties"]), {"AMOSTRA_TR"})
+        # Somente o campo do TR muda: o ETP continua com AMOSTRA_ETP.
+        etp = _json_schema_fase_preparatoria(exigir_amostra_tr=False)["json_schema"]["schema"]["properties"]["ETP"]
+        self.assertIn("AMOSTRA_ETP", etp["required"])
+
+        opcoes = _opcoes_chamada_ia_etapa("geracao_unificada", "FASE_PREPARATORIA", exigir_amostra_tr=False)
+        self.assertEqual(
+            opcoes["response_format"],
+            _json_schema_fase_preparatoria(exigir_amostra_tr=False),
+        )
+
+    def test_validacao_sem_amostra_nao_exige_amostra_tr_e_descarta_o_que_vier(self):
+        sem_amostra = _json_schema_fase_preparatoria(exigir_amostra_tr=False)["json_schema"]["schema"]["properties"]
+        valido = {
+            bloco: {campo: "Texto válido." for campo in definicao["properties"]}
+            for bloco, definicao in sem_amostra.items()
+        }
+        valido["TR"]["REQUISITOS_TR"] = "Não há documentos adicionais"
+
+        self.assertEqual(_validar_json_unificado(valido, exigir_amostra_tr=False), valido)
+        # Por padrão (amostra exigida) o campo continua obrigatório.
+        with self.assertRaisesRegex(RuntimeError, "campos ausentes: AMOSTRA_TR"):
+            _validar_json_unificado(valido)
+
+        com_extra = {bloco: dict(conteudo) for bloco, conteudo in valido.items()}
+        com_extra["TR"]["AMOSTRA_TR"] = "Redação da IA que não deve ser aproveitada."
+        resultado = _validar_json_unificado(com_extra, exigir_amostra_tr=False)
+        self.assertNotIn("AMOSTRA_TR", resultado["TR"])
+
+    def test_todas_as_etapas_juridicas_e_de_consulta_usam_formato_estrito(self):
+        consulta = _opcoes_chamada_ia_etapa("consulta_habilitacao")
+        self.assertTrue(consulta["enable_tools"])
+        self.assertTrue(consulta["response_format"]["json_schema"]["strict"])
+        pagamento = _opcoes_chamada_ia_etapa("geracao_json", "PAGAMENTO_ETAPAS")
+        self.assertFalse(pagamento["enable_tools"])
+        self.assertTrue(pagamento["response_format"]["json_schema"]["strict"])
+        contratacao = _opcoes_chamada_ia_etapa("geracao_contratacao_direta", "CONTRATACAO_DIRETA")
+        self.assertFalse(contratacao["enable_tools"])
+        self.assertTrue(contratacao["response_format"]["json_schema"]["strict"])
+        legado = _opcoes_chamada_ia_etapa("geracao_json", "OUTRA_ETAPA")
+        self.assertFalse(legado["enable_tools"])
+        self.assertNotIn("response_format", legado)
+
+    def test_pagamento_por_etapas_usa_json_schema_estrito_sem_ferramentas(self):
+        opcoes = _opcoes_chamada_ia_etapa("geracao_json", "PAGAMENTO_ETAPAS")
+        self.assertFalse(opcoes["enable_tools"])
+        self.assertTrue(opcoes["system_prompt"])
+        formato = opcoes["response_format"]
+        self.assertEqual(formato["type"], "json_schema")
+        self.assertEqual(formato["json_schema"]["name"], "pagamento_etapas")
+        self.assertTrue(formato["json_schema"]["strict"])
+        schema = formato["json_schema"]["schema"]
+        self.assertEqual(schema["properties"], {"PAGAMENTO": {"type": "string"}})
+        self.assertEqual(schema["required"], ["PAGAMENTO"])
+        self.assertFalse(schema["additionalProperties"])
+
+    def test_extracao_de_itens_do_tr_tem_schema_estrito(self):
+        formato = _json_schema_itens_tr()
+        self.assertEqual(formato["type"], "json_schema")
+        self.assertTrue(formato["json_schema"]["strict"])
+        schema = formato["json_schema"]["schema"]
+        self.assertEqual(set(schema["required"]), {"todos_itens_identificados", "itens"})
+        self.assertFalse(schema["additionalProperties"])
+        self.assertEqual(schema["properties"]["todos_itens_identificados"], {"type": "boolean"})
+        item = schema["properties"]["itens"]["items"]
+        campos = {"numero", "descricao", "quantidade", "valor_unitario", "valor_total"}
+        self.assertEqual(set(item["properties"]), campos)
+        self.assertEqual(set(item["required"]), campos)
+        self.assertFalse(item["additionalProperties"])
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+class TestPagamentoPipeline(unittest.TestCase):
+    def test_pagamento_por_etapas_nao_pode_ser_sobrescrito_por_fase_preparatoria(self):
+        resultados = {
+            "PAGAMENTO_ETAPAS": {"PAGAMENTO": "Pagamento revisado por etapas."},
+            "FASE_PREPARATORIA": {
+                "DFD": {},
+                "ETP": {},
+                "TR": {},
+                "PAGAMENTO": "Pagamento inventado pela IA principal.",
+            },
+        }
+        dados_ia_final = {}
+        for etapa_id, resultado in resultados.items():
+            if etapa_id == "AUDITORIA_MARCAS" or not isinstance(resultado, dict):
+                continue
+            blocos = (
+                resultado
+                if etapa_id == "FASE_PREPARATORIA"
+                and all(isinstance(resultado.get(bloco), dict) for bloco in ("DFD", "ETP", "TR"))
+                else {"_": resultado}
+            )
+            for bloco in blocos.values():
+                if not isinstance(bloco, dict):
+                    continue
+                for chave, valor in bloco.items():
+                    if chave == "PAGAMENTO" and etapa_id != "PAGAMENTO_ETAPAS":
+                        continue
+                    dados_ia_final[chave] = valor
+
+        self.assertEqual(dados_ia_final["PAGAMENTO"], "Pagamento revisado por etapas.")
+
+
+class TestPipelineUnificado(unittest.TestCase):
+    def test_calcula_valor_aproximado_redondo_acima_do_total_dos_itens(self):
+        import fila_pipeline_unificado as pipeline
+
+        dados = {
+            "{{ITENS}}": json.dumps([
+                {"numero": 1, "qtd": 2, "valor": 1234.56},
+            ]),
+            "{{VALOR_ESTIMADO}}": "R$ 2.469,12",
+        }
+        self.assertEqual(
+            pipeline._calcular_valor_estimado_aproximado(dados),
+            "R$ 2.600,00",
+        )
+
+    def test_valor_aproximado_vazio_quando_nao_ha_total_positivo(self):
+        import fila_pipeline_unificado as pipeline
+
+        self.assertEqual(
+            pipeline._calcular_valor_estimado_aproximado({"{{ITENS}}": "[]"}),
+            "",
+        )
+
+    def test_valor_aproximado_prioriza_soma_dos_itens_do_tr_anterior(self):
+        import fila_pipeline_unificado as pipeline
+
+        dados_atuais = {
+            "{{ITENS}}": json.dumps([
+                {"numero": 1, "qtd": 2, "valor": 1234.56},
+            ]),
+        }
+        documentos = [
+            {
+                "tipo": "ETP",
+                "texto": "Valor total estimado: R$ 999.999,00",
+            },
+            {
+                "tipo": "TR",
+                "nome": "Termo de Referência anterior",
+                "texto": (
+                    "ANEXO III - TERMO DE REFERÊNCIA\n"
+                    "ITEM | DESCRIÇÃO | UN | QTD | VLR UNIT. | VLR TOTAL\n"
+                    "1 | Papel A4 | RESMA | 10 | R$ 25,00 | R$ 250,00\n"
+                    "2 | Caneta azul | CX | 20 | R$ 2,00 | R$ 40,00\n"
+                    "VALOR TOTAL DOS ITENS: R$ 290,00"
+                ),
+            },
+        ]
+
+        # O total de R$ 290,00 do TR anterior prevalece sobre o valor atual de R$ 2.469,12.
+        self.assertEqual(
+            pipeline._calcular_valor_estimado_aproximado(dados_atuais, documentos),
+            "R$ 305,00",
+        )
+
+    def test_valor_aproximado_usa_total_explicito_do_tr_se_nao_houver_tabela(self):
+        import fila_pipeline_unificado as pipeline
+
+        dados_atuais = {"{{ITENS}}": json.dumps([{"qtd": 1, "valor": 100}])}
+        documentos = [
+            {"tipo": "TR", "texto": "Valor total estimado da contratação: R$ 3.450,00"},
+        ]
+
+        self.assertEqual(
+            pipeline._calcular_valor_estimado_aproximado(dados_atuais, documentos),
+            "R$ 3.630,00",
+        )
+
+    def test_valor_aproximado_ignora_total_de_etp_quando_nao_ha_tr(self):
+        import fila_pipeline_unificado as pipeline
+
+        dados_atuais = {"{{ITENS}}": json.dumps([{"qtd": 1, "valor": 100}])}
+        documentos = [
+            {"tipo": "ETP", "texto": "Valor total estimado: R$ 999.999,00"},
+            {"tipo": "DFD", "texto": "Valor total estimado: R$ 777.777,00"},
+        ]
+
+        self.assertEqual(
+            pipeline._calcular_valor_estimado_aproximado(dados_atuais, documentos),
+            "R$ 105,00",
+        )
+
+    def test_reutiliza_modelo_resolvido_nas_etapas_seguintes(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        import fila_pipeline_unificado as pipeline
+
+        chamadas_modelo = []
+        job_id = "a" * 32
+
+        def chamar_ia(prompt, model, temperature=0.3, **opcoes):
+            chamadas_modelo.append(model)
+            return {"CAMPO": f"resultado de {prompt}"}, "modelo-resolvido"
+
+        with tempfile.TemporaryDirectory() as diretorio:
+            raiz = Path(diretorio)
+
+            def caminho_job(_job_id, suffix=""):
+                return raiz / f"{_job_id}{suffix}.json"
+
+            def caminho_artifact(_job_id):
+                return raiz / f"{_job_id}.artifact.zip"
+
+            def gerar_zip(_dados_usuario, _dados_ia, _session_id):
+                pasta_gerada = raiz / "gerados"
+                pasta_gerada.mkdir()
+                arquivo = pasta_gerada / "documentos.zip"
+                arquivo.write_bytes(b"zip de teste")
+                return arquivo, "documentos.zip"
+
+            job = {
+                "job_id": job_id,
+                "email": "teste@example.com",
+                "status": "processing",
+                "attempts": 1,
+                "dados_usuario": {
+                    "{{OBJETO}}": "Objeto de teste",
+                    "{{ITENS}}": json.dumps([{"numero": 1, "qtd": 2, "valor": 1234.56}]),
+                    "{{VALOR_ESTIMADO}}": "R$ 2.469,12",
+                },
+                "dados_ia": {
+                    "__LICITA_PIPELINE__": {
+                        "model": "unsloth-auto",
+                        "temperature": 0.3,
+                        "documentos_anteriores": [
+                            {
+                                "tipo": "TR",
+                                "nome": "TR anterior",
+                                "texto": (
+                                    "ANEXO III - TERMO DE REFERÊNCIA\n"
+                                    "ITEM | DESCRIÇÃO | UN | QTD | VLR UNIT. | VLR TOTAL\n"
+                                    "1 | Papel A4 | RESMA | 10 | R$ 25,00 | R$ 250,00\n"
+                                    "2 | Caneta azul | CX | 20 | R$ 2,00 | R$ 40,00"
+                                ),
+                            }
+                        ],
+                        "etapas": [
+                            {"id": "ETAPA_1", "tipo": "geracao_json", "prompt": "PROMPT_1"},
+                            {"id": "ETAPA_2", "tipo": "geracao_json", "prompt": "PROMPT_2"},
+                        ],
+                    }
+                },
+            }
+
+            with (
+                patch.object(pipeline, "_job_path", side_effect=caminho_job),
+                patch.object(pipeline, "_artifact_path", side_effect=caminho_artifact),
+                patch.object(pipeline, "_write_json"),
+                patch.object(pipeline, "_chamar_ia", side_effect=chamar_ia),
+                patch.object(pipeline, "gerar_zip", side_effect=gerar_zip),
+                patch.object(pipeline, "_enviar_email") as enviar_email,
+            ):
+                pipeline._process_pipeline(job)
+
+        self.assertEqual(chamadas_modelo, ["unsloth-auto", "modelo-resolvido"])
+        self.assertEqual(job["status"], "sent")
+        self.assertEqual(job["dados_ia"]["VALOR_ESTIMADO_APROXIMADO"], "R$ 305,00")
+        enviar_email.assert_called_once()
+
+
+    def _rodar_pipeline_unificado(self, dados_usuario, resposta_ia):
+        """Executa a etapa unificada com IA falsa e devolve (opções enviadas à IA, dados_ia gerados)."""
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        import fila_pipeline_unificado as pipeline
+
+        opcoes_recebidas = {}
+        dados_ia_gerados = {}
+        job_id = "b" * 32
+
+        def chamar_ia(prompt, model, temperature=0.3, **opcoes):
+            opcoes_recebidas.update(opcoes)
+            return resposta_ia, "modelo-resolvido"
+
+        with tempfile.TemporaryDirectory() as diretorio:
+            raiz = Path(diretorio)
+
+            def gerar_zip(_dados_usuario, dados_ia, _session_id):
+                dados_ia_gerados.update(dados_ia)
+                pasta = raiz / "gerados"
+                pasta.mkdir()
+                arquivo = pasta / "documentos.zip"
+                arquivo.write_bytes(b"zip de teste")
+                return arquivo, "documentos.zip"
+
+            job = {
+                "job_id": job_id,
+                "email": "teste@example.com",
+                "status": "processing",
+                "attempts": 1,
+                "dados_usuario": dados_usuario,
+                "dados_ia": {
+                    "__LICITA_PIPELINE__": {
+                        "model": "unsloth-auto",
+                        "temperature": 0.3,
+                        "etapas": [{"id": "FASE_PREPARATORIA", "tipo": "geracao_unificada", "prompt": "PROMPT"}],
+                    }
+                },
+            }
+            with (
+                patch.object(pipeline, "_job_path", side_effect=lambda _id, suffix="": raiz / f"{_id}{suffix}.json"),
+                patch.object(pipeline, "_artifact_path", side_effect=lambda _id: raiz / f"{_id}.artifact.zip"),
+                patch.object(pipeline, "_write_json"),
+                patch.object(pipeline, "_chamar_ia", side_effect=chamar_ia),
+                patch.object(pipeline, "gerar_zip", side_effect=gerar_zip),
+                patch.object(pipeline, "_enviar_email"),
+            ):
+                pipeline._process_pipeline(job)
+        return opcoes_recebidas, dados_ia_gerados
+
+    def _resposta_unificada(self, com_amostra_tr):
+        schema = _json_schema_fase_preparatoria(exigir_amostra_tr=com_amostra_tr)["json_schema"]["schema"]["properties"]
+        resposta = {
+            bloco: {campo: f"Texto de {campo}." for campo in definicao["properties"]}
+            for bloco, definicao in schema.items()
+        }
+        resposta["TR"]["REQUISITOS_TR"] = "Não há documentos adicionais"
+        return resposta
+
+    def test_pipeline_sem_amostra_nao_pede_amostra_tr_a_ia(self):
+        opcoes, dados_ia = self._rodar_pipeline_unificado(
+            {"{{OBJETO}}": "Objeto de teste", "{{AMOST}}": "nao"},
+            self._resposta_unificada(com_amostra_tr=False),
+        )
+
+        tr = opcoes["response_format"]["json_schema"]["schema"]["properties"]["TR"]
+        self.assertNotIn("AMOSTRA_TR", tr["properties"])
+        self.assertNotIn("AMOSTRA_TR", dados_ia)
+        self.assertIn("AMOSTRA_ETP", dados_ia)
+
+    def test_pipeline_com_amostra_continua_pedindo_amostra_tr_a_ia(self):
+        opcoes, dados_ia = self._rodar_pipeline_unificado(
+            {"{{OBJETO}}": "Objeto de teste", "{{AMOST}}": "sim"},
+            self._resposta_unificada(com_amostra_tr=True),
+        )
+
+        tr = opcoes["response_format"]["json_schema"]["schema"]["properties"]["TR"]
+        self.assertIn("AMOSTRA_TR", tr["required"])
+        self.assertEqual(dados_ia["AMOSTRA_TR"], "Texto de AMOSTRA_TR.")
+
+
+class TestConfiguracaoThinking(unittest.TestCase):
+    def test_chamar_ia_habilita_thinking_para_modelo_nao_gemma(self):
+        from unittest.mock import MagicMock, patch
+        import fila_pipeline as pipeline
+
+        resposta = MagicMock()
+        resposta.status_code = 200
+        resposta.json.return_value = {
+                "choices": [{"message": {"content": json.dumps({"ok": True})}}],
+            "model": "qwen-modelo-de-teste",
+        }
+        with (
+            patch.object(pipeline, "API_UNSLOTH_URL", "http://unsloth.test/v1"),
+            patch.object(pipeline, "API_UNSLOTH_KEY", "chave-de-teste"),
+            patch.object(pipeline.httpx, "Client") as cliente_http,
+        ):
+            cliente = cliente_http.return_value.__enter__.return_value
+            cliente.post.return_value = resposta
+            resultado, modelo = pipeline._chamar_ia("prompt de teste", "qwen-modelo-de-teste")
+
+        payload = cliente.post.call_args.kwargs["json"]
+        self.assertTrue(payload["enable_thinking"])
+        self.assertTrue(payload["enable_tools"])
+        self.assertNotIn("max_tokens", payload)
+        self.assertNotIn("max_completion_tokens", payload)
+        self.assertNotIn("response_format", payload)
+        self.assertEqual(payload["messages"][0]["role"], "system")
+        self.assertIn("1200 segundos", payload["messages"][0]["content"])
+        self.assertIn("pesquisa na web", payload["messages"][0]["content"])
+        self.assertEqual(payload["model"], "qwen-modelo-de-teste")
+        self.assertEqual(resultado, {"ok": True})
+        self.assertEqual(modelo, "qwen-modelo-de-teste")
+
+
+class TestNotificacaoFalhaFila(unittest.TestCase):
+    def test_notifica_apenas_apos_esgotar_tentativas(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        import fila_pipeline_unificado as pipeline
+
+        job_id = "c" * 32
+
+        for tentativas, deve_notificar in ((1, False), (3, True)):
+            with self.subTest(tentativas=tentativas), tempfile.TemporaryDirectory() as diretorio:
+                raiz = Path(diretorio)
+                processamento = raiz / f"{job_id}.processing.json"
+                processamento.write_text("{}", encoding="utf-8")
+                job = {
+                    "job_id": job_id,
+                    "status": "processing",
+                    "attempts": tentativas,
+                    "email": "destinatario@example.com",
+                    "current_stage": "ENVIO_EMAIL",
+                    "dados_usuario": {},
+                }
+
+                def caminho_job(_job_id, suffix=""):
+                    return raiz / f"{_job_id}{suffix}.json"
+
+                with (
+                    patch.object(pipeline, "MAX_ATTEMPTS", 3),
+                    patch.object(pipeline, "SMTP_FROM", "licitacao@example.gov.br"),
+                    patch.object(pipeline, "SMTP_USERNAME", "smtp@example.gov.br"),
+                    patch.object(pipeline, "_claim_next_job", return_value=(processamento, job)),
+                    patch.object(pipeline, "_process_pipeline", side_effect=ConnectionError("falha simulada")),
+                    patch.object(pipeline, "_job_path", side_effect=caminho_job),
+                    patch.object(pipeline, "_artifact_path", side_effect=lambda _job_id: raiz / f"{_job_id}.artifact.zip"),
+                    patch.object(pipeline, "_write_json"),
+                    patch.object(pipeline, "_enviar_email_alerta_falha") as alertar,
+                ):
+                    pipeline._process_one_job()
+
+                if deve_notificar:
+                    alertar.assert_called_once_with(job, "falha simulada")
+                    self.assertEqual(job["status"], "failed")
+                    self.assertEqual(job["failure_notification"]["status"], "sent")
+                    self.assertEqual(job["failure_notification"]["recipient"], "licitacao@example.gov.br")
+                else:
+                    alertar.assert_not_called()
+                    self.assertEqual(job["status"], "queued")
+
+class TestIAExtracaoTotalTR(unittest.TestCase):
+    def test_ia_identifica_tabela_irregular_e_python_soma_item_por_item(self):
+        from decimal import Decimal
+        from unittest.mock import patch
+        import fila_pipeline_unificado as pipeline
+
+        texto_tr = (
+            "TERMO DE REFERÊNCIA — quadro de materiais\n"
+            "Cod. / descrição resumida / necessidade / custo por unidade\n"
+            "A1 / Papel A4 / 10 resmas / R$ 25,00\n"
+            "A2 / Caneta azul / 20 caixas / R$ 2,00"
+        )
+        resposta_ia = {
+            "todos_itens_identificados": True,
+            "itens": [
+                {"numero": "A1", "descricao": "Papel A4", "quantidade": "10", "valor_unitario": "25,00", "valor_total": None},
+                {"numero": "A2", "descricao": "Caneta azul", "quantidade": "20", "valor_unitario": "2,00", "valor_total": None},
+            ],
+        }
+        documentos = [{"tipo": "TR", "nome": "TR anterior.pdf", "texto": texto_tr}]
+
+        with patch.object(pipeline, "_chamar_ia", return_value=(resposta_ia, "modelo-resolvido")) as chamar:
+            total, modelo = pipeline._total_itens_tr_por_ia(documentos, "unsloth-auto", 0.3)
+
+        self.assertEqual(total, Decimal("290.00"))
+        self.assertEqual(modelo, "modelo-resolvido")
+        self.assertIn(texto_tr, chamar.call_args.args[0])
+        self.assertIn("Não some os valores mentalmente", chamar.call_args.args[0])
+
+        valor_aproximado = pipeline._calcular_valor_estimado_aproximado(
+            {"{{ITENS}}": "[]"}, documentos, total_anterior_ia=total
+        )
+        self.assertEqual(valor_aproximado, "R$ 305,00")
+
+    def test_ia_nao_usa_soma_parcial_quando_nao_confirma_todos_os_itens(self):
+        from unittest.mock import patch
+        import fila_pipeline_unificado as pipeline
+
+        documentos = [{
+            "tipo": "TR",
+            "texto": "Quadro de itens sem cabeçalhos claros e com parte dos preços ilegível.",
+        }]
+        resposta_ia = {
+            "todos_itens_identificados": False,
+            "itens": [],
+        }
+        with patch.object(pipeline, "_chamar_ia", return_value=(resposta_ia, "modelo-resolvido")):
+            total, _ = pipeline._total_itens_tr_por_ia(documentos, "modelo-teste")
+
+        self.assertIsNone(total)
+
+    def test_divergencia_entre_soma_da_tabela_e_total_declarado_aciona_fallback_ia(self):
+        from decimal import Decimal
+        import fila_pipeline_unificado as pipeline
+
+        documentos = [{
+            "tipo": "TR",
+            "texto": (
+                "ITEM | DESCRIÇÃO | QTD | VALOR UNITÁRIO | VALOR TOTAL\n"
+                "1 | Papel A4 | 10 | R$ 2,00 | R$ 20,00\n"
+                "Valor total estimado da contratação: R$ 200,00"
+            ),
+        }]
+
+        self.assertIsNone(pipeline._extrair_total_itens_tr_anterior(documentos))
+        self.assertEqual(
+            pipeline._calcular_valor_estimado_aproximado(
+                {"{{ITENS}}": "[]"}, documentos, total_anterior_ia=Decimal("190.00")
+            ),
+            "R$ 200,00",
+        )
+
+
+
+
+class TestRevisaoHumanaIntegracaoWorker(unittest.TestCase):
+    def test_worker_pausa_apos_ia_e_retorna_da_aprovacao_sem_repetir_geracao(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        import fila_pipeline_unificado as pipeline
+
+        job_id = "a" * 32
+        with tempfile.TemporaryDirectory() as diretorio:
+            raiz = Path(diretorio)
+            resposta = {
+                nome: {campo: f"Conteúdo de {campo}." for campo in campos}
+                for nome, campos in pipeline._FASE_PREPARATORIA_CAMPOS.items()
+            }
+            resposta["DFD"]["OBJETO"] = "Objeto original"
+            resposta["TR"]["REQUISITOS_TR"] = "Não há documentos adicionais"
+            chamadas_ia = []
+
+            def chamar_ia(*args, **kwargs):
+                chamadas_ia.append((args, kwargs))
+                return resposta, "modelo-teste"
+
+            def gravar_json(caminho, dados):
+                caminho = Path(caminho)
+                caminho.parent.mkdir(parents=True, exist_ok=True)
+                caminho.write_text(json.dumps(dados, ensure_ascii=False), encoding="utf-8")
+
+            def gerar_zip(dados_usuario, dados_ia, _job_id):
+                pasta = raiz / "gerados"
+                pasta.mkdir(exist_ok=True)
+                arquivo = pasta / "documentos.zip"
+                arquivo.write_bytes(b"zip de teste")
+                dados_gerados.append(dict(dados_ia))
+                return arquivo, "documentos.zip"
+
+            dados_gerados = []
+            job = {
+                "job_id": job_id,
+                "email": "teste@example.com",
+                "status": "processing",
+                "attempts": 1,
+                "require_review": True,
+                "dados_usuario": {"{{OBJETO}}": "Objeto de teste", "{{AMOST}}": "sim"},
+                "dados_ia": {
+                    "__LICITA_PIPELINE__": {
+                        "model": "unsloth-auto",
+                        "temperature": 0.3,
+                        "etapas": [
+                            {"id": "FASE_PREPARATORIA", "tipo": "geracao_unificada", "prompt": "PROMPT"}
+                        ],
+                    }
+                },
+            }
+
+            with (
+                patch.object(pipeline, "QUEUE_DIR", raiz),
+                patch.object(pipeline, "_job_path", side_effect=lambda _id, suffix="": raiz / f"{_id}{suffix}.json"),
+                patch.object(pipeline, "_artifact_path", side_effect=lambda _id: raiz / f"{_id}.artifact.zip"),
+                patch.object(pipeline, "_write_json", side_effect=gravar_json),
+                patch.object(pipeline, "_chamar_ia", side_effect=chamar_ia) as chamar,
+                patch.object(pipeline, "gerar_zip", side_effect=gerar_zip) as montar,
+                patch.object(pipeline, "_enviar_email") as enviar,
+            ):
+                pipeline._process_pipeline(job)
+
+                caminho_revisao = raiz / f"{job_id}.review.json"
+                self.assertTrue(caminho_revisao.is_file())
+                revisao = json.loads(caminho_revisao.read_text(encoding="utf-8"))
+                self.assertEqual(revisao["status"], "awaiting_review")
+                self.assertEqual(revisao["current_stage"], "REVISAO_USUARIO")
+                self.assertEqual(revisao["review_documents"]["DFD"]["OBJETO"], "Objeto original")
+                self.assertNotIn("DFD", revisao["dados_ia_final"])
+                self.assertFalse((raiz / f"{job_id}.processing.json").exists())
+                montar.assert_not_called()
+                enviar.assert_not_called()
+
+                revisao["review_documents"]["DFD"]["OBJETO"] = "Objeto aprovado e editado"
+                revisao["dados_ia_final"]["OBJETO"] = "Objeto aprovado e editado"
+                revisao["review_approved"] = True
+                revisao["status"] = "queued"
+                revisao["current_stage"] = "MONTAGEM_DOCX"
+                caminho_revisao.unlink()
+                gravar_json(raiz / f"{job_id}.queued.json", revisao)
+
+                pipeline._process_pipeline(revisao)
+
+                chamar.assert_called_once()
+                montar.assert_called_once()
+                enviar.assert_called_once()
+                self.assertEqual(dados_gerados[0]["OBJETO"], "Objeto aprovado e editado")
+                self.assertEqual(revisao["status"], "sent")
+                self.assertTrue((raiz / f"{job_id}.done.json").is_file())

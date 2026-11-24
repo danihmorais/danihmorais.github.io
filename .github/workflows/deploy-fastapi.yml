@@ -1,0 +1,344 @@
+name: Deploy FastAPI to Ubuntu
+
+on:
+  workflow_run:
+    workflows: ["LICITA.AI checks"]
+    types: [completed]
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: "deploy-fastapi"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy FastAPI to Ubuntu
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      previous_sha: ${{ steps.previous.outputs.sha }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 2
+
+      - name: Resolve previous revision
+        id: previous
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          previous_sha="$(git rev-parse "${SHA}^1")"
+          test -n "$previous_sha"
+          echo "sha=$previous_sha" >> "$GITHUB_OUTPUT"
+          echo "Versão anterior: $previous_sha"
+
+      - name: Trigger Ubuntu deployment
+        env:
+          WEBHOOK_SECRET: ${{ secrets.DEPLOY_WEBHOOK_SECRET }}
+          API_URL: ${{ secrets.API_URL }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          REPOSITORY: ${{ github.repository }}
+          PROJECT: DANIHMORAIS-GITHUB-PAGES
+        run: |
+          set -euo pipefail
+          test -n "$WEBHOOK_SECRET" || { echo 'Secret DEPLOY_WEBHOOK_SECRET não configurado.'; exit 1; }
+          test -n "$API_URL" || { echo 'Secret API_URL não configurado.'; exit 1; }
+
+          DEPLOY_URL="${API_URL%/}/deploy"
+          body=$(jq -nc \
+            --arg ref 'refs/heads/main' \
+            --arg after "$SHA" \
+            --arg repository "$REPOSITORY" \
+            --arg project "$PROJECT" \
+            '{ref:$ref,after:$after,repository:{full_name:$repository},project:$project}')
+          signature=$(printf '%s' "$body" | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" -hex | awk '{print $2}')
+
+          response=$(curl --fail-with-body --silent --show-error --retry 3 --retry-delay 2 --max-time 30 \
+            --request POST \
+            --url "$DEPLOY_URL" \
+            --header 'Content-Type: application/json' \
+            --header 'X-GitHub-Event: push' \
+            --header "X-Deploy-Project: $PROJECT" \
+            --header "X-Hub-Signature-256: sha256=$signature" \
+            --data "$body")
+
+          echo "Deploy remoto iniciado: $response"
+
+      - name: Wait for deployment
+        env:
+          API_URL: ${{ secrets.API_URL }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          PROJECT: DANIHMORAIS-GITHUB-PAGES
+        run: |
+          set -euo pipefail
+          test -n "$API_URL" || { echo 'Secret API_URL não configurado.'; exit 1; }
+
+          STATUS_URL="${API_URL%/}/deploy-status"
+          for i in $(seq 1 60); do
+            response=$(curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 30 \
+              --get --url "$STATUS_URL" \
+              --data-urlencode "sha=$SHA" \
+              --data-urlencode "project=$PROJECT")
+            echo "[$i/60] $response"
+            state=$(printf '%s' "$response" | jq -r '.state')
+            if [ "$state" = "success" ]; then
+              echo "Deploy do $PROJECT concluído com sucesso."
+              exit 0
+            fi
+            if [ "$state" = "failure" ]; then
+              echo "Deploy do $PROJECT falhou."
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "Timeout aguardando o deploy de $PROJECT."
+          exit 1
+
+      - name: Validate public API
+        env:
+          API_URL: ${{ secrets.API_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$API_URL" || { echo 'Secret API_URL não configurado.'; exit 1; }
+
+          BASE_URL="${API_URL%/}"
+          ORIGIN='https://danihmorais.github.io'
+          BODY_FILE="$(mktemp)"
+          HEADERS_FILE="$(mktemp)"
+          trap 'rm -f "$BODY_FILE" "$HEADERS_FILE"' EXIT
+
+          echo 'Validando /health...'
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 30 \
+            --header "Origin: $ORIGIN" \
+            --output "$BODY_FILE" \
+            "$BASE_URL/health"
+          python - "$BODY_FILE" <<'PY'
+          import json, sys
+          from pathlib import Path
+          payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          if payload.get("status") != "ok":
+              raise SystemExit("/health não retornou status=ok")
+          print("/health OK")
+          PY
+
+          echo 'Validando namespace do agregador...'
+          for endpoint in /licita/openapi.json /monta/openapi.json /email/openapi.json /geradorextrato/openapi.json; do
+            curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 30 \
+              --output /dev/null \
+              "$BASE_URL$endpoint"
+            echo "$endpoint OK"
+          done
+
+          echo 'Validando CORS do POST do Gerador de Extrato...'
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 30 \
+            --request OPTIONS \
+            --header "Origin: $ORIGIN" \
+            --header 'Access-Control-Request-Method: POST' \
+            --header 'Access-Control-Request-Headers: content-type' \
+            --dump-header "$HEADERS_FILE" \
+            --output /dev/null \
+            "$BASE_URL/geradorextrato/api/analyze"
+          grep -Eiq '^access-control-allow-origin:[[:space:]]*https://danihmorais\.github\.io[[:space:]]*$' "$HEADERS_FILE" || {
+            echo 'CORS não autorizou https://danihmorais.github.io no endpoint /geradorextrato/api/analyze.'
+            cat "$HEADERS_FILE"
+            exit 1
+          }
+          grep -Eiq '^access-control-allow-methods:.*POST' "$HEADERS_FILE" || {
+            echo 'CORS não autorizou POST no endpoint /geradorextrato/api/analyze.'
+            cat "$HEADERS_FILE"
+            exit 1
+          }
+          echo 'CORS do Gerador de Extrato OK.'
+
+          echo 'Validando /files e CORS...'
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 30 \
+            --header "Origin: $ORIGIN" \
+            --dump-header "$HEADERS_FILE" \
+            --output "$BODY_FILE" \
+            "$BASE_URL/files"
+          grep -Eiq '^access-control-allow-origin:[[:space:]]*https://danihmorais\.github\.io[[:space:]]*$' "$HEADERS_FILE" || {
+            echo 'CORS não está configurado corretamente em /files.'
+            cat "$HEADERS_FILE"
+            exit 1
+          }
+          python - "$BODY_FILE" <<'PY'
+          import json, sys
+          from pathlib import Path
+          payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          files = payload.get("files") if isinstance(payload, dict) else None
+          if not isinstance(files, list):
+              raise SystemExit("/files não retornou um objeto JSON com a chave 'files'.")
+          print(f"API pública OK: /health, namespaces, CORS de /geradorextrato/api/analyze e /files funcionando; {len(files)} arquivos encontrados.")
+          PY
+
+          echo 'Validando /files2 e CORS...'
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 30 \
+            --header "Origin: $ORIGIN" \
+            --dump-header "$HEADERS_FILE" \
+            --output "$BODY_FILE" \
+            "$BASE_URL/files2"
+          grep -Eiq '^access-control-allow-origin:.*https://danihmorais\.github\.io' "$HEADERS_FILE" || {
+            echo 'CORS não está configurado corretamente em /files2.'
+            cat "$HEADERS_FILE"
+            exit 1
+          }
+          python - "$BODY_FILE" <<'PY'
+          import json, sys
+          from pathlib import Path
+          payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          files = payload.get("files") if isinstance(payload, dict) else None
+          if payload.get("hidden_only") is not True or not isinstance(files, list):
+              raise SystemExit("/files2 não retornou a lista exclusiva de arquivos ocultos esperada.")
+          for item in files:
+              path = str(item.get("path", "")).replace("\\", "/")
+              if not path or not any(part.startswith(".") for part in path.split("/") if part):
+                  raise SystemExit(f"/files2 retornou um caminho não oculto ou inválido: {path!r}")
+          print(f"API /files2 OK: {len(files)} entradas de caminhos ocultos; CORS autorizado.")
+          PY
+
+  rollback:
+    name: Restore previous deployment
+    needs: deploy
+    if: >-
+      always() &&
+      needs.deploy.result == 'failure' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Trigger rollback deployment
+        env:
+          WEBHOOK_SECRET: \${{ secrets.DEPLOY_WEBHOOK_SECRET }}
+          API_URL: \${{ secrets.API_URL }}
+          SHA: \${{ needs.deploy.outputs.previous_sha }}
+          REPOSITORY: \${{ github.repository }}
+          PROJECT: DANIHMORAIS-GITHUB-PAGES
+        run: |
+          set -euo pipefail
+          test -n "$WEBHOOK_SECRET" || { echo 'Secret DEPLOY_WEBHOOK_SECRET não configurado.'; exit 1; }
+          test -n "$API_URL" || { echo 'Secret API_URL não configurado.'; exit 1; }
+          test -n "$SHA" || { echo 'Não foi possível determinar a versão anterior; rollback manual necessário.'; exit 1; }
+
+          DEPLOY_URL="\${API_URL%/}/deploy"
+          body=$(jq -nc \
+            --arg ref 'refs/heads/main' \
+            --arg after "$SHA" \
+            --arg repository "$REPOSITORY" \
+            --arg project "$PROJECT" \
+            '{ref:$ref,after:$after,repository:{full_name:$repository},project:$project}')
+          signature=$(printf '%s' "$body" | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" -hex | awk '{print $2}')
+
+          response=$(curl --fail-with-body --silent --show-error --retry 3 --retry-delay 2 --max-time 30 \
+            --request POST \
+            --url "$DEPLOY_URL" \
+            --header 'Content-Type: application/json' \
+            --header 'X-GitHub-Event: push' \
+            --header "X-Deploy-Project: $PROJECT" \
+            --header "X-Hub-Signature-256: sha256=$signature" \
+            --data "$body")
+
+          echo "Rollback remoto solicitado para $SHA: $response"
+
+      - name: Wait for rollback
+        env:
+          API_URL: \${{ secrets.API_URL }}
+          SHA: \${{ needs.deploy.outputs.previous_sha }}
+          PROJECT: DANIHMORAIS-GITHUB-PAGES
+        run: |
+          set -euo pipefail
+          test -n "$API_URL"
+          test -n "$SHA"
+          STATUS_URL="\${API_URL%/}/deploy-status"
+          for i in $(seq 1 60); do
+            response=$(curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 30 \
+              --get --url "$STATUS_URL" \
+              --data-urlencode "sha=$SHA" \
+              --data-urlencode "project=$PROJECT")
+            echo "[$i/60] $response"
+            state=$(printf '%s' "$response" | jq -r '.state')
+            if [ "$state" = "success" ]; then
+              echo "Rollback para $SHA concluído."
+              exit 0
+            fi
+            if [ "$state" = "failure" ]; then
+              echo "O serviço remoto informou falha ao restaurar $SHA."
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "Timeout aguardando a restauração de $SHA."
+          exit 1
+
+      - name: Validate restored public API
+        env:
+          API_URL: \${{ secrets.API_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$API_URL"
+          BASE_URL="\${API_URL%/}"
+          ORIGIN='https://danihmorais.github.io'
+          BODY_FILE="$(mktemp)"
+          HEADERS_FILE="$(mktemp)"
+          trap 'rm -f "$BODY_FILE" "$HEADERS_FILE"' EXIT
+
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 30 \
+            --header "Origin: $ORIGIN" --output "$BODY_FILE" "$BASE_URL/health"
+          python - "$BODY_FILE" <<'PY'
+          import json, sys
+          from pathlib import Path
+          if json.loads(Path(sys.argv[1]).read_text(encoding="utf-8")).get("status") != "ok":
+              raise SystemExit("A versão restaurada não passou em /health.")
+          PY
+
+          for endpoint in /licita/openapi.json /monta/openapi.json /email/openapi.json /geradorextrato/openapi.json; do
+            curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 30 \
+              --output /dev/null "$BASE_URL$endpoint"
+          done
+
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 30 \
+            --request OPTIONS \
+            --header "Origin: $ORIGIN" \
+            --header 'Access-Control-Request-Method: POST' \
+            --header 'Access-Control-Request-Headers: content-type' \
+            --dump-header "$HEADERS_FILE" \
+            --output /dev/null \
+            "$BASE_URL/geradorextrato/api/analyze"
+          grep -Eiq '^access-control-allow-origin:[[:space:]]*https://danihmorais\.github\.io[[:space:]]*$' "$HEADERS_FILE"
+          grep -Eiq '^access-control-allow-methods:.*POST' "$HEADERS_FILE"
+
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 30 \
+            --header "Origin: $ORIGIN" --dump-header "$HEADERS_FILE" --output "$BODY_FILE" "$BASE_URL/files"
+          grep -Eiq '^access-control-allow-origin:[[:space:]]*https://danihmorais\.github\.io[[:space:]]*$' "$HEADERS_FILE"
+          python - "$BODY_FILE" <<'PY'
+          import json, sys
+          from pathlib import Path
+          payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          if not isinstance(payload.get("files"), list):
+              raise SystemExit("/files não retornou uma lista.")
+          PY
+
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 30 \
+            --header "Origin: $ORIGIN" --dump-header "$HEADERS_FILE" --output "$BODY_FILE" "$BASE_URL/files2"
+          grep -Eiq '^access-control-allow-origin:.*https://danihmorais\.github\.io' "$HEADERS_FILE"
+          python - "$BODY_FILE" <<'PY'
+          import json, sys
+          from pathlib import Path
+          payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          files = payload.get("files") if isinstance(payload, dict) else None
+          if payload.get("hidden_only") is not True or not isinstance(files, list):
+              raise SystemExit("/files2 não retornou a lista exclusiva de arquivos ocultos esperada.")
+          for item in files:
+              path = str(item.get("path", "")).replace("\\", "/")
+              if not path or not any(part.startswith(".") for part in path.split("/") if part):
+                  raise SystemExit(f"/files2 retornou caminho inválido: {path!r}")
+          PY
+
+          echo "A versão anterior foi restaurada e passou pelas validações públicas."

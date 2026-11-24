@@ -1,0 +1,10 @@
+[Unit]
+Description=Backup diário do banco da Biblioteca Municipal
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+Unit=biblioteca-backup.service
+
+[Install]
+WantedBy=timers.target

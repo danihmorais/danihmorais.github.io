@@ -1,0 +1,26 @@
+{
+  "name": "licita.ai",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Gerador da fase preparatória de contratações públicas",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "test": "node --test tests/unit/*.test.mjs",
+    "test:dist": "npm run build && node tests/dist-smoke.mjs",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "@bundled-es-modules/pdfjs-dist": "3.6.172-alpha.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.8"
+  }
+}

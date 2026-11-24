@@ -1,0 +1,305 @@
+from __future__ import annotations
+
+import base64
+import io
+import json
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+from docx import Document
+from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Inches
+
+TEST_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(TEST_ROOT))
+
+from processador_docx import modificar_documento, replace_text_in_paragraph
+
+
+class ProcessadorDocxTests(unittest.TestCase):
+    def test_tabela_aceita_linhas_com_chaves_diferentes(self):
+        doc = Document()
+        paragraph = doc.add_paragraph("{{ITENS}}")
+        dados = [
+            {"Item": 1, "Descrição": "Caneta"},
+            {"Item": 2, "Descrição": "Papel", "Observação": "Entrega imediata"},
+        ]
+
+        replace_text_in_paragraph(
+            paragraph,
+            {"{{ITENS}}": "__TABLE__" + json.dumps(dados, ensure_ascii=False)},
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            caminho = Path(temp_dir) / "teste.docx"
+            doc.save(caminho)
+            reaberto = Document(caminho)
+
+        self.assertEqual(len(reaberto.tables), 1)
+        tabela = reaberto.tables[0]
+        self.assertEqual(len(tabela.columns), 3)
+        self.assertEqual(tabela.cell(0, 2).text, "Observação")
+        self.assertEqual(tabela.cell(1, 2).text, "")
+        self.assertEqual(tabela.cell(2, 2).text, "Entrega imediata")
+
+    def test_tabela_centralizada_justifica_conteudo_das_celulas(self):
+        doc = Document()
+        paragraph = doc.add_paragraph("{{ITENS}}")
+        dados = [{"Item": 1, "Descrição": "Papel A4", "Qtd": 10}]
+
+        replace_text_in_paragraph(
+            paragraph,
+            {"{{ITENS}}": "__TABLE_CENTER_JUSTIFY__" + json.dumps(dados, ensure_ascii=False)},
+        )
+
+        tabela = doc.tables[0]
+        self.assertEqual(tabela.alignment, WD_TABLE_ALIGNMENT.CENTER)
+        self.assertTrue(
+            all(
+                paragrafo.alignment == WD_ALIGN_PARAGRAPH.JUSTIFY
+                for linha in tabela.rows
+                for celula in linha.cells
+                for paragrafo in celula.paragraphs
+            )
+        )
+
+    def test_tabela_invalida_interrompe_a_geracao_do_documento(self):
+        doc = Document()
+        paragraph = doc.add_paragraph("{{ITENS}}")
+        with self.assertRaisesRegex(RuntimeError, "inserir uma tabela"):
+            replace_text_in_paragraph(paragraph, {"{{ITENS}}": "__TABLE__{json inválido"})
+
+    def test_imagem_de_dotacao_indisponivel_interrompe_a_geracao_do_documento(self):
+        doc = Document()
+        paragraph = doc.add_paragraph("{{DOTACAO}}")
+        with tempfile.TemporaryDirectory() as diretorio:
+            inexistente = Path(diretorio) / "imagem-inexistente.png"
+            with self.assertRaisesRegex(RuntimeError, "imagem de dotação"):
+                replace_text_in_paragraph(paragraph, {"{{DOTACAO}}": "__IMG__" + str(inexistente)})
+
+    def test_placeholder_dividido_em_runs_preserva_formatacao_ao_redor(self):
+        doc = Document()
+        paragraph = doc.add_paragraph()
+
+        prefixo = paragraph.add_run("Introdução ")
+        inicio_chave = paragraph.add_run("{{CH")
+        inicio_chave.bold = True
+        fim_chave = paragraph.add_run("AVE}}")
+        fim_chave.italic = True
+        sufixo = paragraph.add_run(" final")
+        sufixo.underline = True
+
+        replace_text_in_paragraph(paragraph, {"{{CHAVE}}": "resultado"})
+
+        self.assertEqual(paragraph.text, "Introdução resultado final")
+        self.assertEqual(len(paragraph.runs), 3)
+        self.assertFalse(paragraph.runs[0].bold)
+        self.assertFalse(paragraph.runs[0].italic)
+        self.assertTrue(paragraph.runs[1].bold)
+        self.assertFalse(paragraph.runs[1].italic)
+        self.assertFalse(paragraph.runs[2].bold)
+        self.assertFalse(paragraph.runs[2].italic)
+        self.assertTrue(paragraph.runs[2].underline)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            caminho = Path(temp_dir) / "teste_formatacao.docx"
+            doc.save(caminho)
+            reaberto = Document(caminho)
+            runs = reaberto.paragraphs[0].runs
+
+        self.assertEqual(reaberto.paragraphs[0].text, "Introdução resultado final")
+        self.assertTrue(runs[1].bold)
+        self.assertTrue(runs[2].underline)
+
+    def test_quebras_de_linha_geram_paragrafos_reais_e_preservam_alinhamento(self):
+        doc = Document()
+        paragraph = doc.add_paragraph("{{CHAVE}}")
+        paragraph.alignment = 3
+        replace_text_in_paragraph(paragraph, {"{{CHAVE}}": "Primeiro parágrafo.\nSegundo parágrafo."})
+        self.assertEqual([p.text for p in doc.paragraphs], ["Primeiro parágrafo.", "Segundo parágrafo."])
+        self.assertEqual(len(doc.paragraphs), 2)
+        self.assertTrue(all(p.alignment == 3 for p in doc.paragraphs))
+        self.assertNotIn("<w:br", doc.paragraphs[0]._p.xml)
+        self.assertNotIn("<w:br", doc.paragraphs[1]._p.xml)
+
+    def test_titulo_numerado_apos_texto_substituido_fica_em_paragrafo_proprio(self):
+        doc = Document()
+        paragraph = doc.add_paragraph("13. DO PAGAMENTO {{CHAVE}} 14. DA VIGÊNCIA")
+
+        replace_text_in_paragraph(
+            paragraph,
+            {"{{CHAVE}}": "Primeiro parágrafo gerado.\nSegundo parágrafo gerado."},
+        )
+
+        self.assertEqual(
+            [p.text for p in doc.paragraphs],
+            [
+                "13. DO PAGAMENTO Primeiro parágrafo gerado.",
+                "Segundo parágrafo gerado.",
+                "14. DA VIGÊNCIA",
+            ],
+        )
+
+    def test_quebras_consecutivas_nao_criam_paragrafos_vazios(self):
+        doc = Document()
+        paragraph = doc.add_paragraph("{{CHAVE}}")
+        replace_text_in_paragraph(
+            paragraph,
+            {"{{CHAVE}}": "Primeiro parágrafo.\n\nSegundo parágrafo.\n\n\nTerceiro parágrafo."},
+        )
+        self.assertEqual(
+            [p.text for p in doc.paragraphs],
+            ["Primeiro parágrafo.", "Segundo parágrafo.", "Terceiro parágrafo."],
+        )
+        self.assertEqual(len(doc.paragraphs), 3)
+        self.assertTrue(all(p.text for p in doc.paragraphs))
+
+    def test_paragrafos_gerados_nao_criam_espacamento_entre_si(self):
+        doc = Document()
+        paragraph = doc.add_paragraph("{{CHAVE}}")
+        paragraph.paragraph_format.space_before = 0
+        paragraph.paragraph_format.space_after = 6
+
+        replace_text_in_paragraph(
+            paragraph,
+            {"{{CHAVE}}": "Primeiro parágrafo.\nSegundo parágrafo.\nTerceiro parágrafo."},
+        )
+
+        self.assertEqual(len(doc.paragraphs), 3)
+        self.assertEqual(
+            [p.paragraph_format.space_before for p in doc.paragraphs],
+            [0, 0, 0],
+        )
+        self.assertEqual(
+            [p.paragraph_format.space_after for p in doc.paragraphs],
+            [0, 0, 0],
+        )
+
+    def test_quebra_final_do_modelo_vira_linha_em_branco_antes_do_proximo_titulo(self):
+        doc = Document()
+        paragraph = doc.add_paragraph("{{CHAVE}}\n")
+        doc.add_paragraph("14. ADEQUAÇÃO ORÇAMENTÁRIA")
+
+        replace_text_in_paragraph(
+            paragraph,
+            {"{{CHAVE}}": "Primeiro parágrafo.\nSegundo parágrafo."},
+        )
+
+        self.assertEqual(
+            [p.text for p in doc.paragraphs],
+            ["Primeiro parágrafo.", "Segundo parágrafo.", "", "14. ADEQUAÇÃO ORÇAMENTÁRIA"],
+        )
+        # A linha de respiro não pode herdar espaçamentos que a deixem maior que uma linha.
+        self.assertEqual(doc.paragraphs[2].paragraph_format.space_after, 0)
+
+    def test_quebra_final_do_modelo_tambem_vale_para_texto_de_um_unico_paragrafo(self):
+        doc = Document()
+        paragraph = doc.add_paragraph("{{CHAVE}}\n")
+        doc.add_paragraph("14. ADEQUAÇÃO ORÇAMENTÁRIA")
+
+        replace_text_in_paragraph(paragraph, {"{{CHAVE}}": "Texto único."})
+
+        self.assertEqual(
+            [p.text for p in doc.paragraphs],
+            ["Texto único.", "", "14. ADEQUAÇÃO ORÇAMENTÁRIA"],
+        )
+
+    def test_modelo_sem_quebra_final_nao_ganha_linha_em_branco(self):
+        doc = Document()
+        paragraph = doc.add_paragraph("{{CHAVE}}")
+        doc.add_paragraph("14. ADEQUAÇÃO ORÇAMENTÁRIA")
+
+        replace_text_in_paragraph(paragraph, {"{{CHAVE}}": "Primeiro.\nSegundo."})
+
+        self.assertEqual(
+            [p.text for p in doc.paragraphs],
+            ["Primeiro.", "Segundo.", "14. ADEQUAÇÃO ORÇAMENTÁRIA"],
+        )
+
+    def test_linha_em_branco_final_nao_herda_numeracao_de_lista(self):
+        doc = Document()
+        paragraph = doc.add_paragraph("{{CHAVE}}\n")
+        paragraph._p.get_or_add_pPr().get_or_add_numPr().get_or_add_numId().val = 3
+
+        replace_text_in_paragraph(paragraph, {"{{CHAVE}}": "Primeiro.\nSegundo."})
+
+        self.assertEqual([p.text for p in doc.paragraphs], ["Primeiro.", "Segundo.", ""])
+        self.assertIn("<w:numPr", doc.paragraphs[1]._p.xml)
+        self.assertNotIn("<w:numPr", doc.paragraphs[2]._p.xml)
+
+    def test_modelo_tr_base_mantem_linha_em_branco_antes_da_adequacao_orcamentaria(self):
+        from montador_variaveis import filtrar_chaves_docx, montar_variaveis_fixas
+
+        modelo = TEST_ROOT / "modelos" / "TR - BASE.docx"
+        modificacoes = {
+            chave: valor
+            for chave, valor in filtrar_chaves_docx(montar_variaveis_fixas({"{{MODALIDADE}}": "PREGAO_ELETRONICO"})).items()
+            if isinstance(valor, str)
+        }
+        with tempfile.TemporaryDirectory() as diretorio:
+            destino = Path(diretorio) / "tr.docx"
+            modificar_documento(str(modelo), str(destino), modificacoes)
+            paragrafos = Document(str(destino)).paragraphs
+
+        indice = next(i for i, p in enumerate(paragrafos) if p.text.strip() == "ADEQUAÇÃO ORÇAMENTÁRIA")
+        self.assertEqual(paragrafos[indice - 1].text, "")
+        self.assertTrue(paragrafos[indice - 2].text.strip())
+
+    def test_imagem_no_cabecalho_sem_placeholder_e_preservada(self):
+        doc = Document()
+        header = doc.sections[0].header
+        image_run = header.paragraphs[0].add_run()
+        image_run.add_picture(
+            io.BytesIO(
+                base64.b64decode(
+                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+                )
+            ),
+            width=Inches(0.5),
+        )
+        body_paragraph = doc.add_paragraph("{{CHAVE}}")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            origem = Path(temp_dir) / "modelo.docx"
+            destino = Path(temp_dir) / "gerado.docx"
+            doc.save(origem)
+
+            modificar_documento(str(origem), str(destino), {"{{CHAVE}}": "resultado"})
+
+            reaberto = Document(destino)
+            self.assertEqual(reaberto.paragraphs[0].text, "resultado")
+            header_xml = reaberto.sections[0].header.paragraphs[0]._p.xml
+            self.assertIn("<a:blip", header_xml)
+
+    def test_placeholder_dividido_em_tres_runs_preserva_estilos_dos_trechos(self):
+        doc = Document()
+        paragraph = doc.add_paragraph()
+
+        primeira = paragraph.add_run("A ")
+        primeira.font.name = "Arial"
+        parte1 = paragraph.add_run("{{OB")
+        parte1.font.name = "Calibri"
+        parte1.bold = True
+        parte2 = paragraph.add_run("JET")
+        parte2.italic = True
+        parte3 = paragraph.add_run("O}}")
+        parte3.underline = True
+        ultima = paragraph.add_run(" B")
+        ultima.font.name = "Times New Roman"
+
+        replace_text_in_paragraph(paragraph, {"{{OBJETO}}": "MATERIAL"})
+
+        self.assertEqual(paragraph.text, "A MATERIAL B")
+        self.assertEqual(len(paragraph.runs), 3)
+        self.assertEqual(paragraph.runs[0].font.name, "Arial")
+        self.assertEqual(paragraph.runs[1].font.name, "Calibri")
+        self.assertTrue(paragraph.runs[1].bold)
+        self.assertFalse(paragraph.runs[1].italic)
+        self.assertEqual(paragraph.runs[2].font.name, "Times New Roman")
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,0 +1,108 @@
+import { obterTagsMunicipais } from "./configMunicipal";
+import { calcularTotalEmCentavos } from "./regrasContratacao";
+
+export const mapearDadosWizard = (dados: any) => {
+  const itens = dados.itens || [];
+  const lotesExplicitos = Array.isArray(dados.lotes) ? dados.lotes : [];
+  const lotesLegados = new Map<string, string>();
+  for (const item of itens) {
+    const nome = String(item?.lote || "").trim();
+    const chave = nome.toLocaleLowerCase("pt-BR");
+    if (chave && !lotesLegados.has(chave)) lotesLegados.set(chave, nome);
+  }
+  const lotes = lotesExplicitos.length > 0
+    ? lotesExplicitos
+    : Array.from(lotesLegados.entries()).map(([chave, nome]) => ({ id: "legado:" + chave, nome }));
+  const lotesDados = lotes.map((lote: any) => ({
+    nome: String(lote.nome || "").trim(),
+    itens: itens
+      .filter((item: any) => String(item?.loteId || "") === String(lote.id || "") || String(item?.lote || "").trim().toLocaleLowerCase("pt-BR") === String(lote.nome || "").trim().toLocaleLowerCase("pt-BR"))
+      .map((item: any, index: number) => ({ numero: item?.numero ?? index + 1, descricao: String(item?.descricao || "").trim() })),
+  })).filter((lote: any) => lote.nome);
+  const criterioEfetivo = lotesDados.length > 0 ? "LOTE" : (dados.criterio || "ITEM");
+  const pagamentoTipo = String(dados.pagamentoTipo || "CONFORME_ENTREGAS").trim().toUpperCase();
+  const pagamentoEtapas = String(dados.pagamentoEtapas || "").trim();
+  const pagamentoPadrao = pagamentoTipo === "MENSALMENTE"
+    ? "Pagamento será efetuado mensalmente, até o 10º dia útil após a prestação de serviços, emissão da Nota Fiscal e aceite pelo setor Contábil."
+    : "Pagamento até o 10º dia útil após a entrega, emissão da Nota Fiscal e aceite pelo setor Contábil.";
+  const pagamentoMapeado = pagamentoTipo === "POR_ETAPAS" ? pagamentoEtapas : pagamentoPadrao;
+  const prazoRefazimentoDias = Math.max(1, Number.parseInt(String(dados.prazoRefazimentoDias ?? 5), 10) || 5);
+  const totalItensCentavos = calcularTotalEmCentavos(itens);
+  const valorReais = Math.floor(Math.abs(totalItensCentavos) / 100);
+  const valorCentavos = String(Math.abs(totalItensCentavos) % 100).padStart(2, "0");
+  const valorEstimadoFormatado = `R$ ${totalItensCentavos < 0 ? "-" : ""}${valorReais.toLocaleString("pt-BR")},${valorCentavos}`;
+
+  const itensNomes = itens
+    .map((item: any, index: number) => ({
+      numero: item?.numero ?? index + 1,
+      nome: String(item?.descricao || '').trim(),
+    }))
+    .filter((item: any) => item.nome);
+  
+  let contatosStr = "";
+  if (dados.contatosSecretarias && typeof dados.contatosSecretarias === 'object') {
+    const partes = [];
+    for (const [sec, contatos] of Object.entries(dados.contatosSecretarias)) {
+      if (Array.isArray(contatos) && contatos.length > 0) {
+        const listaContatos = contatos.map((c: any) => [c.email, c.tel].filter(Boolean).join(" - ")).join(", ");
+        partes.push(`${sec} (${listaContatos})`);
+      }
+    }
+    contatosStr = partes.join(" | ");
+  }
+
+  return {
+    "{{OBJETO}}": dados.objeto || "",
+    "{{NECESSIDADE}}": dados.necessidade || "",
+    "{{ITENS}}": JSON.stringify(itens),
+    "ITENS_NOMES": JSON.stringify(itensNomes),
+    "LOTES_DADOS": JSON.stringify(lotesDados),
+    "{{VALOR_ESTIMADO}}": valorEstimadoFormatado,
+    "{{EXECUCAO}}": dados.execucao || "",
+    "{{PAC}}": dados.pac === "SIM" ? "Previsto no PAC" : `Não previsto: ${dados.motivoPac || 'sem justificativa'}`,
+    "{{INSTRUMENTO}}": dados.instrumento || "CONTRATO",
+    "{{GESTOR}}": (dados.gestores || []).map((g: any) => g.nome).join(", ") || "[Não informado]",
+    "{{GESTOR_CARGO}}": (dados.gestores || []).map((g: any) => g.cargo).join(", ") || "[Não informado]",
+    "{{FISCAL}}": (dados.fiscais || []).map((f: any) => f.nome).join(", ") || "[Não informado]",
+    "{{FISCAL_CARGO}}": (dados.fiscais || []).map((f: any) => f.cargo).join(", ") || "[Não informado]",
+    // Listas estruturadas: nomes/cargos com vírgula (ex.: "Silva, João") não quebram mais as assinaturas.
+    "GESTORES_DADOS": JSON.stringify((dados.gestores || []).map((g: any) => ({ nome: String(g?.nome || "").trim(), cargo: String(g?.cargo || "").trim() })).filter((g: any) => g.nome)),
+    "FISCAIS_DADOS": JSON.stringify((dados.fiscais || []).map((f: any) => ({ nome: String(f?.nome || "").trim(), cargo: String(f?.cargo || "").trim() })).filter((f: any) => f.nome)),
+    "{{AMOST}}": dados.amostra ? "sim" : "nao",
+    "{{VIST}}": dados.vistoria ? "sim" : "nao",
+    "{{PRORROGA}}": dados.prorrogar ? "sim" : "nao",
+    "{{ME_EPP}}": dados.meepp || "NAO",
+    "{{CRITERIOS}}": criterioEfetivo,
+    "{{MOTIVO_CRITERIO}}": dados.motivoCriterio || "",
+    "{{MODALIDADE}}": dados.modalidade || "PREGAO_ELETRONICO",
+    "{{MOTIVO_MODALIDADE}}": dados.motivoModalidade || "",
+    "{{SECRETARIAS}}": Array.isArray(dados.secretarias) ? dados.secretarias.join(", ") : "",
+    "{{CONTATOS_SECRETARIAS}}": contatosStr,
+    "{{VIGENCIA}}": `${dados.vigenciaNum || 1} ${dados.vigenciaUnidade || 'Meses'}`,
+    "{{PAGAMENTO}}": pagamentoMapeado,
+    "PAGAMENTO_TIPO": pagamentoTipo,
+    "PAGAMENTO_ETAPAS_RAW": pagamentoEtapas,
+    "{{PRAZO REFAZIMENTO}}": `${prazoRefazimentoDias} dias úteis`,
+    "{{DOTACAO}}": (() => {
+      const blocos = Array.isArray(dados.dotacaoBlocos) ? dados.dotacaoBlocos : [];
+      if (blocos.length > 0) {
+        return blocos
+          .map((bloco: any) => {
+            if (bloco?.tipo === "imagem" && bloco.imagemBase64) return `__IMG__${bloco.imagemBase64}`;
+            return String(bloco?.texto || "");
+          })
+          .filter((parte: string) => parte !== "")
+          .join("\n");
+      }
+      return dados.dotacao || "";
+    })(),
+    "{{CAMINHO_IMAGEM_DOTACAO}}": !Array.isArray(dados.dotacaoBlocos) || dados.dotacaoBlocos.length === 0
+      ? (dados.caminhoImagemDotacao ? `__IMG__${dados.caminhoImagemDotacao}` : "")
+      : "",
+    "RAW_EXECUCAO": dados.execucao || "",
+    "RAW_MOTIVO_CRITERIO": dados.motivoCriterio || "",
+    "RAW_MOTIVO_MODALIDADE": dados.motivoModalidade || "",
+    "RAW_PAC": dados.pac === "SIM" ? "Previsto no PAC" : `Não previsto: ${dados.motivoPac || 'sem justificativa'}`,
+    ...obterTagsMunicipais()
+  };
+};

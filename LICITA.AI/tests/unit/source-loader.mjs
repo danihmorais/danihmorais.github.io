@@ -1,0 +1,70 @@
+import fs from "node:fs";
+import path from "node:path";
+import vm from "node:vm";
+import { fileURLToPath } from "node:url";
+import * as ts from "typescript";
+
+const TESTS_DIR = path.dirname(fileURLToPath(import.meta.url));
+const LICITA_DIR = path.resolve(TESTS_DIR, "../..");
+let configMunicipalCache = null;
+
+function testRequire(request) {
+  if (request === "../../config/municipios.json") {
+    return JSON.parse(fs.readFileSync(path.join(LICITA_DIR, "config/municipios.json"), "utf8"));
+  }
+  if (request === "./regrasContratacao") {
+    return loadTsModule("src/utils/regrasContratacao.ts");
+  }
+  if (request === "./utils/configMunicipal" || request === "./configMunicipal") {
+    if (!configMunicipalCache) configMunicipalCache = loadTsModule("src/utils/configMunicipal.ts");
+    return configMunicipalCache;
+  }
+  if (request === "./providers/llm") {
+    return {};
+  }
+  if (request === "./providers/services/geradorIA") {
+    return {
+      construirPrompt: (_dados, _meepp, etapa) => `PROMPT_TESTE_${etapa}`,
+    };
+  }
+  if (request === "./providers/services/descricaoItensIA") {
+    return {
+      melhorarDescricaoItem: async (descricao, unidade) => ({ descricao, unidade }),
+    };
+  }
+  if (request === "./utils/mapearDados") {
+    return { mapearDadosWizard: (dados) => ({ ...dados }) };
+  }
+  if (request === "./utils/apiBase" || request === "../utils/apiBase") {
+    return { getApiBaseUrl: () => process.env.TEST_API_URL || "https://api.example.test" };
+  }
+  throw new Error(`Unsupported test require: ${request}`);
+}
+
+export function loadTsModule(relativePath, { globals = {}, replacements = [] } = {}) {
+  const filename = path.resolve(LICITA_DIR, relativePath);
+  let source = fs.readFileSync(filename, "utf8");
+
+  for (const [search, replacement] of replacements) source = source.replace(search, replacement);
+
+  source = source.replace(/import\.meta\.env\.VITE_API_URL/g, JSON.stringify(process.env.TEST_API_URL || "https://api.example.test"));
+
+  const transpiled = ts.transpileModule(source, {
+    compilerOptions: {
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.CommonJS,
+      esModuleInterop: true,
+    },
+    fileName: filename,
+  }).outputText;
+
+  const module = { exports: {} };
+  const sandbox = { module, exports: module.exports, console, require: testRequire, ...globals };
+  vm.runInNewContext(transpiled, sandbox, { filename });
+  if (relativePath === "src/utils/configMunicipal.ts") configMunicipalCache = module.exports;
+  return module.exports;
+}
+
+export function licitaPath(relativePath) {
+  return path.resolve(LICITA_DIR, relativePath);
+}

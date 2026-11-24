@@ -1,0 +1,989 @@
+from __future__ import annotations
+
+import sqlite3
+import threading
+import time
+
+import json
+import logging
+import os
+import re
+import secrets
+import shutil
+import smtplib
+import ssl
+import tempfile
+import uuid
+import zipfile
+from datetime import datetime, timezone
+from decimal import Decimal
+from email.message import EmailMessage
+from pathlib import Path
+
+import config
+from conformidade import avaliar_conformidade, formatar_relatorio_conformidade, formatar_relatorio_referencias
+from montador_variaveis import amostra_exigida, arredondar_valor_estimado_decimal, calcular_valor_estimado_decimal, filtrar_chaves_docx, formatar_moeda, montar_variaveis_fixas, total_linha_item, valor_decimal, validar_consistencia_dados
+from processador_docx import extrair_placeholders_documento, modificar_documento
+
+logger = logging.getLogger(__name__)
+
+EMAIL_RE = re.compile(r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}", re.IGNORECASE)
+PLACEHOLDER_RE = re.compile(r"\{\{\s*([^{}]+?)\s*\}\}")
+QUEUE_DIR = Path(os.getenv("LICITA_QUEUE_DIR", str(Path.home() / ".local" / "share" / "licita-ai" / "fila"))).expanduser()
+POLL_INTERVAL_SECONDS = max(1, int(os.getenv("LICITA_QUEUE_POLL_SECONDS", "3")))
+MAX_ATTEMPTS = max(1, int(os.getenv("LICITA_QUEUE_MAX_ATTEMPTS", "3")))
+RETRY_BASE_SECONDS = max(1, int(os.getenv("LICITA_QUEUE_RETRY_BASE", "5")))
+RETRY_MAX_SECONDS = max(RETRY_BASE_SECONDS, int(os.getenv("LICITA_QUEUE_RETRY_MAX", "300")))
+SMTP_TIMEOUT_SECONDS = max(5, int(os.getenv("LICITA_SMTP_TIMEOUT", "30")))
+SMTP_HOST = os.getenv("LICITA_SMTP_HOST", os.getenv("SMTP_HOST", "")).strip()
+SMTP_PORT = int(os.getenv("LICITA_SMTP_PORT", os.getenv("SMTP_PORT", "587")))
+SMTP_USERNAME = os.getenv("LICITA_SMTP_USERNAME", os.getenv("SMTP_USERNAME", "")).strip()
+SMTP_PASSWORD = os.getenv("LICITA_SMTP_PASSWORD", os.getenv("SMTP_PASSWORD", ""))
+SMTP_SECURITY = os.getenv("LICITA_SMTP_SECURITY", os.getenv("SMTP_SECURITY", "starttls")).strip().lower()
+SMTP_FROM = os.getenv("LICITA_SMTP_FROM", os.getenv("SMTP_FROM", SMTP_USERNAME)).strip()
+
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _segundos_entre(inicio, fim) -> int | None:
+    try:
+        a = datetime.fromisoformat(str(inicio).strip().replace("Z", "+00:00"))
+        b = datetime.fromisoformat(str(fim).strip().replace("Z", "+00:00"))
+        if a.tzinfo is None:
+            a = a.replace(tzinfo=timezone.utc)
+        if b.tzinfo is None:
+            b = b.replace(tzinfo=timezone.utc)
+        return max(0, int((b - a).total_seconds()))
+    except (TypeError, ValueError):
+        return None
+
+
+def _iniciar_etapa(job: dict, etapa: str) -> None:
+    inicio = _utc_now()
+    historico = job.setdefault("stage_history", [])
+    if not isinstance(historico, list):
+        historico = []
+        job["stage_history"] = historico
+    historico.append({"stage": etapa, "started_at": inicio, "status": "processing"})
+    job["current_stage"] = etapa
+    job["current_stage_started_at"] = inicio
+
+
+def _finalizar_etapa(job: dict, etapa: str, status: str, erro: str | None = None) -> None:
+    historico = job.get("stage_history")
+    if not isinstance(historico, list):
+        return
+    fim = _utc_now()
+    for item in reversed(historico):
+        if not isinstance(item, dict) or str(item.get("stage", "")).upper() != str(etapa).upper():
+            continue
+        if item.get("status") != "processing" or item.get("ended_at"):
+            continue
+        item["ended_at"] = fim
+        item["duration_seconds"] = _segundos_entre(item.get("started_at"), fim) or 0
+        item["status"] = status
+        if erro:
+            item["error"] = str(erro)[:2500]
+        return
+
+
+def _finalizar_tentativa(job: dict, status: str, erro: str | None = None) -> None:
+    historico = job.get("attempt_history")
+    if not isinstance(historico, list):
+        return
+    fim = _utc_now()
+    for item in reversed(historico):
+        if not isinstance(item, dict) or item.get("status") != "processing" or item.get("ended_at"):
+            continue
+        item["ended_at"] = fim
+        item["duration_seconds"] = _segundos_entre(item.get("started_at"), fim) or 0
+        item["status"] = status
+        if erro:
+            item["error"] = str(erro)[:2500]
+        return
+
+
+def _ensure_queue_dir() -> None:
+    QUEUE_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(QUEUE_DIR, 0o700)
+    except OSError:
+        pass
+
+
+def _write_json_arquivo(path: Path, payload: dict) -> None:
+    _ensure_queue_dir()
+    fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(QUEUE_DIR), text=True)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=False, indent=2)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_name, path)
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
+    finally:
+        if os.path.exists(temp_name):
+            os.unlink(temp_name)
+
+
+def _job_path(job_id: str, suffix: str = "") -> Path:
+    return QUEUE_DIR / f"{job_id}{suffix}.json"
+
+
+def _artifact_path(job_id: str) -> Path:
+    return QUEUE_DIR / f"{job_id}.artifact.zip"
+
+
+def _find_job_path(job_id: str) -> Path | None:
+    for suffix in ("", ".queued", ".processing", ".review", ".done", ".failed", ".cancelled"):
+        path = _job_path(job_id, suffix)
+        if path.is_file():
+            return path
+    return None
+
+
+def _valor_vazio(valor) -> bool:
+    if valor is None:
+        return True
+    texto_lower = str(valor).strip().lower()
+    return not texto_lower or texto_lower in [
+        "não informado", "nã£o informado", "n?o informado",
+        "nao informado", "[não informado]", "[nao informado]", "[n?o informado]"
+    ]
+
+
+def _formata_moeda(v) -> str:
+    return formatar_moeda(v)
+
+
+_QUEBRA_ESCAPADA_RE = re.compile(r"(?<!\\)\\r\\n|(?<!\\)\\n")
+
+
+def _normalizar_quebras_escapadas(texto: str) -> str:
+    """
+    Converte escapes literais \\n / \\r\\n (IA que duplica o escape) em quebras reais. Uma barra
+    invertida sozinha antes de "r" não é tratada: "\\rua" e "\\relatório" são texto, não quebra.
+    """
+    return _QUEBRA_ESCAPADA_RE.sub("\n", texto)
+
+
+def _remover_barras_finais_paragrafos(texto: str) -> str:
+    """Remove barras ("/" ou "\\") soltas no fim das linhas, preservando URLs terminadas em barra.
+
+    A barra invertida sobra quando a IA duplica o escape da quebra de linha (o "\\" fica antes da
+    quebra real) e aparece como lixo no fim do parágrafo.
+    """
+    linhas = []
+    for linha in texto.splitlines(keepends=True):
+        if linha.endswith("\r\n"):
+            conteudo, quebra = linha[:-2], "\r\n"
+        elif linha.endswith(("\n", "\r")):
+            conteudo, quebra = linha[:-1], linha[-1]
+        else:
+            conteudo, quebra = linha, ""
+
+        conteudo = conteudo.rstrip(" \t")
+        while True:
+            if conteudo.endswith("\\"):
+                conteudo = conteudo[:-1].rstrip(" \t")
+            elif conteudo.endswith("/") and not re.search(
+                r"(?i)(?:\b(?:https?|ftp)://|\bwww\.)\S+/$", conteudo
+            ):
+                conteudo = conteudo[:-1].rstrip(" \t")
+            else:
+                break
+        linhas.append(conteudo + quebra)
+    return "".join(linhas)
+
+
+def _normalizar_texto_gerado(texto: str) -> str:
+    """Normaliza quebras escapadas e remove separadores '/' espúrios no fim dos parágrafos."""
+    return _remover_barras_finais_paragrafos(_normalizar_quebras_escapadas(texto))
+
+
+def _canonical_placeholder(chave: str) -> str:
+    nome = chave.strip().strip("{}").strip()
+    return f"{{{{{nome}}}}}"
+
+
+def _resolver_placeholders(modificacoes: dict) -> None:
+    valores = {
+        _canonical_placeholder(chave): valor
+        for chave, valor in modificacoes.items()
+        if isinstance(chave, str)
+    }
+
+    def resolver_texto(texto: str, pilha: frozenset[str]) -> str:
+        def substituir(match: re.Match[str]) -> str:
+            chave = _canonical_placeholder(match.group(1))
+            if chave not in valores or chave in pilha:
+                return match.group(0)
+            valor = valores[chave]
+            if not isinstance(valor, str):
+                return match.group(0)
+            return resolver_texto(valor, pilha | {chave})
+        return PLACEHOLDER_RE.sub(substituir, texto)
+
+    for chave, valor in list(valores.items()):
+        if isinstance(valor, str):
+            valores[chave] = resolver_texto(valor, frozenset({chave}))
+    for chave, valor in valores.items():
+        modificacoes[chave] = valor
+
+
+def _retry_delay_seconds(attempts: int) -> int:
+    tentativa = max(1, int(attempts))
+    return min(RETRY_MAX_SECONDS, RETRY_BASE_SECONDS * (2 ** (tentativa - 1)))
+
+
+def _retry_is_ready(job: dict) -> bool:
+    retry_at = job.get("retry_at")
+    if not retry_at:
+        return True
+    try:
+        texto = str(retry_at).strip().replace("Z", "+00:00")
+        return datetime.fromisoformat(texto).astimezone(timezone.utc) <= datetime.now(timezone.utc)
+    except (TypeError, ValueError):
+        return True
+
+
+def _eh_contratacao_direta(dados_usuario: dict) -> bool:
+    modalidade = str(dados_usuario.get("{{MODALIDADE}}", "")).strip().upper()
+    return modalidade in {"DISPENSA_EMAIL", "DISPENSA_BLL"}
+
+
+def _arquivos_base_por_fluxo(dados_usuario: dict) -> list[str]:
+    if _eh_contratacao_direta(dados_usuario):
+        return list(getattr(config, "BASE_FILES_CONTRATACAO_DIRETA", []))
+    return list(config.BASE_FILES)
+
+
+def _avisar_placeholders_residuais(caminho: Path, session_id: str, nome_modelo: str) -> None:
+    """Registra no log placeholders que continuaram no documento (diagnóstico; nunca interrompe a geração)."""
+    try:
+        residuais = sorted(
+            extrair_placeholders_documento(str(caminho))
+            - getattr(config, "PLACEHOLDERS_PREENCHIMENTO_MANUAL", set())
+        )
+    except Exception:
+        logger.debug("Não foi possível verificar placeholders residuais de %s", nome_modelo, exc_info=True)
+        return
+    if residuais:
+        logger.warning(
+            "Solicitação %s: %s foi gerado com placeholders sem valor: %s",
+            session_id, nome_modelo, ", ".join(residuais),
+        )
+
+
+def gerar_zip(dados_usuario: dict, dados_ia: dict, session_id: str) -> tuple[Path, str]:
+    temp_dir = Path(tempfile.mkdtemp(prefix=f"fase_prep_{session_id}_"))
+    try:
+        modificacoes = filtrar_chaves_docx(montar_variaveis_fixas(dados_usuario))
+        pagamento_tipo = str(dados_usuario.get("PAGAMENTO_TIPO", "")).strip().upper()
+        for chave, valor in dados_ia.items():
+            chave_docx = chave if chave.startswith("{{") and chave.endswith("}}") else f"{{{{{chave}}}}}"
+            if chave_docx == "{{PRAZO REFAZIMENTO}}":
+                continue
+            if chave_docx == "{{PAGAMENTO}}" and pagamento_tipo != "POR_ETAPAS":
+                continue
+            if chave_docx == "{{AMOSTRA_TR}}" and not amostra_exigida(dados_usuario):
+                # Sem amostra o item do TR é o texto fixo do montador; a IA não o reescreve.
+                continue
+            modificacoes[chave_docx] = (
+                _normalizar_texto_gerado(valor)
+                if isinstance(valor, str) and not valor.startswith("__TABLE__")
+                else valor
+            )
+
+        for chave1, chave2 in config.ALIASES:
+            val1, val2 = modificacoes.get(chave1), modificacoes.get(chave2)
+            vazio1, vazio2 = _valor_vazio(val1), _valor_vazio(val2)
+            if not vazio1 and vazio2:
+                modificacoes[chave2] = val1
+            elif not vazio2 and vazio1:
+                modificacoes[chave1] = val2
+
+        if _valor_vazio(modificacoes.get("{{MES_INICIO}}")):
+            modificacoes["{{MES_INICIO}}"] = [
+                "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+                "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"
+            ][datetime.now().month - 1]
+
+        _resolver_placeholders(modificacoes)
+
+        itens_json = modificacoes.get("{{ITENS}}")
+        if not _valor_vazio(itens_json):
+            itens_str = str(itens_json)
+            if itens_str.startswith("__TABLE__"):
+                itens_str = itens_str.replace("__TABLE__", "", 1)
+            try:
+                itens = json.loads(itens_str) if isinstance(itens_str, str) else itens_json
+                itens_formatados = []
+                itens_sem_valor = []
+                for item in itens:
+                    valor_unit = valor_decimal(item.get("valor", 0))
+                    total = total_linha_item(item)
+                    itens_formatados.append({"Item": item.get("numero", ""), "Descrição": item.get("descricao", ""), "UN": item.get("un", ""), "Qtd": item.get("qtd", ""), "Vlr Unit.": _formata_moeda(valor_unit), "Total": _formata_moeda(total)})
+                    itens_sem_valor.append({"Item": item.get("numero", ""), "Descrição": item.get("descricao", ""), "UN": item.get("un", ""), "Qtd": item.get("qtd", "")})
+                modificacoes["{{ITENS}}"] = f"__TABLE__{json.dumps(itens_formatados, ensure_ascii=False)}"
+                modificacoes["{{ITENS_SEMVALOR}}"] = f"__TABLE__{json.dumps(itens_sem_valor, ensure_ascii=False)}"
+            except Exception:
+                if not str(itens_json).startswith("__TABLE__"):
+                    modificacoes["{{ITENS}}"] = f"__TABLE__{str(itens_json)}"
+
+        arquivos_base = _arquivos_base_por_fluxo(dados_usuario)
+        arquivos_gerados = []
+        for arq in arquivos_base:
+            cam_origem = os.path.join(config.PASTA_MODELOS, arq)
+            cam_destino = temp_dir / f"Pronto_{arq}"
+            if os.path.exists(cam_origem):
+                modificacoes_documento = dict(modificacoes)
+                nome_modelo = Path(arq).stem.strip().casefold()
+                eh_dfd = nome_modelo.startswith("dfd")
+                eh_etp = nome_modelo.startswith("etp")
+
+                # A estimativa global é arredondada em qualquer documento que utilize
+                # esses campos. A tabela do TR continua preservando os preços de cada item.
+                valor_estimado_global = modificacoes_documento.get("{{VALOR_ESTIMADO_APROXIMADO}}")
+                if _valor_vazio(valor_estimado_global):
+                    total_itens = calcular_valor_estimado_decimal(dados_usuario)
+                    if total_itens > 0:
+                        valor_estimado_global = formatar_moeda(
+                            arredondar_valor_estimado_decimal(total_itens * Decimal("1.05"))
+                        )
+                if not _valor_vazio(valor_estimado_global):
+                    modificacoes_documento["{{VALOR_ESTIMADO}}"] = valor_estimado_global
+                    modificacoes_documento["{{VALOR_ESTIMADO_APROXIMADO}}"] = valor_estimado_global
+
+                if eh_etp:
+                    # O ETP sempre recebe a tabela sem preços, mesmo que o modelo use {{ITENS}}.
+                    tabela_sem_valor = modificacoes_documento.get("{{ITENS_SEMVALOR}}")
+                    if not _valor_vazio(tabela_sem_valor):
+                        modificacoes_documento["{{ITENS}}"] = tabela_sem_valor
+
+                if eh_dfd or eh_etp:
+                    # Centraliza a tabela e justifica o conteúdo de todas as células.
+                    for chave_tabela in ("{{ITENS}}", "{{ITENS_SEMVALOR}}"):
+                        tabela = modificacoes_documento.get(chave_tabela)
+                        if isinstance(tabela, str) and tabela.startswith("__TABLE__"):
+                            modificacoes_documento[chave_tabela] = (
+                                "__TABLE_CENTER_JUSTIFY__" + tabela[len("__TABLE__"):]
+                            )
+
+                modificar_documento(cam_origem, str(cam_destino), modificacoes_documento)
+                arquivos_gerados.append(cam_destino)
+                _avisar_placeholders_residuais(cam_destino, session_id, arq)
+
+        if not arquivos_gerados:
+            raise RuntimeError("Nenhum documento base encontrado para o fluxo selecionado.")
+
+        nome_fluxo = "ContratacaoDireta" if _eh_contratacao_direta(dados_usuario) else "FasePreparatoria"
+        zip_filename = f"{nome_fluxo}_{session_id[:6]}.zip"
+        caminho_zip = temp_dir / zip_filename
+        with zipfile.ZipFile(caminho_zip, "w", zipfile.ZIP_DEFLATED) as zipf:
+            for arq in arquivos_gerados:
+                zipf.write(arq, arq.name)
+            if not _eh_contratacao_direta(dados_usuario):
+                relatorio = avaliar_conformidade(dados_ia, dados_usuario)
+                zipf.writestr("RELATORIO_CONFORMIDADE.json", json.dumps(relatorio, ensure_ascii=False, indent=2))
+                zipf.writestr("RELATORIO_CONFORMIDADE.txt", formatar_relatorio_conformidade(relatorio))
+                zipf.writestr("RELATORIO_REFERENCIAS_LEGAIS.txt", formatar_relatorio_referencias(dados_ia))
+        return caminho_zip, zip_filename
+    except Exception:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise
+
+
+def _smtp_client():
+    if not SMTP_HOST or not SMTP_USERNAME or not SMTP_PASSWORD:
+        raise RuntimeError("SMTP do Licita.AI não está configurado. Defina LICITA_SMTP_HOST, LICITA_SMTP_USERNAME e LICITA_SMTP_PASSWORD.")
+    if SMTP_SECURITY == "ssl":
+        return smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT_SECONDS, context=ssl.create_default_context())
+    client = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT_SECONDS)
+    client.ehlo()
+    if SMTP_SECURITY == "starttls":
+        client.starttls(context=ssl.create_default_context())
+        client.ehlo()
+    elif SMTP_SECURITY != "none":
+        client.quit()
+        raise RuntimeError(f"Segurança SMTP inválida: {SMTP_SECURITY}")
+    return client
+
+
+def _enviar_email(recipient: str, zip_path: Path, filename: str, job_id: str) -> None:
+    message = EmailMessage()
+    message["From"] = SMTP_FROM or SMTP_USERNAME
+    message["To"] = recipient
+    message["Bcc"] = SMTP_FROM or SMTP_USERNAME
+    message["Subject"] = "Licita.AI - Fase Preparatória"
+    message.set_content("Prezados,\n\nA solicitação realizada pelo Licita.AI foi processada com sucesso.\n\n" + f"Identificador da solicitação: {job_id}\n" + "Os documentos da fase preparatória seguem anexados neste e-mail.\n\nAtenciosamente,\nLicita.AI")
+    with zip_path.open("rb") as handle:
+        message.add_attachment(handle.read(), maintype="application", subtype="zip", filename=filename)
+    with _smtp_client() as client:
+        client.login(SMTP_USERNAME, SMTP_PASSWORD)
+        client.send_message(message)
+
+
+
+def _enviar_email_alerta_falha(job: dict, erro: str) -> None:
+    """Avisa Licitações quando uma solicitação esgota as tentativas de processamento."""
+    destinatario_alerta = SMTP_FROM or SMTP_USERNAME
+    if not EMAIL_RE.fullmatch(destinatario_alerta):
+        raise RuntimeError("SMTP_FROM ou SMTP_USERNAME deve conter um e-mail válido para enviar o alerta de falha.")
+
+    job_id = str(job.get("job_id") or "não informado")
+    etapa = str(job.get("current_stage") or "PROCESSAMENTO").strip()
+    tipo_falha = (
+        "envio do e-mail ao destinatário"
+        if etapa.upper() == "ENVIO_EMAIL"
+        else "geração/processamento dos documentos"
+    )
+    dados_usuario = job.get("dados_usuario")
+    if not isinstance(dados_usuario, dict):
+        dados_usuario = job.get("pipeline_dados_usuario")
+    if not isinstance(dados_usuario, dict):
+        dados_usuario = {}
+    objeto = str(dados_usuario.get("{{OBJETO}}") or dados_usuario.get("OBJETO") or "Não informado").strip()
+    objeto = objeto[:500]
+    destinatario = str(job.get("email") or "Não informado")
+    erro_resumido = str(erro or "Erro não informado").strip()[:2500]
+    tentativas = int(job.get("attempts", 0) or 0)
+
+    message = EmailMessage()
+    message["From"] = SMTP_FROM or SMTP_USERNAME
+    message["To"] = destinatario_alerta
+    message["Subject"] = f"LICITA.AI — Falha na solicitação {job_id[:8]}"
+    message.set_content(
+        "O LICITA.AI não conseguiu concluir uma solicitação após esgotar as tentativas automáticas.\n\n"
+        f"Identificador: {job_id}\n"
+        f"Etapa: {etapa}\n"
+        f"Ocorrência: {tipo_falha}\n"
+        f"Destinatário pretendido: {destinatario}\n"
+        f"Objeto: {objeto}\n"
+        f"Tentativas realizadas: {tentativas}\n"
+        f"Data/hora (UTC): {_utc_now()}\n\n"
+        f"Erro registrado:\n{erro_resumido}\n\n"
+        "A solicitação foi marcada como falha na fila. Verifique o erro e, após corrigir a causa, "
+        "oriente o usuário a realizar uma nova solicitação.\n\n"
+        "Mensagem automática do LICITA.AI."
+    )
+    with _smtp_client() as client:
+        client.login(SMTP_USERNAME, SMTP_PASSWORD)
+        client.send_message(message)
+
+
+def enqueue_job(
+    email: str,
+    dados_usuario: dict,
+    dados_ia: dict,
+    instrucoes: str = "",
+    retry_of: str | None = None,
+    retry_mode: str | None = None,
+    dados_usuario_processados: dict | None = None,
+    request_id: str | None = None,
+    require_review: bool = False,
+    job_id: str | None = None,
+) -> dict:
+    email = email.strip()
+    if not EMAIL_RE.fullmatch(email):
+        raise ValueError("Informe um e-mail válido para receber os documentos.")
+    validar_consistencia_dados(dados_usuario)
+    _ensure_queue_dir()
+    job_id = str(job_id or uuid.uuid4().hex).lower()
+    if not re.fullmatch(r"[0-9a-f]{32}", job_id):
+        raise ValueError("Identificador interno da solicitação inválido.")
+    if any(candidato.exists() for candidato in (
+        _job_path(job_id),
+        _job_path(job_id, ".queued"),
+        _job_path(job_id, ".processing"),
+        _job_path(job_id, ".review"),
+        _job_path(job_id, ".done"),
+        _job_path(job_id, ".failed"),
+        _job_path(job_id, ".cancelled"),
+    )):
+        raise ValueError("Já existe uma solicitação com este identificador.")
+    status_token = secrets.token_urlsafe(32)
+    job = {
+        "request_id": request_id,
+        "require_review": bool(require_review),"version": 3, "job_id": job_id, "status": "queued", "created_at": _utc_now(), "attempts": 0, "email": email, "status_token": status_token, "instrucoes": instrucoes.strip(), "dados_usuario": dados_usuario, "dados_ia": dados_ia}
+    if retry_of:
+        job["retry_of"] = retry_of
+    if retry_mode:
+        job["retry_mode"] = retry_mode
+    if isinstance(dados_usuario_processados, dict):
+        job["dados_usuario_processados"] = dados_usuario_processados
+    _write_json(_job_path(job_id), job)
+    return {"job_id": job_id, "status": "queued", "email": email, "status_token": status_token, "message": "Solicitação registrada na fila. O processamento da IA e o envio por e-mail ocorrerão em segundo plano."}
+
+
+def cancel_job(job_id: str, origem: str) -> str:
+    """Cancela um trabalho pendente ou sinaliza interrupção entre etapas."""
+    if not re.fullmatch(r"[0-9a-f]{32}", str(job_id or ""), re.IGNORECASE):
+        raise ValueError("Solicitação inválida.")
+    _ensure_queue_dir()
+    queued_path = _job_path(job_id)
+    cancelled_path = _job_path(job_id, ".cancelled")
+    try:
+        # A troca atômica resolve a corrida com o worker: se ele já reivindicou,
+        # os.path.replace falha e a rotina verifica o arquivo .processing.
+        os.replace(queued_path, cancelled_path)
+    except FileNotFoundError:
+        processing_path = _job_path(job_id, ".processing")
+        if not processing_path.is_file():
+            raise ValueError("Só é possível cancelar pedidos na fila ou em processamento.")
+        marker = QUEUE_DIR / f"{job_id}.cancel"
+        try:
+            with marker.open("x", encoding="utf-8") as handle:
+                json.dump({"requested_at": _utc_now(), "requested_by": origem}, handle)
+        except FileExistsError:
+            pass
+
+        # Se o worker caiu ou ficou abandonado, não deixe o pedido eternamente em
+        # "cancelling". O marcador permanece para que um worker ainda vivo também
+        # pare antes de gerar/enviar os documentos.
+        try:
+            job_em_execucao = json.loads(processing_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            job_em_execucao = {}
+        marco = (
+            job_em_execucao.get("current_stage_started_at")
+            or job_em_execucao.get("last_attempt_started_at")
+            or job_em_execucao.get("started_at")
+        )
+        idade_segundos = 0
+        try:
+            data_marco = datetime.fromisoformat(str(marco).strip().replace("Z", "+00:00"))
+            if data_marco.tzinfo is None:
+                data_marco = data_marco.replace(tzinfo=timezone.utc)
+            idade_segundos = max(0, int((datetime.now(timezone.utc) - data_marco.astimezone(timezone.utc)).total_seconds()))
+        except (TypeError, ValueError):
+            pass
+        limite_abandono = max(60, int(os.getenv("LICITA_QUEUE_STALE_CANCEL_SECONDS", "900")))
+        if idade_segundos >= limite_abandono:
+            try:
+                os.replace(processing_path, cancelled_path)
+            except FileNotFoundError:
+                # O worker terminou entre a leitura e a troca atômica.
+                raise ValueError("O pedido terminou antes de o cancelamento ser aplicado.")
+            job_em_execucao.update({
+                "status": "cancelled",
+                "cancel_requested": True,
+                "cancelled_at": _utc_now(),
+                "cancelled_by": origem,
+            })
+            job_em_execucao.pop("retry_at", None)
+            _write_json(cancelled_path, job_em_execucao)
+            _artifact_path(job_id).unlink(missing_ok=True)
+            # Não removemos o marcador aqui: caso a chamada de IA ainda esteja viva,
+            # ela o encontrará ao retornar e interromperá o restante do pipeline.
+            return "cancelled"
+        return "cancelling"
+
+    try:
+        job = json.loads(cancelled_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Não foi possível ler a solicitação retirada da fila.") from exc
+    job.update({"status": "cancelled", "cancel_requested": True, "cancelled_at": _utc_now(), "cancelled_by": origem})
+    job.pop("retry_at", None)
+    _write_json(cancelled_path, job)
+    return "cancelled"
+
+
+def _get_job_arquivo(job_id: str) -> dict | None:
+    if not re.fullmatch(r"[0-9a-f]{32}", job_id, re.IGNORECASE):
+        return None
+    path = _find_job_path(job_id)
+    if path is None:
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"job_id": job_id, "status": "unavailable"}
+
+
+def _claim_next_job() -> tuple[Path, dict] | None:
+    _ensure_queue_dir()
+    pending = sorted(QUEUE_DIR.glob("[0-9a-f]*.json"), key=lambda path: path.stat().st_mtime)
+    for path in pending:
+        if path.name.endswith((".processing.json", ".review.json", ".done.json", ".failed.json", ".cancelled.json")):
+            continue
+        try:
+            job = json.loads(path.read_text(encoding="utf-8"))
+            if not _retry_is_ready(job):
+                continue
+            job_id = job.get("job_id")
+            if not isinstance(job_id, str) or not re.fullmatch(r"[0-9a-f]{32}", job_id, re.IGNORECASE):
+                continue
+            processing_path = _job_path(job_id, ".processing")
+            try:
+                os.replace(path, processing_path)
+            except FileNotFoundError:
+                continue
+            job["status"] = "processing"
+            agora = _utc_now()
+            job.setdefault("started_at", agora)
+            job["last_attempt_started_at"] = agora
+            job["attempts"] = int(job.get("attempts", 0)) + 1
+            tentativas = job.setdefault("attempt_history", [])
+            if not isinstance(tentativas, list):
+                tentativas = []
+                job["attempt_history"] = tentativas
+            tentativas.append({"attempt": job["attempts"], "started_at": agora, "status": "processing"})
+            job.pop("retry_at", None)
+            _write_json(processing_path, job)
+            return processing_path, job
+        except (OSError, json.JSONDecodeError, ValueError):
+            continue
+    return None
+
+_SQLITE_FILA_LOCK = threading.RLock()
+_SQLITE_FILA_INICIALIZADO = False
+_SQLITE_FILA_EXTENSOES = (".queued", ".processing", ".review", ".done", ".failed", ".cancelled")
+
+
+def _sqlite_fila_caminho() -> Path:
+    diretorio = Path(_job_path("0" * 32, ".queued")).parent
+    diretorio.mkdir(parents=True, exist_ok=True)
+    return diretorio / "queue.sqlite3"
+
+
+def _sqlite_fila_conectar():
+    conexao = sqlite3.connect(_sqlite_fila_caminho(), timeout=30)
+    conexao.row_factory = sqlite3.Row
+    conexao.execute("PRAGMA journal_mode=WAL")
+    conexao.execute("PRAGMA synchronous=NORMAL")
+    conexao.execute("PRAGMA busy_timeout=30000")
+    conexao.execute(
+        """
+        CREATE TABLE IF NOT EXISTS queue_jobs (
+            job_id TEXT PRIMARY KEY,
+            status TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT '',
+            updated_at TEXT NOT NULL DEFAULT '',
+            file_path TEXT NOT NULL DEFAULT '',
+            payload TEXT NOT NULL
+        )
+        """
+    )
+    conexao.execute("CREATE INDEX IF NOT EXISTS idx_queue_jobs_status_created ON queue_jobs(status, created_at, job_id)")
+    conexao.execute("CREATE INDEX IF NOT EXISTS idx_queue_jobs_updated ON queue_jobs(updated_at DESC)")
+    return conexao
+
+
+def _sqlite_fila_gravar(job: dict, caminho: str | Path) -> None:
+    if not isinstance(job, dict):
+        return
+    job_id = str(job.get("job_id") or "").strip()
+    if not job_id:
+        return
+    status = str(job.get("status") or "").strip().lower() or "unknown"
+    caminho_str = str(caminho)
+    created_at = str(job.get("created_at") or job.get("criado_em") or "")
+    updated_at = str(job.get("updated_at") or job.get("atualizado_em") or created_at)
+    payload = json.dumps(job, ensure_ascii=False, default=str)
+    conexao = _sqlite_fila_conectar()
+    try:
+        with conexao:
+            conexao.execute(
+                """
+                INSERT INTO queue_jobs(job_id, status, created_at, updated_at, file_path, payload)
+                VALUES(?, ?, ?, ?, ?, ?)
+                ON CONFLICT(job_id) DO UPDATE SET
+                    status=excluded.status,
+                    created_at=CASE WHEN excluded.created_at='' THEN queue_jobs.created_at ELSE excluded.created_at END,
+                    updated_at=excluded.updated_at,
+                    file_path=excluded.file_path,
+                    payload=excluded.payload
+                """,
+                (job_id, status, created_at, updated_at, caminho_str, payload),
+            )
+    finally:
+        conexao.close()
+
+
+def _sqlite_fila_reindexar() -> None:
+    global _SQLITE_FILA_INICIALIZADO
+    with _SQLITE_FILA_LOCK:
+        if _SQLITE_FILA_INICIALIZADO:
+            return
+        conexao = _sqlite_fila_conectar()
+        try:
+            diretorio = _sqlite_fila_caminho().parent
+            arquivos = []
+            for arquivo in diretorio.iterdir():
+                if not arquivo.is_file() or arquivo.name == "queue.sqlite3":
+                    continue
+                if not arquivo.name.endswith(".json") and not any(extensao in arquivo.name for extensao in _SQLITE_FILA_EXTENSOES):
+                    continue
+                try:
+                    job = json.loads(arquivo.read_text(encoding="utf-8"))
+                except (OSError, ValueError, UnicodeDecodeError):
+                    continue
+                if isinstance(job, dict) and job.get("job_id"):
+                    arquivos.append((job, arquivo))
+            with conexao:
+                for job, arquivo in arquivos:
+                    status = str(job.get("status") or "").lower() or "unknown"
+                    created_at = str(job.get("created_at") or job.get("criado_em") or "")
+                    updated_at = str(job.get("updated_at") or job.get("atualizado_em") or created_at)
+                    conexao.execute(
+                        """
+                        INSERT INTO queue_jobs(job_id, status, created_at, updated_at, file_path, payload)
+                        VALUES(?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(job_id) DO UPDATE SET
+                            status=excluded.status,
+                            created_at=CASE WHEN excluded.created_at='' THEN queue_jobs.created_at ELSE excluded.created_at END,
+                            updated_at=excluded.updated_at,
+                            file_path=excluded.file_path,
+                            payload=excluded.payload
+                        """,
+                        (
+                            str(job["job_id"]),
+                            status,
+                            created_at,
+                            updated_at,
+                            str(arquivo),
+                            json.dumps(job, ensure_ascii=False, default=str),
+                        ),
+                    )
+            _SQLITE_FILA_INICIALIZADO = True
+        finally:
+            conexao.close()
+
+
+def _sqlite_fila_consultar(job_id: str) -> dict | None:
+    _sqlite_fila_reindexar()
+    conexao = _sqlite_fila_conectar()
+    try:
+        registro = conexao.execute(
+            "SELECT payload, file_path FROM queue_jobs WHERE job_id = ?",
+            (str(job_id),),
+        ).fetchone()
+        if registro is None:
+            return None
+        caminho = Path(registro["file_path"]) if registro["file_path"] else None
+        if caminho is not None and caminho.is_file():
+            try:
+                payload = json.loads(registro["payload"])
+                if isinstance(payload, dict):
+                    return payload
+            except (TypeError, ValueError):
+                pass
+        return None
+    finally:
+        conexao.close()
+
+
+def _write_json(caminho: str | Path, dados: dict) -> None:
+    _write_json_arquivo(Path(caminho), dados)
+    try:
+        _sqlite_fila_reindexar()
+        _sqlite_fila_gravar(dados, caminho)
+    except Exception:
+        logger.exception("Não foi possível atualizar o índice SQLite da fila.")
+
+
+def get_job(job_id: str) -> dict | None:
+    try:
+        resultado = _sqlite_fila_consultar(job_id)
+        if resultado is not None:
+            return resultado
+    except Exception:
+        logger.exception("Falha ao consultar o índice SQLite da fila.")
+    resultado = _get_job_arquivo(job_id)
+    if resultado is not None:
+        try:
+            caminho = None
+            for extensao in _SQLITE_FILA_EXTENSOES:
+                candidato = _job_path(job_id, extensao)
+                if Path(candidato).is_file():
+                    caminho = candidato
+                    break
+            if caminho is not None:
+                _sqlite_fila_gravar(resultado, caminho)
+        except Exception:
+            logger.exception("Não foi possível reconstruir o índice do job.")
+    return resultado
+
+
+def atualizar_indice_job_sqlite(job: dict, caminho: str | Path) -> None:
+    _sqlite_fila_gravar(job, caminho)
+
+
+def obter_posicao_fila_sqlite(job_id: str) -> tuple[int | None, int | None]:
+    _sqlite_fila_reindexar()
+    conexao = _sqlite_fila_conectar()
+    try:
+        registro = conexao.execute(
+            "SELECT status, created_at FROM queue_jobs WHERE job_id = ?",
+            (str(job_id),),
+        ).fetchone()
+        if registro is None or str(registro["status"]).lower() != "queued":
+            return None, None
+        a_frente = conexao.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM queue_jobs
+            WHERE status = 'queued'
+              AND (
+                created_at < ?
+                OR (created_at = ? AND job_id < ?)
+              )
+            """,
+            (registro["created_at"], registro["created_at"], str(job_id)),
+        ).fetchone()["total"]
+        return int(a_frente) + 1, int(a_frente)
+    finally:
+        conexao.close()
+
+
+def consumir_limite_taxa_sqlite(chave: str, limite: int, janela_segundos: int, agora: float | None = None) -> int:
+    instante = time.time() if agora is None else float(agora)
+    janela = max(1, int(janela_segundos))
+    teto = max(1, int(limite))
+    conexao = _sqlite_fila_conectar()
+    try:
+        conexao.execute(
+            """
+            CREATE TABLE IF NOT EXISTS rate_limit_buckets (
+                bucket_key TEXT PRIMARY KEY,
+                window_started REAL NOT NULL,
+                request_count INTEGER NOT NULL,
+                updated_at REAL NOT NULL
+            )
+            """
+        )
+        conexao.execute("BEGIN IMMEDIATE")
+        registro = conexao.execute(
+            "SELECT window_started, request_count FROM rate_limit_buckets WHERE bucket_key = ?",
+            (str(chave),),
+        ).fetchone()
+        retry_after = 0
+        if registro is None or instante - float(registro["window_started"]) >= janela:
+            conexao.execute(
+                """
+                INSERT INTO rate_limit_buckets(bucket_key, window_started, request_count, updated_at)
+                VALUES(?, ?, 1, ?)
+                ON CONFLICT(bucket_key) DO UPDATE SET
+                    window_started = excluded.window_started,
+                    request_count = 1,
+                    updated_at = excluded.updated_at
+                """,
+                (str(chave), instante, instante),
+            )
+        elif int(registro["request_count"]) >= teto:
+            retry_after = max(1, int(janela - (instante - float(registro["window_started"])) + 0.999))
+        else:
+            conexao.execute(
+                "UPDATE rate_limit_buckets SET request_count = request_count + 1, updated_at = ? WHERE bucket_key = ?",
+                (instante, str(chave)),
+            )
+        conexao.execute("DELETE FROM rate_limit_buckets WHERE updated_at < ?", (instante - max(86400, janela * 10),))
+        conexao.commit()
+        return retry_after
+    except Exception:
+        conexao.rollback()
+        raise
+    finally:
+        conexao.close()
+
+
+def obter_metricas_fila_sqlite(limite: int = 5000) -> dict:
+    _sqlite_fila_reindexar()
+    conexao = _sqlite_fila_conectar()
+    try:
+        status_rows = conexao.execute(
+            "SELECT status, COUNT(*) AS total FROM queue_jobs GROUP BY status"
+        ).fetchall()
+        payload_rows = conexao.execute(
+            "SELECT payload FROM queue_jobs ORDER BY updated_at DESC, job_id LIMIT ?",
+            (max(1, min(int(limite), 10000)),),
+        ).fetchall()
+    finally:
+        conexao.close()
+
+    status_counts = {str(row["status"]): int(row["total"]) for row in status_rows}
+    stages: dict[str, dict[str, float]] = {}
+    failures = {"ia": 0, "smtp": 0, "documentos": 0, "cancelamento": 0, "outros": 0}
+    for row in payload_rows:
+        try:
+            job = json.loads(row["payload"])
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(job, dict):
+            continue
+        historico = job.get("stage_history")
+        if isinstance(historico, list):
+            for etapa in historico:
+                if not isinstance(etapa, dict):
+                    continue
+                nome = str(etapa.get("stage") or "").upper()
+                if not re.fullmatch(r"[A-Z0-9_]{1,64}", nome):
+                    continue
+                if etapa.get("status") != "completed":
+                    continue
+                try:
+                    duracao = max(0.0, float(etapa.get("duration_seconds") or 0))
+                except (TypeError, ValueError):
+                    continue
+                registro = stages.setdefault(nome, {"count": 0, "duration_seconds": 0.0})
+                registro["count"] += 1
+                registro["duration_seconds"] += duracao
+        if str(job.get("status") or "").lower() != "failed":
+            continue
+        erro = str(job.get("last_error") or "").casefold()
+        if any(chave in erro for chave in ("smtp", "email", "e-mail", "destinat")):
+            categoria = "smtp"
+        elif re.search(r"\b(?:ia|llm)\b", erro) or any(chave in erro for chave in ("modelo", "openai", "unsloth", "json_schema", "response_format", "timeout")):
+            categoria = "ia"
+        elif any(chave in erro for chave in ("docx", "documento", "montagem", "zip", "template")):
+            categoria = "documentos"
+        elif "cancel" in erro:
+            categoria = "cancelamento"
+        else:
+            categoria = "outros"
+        failures[categoria] += 1
+
+    return {
+        "status": status_counts,
+        "stages": stages,
+        "failures": failures,
+        "sampled_jobs": len(payload_rows),
+    }
+
+
+def listar_jobs_sqlite(status: str | None = None, limite: int = 500) -> list[dict]:
+    _sqlite_fila_reindexar()
+    limite = max(1, min(int(limite), 5000))
+    conexao = _sqlite_fila_conectar()
+    try:
+        if status:
+            registros = conexao.execute(
+                "SELECT payload FROM queue_jobs WHERE status = ? ORDER BY created_at DESC, job_id LIMIT ?",
+                (status.lower(), limite),
+            ).fetchall()
+        else:
+            registros = conexao.execute(
+                "SELECT payload FROM queue_jobs ORDER BY created_at DESC, job_id LIMIT ?",
+                (limite,),
+            ).fetchall()
+        resultado = []
+        for registro in registros:
+            try:
+                job = json.loads(registro["payload"])
+            except (TypeError, ValueError):
+                continue
+            if isinstance(job, dict):
+                resultado.append(job)
+        return resultado
+    finally:
+        conexao.close()
+
+
+

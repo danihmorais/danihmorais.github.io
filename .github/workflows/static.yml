@@ -1,0 +1,126 @@
+name: Deploy static content to Pages
+
+on:
+  workflow_run:
+    workflows: ["LICITA.AI checks"]
+    types: [completed]
+    branches: ["main"]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Build MontaEdital
+        working-directory: ./MONTAEDITAL
+        env:
+          VITE_API_URL: ${{ secrets.API_URL }}
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+      - name: Setup Python for backend tests
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Test backend da Biblioteca Municipal
+        working-directory: ./BIBLIOTECA-MUNICIPAL/backend
+        run: |
+          python -m pip install -r requirements.txt
+          PYTHONPATH="$PWD" pytest -q
+      - name: Build Licita.AI
+        working-directory: ./LICITA.AI
+        env:
+          VITE_API_URL: ${{ secrets.API_URL }}
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Build Enviador de Atas e Contratos
+        working-directory: ./EMAIL-ATAS-CONTRATOS
+        env:
+          VITE_API_URL: ${{ secrets.API_URL }}
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+      - name: Build Gerador de Extrato de Atas e Contratos
+        working-directory: ./GERADOREXTRATO
+        env:
+          VITE_API_URL: ${{ secrets.API_URL }}
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+      - name: Build Biblioteca Municipal
+        working-directory: ./BIBLIOTECA-MUNICIPAL
+        env:
+          VITE_BIBLIOTECA_API_URL: ${{ secrets.BIBLIOTECA_API_URL }}
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+      - name: Assemble final site
+        env:
+          API_URL: ${{ secrets.API_URL }}
+          PAGES_VERSION: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p site
+          cp index.html site/
+          cp ads.txt site/
+          cp -r assets site/
+          cp -r MONTAEDITAL/dist site/MONTAEDITAL
+          cp -r LICITA.AI/dist site/LICITA.AI
+          cp -r EMAIL-ATAS-CONTRATOS/dist site/EMAIL-ATAS-CONTRATOS
+          cp -r GERADOREXTRATO/dist site/GERADOREXTRATO
+          cp -r BIBLIOTECA-MUNICIPAL/dist site/BIBLIOTECA-MUNICIPAL
+          cp -r FIORIILICSVTOWORD/. site/FIORIILICSVTOWORD/
+          cp documentos-modelo.html site/documentos-modelo.html
+          cp estudos.html site/estudos.html
+          python - <<'PY'
+          from pathlib import Path
+          import json, os
+          api_url=os.environ.get("API_URL","").strip()
+          version=os.environ.get("PAGES_VERSION","").strip()
+          if len(api_url)>=2 and api_url[0]==api_url[-1] and api_url[0] in "\"'": api_url=api_url[1:-1].strip()
+          api_url=api_url.rstrip("/")
+          if not api_url or not api_url.startswith(("http://","https://")): raise SystemExit("Secret API_URL inválido.")
+          if not version: raise SystemExit("PAGES_VERSION não configurado.")
+          for name in ("documentos-modelo.html","estudos.html"):
+              page=Path("site")/name
+              text=page.read_text(encoding="utf-8")
+              if "__API_URL_JSON__" not in text: raise SystemExit(f"Placeholder __API_URL_JSON__ não encontrado em {name}.")
+              page.write_text(text.replace("__API_URL_JSON__",json.dumps(api_url,ensure_ascii=False)),encoding="utf-8")
+          index=Path("site/index.html")
+          text=index.read_text(encoding="utf-8").replace("__PAGES_VERSION__",version)
+          index.write_text(text,encoding="utf-8")
+          if any("__API_URL_JSON__" in (Path("site")/name).read_text(encoding="utf-8") for name in ("documentos-modelo.html","estudos.html")) or "__PAGES_VERSION__" in text: raise SystemExit("Placeholder não substituído.")
+          PY
+      - name: Setup Pages
+        uses: actions/configure-pages@v6
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          name: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
+          path: './site'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
+        with:
+          artifact_name: github-pages-${{ github.run_id }}-${{ github.run_attempt }}

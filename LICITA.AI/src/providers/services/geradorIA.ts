@@ -1,0 +1,224 @@
+const STAGE_CHAVES: Record<string, string[]> = {
+    "DFD": [
+        "OBJETO", "TIPO_OBJ", "JUSTIFICATIVA", "ESTIMATIVA_QUANTIDADES", "RESULTADOS_ESPERADOS"
+    ],
+    "ETP": [
+        "REQUISITOS_ETP", "SUBCONTRATACAO_ETP", "ME_EPP_ETP", "JUSTIFICATIVA_PAC", "MERCADO",
+        "SOLUCAO", "CRITERIOS_JUSTIFICATIVA_ETP", "CRITERIOS_SUSTENTABILIDADE",
+        "MODALIDADE_JUSTIFICATIVA_ETP", "PROVIDENCIAS_CONT", "CORRELATAS_INTER",
+        "JUSTIFICATIVA_ESTIMATIVA", "GARANTIAS_ETP", "VISTORIA_ETP", "AMOSTRA_ETP",
+        "PARCELAMENTO", "CONCLUSAO"
+    ],
+    "TR": [
+        "REQUISITOS_TR", "OBRIGACOES_CONTRATADA", "OBRIGACOES_CONTRANTE",
+        "QUALIFICACAO_TECNICA", "GARANTIAS_TR", "EXECUCAO", "PRAZO_EXEC",
+        "LOCAL", "AMOSTRA_TR"
+    ],
+};
+
+const REGRAS_MINIMAS_TEXTO: Record<string, string> = {
+    "JUSTIFICATIVA": "Entre 4 e 10 parágrafos com no mínimo 5 linhas cada, levando em consideração os aspectos legais, técnicos e econômicos, amparados pela CF/1988, sob o prisma do interesse público envolvido.",
+    "ESTIMATIVA_QUANTIDADES": "Entre 1 e 2 parágrafos com fundamentação técnica e memória metodológica. Fundamente nas quantidades informadas pela unidade demandante e no consumo/necessidade descritos; só mencione estimativa de processo anterior quando um documento de referência anexado comprovar essa informação.",
+    "RESULTADOS_ESPERADOS": "Entre 3 e 4 parágrafos detalhando economicidade, eficiência, continuidade e interesse público.",
+    "REQUISITOS_ETP": "Elabore requisitos técnicos objetivos, necessários e proporcionais, evitando exigências excessivas de qualificação técnica. Considere a habilitação jurídica, técnica, fiscal, social, trabalhista e econômico-financeira e as declarações previstas na Lei nº 14.133/2021. Sugira documentos adicionais somente quando forem pertinentes ao objeto e indispensáveis, justificando individualmente cada um com fundamento técnico, legal e administrativo; caso contrário, explique a suficiência dos requisitos legais gerais.",
+    "SUBCONTRATACAO_ETP": "Mínimo de 1 parágrafo justificando a decisão sobre subcontratação; se vedada, declarar expressamente a vedação e justificar sua necessidade e proporcionalidade.",
+    "ME_EPP_ETP": "Entre 3 e 4 parágrafos com fundamento na LC 123/2006.",
+    "JUSTIFICATIVA_PAC": "Mínimo de 1 parágrafo caso estivesse previsto, caso contrário justificar excepcionalidade da contratação.",
+    "MERCADO": "Entre 5 e 10 parágrafos comparando soluções e práticas de mercado, geralmente demonstrando cada opção e o porquê ela não é adequada.",
+    "SOLUCAO": "Entre 5 e 8 parágrafos. Você deve focar na contratação como um todo, como a modalidade escolhida, o tipo de julgamento adotado, as condições de execução, a necessidade, o objeto, assistência técnica e garantias, e não abordar aspectos técnicos de itens específicos, que serão abordados posteriormente. O foco deve ser na solução de contratação como um todo, e não em aspectos técnicos de itens específicos.",
+    "CRITERIOS_JUSTIFICATIVA_ETP": "Entre 3 e 4 parágrafos.",
+    "CRITERIOS_SUSTENTABILIDADE": "Entre 3 e 4 parágrafos.",
+    "MODALIDADE_JUSTIFICATIVA_ETP": "Entre 4 e 5 parágrafos com fundamentação legal.",
+    "PROVIDENCIAS_CONT": "Entre 2 e 4 parágrafos. Fale sobre instrução de fiscais, planejamento de fiscalização, e demais providências relacionadas à fiscalização e controle da execução contratual, bem como à mitigação de riscos relacionadas à contratação e diálogo com a autoridade competente (Prefeito) para adoção de providências em caso de necessidade de revisão contratual, aplicação de sanções, ou outras medidas administrativas relacionadas à contratação.",
+    "CORRELATAS_INTER": "Mínimo de 1 parágrafo. Identifique contratações correlatas/interdependentes com base nos dados fornecidos, salvo se as INSTRUÇÕES DO USUÁRIO indicarem outra correlata. Não presuma inexistência sem fundamento.",
+    "JUSTIFICATIVA_ESTIMATIVA": "Mínimo de 1 parágrafo, em complementação à ESTIMATIVA_QUANTIDADES, que será incluída após a tabela de itens. Explique a metodologia de estimativa sem reproduzir preços unitários, subtotais ou totais numéricos; o valor global arredondado será inserido pelo sistema em campo próprio. Não invente nem recalcule valores monetários.",
+    "GARANTIAS_ETP": "Entre 3 e 5 parágrafos, um cada tipo de garantia, devendo abordar tanto a garantia contratual quanto a garantia de proposta, considerando aspectos de proporcionalidade, economicidade e segurança jurídica (devendo ter o viés de QUASE NUNCA pedir essas garantias) e por fim garantia no sentido de assistência técnica, suporte, manutenção, atualização, e demais aspectos relacionados à garantia de solução adequada ao longo da execução contratual, considerando o objeto da contratação.",
+    "VISTORIA_ETP": "Mínimo de 1 parágrafo, podendo ser resumido caso se trate de aquisição de bens.",
+    "AMOSTRA_ETP": "Mínimo de 1 parágrafo, podendo ser resumido caso se trate de prestação de serviços. Caso se tenha optado por exigir amostra, apenas justifique a exigência, sem detalhar as características técnicas da amostra, que serão abordadas posteriormente no termo de referência.",
+    "CONCLUSAO": "Entre 3 e 4 parágrafos.",
+    "REQUISITOS_TR": "Enumere exclusivamente os documentos adicionais indicados em REQUISITOS_ETP, separadamente e em ordem crescente, começando pelo Documento 12, no formato (Documento XX) Nome do documento. Se o ETP não tiver exigido documento adicional, escreva exatamente 'Não há documentos adicionais'. Use o contexto __LICITA_PIPE_ETP__ como fonte.",
+    "OBRIGACOES_CONTRATADA": "Entre 10 e 30 obrigações separadas obrigatoriamente pelo caractere escapado de quebra de linha. Cada obrigação deve ser robusta, evitando exigências genéricas ou superficiais, e deve ser fundamentada tecnicamente, legalmente e administrativamente. As obrigações devem ser compatíveis com o objeto, a necessidade, as condições de execução, a solução adotada e demais aspectos relevantes da contratação.",
+    "OBRIGACOES_CONTRANTE": "Entre 5 e 10 obrigações separadas obrigatoriamente pelo caractere escapado de quebra de linha.",
+    "QUALIFICACAO_TECNICA": "Entre 3 e 4 parágrafos.",
+    "GARANTIAS_TR": "Entre 2 e 3 parágrafos. Deve ser um resumo de GARANTIAS_ETP",
+    "TIPO_OBJ": "( ) Serviço não continuado\n( ) Serviço continuado SEM dedicação exclusiva de mão de obra\n( ) Serviço continuado COM dedicação exclusiva de mão de obra\n( ) Material de Consumo\n( ) Material Permanente/Equipamento\n\nReescreva as opções e insira um X na opção escolhida.",
+    "PARCELAMENTO": "Entre 1 e 3 parágrafos. Você deve analisar a possibilidade de parcelamento da contratação, considerando aspectos como economicidade, eficiência, vantajosidade, planejamento, e jurisprudência do TCU sobre o tema. Considere a opção escolhida e detalhe a forma de parcelamento (parcelamento por item, por lote, ou outro critério), justificando tecnicamente a escolha do critério de parcelamento escolhido. Reforce os aspectos de economicidade, eficiência, vantajosidade e planejamento envolvidos, independente da opção escolhida.",
+    "EXECUCAO": "Entre 4 e 6 parágrafos. Você deve aprimorar o texto base fornecido, detalhando condições de execução, prazos, cronogramas, etapas, e demais aspectos operacionais relevantes para a execução contratual. Não permita prazos de entrega inexequíveis ou condições de execução genéricas. O texto deve ser completo, detalhado e operacional, garantindo clareza e exequibilidade.",
+    "PRAZO_EXEC": "Texto completo contendo prazo por extenso e em algarismos.",
+    "LOCAL": "Entre 1 e 2 parágrafos completos. Sempre será em algum endereço do Município {{MUNICIPIO_UF}}, mas detalhe o local de entrega ou execução, considerando aspectos logísticos e operacionais relevantes para a contratação. Horário quase sempre das 08h às 11h ou das 13h às 17h, salvo se outro tiver sido informado nas condições de execução.",
+    "AMOSTRA_TR": "Entre 4 e 5 parágrafos, detalhando a parte prática da exigência de amostra, como a forma de apresentação, as características técnicas a serem observadas, o processo de avaliação da amostra, e demais aspectos operacionais relacionados à exigência de amostra. Caso se trate de prestação de serviços, o texto pode ser mais resumido, mas ainda assim deve detalhar a parte prática da exigência de amostra, como a forma de apresentação, o processo de avaliação da amostra, e demais aspectos operacionais relacionados à exigência de amostra. Deve se basear mais ou menos nisso: Deverão ser entregues amostras de todos os itens pelos licitantes provisoriamente vencedores no prazo máximo de 07 (sete) dias úteis, contadas da data de convocação via e-mail, que serão testadas e avaliadas pela comissão de avaliação formalmente designada pela Administração. As amostras postadas por correio ou transportadora não serão aceitas fora do prazo, e, desta maneira, a empresa que necessitar do envio por esses meios, deve ter o cuidado de enviar em tempo hábil, vez que o prazo máximo de entrega é extremamente razoável. Os itens deverão ser entregues em sua embalagem ORIGINAL da marca que for cotada pelo licitante. As amostras deverão ser entregues, junto ao Setor de Licitação na {{PREFEITURA}}, no endereço {{ENDERECO_PREFEITURA}}, qual seja das 8h às 11h e 13h às 17h. A empresa participante que não realizar a entrega das amostras dentro do prazo concedido será desclassificada dos itens que necessitam de apresentação de amostra. Serão exigidos como critério de avaliação aquilo que consta do descritivo de cada item, e avaliados por comissão de avaliação, qual seja: {{FISCAL}}, {{FISCAL_CARGO}}; {{GESTOR}}, {{GESTOR_CARGO}}.",
+};
+
+function substituirTagsMunicipais(texto: string, dadosUsuario: Record<string, string>): string {
+    return [
+        "{{MUNICIPIO}}", "{{MUNICIPIO_UF}}", "{{PREFEITURA}}", "{{ENDERECO_PREFEITURA}}",
+        "{{TELEFONE}}", "{{EMAIL_LICITACAO}}", "{{DECRETO}}", "{{LIMITE_ME_EPP}}",
+    ].reduce((resultado, marcador) => resultado.replaceAll(marcador, dadosUsuario[marcador] || ""), texto);
+}
+
+function montarRegrasMinimas(chavesEtapa: string[], dadosUsuario: Record<string, string>, camposExcluidos: string[] = []): string {
+    const valorOriginal = dadosUsuario["{{VALOR_ESTIMADO}}"];
+    const valorEstimado = valorOriginal ? valorOriginal : "[valor não informado — estime com base no mercado]";
+
+    return chavesEtapa
+        .filter(chave => REGRAS_MINIMAS_TEXTO[chave] && !camposExcluidos.includes(chave))
+        .map(chave => {
+            let regra = REGRAS_MINIMAS_TEXTO[chave];
+            regra = regra.replace("{{VALOR_ESTIMADO}}", valorEstimado);
+            regra = substituirTagsMunicipais(regra, dadosUsuario);
+            return `- ${chave}: ${regra}`;
+        })
+        .join("\n");
+}
+
+export function construirPrompt(dadosUsuario: Record<string, string>, meeppExclusivo: boolean, etapa: string, instrucoesDoUsuario = "", usarMarcadorDados = false): string {
+    const objeto = dadosUsuario["{{OBJETO}}"] || "";
+    const execucaoRaw = dadosUsuario["RAW_EXECUCAO"] || "";
+    const exclusividadeTexto = meeppExclusivo ? "Sim" : "Não";
+    const necessidade = dadosUsuario["{{NECESSIDADE}}"] || "";
+    const criterioTipo = dadosUsuario["{{CRITERIOS}}"] || "ITEM";
+    const motivoCriterioRaw = dadosUsuario["RAW_MOTIVO_CRITERIO"] || "";
+    const modalidadeTipo = dadosUsuario["{{MODALIDADE}}"] || "PREGAO_ELETRONICO";
+    const motivoModalidadeRaw = dadosUsuario["RAW_MOTIVO_MODALIDADE"] || "";
+    const pacRaw = dadosUsuario["RAW_PAC"] || "";
+    const instrumento = dadosUsuario["{{INSTRUMENTO}}"] || "";
+    const vigencia = dadosUsuario["{{VIGENCIA}}"] || "";
+    const secretaria = dadosUsuario["{{SECRETARIAS}}"] || "";
+    const amostraOpt = (dadosUsuario["{{AMOST}}"] || "nao").toLowerCase();
+    const vistoriaOpt = (dadosUsuario["{{VIST}}"] || "nao").toLowerCase();
+    const amostraFormatada = ["sim", "s", "x"].includes(amostraOpt) ? "Sim" : "Não";
+    const vistoriaFormatada = ["sim", "s", "x"].includes(vistoriaOpt) ? "Sim" : "Não";
+    const camposExcluidos: string[] = [];
+    if (amostraFormatada === "Não") camposExcluidos.push("AMOSTRA_ETP", "AMOSTRA_TR");
+    if (vistoriaFormatada === "Não") camposExcluidos.push("VISTORIA_ETP");
+    const regrasGerais = substituirTagsMunicipais(`Você é um especialista sênior em licitações e contratos administrativos para {{PREFEITURA}} ({{MUNICIPIO_UF}}).
+Atue conforme a Lei Federal nº 14.133/2021, jurisprudência consolidada do TCU, jurisprudência do TCE-SP, doutrina majoritária e boas práticas de governança pública.
+Os textos devem possuir linguagem técnica, formal, impessoal, jurídica e administrativa.
+Não gere textos genéricos, superficiais ou resumidos.
+Os textos devem possuir fundamentação técnica robusta, coerência lógica e profundidade argumentativa.
+Priorize ampla competitividade, economicidade, eficiência, planejamento, motivação administrativa, segregação de funções, vantajosidade e segurança jurídica.
+Observe especialmente: Lei 14.133/2021; Manual de Licitações e Contratos do TCU; LC 123/2006; Súmulas e jurisprudência do TCU; Jurisprudência do TCE-SP; Boas práticas de governança e planejamento das contratações públicas.
+Evite exigências restritivas ou cláusulas potencialmente limitadoras da competitividade.
+Os textos devem ser completos, extensos e aprofundados.
+Nunca invente número de acórdão, súmula, processo, artigo de lei ou parecer. Cite jurisprudência numerada apenas quando o número e o ano constarem nos dados/documentos de referência ou forem conhecidos com segurança; nos demais casos, descreva o entendimento sem numeração.
+Cada parágrafo de fundamentação deve relacionar fato concreto da contratação, fundamento legal aplicável e consequência prática ou risco. Não copie marcadores como XXXXX ou [inserir] para o documento final.`, dadosUsuario);
+    let basePrompt = `OBJETO BASE DA CONTRATAÇÃO: ${objeto}
+NECESSIDADE ADMINISTRATIVA: ${necessidade}
+CONDIÇÕES DE EXECUÇÃO INFORMADAS: ${execucaoRaw}
+EXCLUSIVIDADE ME/EPP: ${exclusividadeTexto}
+CRITÉRIO DE JULGAMENTO: ${criterioTipo}
+MODALIDADE INFORMADA: ${modalidadeTipo}
+SITUAÇÃO DO PAC: ${pacRaw}
+INSTRUMENTO: ${instrumento}
+VIGÊNCIA: ${vigencia}
+SECRETARIA/SETOR SOLICITANTE: ${secretaria}`;
+    let chaves = "{}";
+    let diretrizEtapa = "";
+    if (etapa === "DFD") {
+        chaves = `{
+  "OBJETO": "",
+  "TIPO_OBJ": "",
+  "JUSTIFICATIVA": "",
+  "ESTIMATIVA_QUANTIDADES": "",
+  "RESULTADOS_ESPERADOS": ""
+}`;
+        diretrizEtapa = `ETAPA: DOCUMENTO DE FORMALIZAÇÃO DE DEMANDA.
+O OBJETO deve:
+1 - Se o instrumento for ARP, iniciar obrigatoriamente com 'Registro de preços para futura e eventual aquisição'.
+2 - Para aquisições comuns sem ARP, iniciar com 'Aquisição'.
+3 - Para serviços, iniciar com 'Contratação de empresa especializada'.
+4 - Informar obrigatoriamente o Município {{MUNICIPIO_UF}}.
+5 - Informar vigência e secretaria/setor destinatário (ou 'diversos setores da Administração Municipal').
+6 - Caso haja convênio, recurso vinculado ou programa governamental, mencionar expressamente.
+A JUSTIFICATIVA deve conter motivação administrativa detalhada, demonstração do interesse público, necessidade institucional, impactos da não contratação, alinhamento ao planejamento e continuidade administrativa.`;
+    } else if (etapa === "ETP") {
+        chaves = `{
+  "REQUISITOS_ETP": "",
+  "SUBCONTRATACAO_ETP": "",
+  "ME_EPP_ETP": "",
+  "JUSTIFICATIVA_PAC": "",
+  "MERCADO": "",
+  "SOLUCAO": "",
+  "CRITERIOS_JUSTIFICATIVA_ETP": "",
+  "CRITERIOS_SUSTENTABILIDADE": "",
+  "MODALIDADE_JUSTIFICATIVA_ETP": "",
+  "PROVIDENCIAS_CONT": "",
+  "CORRELATAS_INTER": "",
+  "JUSTIFICATIVA_ESTIMATIVA": "",
+  "GARANTIAS_ETP": "",
+  "VISTORIA_ETP": "",
+  "AMOSTRA_ETP": "",
+  "PARCELAMENTO": "",
+  "CONCLUSAO": ""
+}`;
+        const diretrizCriterio = criterioTipo === "ITEM"
+            ? "Na justificativa de parcelamento, priorize adjudicação por item como regra geral para ampliar competitividade, conforme jurisprudência do TCU."
+            : criterioTipo === "LOTE"
+                ? `O julgamento é por menor preço por lote. Use LOTES_DADOS e o campo lote dos itens para respeitar os grupos e os nomes cadastrados; não crie, exclua ou redistribua itens entre lotes. A justificativa inicial do usuário é: ${motivoCriterioRaw || "não informada"}. Desenvolva essa ideia simples em fundamentação técnica e econômica objetiva, verificando afinidade dos itens, competitividade, viabilidade do agrupamento e eventual economia de escala apenas quando sustentada pelos dados. Não invente pesquisa de mercado, fornecedores ou economias quantificadas.`
+                : motivoCriterioRaw
+                    ? `Utilize como motivação técnica do agrupamento global: ${motivoCriterioRaw}`
+                    : "Justifique tecnicamente a adoção do critério global com base na compatibilidade técnica e na economicidade informadas.";
+        let diretrizModalidade = "";
+        if (modalidadeTipo === "PREGAO_ELETRONICO") diretrizModalidade = "Justifique a adoção do Pregão Eletrônico como modalidade preferencial para bens e serviços comuns, priorizando competitividade e transparência.";
+        else if (["DISPENSA_EMAIL", "DISPENSA_BLL"].includes(modalidadeTipo)) diretrizModalidade = motivoModalidadeRaw ? `Justifique tecnicamente a contratação direta utilizando como base: ${motivoModalidadeRaw}` : "Justifique tecnicamente a contratação direta excepcional.";
+        else if (modalidadeTipo === "PREGAO_PRESENCIAL") diretrizModalidade = motivoModalidadeRaw ? `Justifique a excepcionalidade do pregão presencial utilizando como base: ${motivoModalidadeRaw}` : "Justifique a excepcionalidade da adoção do pregão presencial.";
+        const instrucaoAmostraEtp = amostraFormatada === "Não" ? `AMOSTRA_ETP: Retorne exatamente e exclusivamente a frase "Não há necessidade de exigência de amostra para esta contratação, justificando tecnicamente a desnecessidade e ausência de risco relevante."` : `AMOSTRA_ETP: Detalhe a exigência de amostra conforme as regras mínimas estabelecidas.`;
+        const instrucaoVistoriaEtp = vistoriaFormatada === "Não" ? `VISTORIA_ETP: Retorne exatamente e exclusivamente a frase "Não há necessidade de exigência de vistoria prévia para esta contratação, justificando tecnicamente a desnecessidade."` : `VISTORIA_ETP: Detalhe a exigência de vistoria prévia.`;
+        diretrizEtapa = `ETAPA: ESTUDO TÉCNICO PRELIMINAR.
+Todos os textos devem possuir análise técnica aprofundada utilizando fundamentos legais, técnicos e administrativos.
+A tabela de itens do ETP deve conter somente item, descrição, unidade e quantidade, sem valores unitários, subtotais ou totais. Não reproduza valores monetários específicos nos textos narrativos do ETP; o valor global estimado, já arredondado pelo sistema, será informado no campo próprio do documento.
+Para ME/EPP, observar LC 123/2006 e jurisprudência aplicável.
+Para PAC, se não houver previsão, justificar excepcionalidade da contratação.
+Para sustentabilidade, abordar impactos ambientais, logística reversa, descarte, durabilidade, eficiência e sustentabilidade econômica.
+
+INSTRUÇÕES CONDICIONAIS DIRETAS:
+${instrucaoAmostraEtp}
+${instrucaoVistoriaEtp}
+${diretrizCriterio}
+${diretrizModalidade}`;
+    } else if (etapa === "TR") {
+        // Sem exigência de amostra, AMOSTRA_TR é texto fixo montado no backend: não é pedido à IA
+        // (o backend também o retira do esquema JSON da resposta).
+        const exigeAmostra = amostraFormatada === "Sim";
+        chaves = `{
+  "REQUISITOS_TR": "",
+  "OBRIGACOES_CONTRATADA": "",
+  "OBRIGACOES_CONTRANTE": "",
+  "QUALIFICACAO_TECNICA": "",
+  "GARANTIAS_TR": "",
+  "EXECUCAO": "",
+  "PRAZO_EXEC": "",
+  "LOCAL": ""${exigeAmostra ? `,
+  "AMOSTRA_TR": ""` : ""}
+}`;
+        const diretrizExecucao = execucaoRaw && execucaoRaw !== "[Condições de execução não informadas]" ? `O campo EXECUCAO deve obrigatoriamente aprimorar o seguinte texto base: ${execucaoRaw}` : "Elabore condições completas de execução compatíveis com o objeto.";
+        const instrucaoAmostraTr = exigeAmostra ? `AMOSTRA_TR: Detalhe a parte prática da exigência de amostra conforme as regras mínimas.` : "";
+        const instrucoesCondicionaisTr = [instrucaoAmostraTr, diretrizExecucao].filter(Boolean).join("\n");
+        diretrizEtapa = `ETAPA: TERMO DE REFERÊNCIA.
+Os textos devem possuir caráter normativo e operacional.
+Os requisitos devem ser objetivos, proporcionais e compatíveis com o objeto. É vedada exigência excessiva de qualificação técnica.
+Observe entendimentos consolidados do TCE-SP quando pertinentes, sem citar número de processo não confirmado nas referências disponíveis.
+
+INSTRUÇÕES CONDICIONAIS DIRETAS:
+${instrucoesCondicionaisTr}`;
+    }
+    const chavesEtapa = STAGE_CHAVES[etapa] || [];
+    const regrasMinimas = montarRegrasMinimas(chavesEtapa, dadosUsuario, camposExcluidos);
+    const restricoesJSON = `ATENÇÃO - REGRAS RÍGIDAS DE SAÍDA:
+1. Você deve retornar EXCLUSIVAMENTE um objeto JSON válido. Não adicione nenhum texto explicativo, saudações ou comentários antes ou depois do JSON.
+2. NÃO USE marcadores de bloco de código (como \`\`\`json ou \`\`\`). Retorne o JSON diretamente em formato de texto puro.
+3. ESCAPE DE QUEBRAS DE LINHA: O JSON não suporta quebras de linha literais dentro de strings. Para representar quebras de linha, use a sequência JSON \\n (uma única barra invertida seguida da letra n). Depois que o JSON for decodificado, o campo deve conter uma quebra de linha real, nunca os caracteres literais barra invertida e n.
+4. Nenhuma chave do JSON pode estar vazia.
+5. Não use "/" isolada como marcador ou separador de parágrafo e não deixe uma "/" no final de parágrafo. Nunca termine um parágrafo com barra invertida ("\\"). Preserve barras internas legítimas em datas, expressões e URLs.`;
+    const dadosMarcados = usarMarcadorDados
+        ? `\n\nDADOS DA CONTRATAÇÃO (JSON; fonte factual para itens, quantidades e valores):\n__LICITA_PIPE_DADOS_USUARIO__`
+        : "";
+    const instrucoesObrigatorias = usarMarcadorDados
+        ? `\n\nINSTRUÇÕES DO USUÁRIO (OBRIGATÓRIAS — prevalecem sobre diretrizes de estilo e tamanho, mas não sobre legalidade, segurança ou fidelidade aos fatos):\n${String(instrucoesDoUsuario || "").trim() || "Nenhuma instrução adicional."}`
+        : "";
+    const lembreteFinal = usarMarcadorDados
+        ? `\n\nLEMBRETE OBRIGATÓRIO: aplique integralmente as INSTRUÇÕES DO USUÁRIO acima, preserve os dados concretos e não invente fatos.`
+        : "";
+    diretrizEtapa = substituirTagsMunicipais(diretrizEtapa, dadosUsuario);
+    return `${regrasGerais}\n\n${basePrompt}${dadosMarcados}${instrucoesObrigatorias}\n\n${diretrizEtapa}\n\nREGRAS MÍNIMAS OBRIGATÓRIAS DE TAMANHO E PROFUNDIDADE:\n${regrasMinimas}${lembreteFinal}\n\nESTRUTURA JSON OBRIGATÓRIA:\n${chaves}\n\n${restricoesJSON}`;
+}
