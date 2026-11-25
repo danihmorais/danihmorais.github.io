@@ -62,33 +62,3 @@ test("acompanhamento da fila é salvo apenas durante a sessão e pode ser descar
   api.limparAcompanhamentoJob();
   assert.equal(api.recuperarAcompanhamentoJob(), null);
 });
-
-test("pré-visualização, edição e aprovação usam o token da fila", async () => {
-  const chamadas = [];
-  const respostas = [
-    { documentos: { DFD: { OBJETO: "Objeto" }, ETP: { JUSTIFICATIVA: "Motivo" }, TR: { DESCRICAO: "Descrição" } }, status: "awaiting_review", job_id: "job-1", message: "Revisar" },
-    { saved: true },
-    { status: "queued" },
-  ];
-  const api = loadTsModule("src/api.ts", {
-    globals: {
-      fetch: async (url, options = {}) => {
-        chamadas.push({ url, options });
-        const data = respostas.shift();
-        return { ok: true, async json() { return data; } };
-      },
-    },
-  });
-  const preview = await api.consultarPreviewFila("job-1", "token-1");
-  assert.equal(preview.documentos.DFD.OBJETO, "Objeto");
-  await api.salvarCampoPreviewFila("job-1", "token-1", "DFD", "OBJETO", "Objeto revisado");
-  await api.aprovarPreviewFila("job-1", "token-1", true);
-  assert.equal(chamadas[0].options.headers["X-Status-Token"], "token-1");
-  assert.equal(chamadas[1].options.method, "PUT");
-  assert.equal(JSON.parse(chamadas[1].options.body).conteudo, "Objeto revisado");
-  assert.equal(chamadas[2].options.method, "POST");
-  assert.equal(chamadas[2].options.headers["X-Status-Token"], "token-1");
-  assert.equal(chamadas[2].options.headers["Content-Type"], "application/json");
-  assert.deepEqual(JSON.parse(chamadas[2].options.body), { confirmar_alertas: true });
-});
-

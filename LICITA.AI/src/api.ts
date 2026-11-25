@@ -127,7 +127,7 @@ export const gerarFasePreparatoria = async (dados: any, arquivos?: DocumentosRef
 
   let requestInit: RequestInit = {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Licita-Review": "1" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   };
 
@@ -139,7 +139,6 @@ export const gerarFasePreparatoria = async (dados: any, arquivos?: DocumentosRef
     }
     requestInit = {
       method: "POST",
-      headers: { "X-Licita-Review": "1" },
       body: formData,
     };
   }
@@ -153,87 +152,6 @@ export const gerarFasePreparatoria = async (dados: any, arquivos?: DocumentosRef
 
   return response.json();
 };
-
-export type RelatorioConformidadePreview = {
-  version: number;
-  generated_at: string;
-  status: string;
-  summary: { total: number; ok: number; pendencias: number; revisao: number };
-  verificacoes: Array<{ id: string; titulo: string; status: "ok" | "alerta" | "revisao"; detalhe: string }>;
-  alertas: Array<Record<string, unknown>>;
-  limites: string[];
-  matriz_conformidade: {
-    fonte: string;
-    summary: { total: number; alertas: number; revisao: number };
-    itens: Array<{ id: string; base: string; titulo: string; status: "alerta" | "revisao"; campos: string[]; detalhe: string; nota?: string }>;
-    limite: string;
-  };
-};
-
-export type PreviewDocumentosFila = {
-  job_id: string;
-  status: "awaiting_review";
-  documentos: Record<"DFD" | "ETP" | "TR", Record<string, string>>;
-  conformidade?: RelatorioConformidadePreview;
-  updated_at?: string;
-  stale_documents?: string[];
-  message: string;
-};
-
-export async function consultarPreviewFila(jobId: string, statusToken: string): Promise<PreviewDocumentosFila> {
-  const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}/preview`, {
-    headers: { "X-Status-Token": statusToken },
-  });
-  let payload: any = {};
-  try { payload = await response.json(); } catch {}
-  if (!response.ok) throw new Error(payload?.detail || "Não foi possível carregar a pré-visualização.");
-  return payload;
-}
-
-export async function salvarCampoPreviewFila(
-  jobId: string,
-  statusToken: string,
-  documento: "DFD" | "ETP" | "TR",
-  campo: string,
-  conteudo: string,
-): Promise<void> {
-  const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}/preview`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json", "X-Status-Token": statusToken },
-    body: JSON.stringify({ documento, campo, conteudo }),
-  });
-  let payload: any = {};
-  try { payload = await response.json(); } catch {}
-  if (!response.ok) throw new Error(payload?.detail || "Não foi possível salvar a alteração.");
-}
-
-export async function regenerarDocumentoPreviewFila(
-  jobId: string,
-  statusToken: string,
-  documento: "DFD" | "ETP" | "TR",
-  instrucoes = "",
-): Promise<{ saved: boolean; documento: string; stale_documents: string[]; message: string }> {
-  const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}/preview/regenerar`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Status-Token": statusToken },
-    body: JSON.stringify({ documento, instrucoes }),
-  });
-  let payload: any = {};
-  try { payload = await response.json(); } catch {}
-  if (!response.ok) throw new Error(payload?.detail || "Não foi possível regenerar o documento.");
-  return payload;
-}
-
-export async function aprovarPreviewFila(jobId: string, statusToken: string, confirmarAlertas = false): Promise<void> {
-  const response = await fetch(`${BASE_URL}/licita/api/fila/${encodeURIComponent(jobId)}/approve`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Status-Token": statusToken },
-    body: JSON.stringify({ confirmar_alertas: confirmarAlertas }),
-  });
-  let payload: any = {};
-  try { payload = await response.json(); } catch {}
-  if (!response.ok) throw new Error(payload?.detail || "Não foi possível aprovar os documentos.");
-}
 
 export type AcompanhamentoJobSalvo = { job_id: string; status_token: string; saved_at: number };
 

@@ -56,7 +56,6 @@ Não é exigida confirmação do endereço por código. O sistema valida o forma
 | `LICITA_QUEUE_EMAIL_RATE_LIMIT` | Limite de criação de pedidos por e-mail, persistido no SQLite. |
 | `LICITA_QUEUE_DIR` | Diretório de persistência dos jobs e arquivos ZIP, conforme `fila.py`. |
 | `LICITA_QUEUE_RETENTION_DAYS` | Retenção padrão de arquivos de pedidos concluídos. Padrão: 7 dias. |
-| `LICITA_QUEUE_REVIEW_RETENTION_DAYS` | Retenção dos pedidos em `awaiting_review`. Padrão: 30 dias e mínimo efetivo de 30 dias. |
 
 O endpoint `/metrics` exige `Authorization: Bearer <LICITA_METRICS_TOKEN>`. As métricas incluem contagem de jobs por status, duração e quantidade de execuções por etapa, falhas categorizadas, requisições HTTP e uso de tokens de IA. Não são expostos e-mails nem identificadores individuais de pedidos.
 
@@ -92,18 +91,11 @@ Na etapa de itens, a interface aceita arquivos CSV e XLSX de até 5 MB, com limi
 
 O parser converte as linhas para os campos `numero`, `descricao`, `un`, `qtd` e `valor`. Revise os itens importados e confira unidades, quantidades e valores antes de enviar a solicitação.
 
-## Revisão dos documentos antes da montagem DOCX
+## Geração e entrega dos documentos
 
-A interface solicita a revisão do conteúdo estruturado antes de montar os DOCX. O job fica no estado `awaiting_review` e mantém os resultados de IA e os dados do processo no diretório persistente da fila.
+Não há etapa de revisão ou aprovação na interface: depois que a IA gera DFD, ETP e TR, o job segue direto para a montagem dos DOCX e para o envio do ZIP por e-mail.
 
-- O endpoint `GET /api/fila/{job_id}/preview` entrega DFD, ETP e TR mediante `X-Status-Token`.
-- O endpoint `PUT /api/fila/{job_id}/preview` salva alterações de campos já existentes e rejeita campos desconhecidos ou conteúdo vazio.
-- O endpoint `POST /api/fila/{job_id}/preview/regenerar` regenera somente DFD, ETP ou TR selecionado, usando schema JSON estrito e contexto dos documentos anteriores.
-- O endpoint `POST /api/fila/{job_id}/approve` reencaminha o mesmo job para a montagem DOCX. Os resultados das etapas são reutilizados e as chamadas anteriores de IA não são repetidas.
-
-Uma edição ou regeneração do DFD marca ETP e TR como dependentes; uma edição ou regeneração do ETP marca TR como dependente. O botão de aprovação fica bloqueado até que esses documentos sejam regenerados. Pendências estruturais impeditivas — como campos obrigatórios vazios, marcadores não preenchidos, divergências dos documentos adicionais, incompatibilidade da amostra e marcos de pagamento não preservados — também impedem a aprovação. Quando restarem itens de conferência humana, o usuário deve marcar expressamente a confirmação no checklist; o backend recalcula o relatório e grava a confirmação junto ao job.
-
-A verificação numérica da Lei 14.133/2021 sinaliza artigos fora do intervalo numérico 1 a 194, mas não verifica o teor, a vigência, a interpretação, a aplicabilidade nem a autenticidade de citações. As demais normas e jurisprudências continuam sujeitas à conferência em fonte primária. A revisão humana continua obrigatória.
+A verificação numérica da Lei 14.133/2021 sinaliza artigos fora do intervalo numérico 1 a 194, mas não verifica o teor, a vigência, a interpretação, a aplicabilidade nem a autenticidade de citações. As demais normas e jurisprudências continuam sujeitas à conferência em fonte primária. Os documentos recebidos devem ser conferidos por servidor responsável antes do uso.
 
 ## PDF.js e política de Content Security Policy
 
@@ -143,13 +135,13 @@ O repositório não contém segredos de deploy. O webhook de deploy e a URL púb
 
 ## Checklist automatizado de revisão documental
 
-Na pré-visualização de DFD, ETP e TR, o LICITA.AI apresenta um checklist estrutural e de coerência com os dados do formulário. O ZIP da fase preparatória inclui:
+O LICITA.AI gera um checklist estrutural e de coerência de DFD, ETP e TR com os dados do formulário. O ZIP da fase preparatória inclui:
 
 - `RELATORIO_CONFORMIDADE.txt`: checklist legível, verificações e limites.
 - `RELATORIO_CONFORMIDADE.json`: resultado estruturado para auditoria ou integração.
 - `RELATORIO_REFERENCIAS_LEGAIS.txt`: campos estruturais, fontes com URL e referências a artigos identificadas; a checagem numérica é limitada e exige conferência humana.
 
-O checklist identifica campos obrigatórios vazios, marcadores de preenchimento, diferenças entre documentos adicionais de habilitação no ETP e TR, referências legais que precisam de verificação humana, consistência da amostra e preservação de números/percentuais em pagamento por etapas. A pré-visualização também apresenta uma matriz assistiva dos 13 elementos do ETP (art. 18, § 1º, incluindo os elementos mínimos do § 2º) e dos 10 elementos do TR (art. 6º, XXIII), além de itens para revisão sobre análise de riscos, matriz de riscos, modo de disputa e pesquisa de preços. A matriz verifica a presença dos campos mapeados, não o mérito do conteúdo. A ferramenta não valida automaticamente vigência, texto, interpretação, pertinência ou legalidade. A revisão humana continua necessária.
+O checklist identifica campos obrigatórios vazios, marcadores de preenchimento, diferenças entre documentos adicionais de habilitação no ETP e TR, referências legais que precisam de verificação humana, consistência da amostra e preservação de números/percentuais em pagamento por etapas. O checklist também inclui uma matriz assistiva dos 13 elementos do ETP (art. 18, § 1º, incluindo os elementos mínimos do § 2º) e dos 10 elementos do TR (art. 6º, XXIII), além de itens para revisão sobre análise de riscos, matriz de riscos, modo de disputa e pesquisa de preços. A matriz verifica a presença dos campos mapeados, não o mérito do conteúdo. A ferramenta não valida automaticamente vigência, texto, interpretação, pertinência ou legalidade. A revisão humana continua necessária.
 
 
 ## Configuração por município

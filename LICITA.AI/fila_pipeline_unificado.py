@@ -898,26 +898,6 @@ def _adicionar_documentos_de_referencia(prompt: str, documentos: list[dict]) -> 
     return prompt + "\n\n" + contexto
 
 
-def _montar_documentos_revisao(resultados: dict) -> dict:
-    documentos = {}
-    unificada = resultados.get("FASE_PREPARATORIA")
-    if isinstance(unificada, dict):
-        for nome in ("DFD", "ETP", "TR"):
-            bloco = unificada.get(nome)
-            if isinstance(bloco, dict):
-                documentos[nome] = dict(bloco)
-    for nome, etapa_id in (("DFD", "GERACAO_DFD"), ("ETP", "GERACAO_ETP"), ("TR", "GERACAO_TR")):
-        if nome in documentos:
-            continue
-        bloco = resultados.get(nome)
-        if not isinstance(bloco, dict):
-            etapa = resultados.get(etapa_id)
-            bloco = etapa.get(nome) if isinstance(etapa, dict) else None
-        if isinstance(bloco, dict):
-            documentos[nome] = dict(bloco)
-    return documentos
-
-
 def _gerar_documentos_e_enviar(job: dict, dados_usuario: dict, dados_ia_final: dict) -> None:
     _checar_cancelamento(job)
     _iniciar_etapa(job, "GERACAO_DOCUMENTOS")
@@ -951,20 +931,6 @@ def _gerar_documentos_e_enviar(job: dict, dados_usuario: dict, dados_ia_final: d
 
 
 def _process_pipeline(job: dict) -> None:
-    if job.get("review_approved"):
-        dados_usuario = job.get("dados_usuario_processados") or job.get("pipeline_dados_usuario") or job.get("dados_usuario")
-        dados_ia_final = job.get("dados_ia_final")
-        documentos = job.get("review_documents")
-        if not isinstance(dados_usuario, dict) or not isinstance(dados_ia_final, dict):
-            raise ErroPermanente("Os dados aprovados não estão disponíveis para a montagem dos documentos.")
-        if not isinstance(documentos, dict) or not all(isinstance(documentos.get(nome), dict) for nome in ("DFD", "ETP", "TR")):
-            raise ErroPermanente("A revisão aprovada não contém DFD, ETP e TR válidos.")
-        dados_ia_final = dict(dados_ia_final)
-        for nome in ("DFD", "ETP", "TR"):
-            dados_ia_final.update(documentos[nome])
-        _gerar_documentos_e_enviar(job, dados_usuario, dados_ia_final)
-        return
-
     if job.get("retry_mode") == "email_only":
         _process_email_only_retry(job)
         return
@@ -1120,23 +1086,6 @@ def _process_pipeline(job: dict) -> None:
     if valor_estimado_aproximado:
         # O valor aproximado é derivado dos itens, com margem de 5% e arredondamento para cima.
         dados_ia_final["VALOR_ESTIMADO_APROXIMADO"] = valor_estimado_aproximado
-    if job.get("require_review") and not job.get("review_approved"):
-        documentos_revisao = _montar_documentos_revisao(resultados)
-        if not all(isinstance(documentos_revisao.get(nome), dict) and documentos_revisao[nome] for nome in ("DFD", "ETP", "TR")):
-            raise ErroPermanente("A revisão não pode ser aberta porque DFD, ETP e TR não foram gerados integralmente.")
-        job.update({
-            "status": "awaiting_review",
-            "current_stage": "REVISAO_USUARIO",
-            "dados_usuario_processados": dados_usuario,
-            "dados_ia_final": dados_ia_final,
-            "review_documents": documentos_revisao,
-            "review_results": resultados,
-            "updated_at": _utc_now(),
-        })
-        _write_json(_job_path(job["job_id"], ".review"), job)
-        _job_path(job["job_id"], ".processing").unlink(missing_ok=True)
-        return
-
     _gerar_documentos_e_enviar(job, dados_usuario, dados_ia_final)
 
 
