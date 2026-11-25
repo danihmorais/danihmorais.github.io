@@ -894,8 +894,8 @@ class TestIAExtracaoTotalTR(unittest.TestCase):
 
 
 
-class TestRevisaoHumanaIntegracaoWorker(unittest.TestCase):
-    def test_worker_pausa_apos_ia_e_retorna_da_aprovacao_sem_repetir_geracao(self):
+class TestMontagemDiretaWorker(unittest.TestCase):
+    def test_worker_gera_documentos_e_envia_direto_sem_pausa_para_revisao(self):
         import json
         import tempfile
         from pathlib import Path
@@ -936,7 +936,6 @@ class TestRevisaoHumanaIntegracaoWorker(unittest.TestCase):
                 "email": "teste@example.com",
                 "status": "processing",
                 "attempts": 1,
-                "require_review": True,
                 "dados_usuario": {"{{OBJETO}}": "Objeto de teste", "{{AMOST}}": "sim"},
                 "dados_ia": {
                     "__LICITA_PIPELINE__": {
@@ -960,30 +959,10 @@ class TestRevisaoHumanaIntegracaoWorker(unittest.TestCase):
             ):
                 pipeline._process_pipeline(job)
 
-                caminho_revisao = raiz / f"{job_id}.review.json"
-                self.assertTrue(caminho_revisao.is_file())
-                revisao = json.loads(caminho_revisao.read_text(encoding="utf-8"))
-                self.assertEqual(revisao["status"], "awaiting_review")
-                self.assertEqual(revisao["current_stage"], "REVISAO_USUARIO")
-                self.assertEqual(revisao["review_documents"]["DFD"]["OBJETO"], "Objeto original")
-                self.assertNotIn("DFD", revisao["dados_ia_final"])
-                self.assertFalse((raiz / f"{job_id}.processing.json").exists())
-                montar.assert_not_called()
-                enviar.assert_not_called()
-
-                revisao["review_documents"]["DFD"]["OBJETO"] = "Objeto aprovado e editado"
-                revisao["dados_ia_final"]["OBJETO"] = "Objeto aprovado e editado"
-                revisao["review_approved"] = True
-                revisao["status"] = "queued"
-                revisao["current_stage"] = "MONTAGEM_DOCX"
-                caminho_revisao.unlink()
-                gravar_json(raiz / f"{job_id}.queued.json", revisao)
-
-                pipeline._process_pipeline(revisao)
-
+                self.assertFalse((raiz / f"{job_id}.review.json").exists())
                 chamar.assert_called_once()
                 montar.assert_called_once()
                 enviar.assert_called_once()
-                self.assertEqual(dados_gerados[0]["OBJETO"], "Objeto aprovado e editado")
-                self.assertEqual(revisao["status"], "sent")
+                self.assertEqual(dados_gerados[0]["OBJETO"], "Objeto original")
+                self.assertEqual(job["status"], "sent")
                 self.assertTrue((raiz / f"{job_id}.done.json").is_file())

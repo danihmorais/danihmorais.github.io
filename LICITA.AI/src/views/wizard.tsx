@@ -79,7 +79,6 @@ function rotuloEtapa(chave?: string): string {
     CONSULTA_HABILITACAO: "Pesquisa do objeto e da habilitação",
     PAGAMENTO_ETAPAS: "Revisão das condições de pagamento",
     DFD: "Geração do DFD",
-    REVISAO_USUARIO: "Aguardando revisão dos documentos",
     ETP: "Geração do ETP",
     TR: "Geração do TR",
     CONTRATACAO_DIRETA: "Geração da contratação direta",
@@ -100,7 +99,6 @@ function rotuloStatusPedido(status?: string, cancelRequested = false): string {
     failed: "Falha",
     cancelled: "Cancelado",
     cancelling: "Cancelando",
-    awaiting_review: "Aguardando sua revisão",
     retrying: "Nova tentativa agendada",
     unavailable: "Registro indisponível",
   };
@@ -214,7 +212,6 @@ export default function Wizard() {
     if (estado === "sent" || estado === "completed") setStatusTexto("Documentos gerados e enviados por e-mail.");
     else if (estado === "failed") setStatusTexto("O processamento falhou. Consulte o último erro abaixo.");
     else if (estado === "cancelled") setStatusTexto("Solicitação cancelada; nenhum novo envio será iniciado.");
-    else if (estado === "awaiting_review") setStatusTexto("Os documentos foram gerados e aguardam sua revisão.");
     else setStatusTexto(status?.cancel_requested ? "Cancelamento solicitado; aguardando o fim da etapa atual." : "A solicitação continua em processamento na fila.");
   }, []);
   const dadosPreenchidos = Boolean(
@@ -699,7 +696,6 @@ export default function Wizard() {
       : statusPedido === "failed" ? "Falha no processamento"
       : statusPedido === "cancelled" ? "Solicitação cancelada"
       : statusPedido === "cancelling" ? "Cancelamento solicitado"
-      : statusPedido === "awaiting_review" ? "Documentos aguardando revisão"
       : "Solicitação colocada na fila";
     return (
       <main className="status-page">
@@ -710,7 +706,7 @@ export default function Wizard() {
         <section className={"status-content" + (erroMsg || statusFinalFalha ? " status-content-error" : "")} aria-live="polite">
           <h1>{tituloStatus}</h1>
           <p>{erroMsg ? "Os dados do formulário, o e-mail, as instruções e os anexos foram preservados. Corrija o problema ou tente novamente." : statusTexto}</p>
-          {geracaoSucesso && pedidoAindaAtivo && statusPedido !== "awaiting_review" && !cancelamentoSolicitado && jobAgendado && (
+          {geracaoSucesso && pedidoAindaAtivo && !cancelamentoSolicitado && jobAgendado && (
             <div className="status-queue-note" role="status">
               <strong>Você pode fechar esta janela.</strong> A geração continuará em segundo plano e os documentos serão enviados para <strong>{jobAgendado.email}</strong> assim que o processamento terminar. Não é necessário manter esta página aberta.
             </div>

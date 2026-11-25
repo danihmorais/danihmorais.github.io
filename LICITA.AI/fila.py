@@ -487,7 +487,6 @@ def enqueue_job(
     retry_mode: str | None = None,
     dados_usuario_processados: dict | None = None,
     request_id: str | None = None,
-    require_review: bool = False,
     job_id: str | None = None,
 ) -> dict:
     email = email.strip()
@@ -511,7 +510,7 @@ def enqueue_job(
     status_token = secrets.token_urlsafe(32)
     job = {
         "request_id": request_id,
-        "require_review": bool(require_review),"version": 3, "job_id": job_id, "status": "queued", "created_at": _utc_now(), "attempts": 0, "email": email, "status_token": status_token, "instrucoes": instrucoes.strip(), "dados_usuario": dados_usuario, "dados_ia": dados_ia}
+        "version": 3, "job_id": job_id, "status": "queued", "created_at": _utc_now(), "attempts": 0, "email": email, "status_token": status_token, "instrucoes": instrucoes.strip(), "dados_usuario": dados_usuario, "dados_ia": dados_ia}
     if retry_of:
         job["retry_of"] = retry_of
     if retry_mode:
