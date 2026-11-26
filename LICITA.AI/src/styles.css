@@ -2417,3 +2417,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
     flex: 1 1 180px;
   }
 }
+
+/* Mantém o cartão de status alinhado à largura dos detalhes da solicitação. */
+.status-content > p.status-summary {
+  width: 100%;
+  max-width: none;
+}
